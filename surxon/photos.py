@@ -127,6 +127,12 @@ def store_photo(db, actor, data: bytes, *, category, entity_type, entity_id=None
          meta['taken_at'] or now_str(), now_str(), lat, lon, source, tg_file_unique_id,
          links.get('season_year'), links.get('load_id'), links.get('field_id'), links.get('brigadier_id'),
          links.get('waybill_id'), actor.user_id if actor else None))
+    if links.get('load_id'):
+        from .outbox import enqueue
+        enqueue(db, 'telegram_archive', 'photo', f'photo:{cur.lastrowid}',
+                {'path': f'{sub}/{base}.jpg',
+                 'caption': f'📷 {CATEGORIES[category]} · reys №{links["load_id"]} · {now_str()[:16]}'
+                            + (f' · {actor.name}' if actor and actor.name else '') + (f'\n{caption}' if caption else '')})
     return cur.lastrowid
 
 

@@ -18,7 +18,7 @@ ADMIN_PW = 'AdminPass2026'
 def app(tmp_path):
     app = create_app(TESTING=True, DATA_DIR=tmp_path, DB_PATH=tmp_path / 'test.sqlite3', UPLOAD_DIR=tmp_path / 'uploads',
                      BACKUP_DIR=tmp_path / 'backups', ADMIN_PASSWORD=ADMIN_PW, COOKIE_SECURE=False,
-                     TELEGRAM_WEBHOOK_SECRET='hooksecret', TELEGRAM_BOT_TOKEN='TEST')
+                     TELEGRAM_WEBHOOK_SECRET='hooksecret', TELEGRAM_BOT_TOKEN='TEST', APP_MODE='production')
     with app.app_context():
         get_db().execute('UPDATE users SET must_change_password=0')
     yield app

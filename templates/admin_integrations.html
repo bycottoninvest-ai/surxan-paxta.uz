@@ -40,6 +40,24 @@
   </section>
 
   <section class="card s12">
+    <div class="card-h"><h3>{{ icon('shield') }} Tashqi arxivlar holati</h3>
+      <form method="post" style="margin-left:auto" class="row">{{ csrf() }}
+        <button class="btn btn-light btn-sm" name="action" value="outbox_run">{{ icon('refresh','sm') }} Navbatni hozir yuborish</button>
+        <button class="btn btn-ghost btn-sm" name="action" value="outbox_retry">Xatolarni qayta urinish</button></form></div>
+    <div class="table-wrap"><table class="t">
+      <thead><tr><th>Arxiv</th><th>Holat</th><th>Oxirgi muvaffaqiyat</th><th>Oxirgi xato</th><th class="num">Navbatda</th><th class="num">Yuborilgan</th><th class="num">Xato</th><th></th></tr></thead>
+      <tbody>{% for a in archives %}{% set lbl = {'not_connected': ('Ulanmagan', 'b-gray'), 'configured_untested': ('Sozlangan, hali tekshirilmagan', 'b-orange'), 'working': ('Ishlayapti', 'b-green'), 'error': ('Xato', 'b-red')}[a.state] %}
+      <tr><td class="b">{{ a.label }}</td><td class="keep"><span class="badge {{ lbl[1] }}">{{ lbl[0] }}</span></td>
+        <td class="small">{{ a.last_ok_at|d if a.last_ok_at else '—' }}</td>
+        <td class="small" style="white-space:normal;max-width:320px">{% if a.last_error_at %}{{ a.last_error_at|d }} · {{ a.last_error }}{% else %}—{% endif %}</td>
+        <td class="num">{{ a.pending if a.channel != 'offsite' else '' }}</td><td class="num">{{ a.sent if a.channel != 'offsite' else '' }}</td><td class="num">{{ a.failed if a.channel != 'offsite' else '' }}</td>
+        <td class="keep">{% if a.configured %}<form method="post">{{ csrf() }}<button class="btn btn-light btn-sm" name="action" value="test_{{ a.channel }}">Sinov</button></form>{% endif %}</td></tr>{% endfor %}</tbody>
+    </table></div>
+    <div class="card-b tiny muted">“Ishlayapti” faqat haqiqiy yuborish muvaffaqiyatli bo‘lgandan keyin ko‘rsatiladi. Ulanmagan arxiv uchun yozuvlar navbatda saqlanadi va sozlangach yuboriladi.
+      Sozlash (.env): Telegram kanali — <code>TELEGRAM_ARCHIVE_CHAT_ID</code>; Google Sheets — <code>GOOGLE_SHEETS_ID</code>, <code>GOOGLE_SERVICE_ACCOUNT_FILE</code>; mustaqil zaxira — <code>OFFSITE_RCLONE_REMOTE</code>. Qo‘llanma: <code>docs/ARXIVLAR.md</code>.</div>
+  </section>
+
+  <section class="card s12">
     <div class="card-h"><h3>Kalitlar</h3></div>
     <div class="table-wrap"><table class="t">
       <thead><tr><th>Nom</th><th>Turi</th><th>Kalit boshi</th><th>Ruxsatlar</th><th>Yaratildi</th><th>Oxirgi murojaat</th><th>Holat</th><th></th></tr></thead>

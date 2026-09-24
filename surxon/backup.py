@@ -43,8 +43,53 @@ def run_backup(cfg):
     fulls = sorted(cfg.BACKUP_DIR.glob('surxon_photos_*_full.tar.gz'))
     for old in fulls[:-8]:
         old.unlink()
-    return (f'Zaxira tayyor: {db_out.name} ({db_out.stat().st_size // 1024} KB), '
-            f'{photos_out.name} ({count} ta rasm fayli{", to‘liq" if full else ""}). Eski fayllar o‘chirildi: {removed}.')
+    msg = (f'Zaxira tayyor: {db_out.name} ({db_out.stat().st_size // 1024} KB), '
+           f'{photos_out.name} ({count} ta rasm fayli{", to‘liq" if full else ""}). Eski fayllar o‘chirildi: {removed}.')
+    if cfg.OFFSITE_RCLONE_REMOTE:
+        try:
+            offsite_copy(cfg)
+            _record(cfg, True)
+            msg += f' Serverdan tashqariga nusxalandi: {cfg.OFFSITE_RCLONE_REMOTE}.'
+        except Exception as exc:
+            _record(cfg, False, exc)
+            msg += f' DIQQAT: serverdan tashqariga nusxa XATO: {exc}'
+    else:
+        msg += ' Mustaqil (serverdan tashqari) zaxira ulanmagan.'
+    return msg
+
+
+def offsite_copy(cfg, test=False):
+    """Copy new backup files to an independent location with rclone (S3, Google Drive, Backblaze, SFTP...).
+
+    The remote is configured once with `rclone config` (file path in RCLONE_CONFIG). Files are only ever
+    added — `rclone copy` never deletes on the remote, so a compromised server can't wipe the offsite copy
+    through this path (use a bucket with versioning / write-only key where possible)."""
+    import subprocess
+    if test:
+        probe = cfg.BACKUP_DIR / 'surxon_offsite_test.txt'
+        probe.write_text(f'offsite test {datetime.now(cfg.TZ).isoformat()}\n')
+        args = ['rclone', 'copyto', str(probe), f'{cfg.OFFSITE_RCLONE_REMOTE}/surxon_offsite_test.txt']
+    else:
+        args = ['rclone', 'copy', str(cfg.BACKUP_DIR), cfg.OFFSITE_RCLONE_REMOTE, '--include', 'surxon_*',
+                '--max-age', '3d', '--transfers', '2']
+    res = subprocess.run(args, capture_output=True, text=True, timeout=3600)
+    if res.returncode != 0:
+        raise RuntimeError((res.stderr or res.stdout or 'rclone xatosi')[-400:])
+
+
+def _record(cfg, ok, error=None):
+    db = sqlite3.connect(str(cfg.DB_PATH), timeout=30)
+    try:
+        now = datetime.now(cfg.TZ).strftime('%Y-%m-%d %H:%M:%S')
+        db.execute("INSERT OR IGNORE INTO channel_status(channel) VALUES ('offsite')")
+        if ok:
+            db.execute("UPDATE channel_status SET last_ok_at=?, ok_count=ok_count+1 WHERE channel='offsite'", (now,))
+        else:
+            db.execute("UPDATE channel_status SET last_error_at=?, last_error=?, error_count=error_count+1 WHERE channel='offsite'",
+                       (now, str(error)[:500]))
+        db.commit()
+    finally:
+        db.close()
 
 
 if __name__ == '__main__':

@@ -429,6 +429,8 @@ def _finish_tare(chat, user, st, tare, reason):
     clear_state(tid)
     ld = queries.load(st['load_id'])
     if not res['already']:
+        from .services import after_waybill_change
+        after_waybill_change(actor_for(user), res['waybill_id'], 'yaratildi')
         notify_async(f'⚖️ {ld["trailer_code"]} tortildi · Netto {fmt_num(res["net_kg"])} kg\n📄 {res["number"]}',
                      roles=('admin', 'manager', 'accountant'))
     return send(chat, f'✅ Tortish yakunlandi\n🚛 {ld["trailer_code"]} · {ld["field_name"]}\n'

@@ -28,6 +28,7 @@
   <div class="top"><img src="{{ url_for('static', filename='img/logo-dark.png') }}" alt="SURXON"></div>
   {% if wb.status == 'BEKOR' %}<div class="void">BEKOR QILINGAN — {{ wb.void_reason }}</div>{% endif %}
   <h1>NAKLADNOY № {{ wb.number }}</h1>
+  <div style="text-align:center;font-size:12px">Nayman uchun nusxa</div>
   <div class="date">{{ wb.document_date|d }}</div>
   <table>
     <tr><td>Jo‘natuvchi</td><td class="v">{{ company }}</td></tr>
@@ -43,8 +44,6 @@
     <tr><td>Brutto</td><td>{{ wb.gross_kg|num }} kg</td></tr>
     <tr><td>Tara</td><td>{{ wb.tare_kg|num }} kg</td></tr>
     <tr class="net"><td>Netto</td><td>{{ wb.net_kg|num }} kg</td></tr>
-    {% if wb.price_per_kg %}<tr><td>Narx</td><td>{{ wb.price_per_kg|num }} so‘m/kg</td></tr>
-    <tr><td>Jami summa (hisob-kitob uchun)</td><td>{{ (wb.net_kg * wb.price_per_kg)|num }} so‘m</td></tr>{% endif %}
   </table>
   <div>Brutto: {{ wb.gross_at|d }} · Tara: {{ wb.tare_at|d }}</div>
   <div class="sign"><div>Jo‘natuvchi</div><div>Qabul qiluvchi</div></div>

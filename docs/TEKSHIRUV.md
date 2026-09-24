@@ -1,10 +1,26 @@
 # Tekshiruv natijalari
 
-Sana: 2026-09-25. Ishga tushirish: `pytest -q` (31 test) va `python tools/perf.py`.
+Sana: 2026-09-25. Ishga tushirish: `pytest -q` (38 test) va `python tools/perf.py`.
+
+## 0. Yakuniy holat — nima bajarildi, nima bajarilmadi
+
+| Talab | Holat | Isbot |
+|---|---|---|
+| Tarozi yakunlanganda nakladnoy **PDF** serverda avtomatik yaratilib, arxivga saqlanadi | ✅ **Bajarildi** | `tests/test_documents.py`: PDF matni tekshiriladi. Har tuzatish yoki bekor qilishda yangi versiya yaratiladi, eskisi saqlanadi. PDF yaratilmay qolsa, ishchi jarayon keyin qayta yaratadi |
+| Naymanga beriladigan nusxada narx va summa **yo‘q** | ✅ **Bajarildi** | Nayman PDF va chop etish sahifasida narx/summa yo‘qligi test bilan tekshirilgan. Ichki nusxa (narx bilan) faqat buxgalteriya rollariga ochiq |
+| PDF va reys rasmlarini yopiq **Telegram arxiv kanaliga** yuborish | 🟡 **Kod tayyor, ULANMAGAN** | Soxta Telegram bilan testlangan: yuboriladi, takrorlanmaydi, xato bo‘lsa qayta urinadi. Haqiqiy kanal va bot tokeni yo‘q |
+| **Google Sheets** nazorat nusxasi | 🟡 **Kod tayyor, ULANMAGAN** | Soxta Sheets bilan testlangan. Google xizmat akkaunti va jadval yo‘q |
+| **Mustaqil** (serverdan tashqari) zaxira | 🟡 **Kod tayyor, ULANMAGAN** | rclone orqali. Zaxira joyi tanlanmagan, sinab ko‘rilmagan |
+| Serverdagi kunlik zaxira va tiklash | ✅ Kod va tiklash testi bor · ⏳ server yo‘q | `test_backup_from_live_wal_database_restores` |
+| Haqiqiy telefon va Telegram bilan bitta reys (terimdan to‘lovgacha) | ❌ **Bajarilmagan** — server yo‘q | Bayonnoma tayyor: `docs/QABUL_SINOVI.md` |
+| Kompyuterda test rejimi (alohida baza) va telefondan Wi-Fi orqali kirish | ✅ Tayyor, bu muhitda sinaldi | `start_test.bat` / `start_test.command`. Sizning kompyuteringizda ishga tushirilmagan: kirish imkonim yo‘q |
+| Domen faollashguncha parolli vaqtinchalik HTTPS; domenga ma’lumot yo‘qotmasdan o‘tish | 🟡 Skriptlar tayyor, **sinab ko‘rilmagan** (server yo‘q) | `tools/vaqtinchalik_https.sh`, `tools/domen_ulash.sh`, `docs/ISHGA_TUSHIRISH.md` |
+
+Tizimning o‘zida ham holat halol ko‘rsatiladi: Integratsiyalar sahifasi va `flask smoke-check` buyrug‘i. “Ishlayapti” belgisi faqat haqiqiy muvaffaqiyatli yuborishdan keyin chiqadi.
 
 ## 1. Tekshirildi va o‘tdi
 
-**Avtomatik testlar: 31 / 31 o‘tdi.**
+**Avtomatik testlar: 38 / 38 o‘tdi.** (7 tasi yangi: PDF, arxiv navbati, bazani yangi versiyaga ko‘chirish)
 
 | Test | Nima tekshirildi |
 |---|---|

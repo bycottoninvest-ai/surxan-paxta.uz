@@ -1,10 +1,11 @@
 {% extends 'base.html' %}
-{% from 'macros.html' import icon, status, photo_card, empty, void_button with context %}
+{% from 'macros.html' import icon, csrf, status, photo_card, empty, void_button with context %}
 {% set page_title = 'Nakladnoy ' ~ wb.number %}
 {% block content %}
 <div class="page-h"><a href="{{ url_for('ops.waybills') }}" class="icon-btn">{{ icon('chev-left') }}</a><h1>Nakladnoy № {{ wb.number }}</h1>{{ status(wb.status) }}
   <span class="spacer"></span>
-  <a class="btn btn-red" href="{{ url_for('ops.waybill_detail', waybill_id=wb.id, print=1) }}" target="_blank">PDF</a>
+  {% set nay = docs|selectattr('kind', 'equalto', 'nayman')|first %}
+  {% if nay %}<a class="btn btn-red" href="{{ url_for('ops.document', doc_id=nay.id) }}" target="_blank">PDF (Nayman nusxasi)</a>{% endif %}
   <a class="btn btn-primary" href="{{ url_for('ops.waybill_detail', waybill_id=wb.id, print=1, auto=1) }}" target="_blank">{{ icon('printer','sm') }} Chop etish</a>
   {% if wb.status == 'YARATILDI' and can('nayman.write') %}<a class="btn btn-green" href="{{ url_for('ops.nayman', waybill_id=wb.id) }}">{{ icon('factory','sm') }} Nayman qabuli</a>{% endif %}
 </div>
@@ -44,6 +45,16 @@
         {% for p in payments %}<tr class="{{ 'void' if p.voided_at }}"><td>{{ p.payment_date|d }}</td><td class="num">{{ p.amount|num }}</td><td>{{ p.method or '—' }}</td><td class="keep">{{ 'Bekor' if p.voided_at else 'Faol' }}</td></tr>{% endfor %}</tbody></table>{% endif %}
     </div>
   </section>
+  <section class="card s12"><div class="card-h"><h3>{{ icon('doc') }} Arxivlangan PDF hujjatlar</h3>
+      {% if can('weigh.write') or can('nayman.write') or can('waybill.void') %}<form method="post" action="{{ url_for('ops.waybill_pdf', waybill_id=wb.id) }}" style="margin-left:auto">{{ csrf() }}<button class="btn btn-light btn-sm">{{ icon('refresh','sm') }} Qayta yaratish</button></form>{% endif %}</div>
+    <div class="table-wrap"><table class="t"><thead><tr><th>Versiya</th><th>Nusxa</th><th>Sabab</th><th>Yaratildi</th><th class="num">Hajm</th><th>SHA-256</th><th></th></tr></thead>
+      <tbody>{% for d in docs %}{% if d.kind == 'nayman' or can('reports.finance') %}<tr class="{{ 'void' if d.superseded }}">
+        <td class="keep b">v{{ d.version }}{% if not d.superseded %} <span class="badge b-green">joriy</span>{% endif %}</td>
+        <td>{{ 'Nayman nusxasi (narxsiz)' if d.kind == 'nayman' else 'Ichki nusxa (narx bilan)' }}</td><td>{{ d.reason }}</td>
+        <td class="small">{{ d.created_at|d }} · {{ d.created_name or 'tizim' }}</td><td class="num">{{ (d.size / 1024)|num }} KB</td>
+        <td class="tiny muted">{{ d.sha256[:16] }}…</td>
+        <td class="keep"><a class="btn btn-ghost btn-sm" target="_blank" href="{{ url_for('ops.document', doc_id=d.id) }}">Ochish</a><a class="btn btn-ghost btn-sm" href="{{ url_for('ops.document', doc_id=d.id, download=1) }}">{{ icon('download','sm') }}</a></td></tr>{% endif %}
+      {% else %}<tr><td colspan="7">{{ empty('PDF hali yaratilmagan — ishchi jarayon avtomatik yaratadi yoki “Qayta yaratish” ni bosing', 'doc') }}</td></tr>{% endfor %}</tbody></table></div></section>
   <section class="card s7"><div class="card-h"><h3>Rasmlar</h3></div><div class="card-b"><div class="photo-grid">{% for p in photos %}{{ photo_card(p) }}{% else %}{{ empty('Rasm yo‘q','camera') }}{% endfor %}</div></div></section>
   <section class="card s5"><div class="card-h"><h3>{{ icon('history') }} To‘liq zanjir tarixi</h3></div>
     <div class="card-b"><ul class="timeline">{% for a in timeline %}<li><span class="dot">{{ icon('check') }}</span><b>{{ a.action }} · {{ a.entity_type }}</b><span>{{ a.created_at|d }} · {{ a.full_name or 'tizim' }} ({{ a.source }}){% if a.reason %} · {{ a.reason }}{% endif %}</span></li>{% endfor %}</ul></div></section>

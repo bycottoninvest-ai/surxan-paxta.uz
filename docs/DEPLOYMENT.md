@@ -26,7 +26,7 @@ sudo docker compose up -d --build
 curl https://surxan-paxta.uz/health      # {"ok": true, ...}
 ```
 
-Caddy HTTPS sertifikatini o‘zi oladi. Ilova ishga tushganda migratsiya o‘zi bajariladi, 3 ta brigada va boshlang‘ich texnika (3 traktor, 4 telashka, 2 kombayn) yaratiladi.
+Uchta xizmat ishga tushadi: `app` (sayt), `worker` (PDF, arxiv kanali, Sheets) va `backup` (tungi zaxira). Caddy HTTPS sertifikatini o‘zi oladi. Ilova ishga tushganda migratsiya o‘zi bajariladi, 3 ta brigada va boshlang‘ich texnika (3 traktor, 4 telashka, 2 kombayn) yaratiladi.
 
 ## 4. Birinchi kirish
 
@@ -47,13 +47,16 @@ Admin → Foydalanuvchilar → “Ulash kodi” ni bosing. Xodim botga `/start K
 
 Admin → Sozlamalar → Integratsiyalar → TV ulanishini yoqing → **TV kaliti yaratish**. Chiqqan havolani (`https://surxan-paxta.uz/tv?k=...`) televizor brauzerida bir marta oching. Ekran har 30 soniyada yangilanadi. Aloqa uzilsa, qizil ogohlantirish chiqadi.
 
-## 7. Mahalliy sinov (kompyuterda)
+## 7. Domen faollashmagan bo‘lsa
+
+Parolli vaqtinchalik HTTPS: `sudo bash tools/vaqtinchalik_https.sh`. Domen tayyor bo‘lgach: `sudo bash tools/domen_ulash.sh`. Batafsil: `docs/ISHGA_TUSHIRISH.md`.
+
+## 8. Tekshirish
 
 ```bash
-python -m venv .venv && . .venv/bin/activate
-pip install -r requirements-dev.txt
-cp .env.example .env    # SECRET_KEY=istalgan, COOKIE_SECURE=0, ADMIN_PASSWORD=...
-python app.py           # http://127.0.0.1:5000
-flask --app app demo-data --yes   # faqat bo‘sh sinov bazasiga namunaviy ma’lumot
-pytest -q
+docker compose exec app flask --app app smoke-check --send-tests
 ```
+
+## 9. Kompyuterda test rejimi
+
+`start_test.bat` / `start_test.command` — `docs/ISHGA_TUSHIRISH.md` (A bo‘lim). Dasturchilar uchun: `pip install -r requirements-dev.txt && pytest -q`.

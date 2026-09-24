@@ -26,8 +26,18 @@ class Config:
         self.TELEGRAM_BOT_USERNAME = env.get('TELEGRAM_BOT_USERNAME', '').strip().lstrip('@')
         self.TZ = ZoneInfo(env.get('APP_TZ', 'Asia/Tashkent'))
         self.MAX_UPLOAD_MB = int(env.get('MAX_UPLOAD_MB', '25'))
+        # External archives — each one stays "not connected" until its settings are present.
+        self.TELEGRAM_ARCHIVE_CHAT_ID = env.get('TELEGRAM_ARCHIVE_CHAT_ID', '').strip()
+        self.GOOGLE_SHEETS_ID = env.get('GOOGLE_SHEETS_ID', '').strip()
+        self.GOOGLE_SERVICE_ACCOUNT_FILE = env.get('GOOGLE_SERVICE_ACCOUNT_FILE', '').strip()
+        self.OFFSITE_RCLONE_REMOTE = env.get('OFFSITE_RCLONE_REMOTE', '').strip()
+        self.APP_MODE = env.get('APP_MODE', 'production').strip().lower()
         for k, v in overrides.items():
             setattr(self, k, v)
+        if self.APP_MODE == 'test':
+            # A test copy must never talk to the real bot, archive channel, Sheets or offsite storage.
+            self.TELEGRAM_BOT_TOKEN = self.TELEGRAM_ARCHIVE_CHAT_ID = ''
+            self.GOOGLE_SHEETS_ID = self.GOOGLE_SERVICE_ACCOUNT_FILE = self.OFFSITE_RCLONE_REMOTE = ''
 
     def validate(self):
         if not self.SECRET_KEY:

@@ -165,6 +165,7 @@ def register_template_helpers(app):
             'domain': app.config['SURXON'].DOMAIN, 'version': VERSION, 'notifications': notes,
             'photo_categories': CATEGORIES, 'my_brigade': brigadier_scope(),
             'bot_username': app.config['SURXON'].TELEGRAM_BOT_USERNAME,
+            'test_mode': app.config['SURXON'].APP_MODE == 'test',
         }
 
     @app.template_global()
@@ -252,9 +253,58 @@ def register_cli(app):
     def demo_data(yes):
         """Fill an EMPTY database with sample data (for training/demo only)."""
         from .demo import fill_demo
+        if app.config['SURXON'].APP_MODE != 'test':
+            raise click.ClickException('Namunaviy ma’lumot faqat TEST rejimida (APP_MODE=test, alohida data-test papkasi) yoziladi.')
         if not yes:
             raise click.ClickException('Faqat sinov bazasi uchun. Tasdiqlash: flask demo-data --yes')
         click.echo(fill_demo())
+
+    @app.cli.command('outbox-run')
+    def outbox_run():
+        """Send pending archive jobs once (the docker 'worker' service does this every 30 s)."""
+        from .outbox import run_once
+        click.echo(run_once(limit=500))
+
+    @app.cli.command('smoke-check')
+    @click.option('--send-tests', is_flag=True, help='Arxiv kanallariga haqiqiy sinov xabari yuborish')
+    def smoke_check(send_tests):
+        """Post-deploy check: database, config, Telegram webhook, archives. Prints an honest status table."""
+        from .outbox import CHANNELS, configured, send_test, status
+        cfg = app.config['SURXON']
+        rows = []
+        try:
+            dbmod.scalar('SELECT COUNT(*) FROM users')
+            rows.append(('Baza', 'OK', str(cfg.DB_PATH)))
+        except Exception as exc:
+            rows.append(('Baza', 'XATO', str(exc)))
+        rows.append(('HTTPS cookie', 'OK' if cfg.COOKIE_SECURE else 'O‘CHIQ', 'COOKIE_SECURE'))
+        if cfg.TELEGRAM_BOT_TOKEN:
+            try:
+                from .telegram_bot import tg_api
+                info = tg_api('getWebhookInfo')['result']
+                ok = info.get('url', '').startswith(f'https://{cfg.DOMAIN}/telegram/webhook/')
+                rows.append(('Telegram webhook', 'OK' if ok else 'SOZLANMAGAN',
+                             (info.get('url') or 'yo‘q').split('/webhook/')[0] + f' · kutilayotgan: {info.get("pending_update_count")}'
+                             + (f' · oxirgi xato: {info.get("last_error_message")}' if info.get('last_error_message') else '')))
+            except Exception as exc:
+                rows.append(('Telegram webhook', 'XATO', str(exc)))
+        else:
+            rows.append(('Telegram bot', 'ULANMAGAN', 'TELEGRAM_BOT_TOKEN yo‘q'))
+        for ch, label in CHANNELS.items():
+            if not configured(ch):
+                rows.append((label, 'ULANMAGAN', 'sozlama yo‘q'))
+                continue
+            if send_tests:
+                try:
+                    send_test(ch)
+                    rows.append((label, 'ISHLAYAPTI', 'sinov yuborildi'))
+                except Exception as exc:
+                    rows.append((label, 'XATO', str(exc)[:200]))
+            else:
+                st = next(s for s in status() if s['channel'] == ch)
+                rows.append((label, st['state'].upper(), f'oxirgi muvaffaqiyat: {st["last_ok_at"] or "hali yo‘q"}'))
+        for name, state, note in rows:
+            click.echo(f'{name:40} {state:12} {note}')
 
     @app.cli.command('permissions')
     def permissions():

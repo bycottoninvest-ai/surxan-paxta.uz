@@ -5,3 +5,5 @@ __pycache__/
 instance/
 .env
 perf_results.json
+data-test/
+Caddyfile.vaqtinchalik

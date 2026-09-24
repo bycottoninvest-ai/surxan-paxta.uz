@@ -1,0 +1,3 @@
+DejaVu fonts (DejaVuSans.ttf, DejaVuSans-Bold.ttf) — https://dejavu-fonts.github.io/
+Bitstream Vera / DejaVu license: free to use, copy, embed and redistribute (see dejavu-fonts.github.io/License.html).
+Embedded in the waybill PDFs so Uzbek letters (o‘, g‘) and Cyrillic print correctly on any server.

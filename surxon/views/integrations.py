@@ -86,6 +86,8 @@ def index():
                                                                 actor.user_id, now_str()))
                 audit(db, actor, 'CREATE', 'integration_client', cur.lastrowid, new={'kind': kind, 'name': name, 'scopes': scopes})
                 msg = 'Kalit yaratildi. Uni hozir nusxalab oling — keyin qayta ko‘rsatilmaydi.'
+            elif action in ('test_telegram_archive', 'test_sheets', 'test_offsite', 'outbox_run', 'outbox_retry'):
+                msg = None
             else:
                 cid = int(request.form.get('id') or 0)
                 c = db.execute('SELECT * FROM integration_clients WHERE id=?', (cid,)).fetchone()
@@ -115,6 +117,21 @@ def index():
                     msg = 'Kalit almashtirildi: eski kalit endi ishlamaydi. Yangisini hozir nusxalab oling.'
                 else:
                     raise UserError('Noma’lum amal.')
+        if action and action.startswith('test_'):
+            from ..outbox import send_test
+            try:
+                send_test(action[5:])
+                return done('Sinov muvaffaqiyatli: haqiqiy ulanish ishladi.', url_for('integrations.index'))
+            except Exception as exc:
+                raise UserError(f'Sinov muvaffaqiyatsiz: {exc}')
+        if action == 'outbox_run':
+            from ..outbox import run_once
+            r = run_once()
+            return done(f'Yuborildi: {r["sent"]}, xato: {r["errors"]}. Ulanmagan: {", ".join(r["skipped_channels"]) or "yo‘q"}.',
+                        url_for('integrations.index'))
+        if action == 'outbox_retry':
+            from ..outbox import retry_failed
+            return done(f'{retry_failed()} ta xato yuborish qayta navbatga qo‘yildi.', url_for('integrations.index'))
         if new_key:
             # shown exactly once, never stored in plain text
             g.new_key = new_key
@@ -128,7 +145,10 @@ def render(new_key=None, message=None):
                    ORDER BY c.active DESC, c.id DESC''')
     log = q('''SELECT l.*, c.name, c.kind, c.key_prefix FROM integration_log l LEFT JOIN integration_clients c ON c.id=l.client_id
                ORDER BY l.id DESC LIMIT 100''')
+    from ..outbox import status as outbox_status
+    recent_jobs = q('SELECT * FROM outbox ORDER BY id DESC LIMIT 30')
     return render_template('admin_integrations.html', clients=clients, log=log, scopes=SCOPES, new_key=new_key,
+                           archives=outbox_status(), recent_jobs=recent_jobs,
                            message=message, erp_on=get_bool('erp_enabled'), tv_on=get_bool('tv_enabled'),
                            base=request.host_url.rstrip('/'), loads=json.loads)
 

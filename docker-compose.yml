@@ -19,6 +19,16 @@ services:
       - ./data:/data
     command: ["python", "-m", "surxon.backup"]
 
+  # Sends waybill PDFs and trip photos to the private Telegram archive channel and rows to Google Sheets,
+  # and regenerates any missing PDF. Channels without settings stay "not connected" (jobs wait in the queue).
+  worker:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - ./data:/data
+    command: ["python", "-m", "surxon.outbox"]
+
   caddy:
     image: caddy:2
     restart: unless-stopped

@@ -11,6 +11,7 @@ from datetime import date, timedelta
 from werkzeug.security import generate_password_hash
 
 from .db import next_counter, tx
+from .outbox import enqueue
 from .photos import store_photo
 from .security import ROLES, audit
 from .settings import get_bool, get_float, get_setting
@@ -463,6 +464,7 @@ def record_tare(actor, load_id, tare_kg, *, diff_reason='', photo=None, source='
                           get_setting('destination_name', db), int(price) if price else None, actor.user_id, now_str()))
         db.execute('UPDATE photos SET waybill_id=? WHERE load_id=?', (cur.lastrowid, load_id))
         audit(db, actor, 'CREATE', 'waybill', cur.lastrowid, new={'number': number, 'load_id': load_id, 'net_kg': net})
+        _sheet_waybill(db, cur.lastrowid, 'yaratildi')
         return {'already': False, 'waybill_id': cur.lastrowid, 'number': number, 'net_kg': net,
                 'internal_kg': internal, 'diff_kg': diff}
 
@@ -499,6 +501,12 @@ def correct_weighing(actor, load_id, gross_kg, tare_kg, reason):
             db.execute('UPDATE weighings SET gross_kg=?, updated_at=? WHERE id=?', (gross_kg, now_str(), w['id']))
             new = {'gross_kg': gross_kg}
         audit(db, actor, 'CORRECT', 'weighing', w['id'], old=row_dict(w), new=new, reason=reason)
+        wb_row = db.execute('SELECT id FROM waybills WHERE load_id=?', (load_id,)).fetchone()
+        if wb_row:
+            _sheet_waybill(db, wb_row['id'], 'tarozi tuzatildi')
+        corrected_waybill = wb_row['id'] if wb_row else None
+    if corrected_waybill:
+        after_waybill_change(actor, corrected_waybill, f'tuzatish: {reason}')
 
 
 # ------------------------------------------------------------------ waybills / Nayman
@@ -517,6 +525,8 @@ def void_waybill(actor, waybill_id, reason):
         db.execute("UPDATE waybills SET status='BEKOR', voided_at=?, voided_by=?, void_reason=?, updated_at=? WHERE id=?",
                    (now_str(), actor.user_id, reason, now_str(), waybill_id))
         audit(db, actor, 'VOID', 'waybill', waybill_id, old={'status': wb['status']}, new={'status': 'BEKOR'}, reason=reason)
+        _sheet_waybill(db, waybill_id, 'bekor qilindi')
+    after_waybill_change(actor, waybill_id, f'bekor: {reason}')
 
 
 NAYMAN_DIFF_REASONS = ['Namlik / tabiiy kamayish', 'Ifloslik (chiqindi)', 'Tarozi farqi', 'Yo‘lda to‘kilgan', 'Boshqa']
@@ -558,6 +568,7 @@ def record_nayman(actor, waybill_id, *, accepted_kg, received_date, receiver_nam
             audit(db, actor, 'CREATE', 'nayman_receipt', rid,
                   new={'waybill': wb['number'], 'accepted_kg': accepted_kg, 'diff_kg': diff, 'diff_reason': diff_reason})
         db.execute("UPDATE waybills SET status='QABUL', updated_at=? WHERE id=?", (now_str(), waybill_id))
+        _sheet_waybill(db, waybill_id, 'Nayman qabuli' if not existing else 'Nayman qabuli tuzatildi')
         if photo:
             load = load_row(db, wb['load_id'])
             store_photo(db, actor, photo, category='nayman', entity_type='nayman_receipt', entity_id=rid,
@@ -598,6 +609,7 @@ def add_payment(actor, *, amount, payment_date, waybill_id=None, method='', paye
                         caption=f'To‘lov {amount:,} so‘m', links={'season_year': season, 'waybill_id': waybill_id})
         audit(db, actor, 'CREATE', 'payment', pid, new={'amount': amount, 'waybill_id': waybill_id, 'method': method,
                                                         'to_cash': bool(to_cash)})
+        _sheet_payment(db, pid, 'kiritildi')
         return pid
 
 
@@ -613,6 +625,7 @@ def void_payment(actor, payment_id, reason):
                    (now_str(), actor.user_id, reason, payment_id))
         db.execute('UPDATE cash_entries SET voided_at=?, voided_by=?, void_reason=? WHERE payment_id=? AND voided_at IS NULL',
                    (now_str(), actor.user_id, f'To‘lov #{payment_id} bekor qilindi: {reason}', payment_id))
+        _sheet_payment(db, payment_id, 'bekor qilindi')
         audit(db, actor, 'VOID', 'payment', payment_id, old=row_dict(p), reason=reason)
 
 
@@ -983,3 +996,92 @@ def upload_archive_photo(actor, data, *, category, caption='', load_id=None, way
                           tg_file_unique_id=tg_file_unique_id, links=links)
         audit(db, actor, 'PHOTO', entity_type, entity_id or pid, new={'photo_id': pid, 'category': category})
         return pid
+
+
+# ------------------------------------------------------------------ waybill PDF documents
+
+def create_waybill_documents(actor, waybill_id, reason='yaratildi'):
+    """Render the Nayman copy (no price/amount) and the internal copy, store both as a new version,
+    and queue them for the Telegram archive channel. Earlier versions are kept (marked superseded)."""
+    import hashlib
+    from flask import current_app
+    from . import queries
+    from .pdfdoc import build_waybill_pdf
+    wb = queries.waybill(waybill_id)
+    if not wb:
+        raise UserError('Nakladnoy topilmadi.')
+    cfg = current_app.config['SURXON']
+    with tx() as db:
+        workers = db.execute('SELECT COUNT(DISTINCT worker_id) FROM harvests WHERE load_id=? AND voided_at IS NULL AND worker_id IS NOT NULL',
+                             (wb['load_id'],)).fetchone()[0]
+        version = (db.execute('SELECT MAX(version) FROM documents WHERE waybill_id=?', (waybill_id,)).fetchone()[0] or 0) + 1
+        company = get_setting('company_name', db)
+        folder = cfg.UPLOAD_DIR / 'hujjatlar' / str(wb['season_year'])
+        folder.mkdir(parents=True, exist_ok=True)
+        db.execute('UPDATE documents SET superseded=1 WHERE waybill_id=?', (waybill_id,))
+        ids = []
+        for kind in ('nayman', 'ichki'):
+            pdf = build_waybill_pdf(wb, copy=kind, company=company, version=version, generated_at=now_str()[:16],
+                                    generated_by=actor.name or 'tizim', workers_count=workers)
+            name = f'{wb["number"]}_v{version}_{kind}.pdf'
+            (folder / name).write_bytes(pdf)
+            rel = f'hujjatlar/{wb["season_year"]}/{name}'
+            cur = db.execute('''INSERT INTO documents(waybill_id, kind, version, reason, path, sha256, size, created_by, created_at)
+                                VALUES (?,?,?,?,?,?,?,?,?)''', (waybill_id, kind, version, reason, rel,
+                                                                 hashlib.sha256(pdf).hexdigest(), len(pdf), actor.user_id, now_str()))
+            ids.append(cur.lastrowid)
+            enqueue(db, 'telegram_archive', 'document', f'doc:{cur.lastrowid}',
+                    {'path': rel, 'filename': name,
+                     'caption': f'📄 {wb["number"]} · {version}-versiya ({reason}) · '
+                                f'{"Nayman nusxasi" if kind == "nayman" else "Ichki nusxa"}\n'
+                                f'{wb["trailer_code"]} · {wb["field_name"]} · {wb["brigadier_name"]} · netto {wb["net_kg"]:g} kg'})
+        audit(db, actor, 'PDF', 'waybill', waybill_id, new={'version': version, 'reason': reason, 'document_ids': ids})
+        return version
+
+
+def ensure_missing_documents():
+    """Safety net: any waybill without a PDF (e.g. rendering failed after the weighing committed) gets one."""
+    from .db import q
+    from .security import Actor
+    missing = q('''SELECT wb.id FROM waybills wb WHERE NOT EXISTS (SELECT 1 FROM documents d WHERE d.waybill_id=wb.id)
+                   ORDER BY wb.id LIMIT 20''')
+    for r in missing:
+        try:
+            create_waybill_documents(Actor(None, 'system', source='system', name='tizim'), r['id'], 'avtomatik tiklandi')
+        except Exception:
+            from flask import current_app
+            current_app.logger.exception('PDF generation failed for waybill %s', r['id'])
+
+
+def after_waybill_change(actor, waybill_id, reason):
+    """Called after the committing transaction; a PDF failure never undoes the weighing (retried by the worker)."""
+    try:
+        return create_waybill_documents(actor, waybill_id, reason)
+    except Exception:
+        from flask import current_app
+        current_app.logger.exception('PDF generation failed for waybill %s', waybill_id)
+        return None
+
+
+def _sheet_waybill(db, waybill_id, event):
+    """Queue one control row for the Google Sheets copy (inside the caller's transaction)."""
+    r = db.execute('''SELECT wb.number, wb.document_date, wb.status, wb.net_kg, t.code trailer, f.name field, b.name brigadier,
+                             w.gross_kg, w.tare_kg, tl.internal_kg, nr.accepted_kg, nr.diff_kg
+                      FROM waybills wb JOIN trailer_loads tl ON tl.id=wb.load_id JOIN equipment t ON t.id=tl.trailer_id
+                      LEFT JOIN fields f ON f.id=tl.field_id LEFT JOIN brigadiers b ON b.id=tl.brigadier_id
+                      LEFT JOIN weighings w ON w.load_id=tl.id LEFT JOIN nayman_receipts nr ON nr.waybill_id=wb.id
+                      WHERE wb.id=?''', (waybill_id,)).fetchone()
+    event_id = secrets.token_hex(6)
+    enqueue(db, 'sheets', 'row', f'wb:{waybill_id}:{event_id}',
+            {'sheet': 'Nakladnoylar', 'row': [now_str(), event, r['number'], r['document_date'], r['status'], r['trailer'],
+                                              r['field'], r['brigadier'], r['gross_kg'], r['tare_kg'], r['net_kg'],
+                                              r['internal_kg'], r['accepted_kg'], r['diff_kg'], event_id]})
+
+
+def _sheet_payment(db, payment_id, event):
+    p = db.execute('''SELECT p.*, wb.number FROM payments p LEFT JOIN waybills wb ON wb.id=p.waybill_id WHERE p.id=?''',
+                   (payment_id,)).fetchone()
+    event_id = secrets.token_hex(6)
+    enqueue(db, 'sheets', 'row', f'pay:{payment_id}:{event_id}',
+            {'sheet': 'Tolovlar', 'row': [now_str(), event, p['id'], p['payment_date'], p['amount'], p['method'], p['payer'],
+                                          p['number'], p['void_reason'] or '', event_id]})

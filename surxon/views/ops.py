@@ -7,7 +7,7 @@ from .. import queries
 from ..db import q
 from ..photos import uploads_from_request, read_upload
 from ..security import can, perm_required, require
-from ..services import (NAYMAN_DIFF_REASONS, add_harvest, attach_load_photos, correct_weighing, diff_needs_reason,
+from ..services import (NAYMAN_DIFF_REASONS, add_harvest, after_waybill_change, attach_load_photos, correct_weighing, diff_needs_reason,
                         expected_payment, mark_full, open_load, record_gross, record_nayman, record_tare, reopen_load,
                         void_harvest, void_load, void_waybill)
 from ..settings import get_float, get_setting
@@ -211,6 +211,7 @@ def weigh(load_id):
             tare = parse_number(request.form.get('tare_kg'), 'Tara')
             res = record_tare(actor, load_id, tare, diff_reason=request.form.get('diff_reason', ''), photo=photo)
             if not res['already']:
+                after_waybill_change(actor, res['waybill_id'], 'yaratildi')
                 from ..telegram_bot import notify_async
                 notify_async(f'⚖️ {ld["trailer_code"]} tortildi · Netto {res["net_kg"]:,.0f} kg\n'
                              f'📄 Nakladnoy {res["number"]} yaratildi'.replace(',', ' '),
@@ -262,8 +263,10 @@ def waybill_detail(waybill_id):
     workers = q('''SELECT w.full_name, SUM(h.kg) kg FROM harvests h JOIN workers w ON w.id=h.worker_id
                    WHERE h.load_id=? AND h.voided_at IS NULL GROUP BY w.id ORDER BY kg DESC''', (wb['load_id'],))
     tpl = 'waybill_print.html' if request.args.get('print') else 'waybill_detail.html'
+    docs = q('''SELECT d.*, u.full_name created_name FROM documents d LEFT JOIN users u ON u.id=d.created_by
+                WHERE d.waybill_id=? ORDER BY d.version DESC, d.kind''', (waybill_id,))
     return render_template(tpl, wb=wb, workers=workers, photos=queries.photos_for(load_id=wb['load_id']),
-                           timeline=queries.load_timeline(wb['load_id']), company=get_setting('company_name'),
+                           timeline=queries.load_timeline(wb['load_id']), company=get_setting('company_name'), docs=docs,
                            payments=q('SELECT * FROM payments WHERE waybill_id=? ORDER BY id', (waybill_id,)))
 
 
@@ -312,3 +315,29 @@ def nayman(waybill_id):
     exp = expected_payment(receipt['received_date'], receipt['amount']) if receipt and receipt['amount'] else None
     return render_template('nayman.html', wb=wb, receipt=receipt, reasons=NAYMAN_DIFF_REASONS,
                            default_price=default_price, expected=exp)
+
+
+@bp.get('/hujjat/<int:doc_id>')
+@perm_required('waybill.view')
+def document(doc_id):
+    """Stored PDF (private). Brigadiers only see their own brigade's documents."""
+    from flask import current_app, send_from_directory
+    d = q('''SELECT d.*, tl.brigadier_id, wb.number FROM documents d JOIN waybills wb ON wb.id=d.waybill_id
+             JOIN trailer_loads tl ON tl.id=wb.load_id WHERE d.id=?''', (doc_id,), one=True)
+    if not d:
+        abort(404)
+    if scope() and d['brigadier_id'] != scope():
+        abort(403)
+    if d['kind'] == 'ichki' and not can('reports.finance'):
+        abort(403)
+    return send_from_directory(current_app.config['SURXON'].UPLOAD_DIR, d['path'], mimetype='application/pdf',
+                               as_attachment=request.args.get('download') == '1',
+                               download_name=d['path'].rsplit('/', 1)[-1])
+
+
+@bp.post('/nakladnoy/<int:waybill_id>/pdf')
+@perm_required('weigh.write', 'nayman.write', 'waybill.void')
+def waybill_pdf(waybill_id):
+    from ..services import create_waybill_documents
+    v = create_waybill_documents(post_actor(), waybill_id, request.form.get('reason') or 'qo‘lda qayta yaratildi')
+    return done(f'PDF yaratildi ({v}-versiya).', url_for('ops.waybill_detail', waybill_id=waybill_id))

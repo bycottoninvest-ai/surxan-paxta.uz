@@ -27,11 +27,19 @@ Bitta backend va bitta baza bilan ishlaydi. Uning bir necha xil ko‘rinishi bor
 - **Pul taxmin qilinmaydi.** Narx, stavka yoki boshlang‘ich qoldiq kiritilmagan bo‘lsa, tegishli summa “hisoblanmagan” deb ko‘rsatiladi, 0 deb emas.
 - **Rollar va brigada cheklovi** server tomonida tekshiriladi (web va Telegram uchun bir xil) — [docs/VAKOLATLAR.md](docs/VAKOLATLAR.md).
 - **Ko‘p yillik arxiv.** Yopilgan mavsum qotiriladi. Keyingi yil gektar o‘zgarsa ham eski hisobot o‘zgarmaydi.
+- **Nakladnoy PDF** tortish yakunlanganda serverda avtomatik yaratiladi va versiyalari bilan arxivlanadi. Nayman nusxasida narx ham, summa ham yo‘q.
 - **Oflayn.** Dalada internet uzilsa, yozuv telefonda saqlanadi va keyin avtomatik yuboriladi.
+
+## Tezkor sinov (o‘z kompyuteringizda)
+
+`start_test.bat` (Windows) yoki `start_test.command` (Mac/Linux) ni ikki marta bosing. Alohida test bazasi namunaviy ma’lumot bilan ochiladi, brauzer o‘zi ochiladi va telefon uchun Wi-Fi manzili ko‘rsatiladi. Batafsil: [docs/ISHGA_TUSHIRISH.md](docs/ISHGA_TUSHIRISH.md)
 
 ## Hujjatlar
 
+- [Kompyuterda test, vaqtinchalik HTTPS, domenga o‘tish](docs/ISHGA_TUSHIRISH.md)
 - [Serverga o‘rnatish](docs/DEPLOYMENT.md)
+- [Tashqi arxivlar: Telegram kanal, Google Sheets, mustaqil zaxira](docs/ARXIVLAR.md)
+- [Serverdagi qabul sinovi bayonnomasi](docs/QABUL_SINOVI.md)
 - [Zaxira nusxa va tiklash, migratsiya](docs/TIKLASH.md)
 - [Vakolatlar jadvali](docs/VAKOLATLAR.md)
 - [Azizbek ERP API](docs/ERP_API.md)
@@ -51,10 +59,12 @@ surxon/
   queries.py           dashboard va hisobot so‘rovlari
   telegram_bot.py      Telegram webhook bot
   photos.py            rasmni tekshirish, siqish, yopiq saqlash
-  backup.py            zaxira nusxa
+  backup.py            zaxira nusxa (+ rclone orqali serverdan tashqariga)
+  pdfdoc.py            nakladnoy PDF (Nayman nusxasi narxsiz)
+  outbox.py            Telegram arxiv kanali va Google Sheets'ga ishonchli yuborish
   views/               sahifalar, ERP API, TV
 templates/  static/    dizayn
-tests/                 31 ta avtomatik test
+tests/                 38 ta avtomatik test
 tools/                 skrinshot va tezlik o‘lchovi
 ```
 

@@ -88,6 +88,7 @@
       </div>
     </header>
     <main class="content">
+      {% if test_mode %}<div class="flash warn" style="margin-bottom:10px">{{ icon('alert','sm') }}<div><b>TEST REJIMI</b> — alohida sinov bazasi (namunaviy ma’lumotlar). Haqiqiy hisob bu yerda yuritilmaydi. Telegram va tashqi arxivlar o‘chirilgan.</div></div>{% endif %}
       {% with messages = get_flashed_messages(with_categories=true) %}{% for cat, msg in messages %}
         <div class="flash {{ cat }}">{{ icon('check-circle' if cat == 'success' else 'alert','sm') }}<div>{{ msg }}</div></div>
       {% endfor %}{% endwith %}

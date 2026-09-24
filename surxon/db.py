@@ -10,7 +10,7 @@ from contextlib import contextmanager
 
 from flask import current_app, g
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 SCHEMA = r'''
 CREATE TABLE IF NOT EXISTS brigadiers (
@@ -380,6 +380,50 @@ CREATE TABLE IF NOT EXISTS integration_log (
 );
 CREATE INDEX IF NOT EXISTS idx_integration_log ON integration_log(client_id, at_epoch);
 
+-- v2: generated documents (waybill PDFs) — every version is kept
+CREATE TABLE IF NOT EXISTS documents (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  waybill_id INTEGER NOT NULL REFERENCES waybills(id),
+  kind TEXT NOT NULL CHECK (kind IN ('nayman','ichki')),
+  version INTEGER NOT NULL,
+  reason TEXT NOT NULL,
+  path TEXT NOT NULL,
+  sha256 TEXT NOT NULL,
+  size INTEGER NOT NULL,
+  superseded INTEGER NOT NULL DEFAULT 0,
+  created_by INTEGER REFERENCES users(id),
+  created_at TEXT NOT NULL,
+  UNIQUE (waybill_id, kind, version)
+);
+
+-- v2: reliable delivery queue to external archives (Telegram channel, Google Sheets).
+-- Jobs are written in the same transaction as the business record, sent later with retries.
+CREATE TABLE IF NOT EXISTS outbox (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  channel TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  ref TEXT NOT NULL,
+  payload_json TEXT NOT NULL DEFAULT '{}',
+  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','sent','failed')),
+  attempts INTEGER NOT NULL DEFAULT 0,
+  last_error TEXT,
+  created_at TEXT NOT NULL,
+  next_try_at REAL NOT NULL DEFAULT 0,
+  sent_at TEXT,
+  UNIQUE (channel, kind, ref)
+);
+CREATE INDEX IF NOT EXISTS idx_outbox_pending ON outbox(status, next_try_at);
+
+-- v2: last real success / error per external channel (shown honestly on the status page)
+CREATE TABLE IF NOT EXISTS channel_status (
+  channel TEXT PRIMARY KEY,
+  last_ok_at TEXT,
+  last_error_at TEXT,
+  last_error TEXT,
+  ok_count INTEGER NOT NULL DEFAULT 0,
+  error_count INTEGER NOT NULL DEFAULT 0
+);
+
 CREATE TABLE IF NOT EXISTS schema_version (version INTEGER NOT NULL);
 '''
 
@@ -441,7 +485,10 @@ def migrate(db):
     # single atomic statement: safe when several gunicorn workers start at once
     db.execute('INSERT INTO schema_version(version) SELECT ? WHERE NOT EXISTS (SELECT 1 FROM schema_version)',
                (SCHEMA_VERSION,))
-    # Future migrations: if row['version'] < 2: ALTER TABLE ...; UPDATE schema_version ...
+    # v1 -> v2 only added tables (documents, outbox, channel_status), created above with IF NOT EXISTS.
+    # Future column changes go here as: if version < N: ALTER TABLE ...
+    db.execute('UPDATE schema_version SET version=? WHERE version < ?', (SCHEMA_VERSION, SCHEMA_VERSION))
+
 
 
 def next_counter(db, name):
