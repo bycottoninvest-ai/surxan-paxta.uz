@@ -14,8 +14,7 @@
     <div class="auth-card">
       <img class="logo" src="{{ url_for('static', filename='img/logo-dark.png') }}" alt="SURXON Taxiatosh Textile">
       <div class="ttl">PAXTA HISOB TIZIMI</div>
-      {% if test_mode %}<div class="flash warn"><b>TEST REJIMI</b> · sinov bazasi. Kirish: <b>admin / Test2026!</b>, brigadir <b>juma</b>, tarozi <b>tarozi01</b>, buxgalter <b>buxgalter</b>, kassa <b>asadbek</b>, rahbar <b>rahbar</b> (parol: Demo2026!)</div>{% endif %}
-      <div class="avatar">{{ icon('user','lg') }}</div>
+      {% if test_mode %}<div class="test-badge">TEST REJIMI</div>{% endif %}
       {% with messages = get_flashed_messages(with_categories=true) %}{% for cat, msg in messages %}<div class="flash {{ cat }}">{{ msg }}</div>{% endfor %}{% endwith %}
       {% if request.args.get('bye') %}<div class="flash info">Tizimdan chiqdingiz.</div>{% endif %}
       <form method="post" action="{{ url_for('auth.do_login', next=request.args.get('next')) }}">
@@ -25,7 +24,6 @@
         <label class="check" style="margin:4px 0 16px"><input type="checkbox" name="remember" value="1" checked> Eslab qolish</label>
         <button class="btn btn-primary btn-block">Kirish</button>
       </form>
-      <div class="foot">Telefon · Kompyuter · Telegram — bitta tizim<br>{{ domain }} · v{{ version }}</div>
     </div>
   </div>
 </div>
