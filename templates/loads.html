@@ -1,0 +1,61 @@
+{% extends 'base.html' %}
+{% from 'macros.html' import pager, icon, csrf, uuid_field, status, empty with context %}
+{% set page_title = 'Telashkalar' %}
+{% block content %}
+<div class="page-h"><h1>{{ icon('trailer','lg') }} Telashkalar va reyslar</h1><span class="sub">Ochiq → TOLDI (dalada) → Tortildi (tarozida) → Nakladnoy</span></div>
+
+<section class="card mb">
+  <div class="card-h"><h3>Telashkalar holati (hozir)</h3></div>
+  <div class="card-b"><div class="trailers">
+    {% for t in trailers %}
+    <a class="tcard {{ 'free' if not t.load_id }}" href="{{ url_for('ops.load_detail', load_id=t.load_id) if t.load_id else '#open' }}">
+      <div class="ph" style="background-image:url('{{ photo_url(t.thumb) }}')">{% if t.status %}{{ status(t.status) }}{% else %}<span class="badge b-gray">Bo‘sh</span>{% endif %}</div>
+      <div class="bd"><b class="code">{{ t.trailer_code }}</b>
+        {% if t.load_id %}<div class="kg num">{{ (t.internal_kg if t.status == 'TOLDI' else t.live_kg)|num }} kg</div>
+        <div>{{ icon('tractor','xs') }} {{ t.tractor_code or '—' }}</div><div>{{ icon('pin','xs') }} {{ t.field_name }}</div><div>{{ icon('user','xs') }} {{ t.brigadier_name }}</div>
+        <div>{{ icon('clock','xs') }} {{ (t.full_at or t.opened_at)[11:16] }}</div>
+        {% else %}<div class="small muted">Bo‘sh — yangi reys ochish mumkin</div>{% endif %}
+      </div>
+    </a>
+    {% endfor %}
+  </div></div>
+</section>
+
+<div class="grid">
+  {% if can('load.open') %}
+  <section class="card s4" id="open">
+    <div class="card-h"><h3>{{ icon('plus') }} Yangi reys ochish</h3></div>
+    <div class="card-b">
+      <form method="post" action="{{ url_for('ops.load_open') }}" data-offline="Telashka ochish" class="form">
+        {{ csrf() }}{{ uuid_field() }}
+        <div class="f"><label>Telashka <span class="req">*</span></label><select name="trailer_id" required>{% for t in trailers if not t.load_id %}<option value="{{ t.trailer_id }}">{{ t.trailer_code }}</option>{% else %}<option value="">Bo‘sh telashka yo‘q</option>{% endfor %}</select></div>
+        <div class="f"><label>Dala <span class="req">*</span></label><select name="field_id" required>{% for f in fields %}<option value="{{ f.id }}">{{ f.code }} · {{ f.name }} ({{ f.brigadier_name or '—' }})</option>{% endfor %}</select></div>
+        <div class="f h"><label>Traktor</label><select name="tractor_id"><option value="">—</option>{% for t in tractors %}<option value="{{ t.id }}">{{ t.code }}</option>{% endfor %}</select></div>
+        <div class="f h"><label>Brigadir</label><select name="brigadier_id">{% if not my_brigade %}<option value="">Daladan olinsin</option>{% endif %}{% for b in brigadiers %}<option value="{{ b.id }}">{{ b.name }}</option>{% endfor %}</select></div>
+        <div class="f h"><label>Mashina raqami</label><input name="vehicle_plate" placeholder="01 123 AAA"></div>
+        <div class="f h"><label>Haydovchi</label><input name="driver_name"></div>
+        <div class="f"><button class="btn btn-primary btn-block">Reysni ochish</button></div>
+      </form>
+    </div>
+  </section>
+  {% endif %}
+  <section class="card {{ 's8' if can('load.open') else 's12' }}">
+    <div class="card-h"><h3>Reyslar ({{ year }})</h3>
+      <div class="tabs" style="margin-left:auto">
+        <a href="{{ url_for('ops.loads') }}" class="{{ 'on' if not status }}">Barchasi</a>
+        {% for s, l in [('OCHIQ','Ochiq'),('TOLDI','TOLDI'),('TORTILDI','Tortilgan'),('BEKOR','Bekor')] %}<a href="{{ url_for('ops.loads', status=s) }}" class="{{ 'on' if status == s }}">{{ l }}</a>{% endfor %}
+      </div></div>
+    <div class="table-wrap"><table class="t">
+      <thead><tr><th>№</th><th>Sana</th><th>Telashka</th><th>Traktor</th><th>Dala</th><th>Brigadir</th><th class="num">Ichki kg</th><th class="num">Netto</th><th>Nakladnoy</th><th>Holat</th></tr></thead>
+      <tbody>{% for r in rows %}<tr class="{{ 'void' if r.status == 'BEKOR' }}">
+        <td><a class="link" href="{{ url_for('ops.load_detail', load_id=r.id) }}">{{ r.id }}</a></td><td>{{ r.load_date|d }}</td><td class="b">{{ r.trailer_code }}</td><td>{{ r.tractor_code or '—' }}</td>
+        <td>{{ r.field_name }}</td><td>{{ r.brigadier_name }}</td><td class="num">{{ (r.internal_kg if r.status != 'OCHIQ' else r.live_kg)|num }}</td>
+        <td class="num b">{{ r.net_kg|num if r.net_kg else '—' }}</td>
+        <td>{% if r.waybill_id %}<a class="link" href="{{ url_for('ops.waybill_detail', waybill_id=r.waybill_id) }}">{{ r.waybill_number }}</a>{% else %}—{% endif %}</td>
+        <td class="keep">{{ status(r.status) }}</td></tr>
+      {% else %}<tr><td colspan="10">{{ empty('Reys yo‘q', 'trailer') }}</td></tr>{% endfor %}</tbody>
+    </table></div>
+    {{ pager(page, has_more) }}
+  </section>
+</div>
+{% endblock %}

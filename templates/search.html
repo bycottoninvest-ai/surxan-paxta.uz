@@ -1,0 +1,10 @@
+{% extends 'base.html' %}
+{% from 'macros.html' import icon, empty with context %}
+{% set page_title = 'Qidiruv' %}
+{% block content %}
+<div class="page-h"><h1>{{ icon('search','lg') }} Qidiruv: “{{ term }}”</h1></div>
+<section class="card"><div class="card-b"><div class="feed">
+  {% for r in results %}<a href="{{ r.url }}"><span class="th">{{ icon('search') }}</span><span class="tx"><b>{{ r.label }}</b><span>{{ r.type }} · {{ r.sub }}</span></span></a>
+  {% else %}{{ empty('Hech narsa topilmadi. Kamida 2 harf yozing.') }}{% endfor %}
+</div></div></section>
+{% endblock %}

@@ -1,0 +1,32 @@
+{% extends 'base.html' %}
+{% from 'macros.html' import pager, icon, status, empty with context %}
+{% set page_title = 'Nakladnoylar' %}
+{% block content %}
+<div class="page-h"><h1>{{ icon('doc','lg') }} Nakladnoylar</h1><span class="sub">Raqam tizim tomonidan avtomatik va takrorlanmas beriladi (PA-000001…)</span>
+  <span class="spacer"></span><a class="btn btn-light" href="{{ url_for('reports.report', key='nakladnoylar', format='xlsx') }}">{{ icon('download','sm') }} Excel</a></div>
+<section class="card">
+  <div class="card-h">
+    <div class="tabs">
+      <a href="{{ url_for('ops.waybills') }}" class="{{ 'on' if not period and not request.args.get('status') }}">Barchasi</a>
+      <a href="{{ url_for('ops.waybills', period='today') }}" class="{{ 'on' if period == 'today' }}">Bugun</a>
+      <a href="{{ url_for('ops.waybills', period='week') }}" class="{{ 'on' if period == 'week' }}">Bu hafta</a>
+      <a href="{{ url_for('ops.waybills', status='pending') }}" class="{{ 'on' if request.args.get('status') == 'pending' }}">Yo‘lda</a>
+      <a href="{{ url_for('ops.waybills', status='QABUL') }}" class="{{ 'on' if request.args.get('status') == 'QABUL' }}">Qabul qilingan</a>
+    </div>
+    <form class="search" style="max-width:280px" method="get">{{ icon('search','sm') }}<input name="q" value="{{ request.args.get('q','') }}" placeholder="Raqam, telashka, mashina..."></form>
+  </div>
+  <div class="table-wrap"><table class="t">
+    <thead><tr><th>№</th><th>Sana / vaqt</th><th>Telashka</th><th>Traktor</th><th>Mashina</th><th>Dala</th><th>Brigadir</th><th class="num">Brutto</th><th class="num">Tara</th><th class="num">Netto (kg)</th><th class="num">Nayman qabul</th><th class="num">Farq</th><th>Holat</th></tr></thead>
+    <tbody>{% for r in rows %}<tr class="{{ 'void' if r.status == 'BEKOR' }}">
+      <td class="keep"><a class="link" href="{{ url_for('ops.waybill_detail', waybill_id=r.id) }}">{{ r.number }}</a></td>
+      <td>{{ r.document_date|d }} <span class="muted">{{ (r.tare_at or r.created_at)[11:16] }}</span></td><td>{{ r.trailer_code }}</td><td>{{ r.tractor_code or '—' }}</td><td>{{ r.vehicle_plate or '—' }}</td>
+      <td>{{ r.field_name }}</td><td>{{ r.brigadier_name }}</td><td class="num">{{ r.gross_kg|num }}</td><td class="num">{{ r.tare_kg|num }}</td><td class="num b">{{ r.net_kg|num }}</td>
+      <td class="num">{{ r.accepted_kg|num if r.accepted_kg is not none else '—' }}</td>
+      <td class="num b {{ 't-down' if r.nayman_diff_kg and r.nayman_diff_kg < 0 }}">{{ ('%+.0f'|format(r.nayman_diff_kg)) if r.nayman_diff_kg is not none else '—' }}</td>
+      <td class="keep">{{ status(r.status) }}</td></tr>
+    {% else %}<tr><td colspan="13">{{ empty('Nakladnoy yo‘q', 'doc') }}</td></tr>{% endfor %}</tbody>
+    {% if rows %}<tfoot><tr><td colspan="9">Sahifa jami ({{ rows|length }} ta, bekorlarsiz)</td><td class="num">{{ totals.net|num }}</td><td class="num">{{ totals.accepted|num }}</td><td colspan="2"></td></tr></tfoot>{% endif %}
+  </table></div>
+    {{ pager(page, has_more) }}
+</section>
+{% endblock %}

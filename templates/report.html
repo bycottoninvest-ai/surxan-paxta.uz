@@ -1,0 +1,30 @@
+{% extends 'base.html' %}
+{% from 'macros.html' import icon, empty with context %}
+{% set page_title = spec.title %}
+{% macro cell(v, t) -%}
+{%- if v is none or v == '' -%}—
+{%- elif t == 'kg' -%}{{ v|num(1 if (v is number and v % 1) else 0) }}
+{%- elif t == 'money' -%}{{ v|num }}
+{%- elif t == 'date' -%}{{ v|d }}
+{%- elif t == 'num' -%}{{ v|num(1 if (v is number and v % 1) else 0) }}
+{%- else -%}{{ v }}{%- endif -%}
+{%- endmacro %}
+{% block content %}
+<div class="print-only" style="text-align:center;margin-bottom:10px"><img src="{{ url_for('static', filename='img/logo-dark.png') }}" style="width:180px" alt=""><div class="small">PAXTA HISOB TIZIMI · {{ today|d }}</div></div>
+<div class="page-h"><a href="{{ url_for('reports.index') }}" class="icon-btn no-print">{{ icon('chev-left') }}</a><h1>{{ spec.title }}</h1>
+  <span class="spacer"></span>
+  {% if 'date' in spec.get('filters', []) %}<form class="no-print row" method="get"><input type="hidden" name="season" value="{{ year }}"><input class="input" type="date" name="date" value="{{ spec.date }}" max="{{ today }}" onchange="this.form.submit()" style="width:170px"></form>{% endif %}
+  <a class="btn btn-light no-print" href="{{ season_url(format='xlsx') }}">{{ icon('download','sm') }} Excel</a>
+  <button class="btn btn-primary no-print" onclick="window.print()">{{ icon('printer','sm') }} Chop etish / PDF</button>
+</div>
+<section class="card">
+  <div class="table-wrap"><table class="t">
+    <thead><tr>{% for c in spec.columns %}<th class="{{ 'num' if c[2] in ('kg','money','num') }}">{{ c[1] }}{% if c[2] == 'kg' %} (kg){% elif c[2] == 'money' %} (so‘m){% endif %}</th>{% endfor %}</tr></thead>
+    <tbody>{% for r in spec.rows %}<tr>{% for c in spec.columns %}<td class="{{ 'num' if c[2] in ('kg','money','num') }}">{{ cell(r.get(c[0]), c[2]) }}</td>{% endfor %}</tr>
+    {% else %}<tr><td colspan="{{ spec.columns|length }}">{{ empty('Ma’lumot yo‘q') }}</td></tr>{% endfor %}</tbody>
+    {% if spec.totals and spec.rows %}<tfoot><tr>{% for c in spec.columns %}<td class="{{ 'num' if c[2] in ('kg','money','num') }}">{% if loop.first %}Jami{% elif c[0] in spec.totals %}{{ cell(spec.totals[c[0]], c[2]) }}{% endif %}</td>{% endfor %}</tr></tfoot>{% endif %}
+  </table></div>
+</section>
+<p class="tiny muted">Yakuniy og‘irlik — umumiy tarozi netto. Daladagi ichki kg va Nayman qabuli alohida ustunlarda; ular bir-biriga qo‘shilmaydi. Bekor qilingan yozuvlar jamiga kirmaydi.</p>
+{% if printing %}<script>window.addEventListener('load', () => setTimeout(() => window.print(), 300));</script>{% endif %}
+{% endblock %}

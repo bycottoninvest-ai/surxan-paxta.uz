@@ -1,0 +1,43 @@
+{% extends 'base.html' %}
+{% from 'macros.html' import icon, csrf, uuid_field, empty, void_button, file_input with context %}
+{% set page_title = 'Asadbek kassasi' %}
+{% block content %}
+<div class="page-h"><h1>{{ icon('cash','lg') }} Asadbek kassasi ({{ year }})</h1><span class="spacer"></span><a class="btn btn-light" href="{{ url_for('reports.report', key='kassa', format='xlsx') }}">{{ icon('download','sm') }} Excel</a></div>
+{% if not has_opening %}<div class="notice mb">{{ icon('alert') }}<div><b>Boshlang‘ich qoldiq kiritilmagan.</b> Kassa qoldig‘i faqat shu mavsumdagi yozuvlar bo‘yicha ko‘rsatilmoqda — haqiqiy qoldiq emas. Birinchi yozuv sifatida “Boshlang‘ich qoldiq” ni kiriting.</div></div>{% endif %}
+<div class="kpis" style="grid-template-columns:repeat(4,minmax(0,1fr))">
+  <div class="kpi"><div class="sq bg-navy">{{ icon('flag') }}</div><div><div class="label">Boshlang‘ich qoldiq</div><div class="value num">{{ fin.cash_opening|num if has_opening else '—' }}</div></div></div>
+  <div class="kpi"><div class="sq bg-green">{{ icon('down') }}</div><div><div class="label">Kirim</div><div class="value num">{{ fin.cash_in|num }}</div></div></div>
+  <div class="kpi"><div class="sq bg-red">{{ icon('up') }}</div><div><div class="label">Chiqim</div><div class="value num">{{ fin.cash_out|num }}</div></div></div>
+  <div class="kpi"><div class="sq bg-blue">{{ icon('wallet') }}</div><div><div class="label">Joriy qoldiq</div><div class="value num">{{ balance|num if has_opening else '—' }}</div>{% if not has_opening %}<div class="trend t-muted">Boshlang‘ich qoldiq yo‘q</div>{% endif %}</div></div>
+</div>
+<div class="grid">
+  {% if can('cash.write') %}
+  <section class="card s4">
+    <div class="card-h"><h3>{{ icon('plus') }} Kassa operatsiyasi</h3></div>
+    <div class="card-b"><form method="post" enctype="multipart/form-data" class="form" data-confirm="Kassa yozuvini saqlaysizmi?">{{ csrf() }}{{ uuid_field() }}
+      <div class="f"><label>Operatsiya <span class="req">*</span></label><select name="category" id="cat" required>
+        {% for k, v in categories.items() %}{% if k != 'expense' and (k != 'opening' or not has_opening) %}<option value="{{ k }}" {{ 'selected' if (request.args.get('worker') and k == 'worker_pay') or (not has_opening and k == 'opening') }}>{{ '↓ ' if v[0] == 'IN' else '↑ ' }}{{ v[1] }}</option>{% endif %}{% endfor %}</select></div>
+      <div class="f" id="wk"><label>Ishchi</label><select name="worker_id"><option value="">—</option>{% for w in workers %}<option value="{{ w.id }}" {{ 'selected' if request.args.get('worker')|int == w.id }}>{{ w.full_name }}</option>{% endfor %}</select></div>
+      <div class="f h"><label>Sana</label><input type="date" name="entry_date" value="{{ today }}" max="{{ today }}" required></div>
+      <div class="f h"><label>Summa (so‘m) <span class="req">*</span></label><input name="amount" inputmode="numeric" required></div>
+      <div class="f"><label>Kimdan / kimga</label><input name="counterparty"></div>
+      <div class="f"><label>Izoh</label><input name="note"></div>
+      <div class="f">{{ file_input('photo', 'Hujjat / kvitansiya rasmi') }}</div>
+      <div class="f"><button class="btn btn-primary btn-block">Saqlash</button></div>
+    </form><div class="tiny muted mt">Xarajatlar “Xarajatlar” bo‘limida “kassadan” belgisi bilan kiritiladi. Qoldiqdan ortiq chiqim qabul qilinmaydi.</div></div>
+  </section>
+  {% endif %}
+  <section class="card {{ 's8' if can('cash.write') else 's12' }}">
+    <div class="card-h"><h3>Kassa daftari</h3></div>
+    <div class="table-wrap"><table class="t">
+      <thead><tr><th>Sana</th><th>Operatsiya</th><th class="num">Kirim</th><th class="num">Chiqim</th><th class="num">Qoldiq</th><th>Ishchi / kontragent</th><th>Izoh</th><th></th></tr></thead>
+      <tbody>{% for r in rows %}<tr class="{{ 'void' if r.voided_at }}"><td>{{ r.entry_date|d }}</td><td>{{ categories.get(r.category, ('', r.category))[1] }}</td>
+        <td class="num t-up">{{ r.amount|num if r.direction == 'IN' }}</td><td class="num t-down">{{ r.amount|num if r.direction == 'OUT' }}</td><td class="num b">{{ running[r.id]|num }}</td>
+        <td>{{ r.worker_name or r.counterparty or '—' }}</td><td class="small">{{ r.note or '' }}</td>
+        <td class="keep right">{% if r.voided_at %}<span class="badge b-gray">Bekor</span>{% elif can('cash.write') and not r.expense_id and not r.payment_id %}{{ void_button(url_for('finance.cash_void', entry_id=r.id)) }}{% endif %}</td></tr>
+      {% else %}<tr><td colspan="8">{{ empty('Kassa yozuvi yo‘q', 'cash') }}</td></tr>{% endfor %}</tbody>
+    </table></div>
+  </section>
+</div>
+{% endblock %}
+{% block scripts %}<script>(function(){const c=document.getElementById('cat'),w=document.getElementById('wk');if(!c)return;const f=()=>w.hidden=!['worker_pay','advance'].includes(c.value);c.addEventListener('change',f);f();})();</script>{% endblock %}

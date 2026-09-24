@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="uz"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>SURXON · TV</title>
+<link rel="icon" href="{{ url_for('static', filename='img/favicon.png') }}">
+<style>
+  :root{--bg:#071f40;--card:#0d2c55;--line:#1d4478;--text:#fff;--muted:#9fb6d6;--green:#2fc16a;--orange:#ffa53a;--purple:#9b7bff;--blue:#4aa3ff;--red:#ff5b7f}
+  *{box-sizing:border-box}html,body{margin:0;height:100%;background:var(--bg);color:var(--text);font-family:Roboto,system-ui,Arial,sans-serif;overflow:hidden}
+  .wrap{display:grid;grid-template-rows:auto auto 1fr;height:100vh;padding:1.6vh 1.6vw;gap:1.6vh}
+  header{display:flex;align-items:center;gap:2vw}
+  header img{height:6vh}
+  header h1{font-size:3.2vh;margin:0;font-weight:700;letter-spacing:.1vw}
+  header .sp{flex:1}
+  .clock{font-size:4.5vh;font-weight:800;font-variant-numeric:tabular-nums}
+  .state{font-size:2vh;padding:.8vh 1.2vw;border-radius:99px;background:#12406f}
+  .state.bad{background:var(--red);animation:none}
+  .kpis{display:grid;grid-template-columns:repeat(5,1fr);gap:1.2vw}
+  .k{background:var(--card);border:1px solid var(--line);border-radius:1.4vh;padding:1.6vh 1.2vw}
+  .k .l{font-size:2.2vh;color:var(--muted)}
+  .k .v{font-size:6.4vh;font-weight:900;font-variant-numeric:tabular-nums;line-height:1.1;margin-top:.6vh}
+  .k .v small{font-size:2.6vh;font-weight:600;color:var(--muted)}
+  .k .s{font-size:2vh;color:var(--muted);margin-top:.4vh}
+  .main{display:grid;grid-template-columns:1.25fr 1fr;gap:1.2vw;min-height:0}
+  .panel{background:var(--card);border:1px solid var(--line);border-radius:1.4vh;padding:1.6vh 1.2vw;min-height:0;display:flex;flex-direction:column}
+  .panel h2{font-size:2.6vh;margin:0 0 1.2vh;font-weight:700}
+  .col{display:grid;grid-template-rows:1fr 1fr;gap:1.2vw;min-height:0}
+  .tr{display:grid;grid-template-columns:repeat(4,1fr);gap:1vw}
+  .t{border-radius:1vh;padding:1.2vh 1vw;background:#12396a;border-left:.6vh solid #54708f}
+  .t b{font-size:3.2vh;display:block}.t .kg{font-size:4.2vh;font-weight:900;font-variant-numeric:tabular-nums}
+  .t .st{font-size:2vh;font-weight:700}.t .f{font-size:1.9vh;color:var(--muted)}
+  .t.OCHIQ{border-color:var(--blue)}.t.TOLDI{border-color:var(--green);background:#0f4a3a}
+  .b{display:grid;grid-template-columns:18vw 1fr 12vw;align-items:center;gap:1vw;margin:.9vh 0;font-size:2.6vh}
+  .bar{height:2.6vh;background:#12396a;border-radius:99px;overflow:hidden}.bar span{display:block;height:100%;background:var(--green);border-radius:99px}
+  .b .n{text-align:right;font-weight:800;font-variant-numeric:tabular-nums}
+  .chart{flex:1;min-height:0;display:flex;align-items:flex-end;gap:1vw;padding-top:1vh}
+  .chart .d{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;gap:.6vh}
+  .chart .st{width:70%;display:flex;flex-direction:column-reverse;border-radius:.6vh .6vh 0 0;overflow:hidden}
+  .chart .h{background:var(--green)}.chart .c{background:var(--orange)}
+  .chart .lab{font-size:1.8vh;color:var(--muted)}.chart .val{font-size:1.8vh;font-weight:700}
+  .legend{font-size:1.9vh;color:var(--muted);margin-top:.6vh}.legend i{display:inline-block;width:1.6vh;height:1.6vh;border-radius:50%;vertical-align:-.2vh;margin:0 .4vw 0 1vw}
+  .offline{position:fixed;inset:auto 0 0 0;background:var(--red);color:#fff;text-align:center;font-size:3vh;font-weight:800;padding:1.4vh;display:none}
+</style></head>
+<body>
+<div class="wrap">
+  <header>
+    <img src="{{ url_for('static', filename='img/logo-light.png') }}" alt="SURXON">
+    <h1>PAXTA HISOB TIZIMI · <span id="season"></span>-mavsum · <span id="date"></span></h1>
+    <span class="sp"></span>
+    <span class="state" id="state">Yuklanmoqda…</span>
+    <span class="clock" id="clock">--:--</span>
+  </header>
+  <section class="kpis">
+    <div class="k"><div class="l">Bugungi terim (dala)</div><div class="v" id="k-harvest">—</div><div class="s" id="k-split"></div></div>
+    <div class="k"><div class="l">Tarozi netto (bugun)</div><div class="v" id="k-net">—</div><div class="s" id="k-season"></div></div>
+    <div class="k"><div class="l">Naymanga jo‘natilgan</div><div class="v" id="k-sent">—</div><div class="s" id="k-transit"></div></div>
+    <div class="k"><div class="l">Nayman qabul qildi</div><div class="v" id="k-acc">—</div><div class="s">bugun</div></div>
+    <div class="k"><div class="l">Telashkalar band</div><div class="v" id="k-tr">—</div><div class="s" id="k-target"></div></div>
+  </section>
+  <section class="main">
+    <div class="col">
+      <div class="panel"><h2>Telashkalar (hozir)</h2><div class="tr" id="trailers"></div></div>
+      <div class="panel"><h2>Oxirgi 8 kun terimi (dala, kg)</h2><div class="chart" id="chart"></div>
+        <div class="legend"><i style="background:var(--green)"></i>Qo‘l terimi<i style="background:var(--orange)"></i>Kombayn</div></div>
+    </div>
+    <div class="panel"><h2>Brigadalar natijasi (mavsum, tarozi netto)</h2><div id="brigs"></div></div>
+  </section>
+</div>
+<div class="offline" id="offline">ALOQA UZILDI — ko‘rsatilgan ma’lumot eskirgan bo‘lishi mumkin</div>
+<script>
+(function () {
+  const $ = id => document.getElementById(id);
+  const fmt = n => n == null ? '—' : Math.round(n).toLocaleString('ru-RU').replace(/,/g, ' ');
+  const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  let last = 0;
+  setInterval(() => { const d = new Date(); $('clock').textContent = d.toTimeString().slice(0, 5); tick(); }, 1000);
+  function tick() {
+    if (!last) return;
+    const age = Math.round((Date.now() - last) / 1000);
+    const stale = age > 120;
+    $('state').className = 'state' + (stale ? ' bad' : '');
+    $('state').textContent = 'Yangilandi: ' + new Date(last).toTimeString().slice(0, 8) + (stale ? ' · ' + Math.round(age / 60) + ' daqiqa oldin' : '');
+    $('offline').style.display = stale ? 'block' : 'none';
+  }
+  async function load() {
+    try {
+      const r = await fetch('/tv/data.json', { credentials: 'same-origin', cache: 'no-store' });
+      if (r.status === 403) { location.reload(); return; }
+      const d = await r.json();
+      last = Date.now();
+      $('season').textContent = d.season; $('date').textContent = d.date.split('-').reverse().join('.');
+      const k = d.kpi;
+      $('k-harvest').innerHTML = fmt(k.harvest) + ' <small>kg</small>';
+      $('k-split').textContent = 'qo‘l ' + fmt(k.hand) + ' · kombayn ' + fmt(k.combine);
+      $('k-net').innerHTML = fmt(k.net) + ' <small>kg</small>';
+      $('k-season').textContent = 'mavsum: ' + fmt(k.season_net / 1000) + ' t';
+      $('k-sent').innerHTML = fmt(k.sent) + ' <small>kg</small>';
+      $('k-transit').textContent = 'yo‘lda: ' + k.in_transit + ' ta nakladnoy';
+      $('k-acc').innerHTML = fmt(k.accepted) + ' <small>kg</small>';
+      $('k-tr').textContent = k.trailers_busy + ' / ' + k.trailers_total;
+      $('k-target').textContent = d.target ? 'reja: ' + fmt(d.target) + ' kg (' + Math.round(k.harvest / d.target * 100) + '%)' : '';
+      const lab = { OCHIQ: 'Terim', TOLDI: 'TOLDI → tarozi', BOSH: 'Bo‘sh' };
+      $('trailers').innerHTML = d.trailers.map(t => `<div class="t ${esc(t.status)}"><b>${esc(t.code)}</b><div class="kg">${t.status === 'BOSH' ? '—' : fmt(t.kg) + ' kg'}</div><div class="st">${esc(lab[t.status] || t.status)}</div><div class="f">${esc(t.field || '')} ${t.tractor ? '· ' + esc(t.tractor) : ''}</div></div>`).join('');
+      const max = Math.max(1, ...d.brigadiers.map(b => b.net_kg));
+      $('brigs').innerHTML = d.brigadiers.map(b => `<div class="b"><span>${esc(b.name)}<br><small style="color:var(--muted);font-size:1.9vh">${fmt(b.area_ha)} ga · ${b.kg_ha == null ? '—' : fmt(b.kg_ha) + ' kg/ga'}</small></span><div class="bar"><span style="width:${b.net_kg / max * 100}%"></span></div><span class="n">${fmt(b.net_kg / 1000)} t</span></div>`).join('');
+      const s = d.series, tot = s.hand.map((h, i) => h + s.combine[i]), m = Math.max(1, ...tot);
+      $('chart').innerHTML = s.labels.map((l, i) => `<div class="d"><span class="val">${fmt(tot[i] / 1000)}t</span><div class="st" style="height:${tot[i] / m * 80}%"><div class="h" style="flex:${s.hand[i]}"></div><div class="c" style="flex:${s.combine[i]}"></div></div><span class="lab">${esc(l)}</span></div>`).join('');
+      tick();
+    } catch (e) { tick(); if (!last) { $('state').className = 'state bad'; $('state').textContent = 'Aloqa yo‘q'; $('offline').style.display = 'block'; } }
+  }
+  load(); setInterval(load, 30000);
+  // reload the whole page every 6 hours to pick up new versions
+  setTimeout(() => location.reload(), 6 * 3600 * 1000);
+})();
+</script>
+</body></html>

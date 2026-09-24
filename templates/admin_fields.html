@@ -1,0 +1,31 @@
+{% extends 'base.html' %}
+{% from 'macros.html' import icon, csrf, empty with context %}
+{% set page_title = 'Dalalar' %}
+{% block content %}
+<div class="page-h"><h1>{{ icon('field','lg') }} Dalalar va maydon ({{ year }})</h1></div>
+{% set diff = known_total - total_area %}
+<div class="notice mb">{{ icon('alert') }}<div><b>Tasdiqlanmagan maydon:</b> tizimdagi faol dalalar jami <b>{{ total_area|num(1) }} ga</b>.
+  Oldin aytilgan umumiy maydon {{ known_total|num(1) }} ga{% if diff|abs > 0.05 %} — farq <b>{{ diff|num(1) }} ga</b> hali hal qilinmagan{% endif %}.
+  Brigadalar bo‘yicha: {% for b in brig_area %}{{ b.name }} {{ b.area|num(1) }} ga{{ ', ' if not loop.last }}{% endfor %}. Aniq kontur raqamlari va gektarlarini kiriting — tizim farqni taxmin bilan yopmaydi.</div></div>
+<div class="grid">
+  {% if can('masterdata.write') %}
+  <section class="card s4"><div class="card-h"><h3>{{ icon('plus') }} Yangi dala</h3></div>
+    <div class="card-b"><form method="post" class="form">{{ csrf() }}
+      <div class="f h"><label>Kod <span class="req">*</span></label><input name="code" required placeholder="D-01"></div>
+      <div class="f h"><label>Maydon (ga) <span class="req">*</span></label><input name="area_ha" inputmode="decimal" required></div>
+      <div class="f"><label>Nomi / kontur <span class="req">*</span></label><input name="name" required placeholder="Dala 1 (kontur №...)"></div>
+      <div class="f"><label>Brigadir</label><select name="brigadier_id"><option value="">—</option>{% for b in brigadiers %}<option value="{{ b.id }}">{{ b.name }}</option>{% endfor %}</select></div>
+      <div class="f"><label>Izoh</label><textarea name="notes"></textarea></div>
+      <div class="f"><button class="btn btn-primary btn-block">Saqlash</button></div>
+    </form><div class="tiny muted mt">Xaritadagi chegara dala sahifasida chiziladi.</div></div></section>
+  {% endif %}
+  <section class="card {{ 's8' if can('masterdata.write') else 's12' }}"><div class="card-h"><h3>Dalalar</h3></div>
+    <div class="table-wrap"><table class="t"><thead><tr><th>Kod</th><th>Nomi</th><th>Brigadir</th><th class="num">Ga</th><th class="num">Ichki kg</th><th class="num">Netto kg</th><th class="num">kg/ga</th><th>Xarita</th></tr></thead>
+      <tbody>{% for f in rows %}<tr><td class="b"><a class="link" href="{{ url_for('admin.field_detail', field_id=f.id) }}">{{ f.code }}</a></td><td>{{ f.name }}</td><td>{{ f.brigadier_name or '—' }}</td><td class="num">{{ f.area_ha|num(1) }}</td>
+        <td class="num">{{ f.internal_kg|num }}</td><td class="num b">{{ f.net_kg|num }}</td><td class="num">{{ (f.net_kg / f.area_ha)|num if f.area_ha else '—' }}</td>
+        <td>{% if f.polygon_json %}<span class="badge b-green">bor</span>{% else %}<span class="badge b-gray">yo‘q</span>{% endif %}</td></tr>
+      {% else %}<tr><td colspan="8">{{ empty('Dalalar hali kiritilmagan', 'field') }}</td></tr>{% endfor %}</tbody>
+      {% if rows %}<tfoot><tr><td colspan="3">Jami</td><td class="num">{{ total_area|num(1) }}</td><td class="num">{{ rows|sum(attribute='internal_kg')|num }}</td><td class="num">{{ rows|sum(attribute='net_kg')|num }}</td><td colspan="2"></td></tr></tfoot>{% endif %}
+    </table></div></section>
+</div>
+{% endblock %}

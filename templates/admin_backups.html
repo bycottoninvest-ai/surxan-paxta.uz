@@ -1,0 +1,13 @@
+{% extends 'base.html' %}
+{% from 'macros.html' import icon, csrf, empty with context %}
+{% set page_title = 'Zaxira nusxa' %}
+{% block content %}
+<div class="page-h"><h1>{{ icon('database','lg') }} Zaxira nusxalar</h1><span class="sub">Avtomatik har kecha (docker “backup” xizmati) · {{ keep }} kun saqlanadi · haftalik to‘liq foto arxivi</span>
+  <span class="spacer"></span><form method="post">{{ csrf() }}<button class="btn btn-primary">{{ icon('refresh','sm') }} Hozir zaxira olish</button></form></div>
+<div class="notice blue mb">{{ icon('shield') }}<div>Serverdagi nusxa yetarli emas: haftada kamida bir marta oxirgi DB faylini va to‘liq foto arxivini boshqa joyga (kompyuter, bulut) yuklab oling. Tiklash tartibi: <code>docs/TIKLASH.md</code>.</div></div>
+<section class="card"><div class="table-wrap"><table class="t">
+  <thead><tr><th>Fayl</th><th class="num">Hajm</th><th>Vaqt</th><th></th></tr></thead>
+  <tbody>{% for name, size, mtime in files %}<tr><td>{{ name }}</td><td class="num">{{ (size / 1024 / 1024)|num(2) }} MB</td><td>{{ mtime|int }}</td><td><a class="btn btn-light btn-sm" href="{{ url_for('admin.backup_download', name=name) }}">{{ icon('download','sm') }} Yuklab olish</a></td></tr>
+  {% else %}<tr><td colspan="4">{{ empty('Hali zaxira yo‘q', 'database') }}</td></tr>{% endfor %}</tbody>
+</table></div></section>
+{% endblock %}

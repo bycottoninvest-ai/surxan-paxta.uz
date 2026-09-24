@@ -1,0 +1,86 @@
+{% extends 'base.html' %}
+{% from 'macros.html' import icon, csrf, status, photo_card, empty, file_input with context %}
+{% set page_title = 'Tarozi ' ~ ld.trailer_code %}
+{% block content %}
+<div class="page-h"><a href="{{ url_for('ops.scale_queue') }}" class="icon-btn">{{ icon('chev-left') }}</a><h1>Tarozi — {{ ld.trailer_code }} (reys №{{ ld.id }})</h1>{{ status(ld.status) }}</div>
+<div class="steps">
+  <span class="{{ 'done' if w else 'now' }}">1. Brutto (yuk bilan)</span>
+  <span class="{{ 'done' if w and w.status == 'YAKUNLANDI' else 'now' if w else '' }}">2. Tara (bo‘sh)</span>
+  <span class="{{ 'done' if w and w.status == 'YAKUNLANDI' }}">3. Netto + nakladnoy</span>
+</div>
+<div class="grid">
+  <section class="card s5">
+    <div class="card-h"><h3>Yuk ma’lumoti</h3></div>
+    <dl class="kv">
+      <dt>Brigadir</dt><dd>{{ ld.brigadier_name }}</dd><dt>Dala</dt><dd>{{ ld.field_name }}</dd>
+      <dt>Traktor</dt><dd>{{ ld.tractor_code or '—' }}</dd><dt>Telashka</dt><dd>{{ ld.trailer_code }}</dd>
+      <dt>TOLDI vaqti</dt><dd>{{ ld.full_at|d }}</dd>
+      <dt class="hl">Ichki hisob (dala tarozisi)</dt><dd class="hl num">{{ ld.internal_kg|num(1) }} kg</dd>
+      {% if w %}<dt>Brutto</dt><dd class="num">{{ w.gross_kg|num }} kg · {{ w.gross_at[11:16] }}</dd>{% endif %}
+      {% if w and w.status == 'YAKUNLANDI' %}<dt>Tara</dt><dd class="num">{{ w.tare_kg|num }} kg · {{ w.tare_at[11:16] }}</dd>
+      <dt class="hl-g">Netto</dt><dd class="hl-g num" style="font-size:18px">{{ w.net_kg|num }} kg</dd>{% endif %}
+    </dl>
+    <div class="card-b"><div class="photo-grid three">{% for p in photos %}{{ photo_card(p) }}{% endfor %}</div></div>
+  </section>
+
+  <section class="card s7">
+    {% if not can('weigh.write') %}
+      <div class="card-b"><div class="notice blue">Tortishni faqat tarozi xodimi kiritadi.</div></div>
+    {% elif not w %}
+    <div class="card-h"><h3>1-tortish: BRUTTO (yuk bilan)</h3></div>
+    <div class="card-b">
+      <form method="post" enctype="multipart/form-data" class="form" data-confirm="Brutto qiymatini tasdiqlaysizmi?">
+        {{ csrf() }}<input type="hidden" name="step" value="gross">
+        <div class="f"><label>Brutto (kg) <span class="req">*</span></label><input name="gross_kg" class="big" inputmode="decimal" required autofocus placeholder="0"></div>
+        <div class="f h"><label>Mashina raqami</label><input name="vehicle_plate" value="{{ ld.vehicle_plate or '' }}" placeholder="01 123 AAA"></div>
+        <div class="f h"><label>Haydovchi</label><input name="driver_name" value="{{ ld.driver_name or '' }}"></div>
+        <div class="f h"><label>Tarozi №</label><input name="scale_no" placeholder="1"></div>
+        <div class="f h">{{ file_input('photo', 'Tarozi tablosi rasmi') }}</div>
+        <div class="f"><div class="tiny muted">Vaqt avtomatik yoziladi. Operator: {{ current_user['full_name'] }}.</div></div>
+        <div class="f"><button class="btn btn-green btn-block btn-xl">Saqlash (brutto)</button></div>
+      </form>
+    </div>
+    {% elif w.status == 'BRUTTO' %}
+    <div class="card-h"><h3>2-tortish: TARA (bo‘sh holatda)</h3></div>
+    <div class="card-b">
+      <form method="post" enctype="multipart/form-data" class="form" id="tare-form" data-confirm="Tortishni yakunlab, nakladnoy yaratilsinmi?">
+        {{ csrf() }}<input type="hidden" name="step" value="tare">
+        <div class="f h keep"><label>Brutto</label><input value="{{ w.gross_kg|num }}" disabled class="big" style="font-size:22px"></div>
+        <div class="f h keep"><label>Tara (kg) <span class="req">*</span></label><input name="tare_kg" id="tare" class="big" inputmode="decimal" required autofocus placeholder="0"></div>
+        <div class="f h keep"><label>Netto (avtomatik)</label><input id="net" class="big green" disabled value="—"></div>
+        <div class="f h keep"><label>Farq (netto − ichki {{ ld.internal_kg|num }})</label><input id="diff" class="big" disabled value="—"></div>
+        <div class="f" id="reason-box" hidden><label>Farq sababi <span class="req">*</span> <span class="muted">(farq {{ threshold|num(1) }}% dan katta)</span></label><input name="diff_reason" id="reason" placeholder="Masalan: dala tarozisi kalibrlanmagan"></div>
+        <div class="f">{{ file_input('photo', 'Tara tablosi rasmi') }}</div>
+        <div class="f"><button class="btn btn-green btn-block btn-xl">{{ icon('check-circle','lg') }} Tortishni yakunlash<small>(Netto + nakladnoy avtomatik)</small></button></div>
+      </form>
+    </div>
+    {% else %}
+    <div class="card-h"><h3>{{ icon('check-circle') }} Tortish yakunlangan</h3></div>
+    <div class="card-b">
+      <div class="mini-stats"><div class="mini"><span>Brutto</span><b class="num">{{ w.gross_kg|num }}</b></div><div class="mini"><span>Tara</span><b class="num">{{ w.tare_kg|num }}</b></div><div class="mini" style="background:var(--green-50)"><span>Netto</span><b class="num">{{ w.net_kg|num }} kg</b></div></div>
+      {% if ld.waybill_id %}<div class="row mt"><a class="btn btn-primary" href="{{ url_for('ops.waybill_detail', waybill_id=ld.waybill_id) }}">{{ icon('doc','sm') }} Nakladnoy {{ ld.waybill_number }}</a>
+        <a class="btn btn-light" href="{{ url_for('ops.waybill_detail', waybill_id=ld.waybill_id, print=1) }}" target="_blank">{{ icon('printer','sm') }} Chop etish / PDF</a></div>{% endif %}
+    </div>
+    {% endif %}
+  </section>
+</div>
+{% endblock %}
+{% block scripts %}{% if w and w.status == 'BRUTTO' %}
+<script>
+(function () {
+  const gross = {{ w.gross_kg|tojson }}, internal = {{ (ld.internal_kg or 0)|tojson }}, pct = {{ threshold|tojson }};
+  const tare = document.getElementById('tare'), net = document.getElementById('net'), diff = document.getElementById('diff'),
+        box = document.getElementById('reason-box'), reason = document.getElementById('reason');
+  const f = n => Math.round(n).toLocaleString('ru-RU').replace(/,/g, ' ');
+  tare.addEventListener('input', () => {
+    const t = parseFloat(tare.value.replace(',', '.'));
+    if (!(t >= 0) || t >= gross) { net.value = '—'; diff.value = '—'; box.hidden = true; return; }
+    const n = gross - t; net.value = f(n) + ' kg';
+    if (internal > 0) {
+      const d = n - internal; diff.value = (d > 0 ? '+' : '') + f(d) + ' kg';
+      const need = Math.abs(d) / n * 100 > pct;
+      diff.className = 'big ' + (need ? 'red' : 'green'); box.hidden = !need; reason.required = need;
+    } else { diff.value = 'ichki hisob yo‘q'; box.hidden = true; }
+  });
+})();
+</script>{% endif %}{% endblock %}

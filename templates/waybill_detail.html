@@ -1,0 +1,51 @@
+{% extends 'base.html' %}
+{% from 'macros.html' import icon, status, photo_card, empty, void_button with context %}
+{% set page_title = 'Nakladnoy ' ~ wb.number %}
+{% block content %}
+<div class="page-h"><a href="{{ url_for('ops.waybills') }}" class="icon-btn">{{ icon('chev-left') }}</a><h1>Nakladnoy № {{ wb.number }}</h1>{{ status(wb.status) }}
+  <span class="spacer"></span>
+  <a class="btn btn-red" href="{{ url_for('ops.waybill_detail', waybill_id=wb.id, print=1) }}" target="_blank">PDF</a>
+  <a class="btn btn-primary" href="{{ url_for('ops.waybill_detail', waybill_id=wb.id, print=1, auto=1) }}" target="_blank">{{ icon('printer','sm') }} Chop etish</a>
+  {% if wb.status == 'YARATILDI' and can('nayman.write') %}<a class="btn btn-green" href="{{ url_for('ops.nayman', waybill_id=wb.id) }}">{{ icon('factory','sm') }} Nayman qabuli</a>{% endif %}
+</div>
+{% if wb.status == 'BEKOR' %}<div class="flash error">{{ icon('ban','sm') }} Bekor qilingan: {{ wb.void_reason }} ({{ wb.voided_at|d }})</div>{% endif %}
+<div class="grid">
+  <section class="card s5">
+    <div class="card-h"><h3>Hujjat</h3></div>
+    <dl class="kv">
+      <dt>Sana</dt><dd>{{ wb.document_date|d }}</dd><dt>Jo‘natuvchi</dt><dd>{{ company }}</dd><dt>Qabul qiluvchi</dt><dd>{{ wb.destination }}</dd>
+      <dt>Brigadir</dt><dd>{{ wb.brigadier_name }}</dd><dt>Dala</dt><dd>{{ wb.field_code }} · {{ wb.field_name }}</dd>
+      <dt>Traktor</dt><dd>{{ wb.tractor_code or '—' }}</dd><dt>Telashka</dt><dd>{{ wb.trailer_code }}</dd>
+      <dt>Mashina / haydovchi</dt><dd>{{ wb.vehicle_plate or '—' }} · {{ wb.driver_name or '—' }}</dd>
+      <dt>Ishchilar</dt><dd>{{ workers|length }} ta</dd>
+      <dt class="hl">Brutto</dt><dd class="hl num">{{ wb.gross_kg|num }} kg</dd><dt class="hl">Tara</dt><dd class="hl num">{{ wb.tare_kg|num }} kg</dd>
+      <dt class="hl-g">Netto (hujjat)</dt><dd class="hl-g num" style="font-size:18px">{{ wb.net_kg|num }} kg</dd>
+      <dt>Ichki hisob (dala)</dt><dd class="num">{{ wb.internal_kg|num(1) }} kg</dd>
+      {% if wb.price_per_kg %}<dt>Narx (hujjat vaqtidagi sozlama)</dt><dd class="num">{{ wb.price_per_kg|num }} so‘m/kg</dd>{% endif %}
+      <dt>Yaratdi</dt><dd>{{ wb.created_name }} · {{ wb.created_at|d }}</dd>
+    </dl>
+    {% if wb.status == 'YARATILDI' and can('waybill.void') %}<div class="card-b">{{ void_button(url_for('ops.waybill_void', waybill_id=wb.id), 'Nakladnoyni bekor qilish', 'Nakladnoyni bekor qilish sababi') }}</div>{% endif %}
+  </section>
+  <section class="card s7">
+    <div class="card-h"><h3>Nayman qabuli va to‘lov</h3></div>
+    <div class="card-b">
+      {% if wb.receipt_id %}
+      <div class="mini-stats">
+        <div class="mini"><span>Jo‘natilgan</span><b class="num">{{ wb.net_kg|num }}</b></div>
+        <div class="mini"><span>Qabul qilingan</span><b class="num" style="color:var(--green)">{{ wb.accepted_kg|num }}</b></div>
+        <div class="mini"><span>Farq</span><b class="num" style="color:{{ 'var(--red)' if wb.nayman_diff_kg < 0 else 'var(--green)' }}">{{ '%+.0f'|format(wb.nayman_diff_kg) }}</b></div>
+        <div class="mini"><span>Summa</span><b class="num">{{ wb.receipt_amount|num if wb.receipt_amount else 'narx kiritilmagan' }}</b></div>
+        <div class="mini"><span>To‘langan</span><b class="num">{{ wb.paid|num }}</b></div>
+      </div>
+      <p class="small muted">Sabab: {{ wb.nayman_diff_reason or '—' }} · Qabul sanasi: {{ wb.received_date|d }}</p>
+      {% if can('nayman.write') %}<a class="btn btn-light btn-sm" href="{{ url_for('ops.nayman', waybill_id=wb.id) }}">{{ icon('edit','sm') }} Qabulni ko‘rish / tuzatish</a>{% endif %}
+      {% else %}<div class="notice blue">{{ icon('truck') }}<div>Yo‘lda / Nayman qabuli kutilmoqda. Bu kamomad hisoblanmaydi.</div></div>{% endif %}
+      {% if payments %}<table class="t mt"><thead><tr><th>To‘lov sanasi</th><th class="num">Summa</th><th>Usul</th><th>Holat</th></tr></thead><tbody>
+        {% for p in payments %}<tr class="{{ 'void' if p.voided_at }}"><td>{{ p.payment_date|d }}</td><td class="num">{{ p.amount|num }}</td><td>{{ p.method or '—' }}</td><td class="keep">{{ 'Bekor' if p.voided_at else 'Faol' }}</td></tr>{% endfor %}</tbody></table>{% endif %}
+    </div>
+  </section>
+  <section class="card s7"><div class="card-h"><h3>Rasmlar</h3></div><div class="card-b"><div class="photo-grid">{% for p in photos %}{{ photo_card(p) }}{% else %}{{ empty('Rasm yo‘q','camera') }}{% endfor %}</div></div></section>
+  <section class="card s5"><div class="card-h"><h3>{{ icon('history') }} To‘liq zanjir tarixi</h3></div>
+    <div class="card-b"><ul class="timeline">{% for a in timeline %}<li><span class="dot">{{ icon('check') }}</span><b>{{ a.action }} · {{ a.entity_type }}</b><span>{{ a.created_at|d }} · {{ a.full_name or 'tizim' }} ({{ a.source }}){% if a.reason %} · {{ a.reason }}{% endif %}</span></li>{% endfor %}</ul></div></section>
+</div>
+{% endblock %}

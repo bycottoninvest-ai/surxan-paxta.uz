@@ -1,0 +1,25 @@
+{% extends 'base.html' %}
+{% from 'macros.html' import icon, empty, pager with context %}
+{% set page_title = 'Audit tarixi' %}
+{% block content %}
+<div class="page-h"><h1>{{ icon('shield','lg') }} Audit tarixi</h1><span class="sub">Kim, qachon, nima qildi — o‘zgartirib/o‘chirib bo‘lmaydi</span></div>
+<section class="card">
+  <div class="card-h"><form class="row" method="get">
+    <select class="input" name="user" style="width:180px"><option value="">Barcha foydalanuvchi</option>{% for u in users %}<option value="{{ u.id }}" {{ 'selected' if request.args.get('user') == u.id|string }}>{{ u.full_name }}</option>{% endfor %}</select>
+    <select class="input" name="entity" style="width:160px"><option value="">Barcha obyekt</option>{% for e in entities %}<option {{ 'selected' if request.args.get('entity') == e }}>{{ e }}</option>{% endfor %}</select>
+    <select class="input" name="action" style="width:140px"><option value="">Barcha amal</option>{% for a in actions %}<option {{ 'selected' if request.args.get('action') == a }}>{{ a }}</option>{% endfor %}</select>
+    <input class="input" type="date" name="date" value="{{ request.args.get('date','') }}" style="width:160px">
+    <button class="btn btn-primary btn-sm">Filtr</button></form></div>
+  <div class="table-wrap"><table class="t">
+    <thead><tr><th>Vaqt</th><th>Foydalanuvchi</th><th>Amal</th><th>Obyekt</th><th>Eski qiymat</th><th>Yangi qiymat</th><th>Sabab</th><th>Manba / IP</th></tr></thead>
+    <tbody>{% for a in rows %}<tr><td class="nowrap">{{ a.created_at|d }}</td><td>{{ a.full_name or 'tizim' }}<div class="tiny muted">{{ role_labels.get(a.role, '') }}</div></td>
+      <td><span class="badge {{ 'b-red' if a.action in ('VOID','CORRECT') else 'b-orange' if a.action in ('UPDATE','REOPEN') else 'b-blue' }}">{{ a.action }}</span></td>
+      <td>{{ a.entity_type }} #{{ a.entity_id }}</td>
+      <td class="tiny" style="max-width:260px;white-space:normal;word-break:break-word">{{ a.old_json or '' }}</td>
+      <td class="tiny" style="max-width:260px;white-space:normal;word-break:break-word">{{ a.new_json or '' }}</td>
+      <td class="small">{{ a.reason or '' }}</td><td class="tiny muted">{{ a.source }}<br>{{ a.ip or '' }}</td></tr>
+    {% else %}<tr><td colspan="8">{{ empty('Yozuv yo‘q') }}</td></tr>{% endfor %}</tbody>
+  </table></div>
+  {{ pager(page, has_more) }}
+</section>
+{% endblock %}

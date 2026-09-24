@@ -1,0 +1,38 @@
+{% extends 'base.html' %}
+{% from 'macros.html' import icon, csrf, empty, file_input with context %}
+{% set page_title = w.full_name %}
+{% block content %}
+<div class="page-h"><a href="{{ url_for('people.workers') }}" class="icon-btn">{{ icon('chev-left') }}</a>
+  <div class="avatar" style="width:52px;height:52px">{% if w.thumb_path %}<img src="{{ photo_url(w.thumb_path) }}" data-full="{{ photo_url(w.photo_path) }}" alt="">{% else %}{{ w.full_name[:1] }}{% endif %}</div>
+  <h1>{{ w.full_name }}</h1>{% if not w.active %}<span class="badge b-gray">Faol emas</span>{% endif %}</div>
+<div class="kpis" style="grid-template-columns:repeat(4,minmax(0,1fr))">
+  <div class="kpi"><div class="sq bg-green">{{ icon('cotton') }}</div><div><div class="label">Mavsum jami ({{ year }})</div><div class="value num">{{ total_kg|num(1) }} <small>kg</small></div></div></div>
+  <div class="kpi"><div class="sq bg-blue">{{ icon('calendar') }}</div><div><div class="label">Ish kunlari</div><div class="value">{{ days|length }}</div></div></div>
+  {% if can('settlement.view') %}
+  <div class="kpi"><div class="sq bg-orange">{{ icon('calc') }}</div><div><div class="label">Hisoblangan haq</div><div class="value num">{{ earned|num if earned is not none else '—' }}</div>{% if earned is none %}<div class="trend t-muted">Stavka kiritilmagan</div>{% endif %}</div></div>
+  <div class="kpi"><div class="sq bg-purple">{{ icon('cash') }}</div><div><div class="label">To‘langan + avans</div><div class="value num">{{ paid|num }}</div>{% if earned is not none %}<div class="trend {{ 't-down' if earned - paid > 0 else 't-up' }}">Qoldiq: {{ (earned - paid)|num }}</div>{% endif %}</div></div>
+  {% endif %}
+</div>
+<div class="grid">
+  <section class="card s7">
+    <div class="card-h"><h3>Kunlar bo‘yicha terim</h3></div>
+    <div class="table-wrap"><table class="t"><thead><tr><th>Sana</th><th>Dala</th><th>Telashka</th><th class="num">Tortishlar</th><th class="num">Kg</th></tr></thead>
+      <tbody>{% for d in days %}<tr><td>{{ d.work_date|d }}</td><td>{{ d.fields }}</td><td>{{ d.trailers }}</td><td class="num">{{ d.n }}</td><td class="num b">{{ d.kg|num(1) }}</td></tr>{% else %}<tr><td colspan="5">{{ empty('Bu mavsumda terim yo‘q') }}</td></tr>{% endfor %}</tbody></table></div>
+  </section>
+  <section class="card s5">
+    {% if can('workers.write') %}
+    <div class="card-h"><h3>Ma’lumotni tahrirlash</h3></div>
+    <div class="card-b"><form method="post" enctype="multipart/form-data" class="form">{{ csrf() }}
+      <div class="f"><label>F.I.Sh.</label><input name="full_name" value="{{ w.full_name }}" required></div>
+      <div class="f"><label>Telefon</label><input name="phone" value="{{ w.phone or '' }}"></div>
+      <div class="f"><label class="check"><input type="checkbox" name="active" value="1" {{ 'checked' if w.active }}> Faol</label></div>
+      <div class="f">{{ file_input('photo', 'Rasmni yangilash') }}</div>
+      <div class="f"><button class="btn btn-primary">Saqlash</button></div></form></div>
+    {% endif %}
+    {% if can('settlement.view') %}
+    <div class="card-h"><h3>To‘lovlar va avanslar</h3>{% if can('cash.write') %}<a class="more" href="{{ url_for('finance.cash', worker=w.id) }}">+ Kassadan</a>{% endif %}</div>
+    <table class="t"><tbody>{% for c in cash %}<tr><td>{{ c.entry_date|d }}</td><td>{{ 'Avans' if c.category == 'advance' else 'Ish haqi' }}</td><td class="num b">{{ c.amount|num }}</td></tr>{% else %}<tr><td>{{ empty('To‘lov yo‘q') }}</td></tr>{% endfor %}</tbody></table>
+    {% endif %}
+  </section>
+</div>
+{% endblock %}

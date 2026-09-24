@@ -1,0 +1,30 @@
+{% extends 'base.html' %}
+{% from 'macros.html' import icon, status, empty with context %}
+{% set page_title = 'Tarozi' %}
+{% block content %}
+<div class="page-h"><h1>{{ icon('scale','lg') }} Umumiy tarozi</h1><span class="sub">1-tortish: BRUTTO (yuk bilan) → yuk topshiriladi → 2-tortish: TARA (bo‘sh) → netto va nakladnoy avtomatik</span></div>
+<div class="grid">
+  <section class="card s7">
+    <div class="card-h"><h3>Tarozini kutayotganlar ({{ waiting|length }})</h3></div>
+    <div class="card-b">
+      {% for l in waiting %}
+      <a class="brig" href="{{ url_for('ops.weigh', load_id=l.id) }}" style="padding:12px 4px">
+        <div class="avatar" style="border-radius:10px;background:url('{{ url_for('static', filename='img/trailer.jpg') }}') center/cover"></div>
+        <div class="mid"><b>{{ l.trailer_code }}</b> · {{ l.field_name }} · {{ l.brigadier_name }}
+          <div class="small muted">TOLDI {{ l.full_at[11:16] if l.full_at }} · {{ l.tractor_code or 'traktorsiz' }} · {{ l.photo_count }} rasm</div></div>
+        <div class="rt"><b class="num">{{ l.internal_kg|num }} kg</b><div>{% if l.weigh_status == 'BRUTTO' %}<span class="badge b-orange">Tara kerak · brutto {{ l.gross_kg|num }}</span>{% else %}<span class="badge b-blue">Brutto kerak</span>{% endif %}</div></div>
+      </a>
+      {% else %}{{ empty('Hozir tarozini kutayotgan telashka yo‘q', 'scale') }}{% endfor %}
+    </div>
+  </section>
+  <section class="card s5">
+    <div class="card-h"><h3>So‘nggi tortishlar</h3><a class="more" href="{{ url_for('ops.waybills') }}">Nakladnoylar</a></div>
+    <div class="table-wrap"><table class="t">
+      <thead><tr><th>Telashka</th><th class="num">Brutto</th><th class="num">Tara</th><th class="num">Netto</th><th>Nakladnoy</th></tr></thead>
+      <tbody>{% for r in recent %}<tr><td>{{ r.trailer_code }}<div class="tiny muted">{{ r.tare_at|d }}</div></td><td class="num">{{ r.gross_kg|num }}</td><td class="num">{{ r.tare_kg|num }}</td><td class="num b">{{ r.net_kg|num }}</td>
+        <td><a class="link" href="{{ url_for('ops.waybill_detail', waybill_id=r.waybill_id) }}">{{ r.waybill_number }}</a></td></tr>
+      {% else %}<tr><td colspan="5">{{ empty('Hali tortilmagan') }}</td></tr>{% endfor %}</tbody>
+    </table></div>
+  </section>
+</div>
+{% endblock %}

@@ -1,0 +1,37 @@
+services:
+  app:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - ./data:/data            # database, photos and backups live here
+    expose:
+      - "5000"
+
+  # Nightly consistent backup (SQLite online-backup API + photos), keeps BACKUP_KEEP_DAYS days.
+  backup:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      BACKUP_INTERVAL_HOURS: "24"
+    volumes:
+      - ./data:/data
+    command: ["python", "-m", "surxon.backup"]
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - app
+
+volumes:
+  caddy_data:
+  caddy_config:

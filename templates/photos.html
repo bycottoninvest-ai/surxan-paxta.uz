@@ -1,0 +1,45 @@
+{% extends 'base.html' %}
+{% from 'macros.html' import icon, csrf, empty, file_input, void_button, pager with context %}
+{% set page_title = 'Foto arxiv' %}
+{% block content %}
+<div class="page-h"><h1>{{ icon('image','lg') }} Foto arxiv</h1><span class="sub">Telegram va telefondan yuborilgan barcha rasmlar — sana, dala, telashka, nakladnoy bilan bog‘langan</span>
+  {% if can('photos.upload') %}<span class="spacer"></span><button class="btn btn-primary" data-toggle="#up">{{ icon('camera','sm') }} Rasm yuklash</button>{% endif %}</div>
+{% if can('photos.upload') %}
+<form id="up" class="collapse card card-b mb" method="post" enctype="multipart/form-data" data-geo>
+  {{ csrf() }}<input type="hidden" name="lat"><input type="hidden" name="lon">
+  <div class="form">
+    <div class="f t"><label>Turi</label><select name="category">{% for k, v in photo_categories.items() %}<option value="{{ k }}">{{ v }}</option>{% endfor %}</select></div>
+    <div class="f t"><label>Telashka reysi (ixtiyoriy)</label><select name="load_id"><option value="">—</option>{% for l in open_loads %}<option value="{{ l.id }}">{{ l.code }} · №{{ l.id }}</option>{% endfor %}</select></div>
+    <div class="f t"><label>Dala (ixtiyoriy)</label><select name="field_id"><option value="">—</option>{% for f in fields %}<option value="{{ f.id }}">{{ f.code }} · {{ f.name }}</option>{% endfor %}</select></div>
+    <div class="f h"><label>Izoh</label><input name="caption"></div>
+    <div class="f h">{{ file_input('photos', 'Rasmlarni tanlang', multiple=True, required=True) }}</div>
+    <div class="f"><button class="btn btn-green">Saqlash</button></div>
+  </div>
+</form>
+{% endif %}
+<section class="card">
+  <div class="card-h"><form class="row" method="get">
+    <input type="hidden" name="season" value="{{ year }}">
+    <select class="input" name="category" style="width:150px"><option value="">Barcha tur</option>{% for k, v in photo_categories.items() %}<option value="{{ k }}" {{ 'selected' if request.args.get('category') == k }}>{{ v }}</option>{% endfor %}</select>
+    <input class="input" type="date" name="date" value="{{ request.args.get('date','') }}" style="width:160px">
+    <select class="input" name="field" style="width:150px"><option value="">Barcha dala</option>{% for f in fields %}<option value="{{ f.id }}" {{ 'selected' if request.args.get('field') == f.id|string }}>{{ f.name }}</option>{% endfor %}</select>
+    <select class="input" name="trailer" style="width:130px"><option value="">Telashka</option>{% for t in trailers %}<option value="{{ t.id }}" {{ 'selected' if request.args.get('trailer') == t.id|string }}>{{ t.code }}</option>{% endfor %}</select>
+    <button class="btn btn-primary btn-sm">Filtr</button></form></div>
+  <div class="card-b"><div class="photo-grid">
+    {% for p in rows %}
+    <div class="pcard">
+      <img loading="lazy" src="{{ photo_url(p.thumb_path) }}" data-full="{{ photo_url(p.path) }}" data-cap="{{ photo_categories.get(p.category) }} · {{ p.uploaded_at|d }} · {{ p.uploaded_name or '' }}{{ ' · ' ~ p.caption if p.caption }}" alt="">
+      <div class="cap"><b>{{ photo_categories.get(p.category, p.category) }}{% if p.trailer_code %} · {{ p.trailer_code }}{% endif %}</b>
+        <span>{{ p.uploaded_at|d }}{% if p.field_name %} · {{ p.field_name }}{% endif %}</span>
+        {% if p.waybill_number %}<br><span>{{ p.waybill_number }}</span>{% endif %}
+        {% if p.source == 'telegram' %}<br><span class="badge b-blue" style="padding:1px 5px">{{ icon('telegram','xs') }} Telegram</span>{% endif %}
+        {% if p.lat %}<br><a class="tiny" style="color:var(--blue)" target="_blank" rel="noopener" href="https://maps.google.com/?q={{ p.lat }},{{ p.lon }}">{{ icon('pin','xs') }} GPS</a>{% endif %}
+        {% if p.lid %}<br><a class="tiny" style="color:var(--blue)" href="{{ url_for('ops.load_detail', load_id=p.lid) }}">Reys №{{ p.lid }}</a>{% endif %}
+        {% if can('photos.void') %}<br>{{ void_button(url_for('main.photo_void', photo_id=p.id), 'Yashirish', 'Rasmni arxivdan yashirish sababi') }}{% endif %}
+      </div>
+    </div>
+    {% else %}{{ empty('Rasm topilmadi', 'camera') }}{% endfor %}
+  </div>
+  {{ pager(page, has_more) }}</div>
+</section>
+{% endblock %}

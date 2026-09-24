@@ -1,0 +1,9 @@
+{% extends 'base.html' if current_user else 'bare.html' %}
+{% from 'macros.html' import icon with context %}
+{% block content %}
+<section class="card" style="max-width:520px;margin:40px auto;text-align:center"><div class="card-b" style="padding:30px">
+  <div style="font-size:48px;font-weight:900;color:var(--navy-700)">{{ code }}</div>
+  <p style="font-size:16px">{{ message or 'Sahifa topilmadi.' }}</p>
+  <a class="btn btn-primary" href="{{ url_for('main.dashboard') }}">{{ icon('home','sm') }} Bosh sahifa</a>
+</div></section>
+{% endblock %}

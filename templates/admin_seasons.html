@@ -1,0 +1,23 @@
+{% extends 'base.html' %}
+{% from 'macros.html' import icon, csrf with context %}
+{% set page_title = 'Mavsumlar' %}
+{% block content %}
+<div class="page-h"><h1>{{ icon('calendar','lg') }} Mavsumlar va arxiv</h1><span class="sub">Yopilgan mavsum abadiy saqlanadi va o‘zgartirilmaydi</span></div>
+<div class="grid">
+  <section class="card s8"><div class="table-wrap"><table class="t">
+    <thead><tr><th>Mavsum</th><th>Holat</th><th class="num">Netto (t)</th><th class="num">Nakladnoy</th><th class="num">Rasm</th><th></th></tr></thead>
+    <tbody>{% for s in rows %}<tr><td class="b">{{ s.year }}</td><td><span class="badge {{ 'b-green' if s.status == 'OCHIQ' else 'b-gray' }}">{{ s.status }}</span></td>
+      <td class="num">{{ (s.net_kg/1000)|num(1) }}</td><td class="num">{{ s.waybill_count }}</td><td class="num">{{ s.photo_count }}</td>
+      <td class="right">{% if can('seasons.manage') %}<form method="post" class="row" style="justify-content:flex-end" data-confirm="{{ s.year }}-mavsum holatini o‘zgartirasizmi?">{{ csrf() }}<input type="hidden" name="year" value="{{ s.year }}">
+        <input type="hidden" name="action" value="{{ 'close' if s.status == 'OCHIQ' else 'reopen' }}"><input class="input" name="reason" placeholder="Sabab" style="height:34px;width:160px" {{ 'required' if s.status != 'OCHIQ' }}>
+        <button class="btn btn-sm {{ 'btn-orange' if s.status == 'OCHIQ' else 'btn-light' }}">{{ 'Yopish (arxiv)' if s.status == 'OCHIQ' else 'Qayta ochish' }}</button></form>{% endif %}</td></tr>{% endfor %}</tbody>
+  </table></div></section>
+  {% if can('seasons.manage') %}
+  <section class="card s4"><div class="card-h"><h3>Yangi mavsum</h3></div>
+    <div class="card-b"><form method="post" class="form">{{ csrf() }}<input type="hidden" name="action" value="new">
+      <div class="f"><label>Yil</label><input name="year" type="number" value="{{ (seasons[0] + 1) if seasons else today[:4] }}"></div>
+      <div class="f"><button class="btn btn-primary btn-block">Joriy mavsum qilish</button></div></form>
+      <p class="tiny muted">Dalalar, texnika va xodimlar keyingi yilga o‘tadi. Eski mavsum hisobotlari o‘zgarmaydi: yopilganda maydonlar qotirib qo‘yiladi.</p></div></section>
+  {% endif %}
+</div>
+{% endblock %}

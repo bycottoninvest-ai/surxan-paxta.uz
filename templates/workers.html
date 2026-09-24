@@ -1,0 +1,36 @@
+{% extends 'base.html' %}
+{% from 'macros.html' import icon, csrf, empty, file_input, pager with context %}
+{% set page_title = 'Xodimlar' %}
+{% block content %}
+<div class="page-h"><h1>{{ icon('users','lg') }} Xodimlar (terimchilar)</h1><span class="sub">Ishchilar har kuni o‘zgarishi mumkin — terim sahifasida ham qidirib tanlanadi yoki yangi qo‘shiladi</span></div>
+<div class="grid">
+  {% if can('workers.write') %}
+  <section class="card s4">
+    <div class="card-h"><h3>{{ icon('plus') }} Yangi ishchi</h3></div>
+    <div class="card-b"><form method="post" enctype="multipart/form-data" class="form">
+      {{ csrf() }}
+      <div class="f"><label>F.I.Sh. <span class="req">*</span></label><input name="full_name" required minlength="2"></div>
+      <div class="f"><label>Telefon</label><input name="phone" inputmode="tel" placeholder="+998"></div>
+      {% if not my_brigade %}<div class="f"><label>Brigada</label><select name="brigadier_id"><option value="">—</option>{% for b in brigadiers %}<option value="{{ b.id }}">{{ b.name }}</option>{% endfor %}</select></div>{% endif %}
+      <div class="f">{{ file_input('photo', 'Ishchi rasmi (ixtiyoriy)') }}</div>
+      <div class="f"><button class="btn btn-primary btn-block">Saqlash</button></div>
+    </form></div>
+  </section>
+  {% endif %}
+  <section class="card {{ 's8' if can('workers.write') else 's12' }}">
+    <div class="card-h">
+      <form class="search" style="max-width:320px;margin:0" method="get">{{ icon('search','sm') }}<input name="q" value="{{ term }}" placeholder="Ism yoki telefon"></form>
+      <div class="tabs" style="margin-left:auto"><a class="{{ 'on' if show != 'all' }}" href="{{ url_for('people.workers') }}">Faol</a><a class="{{ 'on' if show == 'all' }}" href="{{ url_for('people.workers', show='all') }}">Barchasi</a></div>
+    </div>
+    <div class="table-wrap"><table class="t">
+      <thead><tr><th></th><th>F.I.Sh.</th><th>Telefon</th><th>Brigada</th><th class="num">Bugun (kg)</th><th class="num">Mavsum (kg)</th><th class="num">Kunlar</th></tr></thead>
+      <tbody>{% for w in rows %}<tr class="{{ 'void' if not w.active }}">
+        <td class="keep"><div class="avatar" style="width:32px;height:32px;font-size:13px">{% if w.thumb_path %}<img loading="lazy" src="{{ photo_url(w.thumb_path) }}" alt="">{% else %}{{ w.full_name[:1] }}{% endif %}</div></td>
+        <td><a class="link" href="{{ url_for('people.worker_detail', worker_id=w.id) }}">{{ w.full_name }}</a></td><td>{{ w.phone or '—' }}</td><td>{{ w.brigadier_name or '—' }}</td>
+        <td class="num b">{{ w.today_kg|num if w.today_kg else '—' }}</td><td class="num">{{ w.season_kg|num }}</td><td class="num">{{ w.days }}</td></tr>
+      {% else %}<tr><td colspan="7">{{ empty('Ishchi topilmadi', 'users') }}</td></tr>{% endfor %}</tbody>
+    </table></div>
+    {{ pager(page, has_more) }}
+  </section>
+</div>
+{% endblock %}

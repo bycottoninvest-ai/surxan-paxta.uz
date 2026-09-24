@@ -1,0 +1,26 @@
+{% extends 'base.html' %}
+{% from 'macros.html' import icon, status, empty with context %}
+{% set page_title = 'Nayman' %}
+{% block content %}
+<div class="page-h"><h1>{{ icon('factory','lg') }} Nayman qabuli</h1><span class="sub">Naymanning tarozisida qabul qilingan kg alohida kiritiladi; farq avtomatik hisoblanadi</span></div>
+<div class="grid">
+  <section class="card s6">
+    <div class="card-h"><h3>Qabul kutilmoqda / yo‘lda ({{ pending|length }})</h3></div>
+    <div class="table-wrap"><table class="t">
+      <thead><tr><th>Nakladnoy</th><th>Sana</th><th>Telashka</th><th>Dala</th><th class="num">Netto</th><th></th></tr></thead>
+      <tbody>{% for r in pending %}<tr><td class="b">{{ r.number }}</td><td>{{ r.document_date|d }}</td><td>{{ r.trailer_code }}</td><td>{{ r.field_name }}</td><td class="num b">{{ r.net_kg|num }}</td>
+        <td class="right">{% if can('nayman.write') %}<a class="btn btn-green btn-sm" href="{{ url_for('ops.nayman', waybill_id=r.id) }}">Qabul qilish</a>{% endif %}</td></tr>
+      {% else %}<tr><td colspan="6">{{ empty('Hammasi qabul qilingan', 'check-circle') }}</td></tr>{% endfor %}</tbody>
+    </table></div>
+  </section>
+  <section class="card s6">
+    <div class="card-h"><h3>Qabul qilinganlar</h3><a class="more" href="{{ url_for('reports.report', key='nayman') }}">Sverka</a></div>
+    <div class="table-wrap"><table class="t">
+      <thead><tr><th>Nakladnoy</th><th>Qabul sanasi</th><th class="num">Jo‘natilgan</th><th class="num">Qabul</th><th class="num">Farq</th><th>Sabab</th></tr></thead>
+      <tbody>{% for r in received %}<tr><td><a class="link" href="{{ url_for('ops.waybill_detail', waybill_id=r.id) }}">{{ r.number }}</a></td><td>{{ r.received_date|d }}</td><td class="num">{{ r.net_kg|num }}</td><td class="num b">{{ r.accepted_kg|num }}</td>
+        <td class="num b {{ 't-down' if r.nayman_diff_kg < 0 }}">{{ '%+.0f'|format(r.nayman_diff_kg) }}</td><td class="small">{{ r.nayman_diff_reason or '—' }}</td></tr>
+      {% else %}<tr><td colspan="6">{{ empty('Hali qabul yo‘q') }}</td></tr>{% endfor %}</tbody>
+    </table></div>
+  </section>
+</div>
+{% endblock %}

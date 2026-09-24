@@ -1,0 +1,25 @@
+{% extends 'base.html' %}
+{% from 'macros.html' import icon, csrf with context %}
+{% set page_title = 'Sozlamalar' %}
+{% block content %}
+<div class="page-h"><h1>{{ icon('settings','lg') }} Sozlamalar</h1><span class="sub">Biznes qoidalari kodga yozilmagan — shu yerda o‘zgartiriladi, har bir o‘zgarish auditda</span>
+  <span class="spacer"></span>{% if can('settings.manage') %}<a class="btn btn-light" href="{{ url_for('integrations.index') }}">{{ icon('layers','sm') }} Integratsiyalar (ERP, TV)</a>{% endif %}</div>
+<div class="grid">
+  <section class="card s8"><div class="card-h"><h3>Biznes sozlamalari</h3></div>
+    <form method="post" class="card-b">{{ csrf() }}
+      <div class="form">{% for s in rows %}
+        <div class="f h"><label>{{ s.label }}</label><input name="set_{{ s.key }}" value="{{ s.value or '' }}">{% if s.updated_at %}<div class="hint">O‘zgartirilgan: {{ s.updated_at|d }}</div>{% endif %}</div>
+      {% endfor %}</div>
+      <div class="row mt"><button class="btn btn-primary">Saqlash</button></div>
+    </form></section>
+  <section class="card s4"><div class="card-h"><h3>Server holati</h3></div>
+    <dl class="kv">
+      <dt>Domen</dt><dd>{{ status.domain }}</dd>
+      <dt>HTTPS cookie</dt><dd>{{ 'Ha' if status.cookie_secure else 'Yo‘q (faqat lokal sinov)' }}</dd>
+      <dt>Telegram token</dt><dd>{{ 'O‘rnatilgan' if status.telegram_token else 'Yo‘q' }}</dd>
+      <dt>Webhook maxfiy</dt><dd>{{ 'O‘rnatilgan' if status.webhook_secret else 'Yo‘q' }}</dd>
+      <dt>Bot</dt><dd>{{ '@' ~ status.bot_username if status.bot_username else '—' }}</dd>
+    </dl>
+    <div class="card-b tiny muted">Token va maxfiy kalitlar faqat serverdagi <code>.env</code> faylida saqlanadi, bu sahifada ko‘rsatilmaydi.</div></section>
+</div>
+{% endblock %}

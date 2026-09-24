@@ -1,0 +1,119 @@
+{% from 'macros.html' import icon, season_select with context %}<!doctype html>
+<html lang="uz">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0a2c5a">
+<meta name="csrf-token" content="{{ csrf_token() }}">
+<title>{% block title %}{{ page_title|default('SURXON Paxta Hisob Tizimi') }}{% endblock %} · SURXON</title>
+<link rel="manifest" href="{{ url_for('main.manifest') }}">
+<link rel="icon" href="{{ url_for('static', filename='img/favicon.png') }}">
+<link rel="apple-touch-icon" href="{{ url_for('static', filename='img/apple-touch-icon.png') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}?v={{ version }}">
+{% block head %}{% endblock %}
+</head>
+<body data-user="{{ current_user['id'] }}">
+{% set ep = request.endpoint or '' %}
+{% macro nav(endpoint, label, ico, perm=None, match=None, args={}) -%}
+  {% if perm is none or can(perm) %}{% set ep = request.endpoint or '' %}
+  <a href="{{ url_for(endpoint, **args) }}" class="{{ 'active' if (match and ep in match) or (not match and ep == endpoint) }}">{{ icon(ico) }}<span>{{ label }}</span></a>
+  {% endif %}
+{%- endmacro %}
+<div class="app">
+  <aside class="sidebar" id="sidebar">
+    <div class="brand">
+      <a href="{{ url_for('main.dashboard') }}"><img src="{{ url_for('static', filename='img/logo-light.png') }}" alt="SURXON"></a>
+      <div class="sub">PAXTA HISOB TIZIMI</div><div class="sub2">TAXIATOSH</div>
+    </div>
+    <nav class="nav">
+      {{ nav('main.dashboard', 'Bosh sahifa', 'home') }}
+      {{ nav('ops.harvest', 'Terim (Qo‘l terimi)', 'sprout', 'harvest.write') }}
+      {{ nav('ops.harvest', 'Kombayn', 'combine', 'harvest.write', match=['__none'], args={'method': 'combine'}) }}
+      {{ nav('ops.loads', 'Telashkalar', 'trailer', None, ['ops.loads', 'ops.load_detail']) }}
+      {{ nav('ops.scale_queue', 'Tarozi', 'scale', 'weigh.write', ['ops.scale_queue', 'ops.weigh']) }}
+      {{ nav('ops.waybills', 'Nakladnoy', 'doc', 'waybill.view', ['ops.waybills', 'ops.waybill_detail']) }}
+      {{ nav('ops.nayman_list', 'Nayman', 'factory', 'waybill.view', ['ops.nayman_list', 'ops.nayman']) }}
+      {{ nav('people.settlements', 'Buxgalteriya', 'calc', 'settlement.view') }}
+      {{ nav('finance.payments', 'To‘lovlar', 'card', 'payments.view') }}
+      {{ nav('finance.expenses', 'Xarajatlar', 'receipt', 'reports.finance') }}
+      {{ nav('finance.cash', 'Kassa (Asadbek)', 'cash', 'cash.view') }}
+      {{ nav('people.workers', 'Xodimlar', 'users', 'reports.view', ['people.workers', 'people.worker_detail']) }}
+      {{ nav('admin.equipment', 'Texnikalar', 'tractor') }}
+      {{ nav('admin.fields', 'Dalalar', 'field', 'reports.view', ['admin.fields', 'admin.field_detail']) }}
+      {{ nav('reports.index', 'Hisobotlar', 'bars', 'reports.view', ['reports.index', 'reports.report']) }}
+      {{ nav('main.photos', 'Foto arxiv', 'image') }}
+      {% if can('audit.view') or can('users.manage') or can('masterdata.write') %}
+      <div class="section">Boshqaruv</div>
+      {{ nav('admin.users', 'Foydalanuvchilar', 'user', 'users.manage') }}
+      {{ nav('admin.brigadiers', 'Brigadirlar', 'users', 'masterdata.write') }}
+      {{ nav('admin.seasons', 'Mavsumlar', 'calendar', 'seasons.manage') }}
+      {{ nav('reports.audit_log', 'Audit tarixi', 'shield', 'audit.view') }}
+      {{ nav('admin.backups', 'Zaxira nusxa', 'database', 'backup.manage') }}
+      {{ nav('admin.settings', 'Sozlamalar', 'settings', 'settings.manage') }}
+      {% endif %}
+      <a href="{{ url_for('auth.logout') }}" class="only-mobile">{{ icon('logout') }}<span>Chiqish</span></a>
+    </nav>
+    <div class="side-bottom"><div><img src="{{ url_for('static', filename='img/logo-light.png') }}" alt="">PAXTA {{ season }}</div></div>
+  </aside>
+  <div class="scrim" data-close-nav></div>
+  <div class="main">
+    <header class="topbar{{ ' over-hero' if hero_page }}">
+      <button class="icon-btn menu-btn" data-open-nav aria-label="Menyu">{{ icon('menu') }}</button>
+      <a href="{{ url_for('main.dashboard') }}"><img class="top-logo" src="{{ url_for('static', filename='img/logo-dark.png') }}" alt="SURXON"></a>
+      {{ season_select() }}
+      <div class="chip hide-md">{{ icon('calendar','sm') }} <span>{{ today|d }}</span></div>
+      <div class="chip hide-md">{{ icon('clock','sm') }} <span data-clock>{{ now_time }}</span></div>
+      {% block topbar_extra %}{% endblock %}
+      <span class="sync" id="sync-state"></span>
+      <div class="search" data-search>
+        {{ icon('search','sm') }}
+        <input type="search" placeholder="Qidirish (dala, nakladnoy, telashka, odam...)" autocomplete="off" aria-label="Qidirish">
+        <div class="search-results"></div>
+      </div>
+      <div style="position:relative" class="bell-wrap">
+        <button class="icon-btn" data-toggle="#notes" aria-label="Xabarlar">{{ icon('bell') }}{% if notifications %}<span class="dot">{{ notifications|length }}</span>{% endif %}</button>
+        <div class="dropdown" id="notes">
+          {% for n in notifications %}<a href="{{ url_for(n.endpoint) }}">{{ icon('alert','sm') }} {{ n.text }}</a>{% else %}<div class="note">Yangi xabar yo‘q.</div>{% endfor %}
+        </div>
+      </div>
+      <div class="userchip" data-toggle="#usermenu">
+        <div class="avatar">{{ current_user['full_name'][:1] }}</div>
+        <div class="who"><b>{{ current_user['full_name'] }}</b><span>{{ role_labels.get(current_user['role']) }}</span></div>
+        {{ icon('chev-down','sm') }}
+        <div class="dropdown" id="usermenu">
+          <div class="note">{{ current_user['username'] }} · {{ role_labels.get(current_user['role']) }}</div>
+          <a href="{{ url_for('auth.change_password') }}">{{ icon('shield','sm') }} Parolni almashtirish</a>
+          <a href="{{ url_for('auth.logout') }}" data-logout>{{ icon('logout','sm') }} Chiqish</a>
+        </div>
+      </div>
+    </header>
+    <main class="content">
+      {% with messages = get_flashed_messages(with_categories=true) %}{% for cat, msg in messages %}
+        <div class="flash {{ cat }}">{{ icon('check-circle' if cat == 'success' else 'alert','sm') }}<div>{{ msg }}</div></div>
+      {% endfor %}{% endwith %}
+      {% block content %}{% endblock %}
+      <div class="tiny muted center no-print" style="margin-top:26px">SURXON TAXIATOSH TEXTILE · {{ domain }} · v{{ version }}</div>
+    </main>
+  </div>
+</div>
+<nav class="bottom-nav">
+  <a href="{{ url_for('main.dashboard') }}" class="{{ 'active' if ep == 'main.dashboard' }}">{{ icon('home') }}Bosh</a>
+  {% if can('harvest.write') %}<a href="{{ url_for('ops.harvest') }}" class="{{ 'active' if ep == 'ops.harvest' }}">{{ icon('sprout') }}Terim</a>{% else %}<a href="{{ url_for('ops.waybills') }}">{{ icon('doc') }}Hujjat</a>{% endif %}
+  {% if can('weigh.write') and not can('harvest.write') %}<a href="{{ url_for('ops.scale_queue') }}" class="primary">{{ icon('scale') }}Tarozi</a>
+  {% else %}<a href="{{ url_for('ops.loads') }}" class="primary">{{ icon('trailer') }}Telashka</a>{% endif %}
+  <a href="{{ url_for('main.photos') }}" class="{{ 'active' if ep == 'main.photos' }}">{{ icon('camera') }}Foto</a>
+  <a href="#" data-open-nav>{{ icon('menu') }}Boshqa</a>
+</nav>
+<dialog class="modal" id="reason-dialog">
+  <div class="card-h"><h3 data-title>Sabab</h3></div>
+  <form method="post">
+    <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+    <div class="f"><label>Sabab <span class="req">*</span></label><textarea name="reason" required minlength="3" placeholder="Nima uchun? (auditda saqlanadi)"></textarea></div>
+    <div class="row mt"><span class="spacer"></span><button type="button" class="btn btn-light" data-close-dialog>Yopish</button><button class="btn btn-red">Tasdiqlash</button></div>
+  </form>
+</dialog>
+<div class="lightbox" id="lightbox"><img alt=""><div class="cap"></div></div>
+<script src="{{ url_for('static', filename='js/app.js') }}?v={{ version }}"></script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

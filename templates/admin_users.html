@@ -1,0 +1,44 @@
+{% extends 'base.html' %}
+{% from 'macros.html' import icon, csrf, empty with context %}
+{% set page_title = 'Foydalanuvchilar' %}
+{% block content %}
+<div class="page-h"><h1>{{ icon('user','lg') }} Foydalanuvchilar va vakolatlar</h1></div>
+<div class="grid">
+  <section class="card s4">
+    <div class="card-h"><h3>{{ 'Tahrirlash: ' ~ edit.username if edit else 'Yangi login' }}</h3>{% if edit %}<a class="more" href="{{ url_for('admin.users') }}">Yangi</a>{% endif %}</div>
+    <div class="card-b"><form method="post" class="form">{{ csrf() }}
+      {% if edit %}<input type="hidden" name="id" value="{{ edit.id }}">{% endif %}
+      <div class="f"><label>F.I.Sh. <span class="req">*</span></label><input name="full_name" required value="{{ edit.full_name if edit else '' }}"></div>
+      <div class="f h"><label>Login <span class="req">*</span></label><input name="username" required autocapitalize="none" value="{{ edit.username if edit else '' }}"></div>
+      <div class="f h"><label>Telefon</label><input name="phone" value="{{ edit.phone or '' if edit else '' }}"></div>
+      <div class="f h"><label>Rol <span class="req">*</span></label><select name="role" id="role">{% for k, v in roles.items() %}<option value="{{ k }}" {{ 'selected' if edit and edit.role == k }}>{{ v }}</option>{% endfor %}</select></div>
+      <div class="f h" id="brig"><label>Brigada (brigadir uchun)</label><select name="brigadier_id"><option value="">—</option>{% for b in brigadiers %}<option value="{{ b.id }}" {{ 'selected' if edit and edit.brigadier_id == b.id }}>{{ b.name }}</option>{% endfor %}</select></div>
+      <div class="f"><label>{{ 'Yangi parol (almashtirish uchun)' if edit else 'Vaqtinchalik parol' }} {% if not edit %}<span class="req">*</span>{% endif %}</label><input type="text" name="password" {{ 'required' if not edit }} minlength="8" autocomplete="new-password" placeholder="kamida 8 belgi, harf+raqam"><div class="hint">Xodim birinchi kirishda o‘z parolini o‘rnatadi.</div></div>
+      {% if edit %}<div class="f"><label class="check"><input type="checkbox" name="active" value="1" {{ 'checked' if edit.active }}> Faol (o‘chirilsa tizimga kira olmaydi, tarixi saqlanadi)</label></div>{% endif %}
+      <div class="f"><button class="btn btn-primary btn-block">Saqlash</button></div>
+    </form></div>
+  </section>
+  <section class="card s8">
+    <div class="card-h"><h3>Foydalanuvchilar</h3></div>
+    <div class="table-wrap"><table class="t">
+      <thead><tr><th>F.I.Sh.</th><th>Login</th><th>Rol</th><th>Brigada</th><th>Telegram</th><th>Oxirgi kirish</th><th></th></tr></thead>
+      <tbody>{% for u in rows %}<tr class="{{ 'void' if not u.active }}">
+        <td class="b">{{ u.full_name }}</td><td>{{ u.username }}</td><td><span class="badge b-blue">{{ roles.get(u.role, u.role) }}</span></td><td>{{ u.brigadier_name or '—' }}</td>
+        <td class="keep">{% if u.telegram_id %}<span class="badge b-green">{{ icon('telegram','xs') }} ulangan</span>
+          <form method="post" action="{{ url_for('admin.user_telegram', uid=u.id) }}" style="display:inline" data-confirm="Telegram bog‘lanishini uzasizmi?">{{ csrf() }}<input type="hidden" name="action" value="unlink"><button class="btn btn-ghost btn-sm">uzish</button></form>
+          {% else %}<form method="post" action="{{ url_for('admin.user_telegram', uid=u.id) }}" style="display:inline">{{ csrf() }}<button class="btn btn-light btn-sm">{{ icon('telegram','xs') }} Ulash kodi</button></form>{% endif %}</td>
+        <td class="small muted">{{ u.last_login_at|d if u.last_login_at else '—' }}</td>
+        <td class="keep"><a class="btn btn-ghost btn-sm" href="{{ url_for('admin.users', edit=u.id) }}">{{ icon('edit','sm') }}</a></td></tr>
+      {% endfor %}</tbody>
+    </table></div>
+  </section>
+  <section class="card s12">
+    <div class="card-h"><h3>{{ icon('shield') }} Vakolatlar jadvali</h3><span class="muted small" style="margin-left:auto">Brigadir faqat o‘z brigadasi dalalari bilan ishlaydi. Tekshiruv serverda (web va Telegram uchun bir xil).</span></div>
+    <div class="table-wrap"><table class="t">
+      <thead><tr><th>Vakolat</th>{% for k, v in roles.items() %}<th class="center">{{ v }}</th>{% endfor %}</tr></thead>
+      <tbody>{% for perm, rs in permissions.items() %}<tr><td class="small">{{ perm }}</td>{% for k in roles %}<td class="center">{% if k == 'admin' or k in rs %}<span style="color:var(--green)">{{ icon('check','sm') }}</span>{% else %}<span class="muted">—</span>{% endif %}</td>{% endfor %}</tr>{% endfor %}</tbody>
+    </table></div>
+  </section>
+</div>
+{% endblock %}
+{% block scripts %}<script>(function(){const r=document.getElementById('role'),b=document.getElementById('brig');const f=()=>b.hidden=r.value!=='brigadier';r.addEventListener('change',f);f();})();</script>{% endblock %}

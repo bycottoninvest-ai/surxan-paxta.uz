@@ -1,0 +1,154 @@
+{% extends 'base.html' %}
+{% from 'macros.html' import icon, csrf, uuid_field, status, empty, void_button with context %}
+{% set page_title = 'Terim' %}
+{% block content %}
+<div class="page-h"><h1>{{ icon('sprout','lg') }} Terim kiritish</h1><span class="sub">Har bir tortish aniq telashka reysiga yoziladi</span></div>
+
+<div class="grid">
+  <section class="card s5">
+    <div class="card-h"><h3>1. Telashkani tanlang</h3>{% if can('load.open') %}<button class="btn btn-ghost btn-sm" style="margin-left:auto" data-toggle="#open-form">{{ icon('plus','sm') }} Yangi telashka ochish</button>{% endif %}</div>
+    <div class="card-b">
+      {% if can('load.open') %}
+      <form id="open-form" class="collapse{{ ' open' if not open_loads }}" style="border:1px dashed #c9d7e8;border-radius:10px;margin-bottom:12px;padding:12px" method="post" action="{{ url_for('ops.load_open') }}" data-offline="Telashka ochish">
+        {{ csrf() }}{{ uuid_field() }}
+        <div class="form">
+          <div class="f h keep"><label>Telashka <span class="req">*</span></label><select name="trailer_id" required>{% for t in trailers %}<option value="{{ t.id }}">{{ t.code }}{{ ' · ' ~ t.plate if t.plate }}</option>{% endfor %}</select></div>
+          <div class="f h keep"><label>Traktor</label><select name="tractor_id"><option value="">—</option>{% for t in tractors %}<option value="{{ t.id }}">{{ t.code }}</option>{% endfor %}</select></div>
+          <div class="f h keep"><label>Dala <span class="req">*</span></label><select name="field_id" required>{% for f in fields %}<option value="{{ f.id }}" data-brig="{{ f.brigadier_id or '' }}">{{ f.code }} · {{ f.name }}</option>{% else %}<option value="">Dala kiritilmagan</option>{% endfor %}</select></div>
+          <div class="f h keep"><label>Brigadir</label><select name="brigadier_id">{% if not my_brigade %}<option value="">Daladan olinsin</option>{% endif %}{% for b in brigadiers %}<option value="{{ b.id }}">{{ b.name }}</option>{% endfor %}</select></div>
+          <div class="f"><button class="btn btn-primary btn-block">{{ icon('plus','sm') }} Telashkani ochish</button></div>
+        </div>
+      </form>
+      {% endif %}
+      {% for l in open_loads %}
+      <a href="{{ url_for('ops.harvest', load=l.id) }}" class="brig" style="{{ 'background:var(--blue-50);border-radius:10px;padding:10px' if current and current.id == l.id else 'padding:10px' }}">
+        <div class="avatar" style="border-radius:10px;background:url('{{ url_for('static', filename='img/trailer.jpg') }}') center/cover"></div>
+        <div class="mid"><b>{{ l.trailer_code }}</b> · {{ l.field_name }}<div class="small muted">{{ l.brigadier_name }} · {{ l.tractor_code or 'traktorsiz' }} · ochildi {{ l.opened_at[11:16] }}</div></div>
+        <div class="rt"><b class="num">{{ l.live_kg|num }} kg</b><div class="small muted">yuk №{{ l.id }}</div></div>
+      </a>
+      {% else %}{{ empty('Ochiq telashka yo‘q. Yuqoridan yangi telashka oching.', 'trailer') }}{% endfor %}
+    </div>
+  </section>
+
+  {% if current or open_loads %}<section class="card s7">
+    {% if current %}
+    <div class="card-h"><h3>2. Tortish: {{ current.trailer_code }} · {{ current.field_name }}</h3><span style="margin-left:auto">{{ status(current.status) }}</span></div>
+    <div class="card-b">
+      {% if current.status == 'OCHIQ' and can('harvest.write') %}
+      <form method="post" action="{{ url_for('ops.harvest') }}" enctype="multipart/form-data" data-offline="Terim {{ current.trailer_code }}" id="harvest-form">
+        {{ csrf() }}{{ uuid_field() }}
+        <input type="hidden" name="load_id" value="{{ current.id }}">
+        <div class="form">
+          <div class="f"><div class="seg">
+            <input type="radio" name="method" id="m-hand" value="hand" {{ 'checked' if request.args.get('method') != 'combine' }}><label for="m-hand">{{ icon('cotton','sm') }} Qo‘l terimi</label>
+            <input type="radio" name="method" id="m-comb" value="combine" class="orange" {{ 'checked' if request.args.get('method') == 'combine' }}><label for="m-comb">{{ icon('combine','sm') }} Kombayn</label>
+          </div></div>
+          <div class="f" data-for="hand">
+            <label>Odam (F.I.Sh.) <span class="req">*</span></label>
+            <div class="worker-pick">
+              <input name="worker_name" id="worker-name" autocomplete="off" placeholder="Ismni yozing — ro‘yxatdan tanlang yoki yangi odam" autocapitalize="words">
+              <input type="hidden" name="worker_id" id="worker-id">
+              <div class="worker-list" id="worker-list"></div>
+            </div>
+            <div class="hint">Yangi odam bo‘lsa, to‘liq ismini yozing — saqlashda avtomatik ro‘yxatga qo‘shiladi.</div>
+            <div id="worker-selected"></div>
+          </div>
+          <div class="f" data-for="combine" hidden>
+            <label>Kombayn <span class="req">*</span></label>
+            <select name="combine_id">{% for c in combines %}<option value="{{ c.id }}">{{ c.code }}{{ ' · ' ~ c.operator_name if c.operator_name }}</option>{% endfor %}</select>
+          </div>
+          <div class="f h keep"><label>Kg (tarozida) <span class="req">*</span></label><input name="kg" class="big" inputmode="decimal" required placeholder="0" autocomplete="off"></div>
+          <div class="f h keep"><label>Rasm (ixtiyoriy)</label><label class="file-drop" style="padding:10px"><input type="file" name="photo" accept="image/*" capture="environment" data-preview>{{ icon('camera') }} Rasmga olish<div class="previews"></div></label></div>
+          <div class="f"><label class="check"><input type="checkbox" name="confirm_duplicate" value="1"> Takror yozuv (xuddi shu odam, xuddi shu kg — rostdan ikkinchi marta)</label></div>
+          <div class="f"><button class="btn btn-green btn-block btn-xl">Saqlash</button></div>
+        </div>
+      </form>
+      {% elif current.status == 'OCHIQ' %}
+      <div class="notice blue">Sizda faqat ko‘rish huquqi bor.</div>
+      {% endif %}
+
+      <div class="row mt" style="justify-content:space-between">
+        <div><b style="font-size:18px">Jami: <span class="num">{{ entries|sum(attribute='kg')|num(1) }}</span> kg</b> <span class="muted">({{ entries|selectattr('worker_id')|map(attribute='worker_id')|unique|list|length }} kishi, {{ entries|length }} yozuv)</span></div>
+        {% if current.status == 'OCHIQ' and can('load.full') %}<a class="btn btn-green" href="{{ url_for('ops.load_detail', load_id=current.id) }}#toldi">{{ icon('check-circle','sm') }} TOLDI (taroziga yuborish)</a>{% endif %}
+      </div>
+    </div>
+    <div class="table-wrap" data-refresh-on-sync><table class="t">
+      <thead><tr><th>№</th><th>F.I.Sh. / Kombayn</th><th class="num">Kg</th><th>Vaqt</th><th class="hide-m">Kiritdi</th><th></th></tr></thead>
+      <tbody>{% for e in entries %}<tr>
+        <td>{{ loop.revindex }}</td>
+        <td>{% if e.method == 'hand' %}<a href="{{ url_for('people.worker_detail', worker_id=e.worker_id) }}">{{ e.worker_name }}</a>{% else %}<span class="badge b-orange">{{ icon('combine','xs') }} {{ e.combine_code }}</span>{% endif %}</td>
+        <td class="num b">{{ e.kg|num(1 if e.kg % 1 else 0) }}</td><td>{{ e.created_at[11:16] }}</td><td class="small muted hide-m">{{ e.entered_name }}{{ ' · TG' if e.source == 'telegram' }}</td>
+        <td class="right">{% if current.status == 'OCHIQ' and can('harvest.write') %}{{ void_button(url_for('ops.harvest_void', harvest_id=e.id), 'Bekor', 'Terim yozuvini bekor qilish sababi') }}{% endif %}</td>
+      </tr>{% else %}<tr><td colspan="6">{{ empty('Bu telashkaga hali terim yozilmagan', 'cotton') }}</td></tr>{% endfor %}</tbody>
+    </table></div>
+    {% else %}
+    <div class="card-b">{{ empty('Telashkani tanlang.', 'trailer') }}</div>
+    {% endif %}
+  </section>{% endif %}
+
+  <section class="card s12">
+    <div class="card-h"><h3>Bugungi barcha terim yozuvlari</h3><span class="muted small" style="margin-left:auto">{{ today_rows|length }} ta · {{ today_rows|sum(attribute='kg')|num }} kg</span></div>
+    <div class="table-wrap"><table class="t">
+      <thead><tr><th>Vaqt</th><th>Telashka</th><th class="hide-m">Dala</th><th>F.I.Sh. / Kombayn</th><th class="hide-m">Turi</th><th class="num">Kg</th></tr></thead>
+      <tbody>{% for r in today_rows[:100] %}<tr><td>{{ r.created_at[11:16] }}</td><td><a class="link" href="{{ url_for('ops.load_detail', load_id=r.load_id) }}">{{ r.trailer_code }}</a></td><td class="hide-m">{{ r.field_name }}</td><td>{{ r.worker_name or r.combine_code }}</td>
+        <td class="hide-m"><span class="badge {{ 'b-green' if r.method == 'hand' else 'b-orange' }}">{{ 'Qo‘l' if r.method == 'hand' else 'Kombayn' }}</span></td><td class="num b">{{ r.kg|num(1 if r.kg % 1 else 0) }}</td></tr>
+      {% else %}<tr><td colspan="6">{{ empty('Bugun terim yo‘q', 'cotton') }}</td></tr>{% endfor %}</tbody>
+    </table></div>
+  </section>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+(function () {
+  const form = document.getElementById('harvest-form');
+  if (!form) return;
+  const maxHand = {{ max_hand|tojson }};
+  const name = document.getElementById('worker-name'), wid = document.getElementById('worker-id'),
+        list = document.getElementById('worker-list'), sel = document.getElementById('worker-selected'),
+        kg = form.querySelector('[name=kg]');
+  function mode() { return form.querySelector('[name=method]:checked').value; }
+  function sync() {
+    form.querySelectorAll('[data-for]').forEach(el => el.hidden = el.dataset.for !== mode());
+    try { localStorage.setItem('surxon.method', mode()); } catch (_) {}
+  }
+  form.querySelectorAll('[name=method]').forEach(r => r.addEventListener('change', sync));
+  try { const m = localStorage.getItem('surxon.method'); if (m && !location.search.includes('method=')) form.querySelector(`[value=${m}]`).checked = true; } catch (_) {}
+  sync();
+  let t, items = [], hl = -1;
+  async function search() {
+    const q = name.value.trim();
+    try {
+      const r = await fetch('/api/workers?q=' + encodeURIComponent(q), { headers: { 'X-Requested-With': 'fetch' } });
+      items = (await r.json()).workers;
+    } catch (_) { items = []; }
+    hl = -1;
+    list.innerHTML = items.map((w, i) => `<button type="button" data-i="${i}"><span class="avatar">${w.thumb ? `<img src="${w.thumb}">` : surxonEsc(w.name[0])}</span><span>${surxonEsc(w.name)}<br><span class="small muted">${surxonEsc(w.phone)}</span></span></button>`).join('')
+      + (q ? `<button type="button" data-new="1">➕ Yangi odam: <b>${surxonEsc(q)}</b></button>` : '');
+    list.classList.toggle('open', !!list.innerHTML);
+  }
+  function pick(w) {
+    wid.value = w ? w.id : ''; if (w) name.value = w.name;
+    sel.innerHTML = w ? `<div class="selected-worker"><span class="avatar">${w.thumb ? `<img src="${w.thumb}">` : surxonEsc(w.name[0])}</span><div><b>${surxonEsc(w.name)}</b><div class="small">Tanlandi</div></div></div>` : '';
+    list.classList.remove('open'); kg.focus();
+  }
+  name.addEventListener('input', () => { wid.value = ''; sel.innerHTML = ''; clearTimeout(t); t = setTimeout(search, 150); });
+  name.addEventListener('focus', search);
+  name.addEventListener('keydown', e => {
+    const btns = list.querySelectorAll('button');
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); hl = Math.max(0, Math.min(btns.length - 1, hl + (e.key === 'ArrowDown' ? 1 : -1))); btns.forEach((b, i) => b.classList.toggle('hl', i === hl)); }
+    if (e.key === 'Enter' && list.classList.contains('open')) { e.preventDefault(); if (hl >= 0) btns[hl].click(); else if (items[0]) pick(items[0]); else pick(null); }
+  });
+  list.addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; if (b.dataset.new) { pick(null); name.blur(); kg.focus(); } else pick(items[+b.dataset.i]); });
+  document.addEventListener('click', e => { if (!e.target.closest('.worker-pick')) list.classList.remove('open'); });
+  window.checkHarvest = function () {
+    const v = parseFloat((kg.value || '').replace(',', '.'));
+    if (!(v > 0)) { surxonToast('Kg ni kiriting', 'error'); kg.focus(); return false; }
+    if (mode() === 'hand' && !name.value.trim()) { surxonToast('Odamni tanlang yoki ismini yozing', 'error'); name.focus(); return false; }
+    if (mode() === 'hand' && v > maxHand) { return confirm(v + ' kg — juda katta. Rostdan to‘g‘rimi?'); }
+    return true;
+  };
+  form.dataset.validate = 'checkHarvest';
+  form.addEventListener('queued', () => { sel.innerHTML = ''; wid.value = ''; name.focus(); sync(); });
+})();
+</script>
+{% endblock %}

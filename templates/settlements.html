@@ -1,0 +1,19 @@
+{% extends 'base.html' %}
+{% from 'macros.html' import icon, empty with context %}
+{% set page_title = 'Buxgalteriya — ishchilar hisob-kitobi' %}
+{% block content %}
+<div class="page-h"><h1>{{ icon('calc','lg') }} Ishchilar hisob-kitobi ({{ year }})</h1>
+  <span class="sub">{% if rate %}Stavka: {{ rate|num }} so‘m/kg (qo‘l terimi, dala tarozisi kg bo‘yicha){% else %}Stavka kiritilmagan — ish haqi hisoblanmaydi{% endif %}</span>
+  <span class="spacer"></span><a class="btn btn-light" href="{{ url_for('reports.report', key='terimchilar', format='xlsx') }}">{{ icon('download','sm') }} Excel</a></div>
+{% if not rate %}<div class="notice mb">{{ icon('alert') }}<div>Ish haqi stavkasi hali tasdiqlanmagan. Admin <b>Sozlamalar → “Qo‘l terimi ish haqi, so‘m/kg”</b> ni kiritgach summalar chiqadi. Tizim stavkani o‘zi taxmin qilmaydi.</div></div>{% endif %}
+<section class="card">
+  <div class="table-wrap"><table class="t">
+    <thead><tr><th>F.I.Sh.</th><th>Brigada</th><th class="num">Kunlar</th><th class="num">Kg</th><th class="num">Hisoblangan</th><th class="num">Avans</th><th class="num">To‘langan</th><th class="num">Qoldiq (qarz)</th></tr></thead>
+    <tbody>{% for r in rows %}<tr><td><a class="link" href="{{ url_for('people.worker_detail', worker_id=r.id) }}">{{ r.full_name }}</a></td><td>{{ r.brigadier_name or '—' }}</td><td class="num">{{ r.days }}</td><td class="num">{{ r.kg|num(1) }}</td>
+      <td class="num">{{ r.earned|num if r.earned is not none else '—' }}</td><td class="num">{{ r.advances|num }}</td><td class="num">{{ r.paid|num }}</td>
+      <td class="num b {{ 't-down' if r.balance and r.balance > 0 }}">{{ r.balance|num if r.balance is not none else 'hisoblanmagan' }}</td></tr>
+    {% else %}<tr><td colspan="8">{{ empty('Ma’lumot yo‘q', 'users') }}</td></tr>{% endfor %}</tbody>
+    {% if rows %}<tfoot><tr><td colspan="3">Jami</td><td class="num">{{ rows|sum(attribute='kg')|num(1) }}</td><td class="num">{{ (rows|sum(attribute='earned'))|num if rate else '—' }}</td><td class="num">{{ rows|sum(attribute='advances')|num }}</td><td class="num">{{ rows|sum(attribute='paid')|num }}</td><td class="num">{{ (rows|sum(attribute='balance'))|num if rate else '—' }}</td></tr></tfoot>{% endif %}
+  </table></div>
+</section>
+{% endblock %}

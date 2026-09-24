@@ -1,0 +1,96 @@
+{% extends 'base.html' %}
+{% from 'macros.html' import icon, status, empty with context %}
+{% set page_title = 'Bosh sahifa' %}
+{% set role = current_user['role'] %}
+{% macro act(url, ico, label, cls='') -%}<a class="m-act {{ cls }}" href="{{ url }}">{{ icon(ico, 'lg') }}<span>{{ label }}</span></a>{%- endmacro %}
+{% macro tile(label, value, unit='', note='', color='') -%}<div class="m-tile"><span>{{ label }}</span><b class="num{{ ' long' if value|string|length > 9 }}" style="{{ 'color:' ~ color if color }}">{{ value }}{% if unit %}<small> {{ unit }}</small>{% endif %}</b>{% if note %}<em>{{ note }}</em>{% endif %}</div>{%- endmacro %}
+{% block content %}
+<div class="m-hello"><b>Salom, {{ current_user['full_name'].split(' ')[0] }}</b><span>{{ role_labels.get(role) }} · {{ today|d }}, {{ today|weekday }}</span></div>
+
+{% if role in ('brigadier', 'tally', 'driver') %}
+  <div class="m-tiles">
+    {{ tile('Bugun terildi' ~ (' (brigada)' if my_brigade else ''), kpi.harvest|num, 'kg', kpi.workers ~ ' kishi') }}
+    {{ tile('Ochiq telashka', open_loads|length, 'ta') }}
+  </div>
+  <div class="m-actions">
+    {% if can('harvest.write') %}{{ act(url_for('ops.harvest'), 'sprout', 'Terim kiritish', 'green') }}{% endif %}
+    {% if can('load.full') %}{{ act(url_for('ops.harvest') if open_loads|length != 1 else url_for('ops.load_detail', load_id=open_loads[0].id) ~ '#toldi', 'check-circle', 'TOLDI + rasm') }}{% endif %}
+    {% if can('load.open') %}{{ act(url_for('ops.loads') ~ '#open', 'plus', 'Yangi telashka') }}{% endif %}
+    {{ act(url_for('main.photos'), 'camera', 'Rasm yuborish') }}
+  </div>
+  <h3 class="m-h">Mening telashkalarim</h3>
+  {% for l in open_loads %}
+  <div class="m-card">
+    <div class="row"><b style="font-size:18px">{{ l.trailer_code }}</b>{{ status(l.status) }}<span class="spacer"></span><b class="num" style="font-size:20px">{{ l.live_kg|num }} kg</b></div>
+    <div class="small muted">{{ l.field_name }} · {{ l.brigadier_name }} · {{ l.tractor_code or 'traktorsiz' }}</div>
+    <div class="row mt-s">
+      <a class="btn btn-green" style="flex:1" href="{{ url_for('ops.harvest', load=l.id) }}">{{ icon('plus','sm') }} Terim</a>
+      {% if can('load.full') %}<a class="btn btn-light" style="flex:1" href="{{ url_for('ops.load_detail', load_id=l.id) }}#toldi">{{ icon('check','sm') }} TOLDI</a>{% endif %}
+    </div>
+  </div>
+  {% else %}{{ empty('Ochiq telashka yo‘q — “Yangi telashka” ni bosing', 'trailer') }}{% endfor %}
+
+{% elif role == 'scale' %}
+  <div class="m-tiles">
+    {{ tile('Tarozini kutmoqda', waiting|length, 'ta', '', '#1a73e8' if waiting else '') }}
+    {{ tile('Bugun netto', kpi.net|num, 'kg') }}
+  </div>
+  <div class="m-actions">
+    {{ act(url_for('ops.scale_queue'), 'scale', 'Tarozi navbati', 'green') }}
+    {{ act(url_for('ops.waybills', period='today'), 'doc', 'Bugungi nakladnoylar') }}
+    {{ act(url_for('main.photos'), 'camera', 'Rasm') }}
+  </div>
+  <h3 class="m-h">Navbatda</h3>
+  {% for l in waiting %}<a class="m-card row" href="{{ url_for('ops.weigh', load_id=l.id) }}"><b style="font-size:18px">{{ l.trailer_code }}</b><span class="small muted">{{ l.field_name }}</span><span class="spacer"></span>
+    {% if l.weigh_status == 'BRUTTO' %}<span class="badge b-orange">Tara kerak</span>{% else %}<span class="badge b-blue">Brutto kerak</span>{% endif %}</a>
+  {% else %}{{ empty('Navbat bo‘sh', 'scale') }}{% endfor %}
+
+{% elif role == 'accountant' %}
+  <div class="m-tiles">
+    {{ tile('Qabul kutilmoqda', kpi.in_transit, 'ta', kpi.in_transit_kg|num ~ ' kg yo‘lda') }}
+    {{ tile('Naymandan qarz', fin.debt|num if fin.debt is not none else 'hisoblanmagan', '', 'narx kiritilmagan' if fin.debt is none else '', '#ee2f5b' if fin.debt else '') }}
+    {{ tile('Tushgan', fin.received|num, 'so‘m') }}
+    {{ tile('Xarajat', fin.expenses|num, 'so‘m') }}
+  </div>
+  <div class="m-actions">
+    {{ act(url_for('ops.nayman_list'), 'factory', 'Nayman qabuli', 'green') }}
+    {{ act(url_for('finance.payments'), 'card', 'To‘lov kiritish') }}
+    {{ act(url_for('finance.expenses'), 'receipt', 'Xarajat') }}
+    {{ act(url_for('reports.index'), 'bars', 'Hisobotlar') }}
+  </div>
+
+{% elif role == 'cashier' %}
+  <div class="m-tiles">
+    {{ tile('Kassa qoldig‘i', fin.cash_balance|num if has_opening else 'hisoblanmagan', 'so‘m' if has_opening else '', '' if has_opening else 'boshlang‘ich qoldiq kiritilmagan') }}
+    {{ tile('Bugun kirim / chiqim', cash_today.inflow|num ~ ' / ' ~ cash_today.outflow|num) }}
+  </div>
+  <div class="m-actions">
+    {{ act(url_for('finance.cash'), 'cash', 'Kassa kirim/chiqim', 'green') }}
+    {{ act(url_for('people.settlements'), 'users', 'Ishchilar hisobi') }}
+    {{ act(url_for('finance.expenses'), 'receipt', 'Xarajat') }}
+    {{ act(url_for('finance.payments'), 'card', 'To‘lovlar') }}
+  </div>
+
+{% else %}{# admin / manager #}
+  <div class="m-tiles">
+    {{ tile('Bugungi terim', kpi.harvest|num, 'kg', 'qo‘l ' ~ kpi.hand|num ~ ' · kombayn ' ~ kpi.combine|num) }}
+    {{ tile('Tarozi netto', kpi.net|num, 'kg') }}
+    {{ tile('Naymanga', kpi.sent|num, 'kg', 'yo‘lda ' ~ kpi.in_transit ~ ' ta') }}
+    {{ tile('Qabul', kpi.accepted|num, 'kg', ('farq ' ~ '%+.0f'|format(kpi.diff) ~ ' kg') if kpi.accepted else '') }}
+    {% if fin %}
+    {{ tile('Naymandan qarz', fin.debt|num if fin.debt is not none else 'hisoblanmagan', '', '' if fin.debt is not none else 'narx kiritilmagan') }}
+    {{ tile('Kassa', fin.cash_balance|num if has_opening else 'hisoblanmagan', '', '' if has_opening else 'boshlang‘ich qoldiq yo‘q') }}
+    {% endif %}
+  </div>
+  <div class="m-actions">
+    {{ act(url_for('main.dashboard', view='full'), 'chart', 'To‘liq dashboard', 'green') }}
+    {{ act(url_for('ops.loads'), 'trailer', 'Telashkalar') }}
+    {{ act(url_for('ops.waybills', period='today'), 'doc', 'Nakladnoylar') }}
+    {{ act(url_for('reports.index'), 'bars', 'Hisobotlar') }}
+  </div>
+  <h3 class="m-h">Telashkalar hozir</h3>
+  <div class="m-card">{% for t in trailers %}<div class="row" style="padding:6px 0;border-bottom:1px solid var(--line-2)"><b>{{ t.trailer_code }}</b>{% if t.status %}{{ status(t.status) }}{% else %}<span class="badge b-gray">Bo‘sh</span>{% endif %}<span class="small muted">{{ t.field_name or '' }}</span><span class="spacer"></span><b class="num">{{ ((t.internal_kg if t.status == 'TOLDI' else t.live_kg)|num ~ ' kg') if t.status else '' }}</b></div>{% endfor %}</div>
+{% endif %}
+<a class="m-more" href="#" data-open-nav>{{ icon('menu') }} Boshqa bo‘limlar</a>
+<a class="m-more" style="margin-top:6px" href="{{ url_for('main.dashboard', view='full') }}">Kompyuter ko‘rinishi</a>
+{% endblock %}

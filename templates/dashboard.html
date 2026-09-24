@@ -1,0 +1,189 @@
+{% extends 'base.html' %}
+{% from 'macros.html' import icon, kpi, status, photo_card, empty with context %}
+{% set page_title = 'Bosh sahifa' %}
+{% block topbar_extra %}<div class="chip weather hide-md" data-weather data-lat="{{ weather.lat }}" data-lon="{{ weather.lon }}">{{ icon('sun') }}<div><b data-temp>—</b><br><span>{{ weather.place }}</span></div></div>{% endblock %}
+{% block content %}
+<section class="hero">
+  <div class="inner">
+    <h1>Paxta – bizning kelajagimiz</h1>
+    <p>Har bir dala, har bir terim, aniq hisob va nazorat</p>
+    <div class="tag">SURXON • TAXIATOSH • {{ year }}</div>
+  </div>
+  <div class="today">{{ icon('sun') }}<small>{{ 'Bugungi sana' if day == today else 'Tanlangan sana' }}</small><b>{{ day|d }}</b><small>{{ day|weekday }}</small></div>
+</section>
+
+<div class="kpis">
+  {{ kpi('Bugungi terim (kg)', k.harvest|num, '', 'green', 'cotton', k.harvest_trend) }}
+  {{ kpi('Umumiy tarozi (netto)', k.net|num, 'kg', 'blue', 'truck', k.net_trend) }}
+  {{ kpi('Naymanga ketgan', k.sent|num, 'kg', 'orange', 'trailer', k.sent_trend) }}
+  {{ kpi('Qabul qilingan', k.accepted|num, 'kg', 'purple', 'factory', k.accepted_trend) }}
+  {% set dnote = ('%+.2f%%'|format(k.diff_pct)) if k.diff_pct is not none else ('Yo‘lda: ' ~ k.in_transit ~ ' ta') %}
+  {{ kpi('Farq (kg)', ('%+.0f'|format(k.diff)) if k.diff else '0', '', 'red', 'target', None, dnote ~ (' · yo‘lda ' ~ k.in_transit ~ ' ta' if k.diff_pct is not none and k.in_transit else '')) }}
+  {{ kpi('Telashkalar (band)', k.trailers_busy ~ ' / ' ~ k.trailers_total, '', 'teal', 'trailer', None,
+         (k.trailers_full ~ ' ta TOLDI → tarozi') if k.trailers_full else 'Tarozi navbati bo‘sh') }}
+</div>
+
+{% if setup.fields == 0 and can('masterdata.write') %}
+<div class="notice mb">{{ icon('alert') }}<div><b>Boshlash uchun sozlash kerak:</b> dalalar hali kiritilmagan. <a class="b" style="color:var(--blue)" href="{{ url_for('admin.fields') }}">Dalalarni kiriting →</a>
+  Brigadirlar (Juma ota, Nurim ota, Bayram ota), 3 traktor, 4 telashka va 2 kombayn tayyor. Keyin <a class="b" style="color:var(--blue)" href="{{ url_for('admin.users') }}">xodimlarga login bering</a>.</div></div>
+{% endif %}
+
+<div class="grid">
+  <!-- map -->
+  <section class="card s5">
+    <div class="card-h"><h3>Dalalar xaritasi</h3>
+      <div class="tabs" style="margin-left:auto" data-map-tabs><button class="on" data-mode="yield">Hosildorlik</button><button data-mode="brig">Brigadirlar</button><button data-mode="state">Terim holati</button></div></div>
+    <div class="card-b">
+      <div class="map" id="fields-map" data-center="{{ map_center }}"></div>
+      <script type="application/json" id="fields-data">{{ fields_json|tojson }}</script>
+    </div>
+  </section>
+
+  <!-- brigadiers -->
+  <section class="card s3">
+    <div class="card-h"><h3>Brigadirlar bo‘yicha natija</h3><a class="more" href="{{ url_for('reports.report', key='brigadirlar') }}">Barchasi</a></div>
+    <div class="card-b" style="padding-top:4px;padding-bottom:4px">
+      {% for b in brigs %}
+      <div class="brig">
+        <div class="avatar">{{ b.name[:1] }}</div>
+        <div class="mid"><b>{{ b.name }}</b><div class="small muted">{{ b.area_ha|num(1) }} ga</div>
+          <div class="prog mt-s"><span style="width:{{ (b.net_kg / max_brig * 100)|round }}%"></span></div></div>
+        <div class="rt"><b class="num">{{ b.net_kg|num }} kg</b><div class="small muted">{{ ((b.net_kg / b.area_ha)|num) if b.area_ha else '—' }} kg/ga</div></div>
+      </div>
+      {% else %}{{ empty('Brigadir yo‘q') }}{% endfor %}
+    </div>
+  </section>
+
+  <!-- equipment live -->
+  <section class="card s4">
+    <div class="card-h"><h3>Texnikalar (jonli holat)</h3><a class="more" href="{{ url_for('ops.loads') }}">Barchasi</a></div>
+    <div class="card-b">
+      <div class="trailers">
+        {% for t in trailers[:4] %}
+        <a class="tcard {{ 'free' if not t.load_id }}" href="{{ url_for('ops.load_detail', load_id=t.load_id) if t.load_id else url_for('ops.loads') }}">
+          <div class="ph" style="background-image:url('{{ photo_url(t.thumb) }}')">{% if t.status %}{{ status(t.status) }}{% else %}<span class="badge b-gray">Bo‘sh</span>{% endif %}</div>
+          <div class="bd"><b class="code">{{ t.trailer_code }}</b>
+            <div class="kg num">{{ (t.internal_kg if t.status == 'TOLDI' else t.live_kg)|num }} kg</div>
+            <div>{{ icon('tractor','xs') }} {{ t.tractor_code or '—' }}</div><div>{{ icon('pin','xs') }} {{ t.field_name or '—' }}</div></div>
+        </a>
+        {% else %}{{ empty('Telashka yo‘q') }}{% endfor %}
+      </div>
+    </div>
+  </section>
+
+  <!-- harvest chart -->
+  <section class="card s5">
+    <div class="card-h"><h3>Terim grafigi</h3>
+      <div class="tabs" style="margin-left:auto" data-chart-tabs><button class="on" data-mode="daily">Kunlik</button><button data-mode="weekly">Haftalik</button><button data-mode="season">Mavsum</button><button data-mode="hourly">Bugun</button></div></div>
+    <div class="card-b"><div class="chart-box"><canvas id="harvest-chart"></canvas></div></div>
+    <script type="application/json" id="series-data">{{ series|tojson }}</script>
+  </section>
+
+  <!-- yield per field -->
+  <section class="card s4">
+    <div class="card-h"><h3>Hosildorlik (kg/ga)</h3><a class="more" href="{{ url_for('reports.report', key='dalalar') }}">Barchasi</a></div>
+    <div class="card-b" style="padding-top:6px">
+      {% set maxy = [1] %}{% for f in fields %}{% if f.area_ha and f.net_kg / f.area_ha > maxy[0] %}{% set _ = maxy.pop() %}{% set _ = maxy.append(f.net_kg / f.area_ha) %}{% endif %}{% endfor %}
+      {% for f in fields[:5] %}{% set y = (f.net_kg / f.area_ha) if f.area_ha else 0 %}
+      <a class="hbar" href="{{ url_for('admin.field_detail', field_id=f.id) }}">
+        <img src="{{ url_for('static', filename='img/field-thumb.jpg') }}" alt="">
+        <div><b>{{ f.name }}</b><span>{{ f.area_ha|num(1) }} ga</span></div>
+        <div class="prog {{ 'orange' if loop.index is even }}"><span style="width:{{ (y / maxy[0] * 100)|round }}%"></span></div>
+        <div class="val num">{{ y|num }}</div>
+      </a>
+      {% else %}{{ empty('Dalalar kiritilmagan', 'field') }}{% endfor %}
+    </div>
+  </section>
+
+  <!-- donut -->
+  <section class="card s3">
+    <div class="card-h"><h3>Paxta turi bo‘yicha</h3></div>
+    <div class="card-b">
+      {% set tot = k.hand + k.combine %}
+      <div class="donut-wrap" style="gap:12px">
+        <div class="chart-box"><canvas id="type-donut" data-hand="{{ k.hand }}" data-combine="{{ k.combine }}" data-total="{{ tot|num }}"></canvas></div>
+        <div class="legend-big">
+          <div><i style="background:#1e9e4a"></i>Qo‘l terimi<b class="num">{{ k.hand|num }} kg ({{ ((k.hand / tot * 100)|round|int) if tot else 0 }}%)</b></div>
+          <div><i style="background:#f59a23"></i>Kombayn<b class="num">{{ k.combine|num }} kg ({{ ((k.combine / tot * 100)|round|int) if tot else 0 }}%)</b></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- status cards (hand / combine / nayman) -->
+  {% set tgt = target %}
+  <section class="card s4"><div class="card-h"><h3>Terim holati (Qo‘l terimi)</h3><a class="more" href="{{ url_for('ops.harvest') }}">Batafsil</a></div>
+    <div class="card-b"><div class="status-card">{{ icon('cotton','xl') }}<div style="flex:1"><div class="big num">{{ k.hand|num }} kg</div><div class="small muted">Bugungi qo‘l terimi · {{ k.workers }} kishi</div>
+      {% if tgt %}<div class="row mt-s"><div class="prog" style="flex:1"><span style="width:{{ [k.harvest / tgt * 100, 100]|min|round }}%"></span></div><b class="small">{{ (k.harvest / tgt * 100)|round|int }}%</b></div><div class="tiny muted right">Reja: {{ tgt|num }} kg</div>{% endif %}
+    </div></div></div></section>
+  <section class="card s4"><div class="card-h"><h3>Kombayn holati</h3><a class="more" href="{{ url_for('admin.equipment') }}">Batafsil</a></div>
+    <div class="card-b"><div class="status-card">{{ icon('combine','xl') }}<div style="flex:1"><div class="big num">{{ k.combine|num }} kg</div><div class="small muted">Bugungi kombayn terimi</div>
+      <div class="equip mt-s" style="grid-template-columns:repeat({{ [combines|length,1]|max }},1fr)">{% for c in combines %}<div class="it comb"><b>{{ c.code }}</b><span>{{ c.field_name or '—' }}</span><em class="{{ 't-up' if c.kg else 't-muted' }}" style="color:{{ '#1e9e4a' if c.kg else '#f28b1c' }}">{{ 'Ishlayapti' if c.kg else 'Tanaffus' }}</em></div>{% endfor %}</div>
+    </div></div></div></section>
+  <section class="card s4"><div class="card-h"><h3>Nayman holati</h3><a class="more" href="{{ url_for('ops.nayman_list') }}">Batafsil</a></div>
+    <div class="card-b"><div class="status-card">{{ icon('factory','xl') }}<div style="flex:1"><div class="big num">{{ k.accepted|num }} kg</div><div class="small muted">Bugun qabul qilingan</div>
+      <div class="row mt-s"><div class="prog purple" style="flex:1"><span style="width:{{ ([k.accepted / k.sent * 100, 100]|min|round) if k.sent else 0 }}%"></span></div><b class="small">{{ ((k.accepted / k.sent * 100)|round|int) if k.sent else 0 }}%</b></div>
+      <div class="tiny muted right">Yo‘lda / qabul kutilmoqda: {{ k.in_transit }} ta · {{ k.in_transit_kg|num }} kg</div>
+    </div></div></div></section>
+
+  <!-- top workers -->
+  <section class="card s4">
+    <div class="card-h"><h3>Bugungi terimchilar (top 10)</h3><a class="more" href="{{ url_for('reports.report', key='terimchilar') }}">Batafsil</a></div>
+    <div class="table-wrap"><table class="t">
+      <thead><tr><th>№</th><th>F.I.Sh.</th><th>Brigadir</th><th>Dala</th><th class="num">Kg (bugun)</th></tr></thead>
+      <tbody>{% for w in top %}<tr><td>{{ loop.index }}</td><td><a href="{{ url_for('people.worker_detail', worker_id=w.id) }}">{{ w.full_name }}</a></td><td>{{ w.brigadier_name }}</td><td>{{ w.field_name }}</td><td class="num b">{{ w.kg|num(1 if w.kg % 1 else 0) }}</td></tr>
+      {% else %}<tr><td colspan="5">{{ empty('Bugun terim kiritilmagan', 'cotton') }}</td></tr>{% endfor %}</tbody>
+    </table></div>
+  </section>
+
+  <!-- today's waybills -->
+  <section class="card s5">
+    <div class="card-h"><h3>Nakladnoylar (bugun)</h3><a class="more" href="{{ url_for('ops.waybills', period='today') }}">Barchasi</a></div>
+    <div class="table-wrap"><table class="t">
+      <thead><tr><th>№</th><th>Vaqt</th><th>Telashka</th><th>Traktor</th><th>Brigadir</th><th class="num">Netto (kg)</th><th>Holat</th></tr></thead>
+      <tbody>{% for w in waybills %}<tr><td><a class="link" href="{{ url_for('ops.waybill_detail', waybill_id=w.id) }}">{{ w.number }}</a></td><td>{{ (w.tare_at or w.created_at)[11:16] }}</td><td>{{ w.trailer_code }}</td><td>{{ w.tractor_code or '—' }}</td><td>{{ w.brigadier_name }}</td><td class="num b">{{ w.net_kg|num }}</td><td>{{ status(w.status) }}</td></tr>
+      {% else %}<tr><td colspan="7">{{ empty('Bugun nakladnoy yo‘q', 'doc') }}</td></tr>{% endfor %}</tbody>
+    </table></div>
+  </section>
+
+  <!-- recent events -->
+  <section class="card s3">
+    <div class="card-h"><h3>So‘nggi voqealar</h3>{% if can('audit.view') %}<a class="more" href="{{ url_for('reports.audit_log') }}">Barchasi</a>{% endif %}</div>
+    <div class="card-b" style="padding-top:2px;padding-bottom:2px"><div class="feed">
+      {% for e in events %}
+      <a href="{{ url_for(e.link[0], **e.link[1]) if e.link else '#' }}"><span class="th">{{ icon(e.icon) }}</span><span class="tx"><b>{{ e.title }}</b><span>{{ e.sub }}</span></span><time>{{ e.time if e.date == today else e.date|d }}</time></a>
+      {% else %}{{ empty('Hali voqea yo‘q', 'history') }}{% endfor %}
+    </div></div>
+  </section>
+
+  <!-- photo archive -->
+  <section class="card s6">
+    <div class="card-h"><h3>Foto arxiv</h3><a class="more" href="{{ url_for('main.photos') }}">Barchasi</a></div>
+    <div class="card-b"><div class="photo-grid three">{% for p in photos %}{{ photo_card(p) }}{% else %}{{ empty('Rasm hali yo‘q. Telegram yoki telefondan yuborilgan rasmlar shu yerda ko‘rinadi.', 'camera') }}{% endfor %}</div></div>
+  </section>
+
+  <!-- Nayman today + seasons -->
+  <section class="card s6">
+    <div class="card-h"><h3>Nayman qabuli (bugun)</h3><a class="more" href="{{ url_for('ops.nayman_list') }}">Barchasi</a></div>
+    <div class="table-wrap"><table class="t">
+      <thead><tr><th>Vaqt</th><th>Nakladnoy</th><th class="num">Qabul (kg)</th><th class="num">Farq (kg)</th><th>Izoh</th><th>Holat</th></tr></thead>
+      <tbody>{% for r in receipts %}<tr><td>{{ r.created_at[11:16] }}</td><td>{{ r.number }}</td><td class="num b">{{ r.accepted_kg|num }}</td><td class="num {{ 't-down' if r.diff_kg < 0 else 't-up' }} b">{{ '%+.0f'|format(r.diff_kg) }}</td><td>{{ r.diff_reason or '—' }}</td><td>{{ icon('check-circle','sm') }}</td></tr>
+      {% else %}<tr><td colspan="6">{{ empty('Bugun Nayman qabuli kiritilmagan', 'factory') }}</td></tr>{% endfor %}</tbody>
+    </table></div>
+    {% if seasons_cmp|length > 1 or fin %}
+    <div class="card-b" style="border-top:1px solid var(--line-2)">
+      <div class="mini-stats">
+        {% for s in seasons_cmp[:3] %}<div class="mini"><span>{{ s.year }}-mavsum netto</span><b class="num">{{ (s.net_kg/1000)|num(1) }} t</b></div>{% endfor %}
+        {% if fin %}<div class="mini"><span>Kassa qoldig‘i</span><b class="num">{{ fin.cash_balance|num }}</b></div>
+        {% if fin.debt is not none %}<div class="mini"><span>Naymandan qarz</span><b class="num" style="color:var(--red)">{{ fin.debt|num }}</b></div>{% endif %}{% endif %}
+      </div>
+    </div>{% endif %}
+  </section>
+</div>
+{% endblock %}
+{% block scripts %}
+<link rel="stylesheet" href="{{ url_for('static', filename='vendor/leaflet/leaflet.css') }}">
+<script src="{{ url_for('static', filename='vendor/leaflet/leaflet.js') }}"></script>
+<script src="{{ url_for('static', filename='vendor/chart.umd.js') }}"></script>
+<script src="{{ url_for('static', filename='js/dashboard.js') }}?v={{ version }}"></script>
+{% endblock %}

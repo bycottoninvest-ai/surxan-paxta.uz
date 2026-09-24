@@ -1,0 +1,37 @@
+{% extends 'base.html' %}
+{% from 'macros.html' import icon, csrf, uuid_field, empty, void_button, file_input with context %}
+{% set page_title = 'Xarajatlar' %}
+{% block content %}
+<div class="page-h"><h1>{{ icon('receipt','lg') }} Xarajatlar ({{ year }})</h1><span class="spacer"></span><a class="btn btn-light" href="{{ url_for('reports.report', key='xarajatlar', format='xlsx') }}">{{ icon('download','sm') }} Excel</a></div>
+<div class="grid">
+  {% if can('expenses.write') %}
+  <section class="card s4">
+    <div class="card-h"><h3>{{ icon('plus') }} Xarajat kiritish</h3></div>
+    <div class="card-b"><form method="post" enctype="multipart/form-data" class="form">{{ csrf() }}{{ uuid_field() }}
+      <div class="f h"><label>Turi <span class="req">*</span></label><select name="category" required>{% for c in categories %}<option>{{ c }}</option>{% endfor %}</select></div>
+      <div class="f h"><label>Sana</label><input type="date" name="expense_date" value="{{ today }}" max="{{ today }}" required></div>
+      <div class="f"><label>Summa (so‘m) <span class="req">*</span></label><input name="amount" inputmode="numeric" required></div>
+      <div class="f h"><label>Dala</label><select name="field_id"><option value="">—</option>{% for f in fields %}<option value="{{ f.id }}">{{ f.code }} · {{ f.name }}</option>{% endfor %}</select></div>
+      <div class="f h"><label>Texnika</label><select name="equipment_id"><option value="">—</option>{% for e in equipment %}<option value="{{ e.id }}">{{ e.code }}</option>{% endfor %}</select></div>
+      <div class="f h"><label>Brigada</label><select name="brigadier_id"><option value="">—</option>{% for b in brigadiers %}<option value="{{ b.id }}">{{ b.name }}</option>{% endfor %}</select></div>
+      <div class="f h"><label>Kimga</label><input name="payer"></div>
+      <div class="f"><label>Izoh</label><input name="note"></div>
+      <div class="f"><label class="check"><input type="checkbox" name="from_cash" value="1"> Asadbek kassasidan to‘landi (kassa chiqimi)</label></div>
+      <div class="f">{{ file_input('photo', 'Chek / hujjat rasmi') }}</div>
+      <div class="f"><button class="btn btn-primary btn-block">Saqlash</button></div>
+    </form></div>
+  </section>
+  {% endif %}
+  <section class="card {{ 's8' if can('expenses.write') else 's12' }}">
+    <div class="card-h"><h3>Turlar bo‘yicha</h3></div>
+    <div class="card-b"><div class="mini-stats">{% for c in by_cat %}<div class="mini"><span>{{ c.category }} ({{ c.n }})</span><b class="num">{{ c.total|num }}</b></div>{% else %}<span class="muted">Xarajat yo‘q</span>{% endfor %}</div></div>
+    <div class="table-wrap"><table class="t">
+      <thead><tr><th>Sana</th><th>Turi</th><th class="num">Summa</th><th>Dala</th><th>Texnika</th><th>Kimga</th><th>Manba</th><th>Izoh</th><th></th></tr></thead>
+      <tbody>{% for r in rows %}<tr class="{{ 'void' if r.voided_at }}"><td>{{ r.expense_date|d }}</td><td>{{ r.category }}</td><td class="num b">{{ r.amount|num }}</td><td>{{ r.field_code or '—' }}</td><td>{{ r.equipment_code or '—' }}</td><td>{{ r.payer or '—' }}</td>
+        <td>{{ 'Kassa' if r.cash_entry_id else '—' }}</td><td class="small">{{ r.note or '' }}</td>
+        <td class="keep right">{% if r.voided_at %}<span class="badge b-gray">Bekor</span>{% elif can('expenses.write') %}{{ void_button(url_for('finance.expense_void', expense_id=r.id)) }}{% endif %}</td></tr>
+      {% else %}<tr><td colspan="9">{{ empty('Xarajat yo‘q', 'receipt') }}</td></tr>{% endfor %}</tbody>
+    </table></div>
+  </section>
+</div>
+{% endblock %}

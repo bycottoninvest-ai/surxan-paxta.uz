@@ -1,0 +1,36 @@
+{% from 'macros.html' import icon, csrf with context %}<!doctype html>
+<html lang="uz"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0a2c5a">
+<title>Kirish · SURXON Paxta Hisob Tizimi</title>
+<link rel="manifest" href="{{ url_for('main.manifest') }}">
+<link rel="icon" href="{{ url_for('static', filename='img/favicon.png') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}?v={{ version }}">
+</head>
+<body>
+<div class="auth">
+  <div class="side"><h2>Paxta — bizning kelajagimiz</h2><p>Har bir dala, har bir terim, aniq hisob va nazorat.</p></div>
+  <div class="panel">
+    <div class="auth-card">
+      <img class="logo" src="{{ url_for('static', filename='img/logo-dark.png') }}" alt="SURXON Taxiatosh Textile">
+      <div class="ttl">PAXTA HISOB TIZIMI</div>
+      <div class="avatar">{{ icon('user','lg') }}</div>
+      {% with messages = get_flashed_messages(with_categories=true) %}{% for cat, msg in messages %}<div class="flash {{ cat }}">{{ msg }}</div>{% endfor %}{% endwith %}
+      {% if request.args.get('bye') %}<div class="flash info">Tizimdan chiqdingiz.</div>{% endif %}
+      <form method="post" action="{{ url_for('auth.do_login', next=request.args.get('next')) }}">
+        {{ csrf() }}
+        <div class="inp">{{ icon('user','sm') }}<input name="username" required autocomplete="username" autocapitalize="none" placeholder="Login" autofocus></div>
+        <div class="inp">{{ icon('shield','sm') }}<input type="password" name="password" required autocomplete="current-password" placeholder="Parol"></div>
+        <label class="check" style="margin:4px 0 16px"><input type="checkbox" name="remember" value="1" checked> Eslab qolish</label>
+        <button class="btn btn-primary btn-block">Kirish</button>
+      </form>
+      <div class="foot">Telefon · Kompyuter · Telegram — bitta tizim<br>{{ domain }} · v{{ version }}</div>
+    </div>
+  </div>
+</div>
+<script>
+// logout clears any cached private data from the offline store
+if (new URLSearchParams(location.search).get('bye') && 'caches' in window) { caches.keys().then(k => k.forEach(n => n.startsWith('surxon-private') && caches.delete(n))); }
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('/service-worker.js').catch(() => {});
+</script>
+</body></html>

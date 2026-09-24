@@ -1,0 +1,54 @@
+{% extends 'base.html' %}
+{% from 'macros.html' import icon, csrf, status, photo_card, empty with context %}
+{% set page_title = f.name %}
+{% block content %}
+<div class="page-h"><a href="{{ url_for('admin.fields') }}" class="icon-btn">{{ icon('chev-left') }}</a><h1>{{ f.code }} · {{ f.name }}</h1><span class="badge b-blue">{{ f.area_ha|num(1) }} ga</span><span class="badge b-gray">{{ f.brigadier_name or 'brigadir yo‘q' }}</span></div>
+<div class="grid">
+  <section class="card s7">
+    <div class="card-h"><h3>{{ icon('map') }} Xarita</h3>{% if can('masterdata.write') %}<span class="small muted" style="margin-left:auto">Chizish: xaritada nuqtalarni bosing, keyin “Saqlash”</span>{% endif %}</div>
+    <div class="card-b">
+      <div class="map tall" id="fmap" data-center="{{ map_center }}"></div>
+      {% if can('masterdata.write') %}
+      <form method="post" action="{{ url_for('admin.fields') }}" class="form mt">{{ csrf() }}
+        <input type="hidden" name="id" value="{{ f.id }}"><input type="hidden" name="polygon_json" id="poly" value="{{ f.polygon_json or '' }}">
+        <div class="f q"><label>Kod</label><input name="code" value="{{ f.code }}" required></div>
+        <div class="f t"><label>Nomi</label><input name="name" value="{{ f.name }}" required></div>
+        <div class="f q"><label>Ga</label><input name="area_ha" value="{{ f.area_ha }}" required></div>
+        <div class="f t"><label>Brigadir</label><select name="brigadier_id"><option value="">—</option>{% for b in brigadiers %}<option value="{{ b.id }}" {{ 'selected' if b.id == f.brigadier_id }}>{{ b.name }}</option>{% endfor %}</select></div>
+        <div class="f t"><label>Izoh</label><input name="notes" value="{{ f.notes or '' }}"></div>
+        <div class="f t"><label class="check" style="margin-top:28px"><input type="checkbox" name="active" value="1" {{ 'checked' if f.active }}> Faol</label></div>
+        <div class="f row"><button type="button" class="btn btn-light" id="clear">Chegarani tozalash</button><button class="btn btn-primary">Saqlash</button></div>
+      </form>{% endif %}
+    </div>
+  </section>
+  <section class="card s5">
+    <div class="card-h"><h3>Mavsumlar tarixi</h3></div>
+    <table class="t"><thead><tr><th>Mavsum</th><th class="num">Reyslar</th><th class="num">Netto (kg)</th><th class="num">kg/ga</th></tr></thead>
+      <tbody>{% for h in history %}<tr><td class="b">{{ h.year }}</td><td class="num">{{ h.loads }}</td><td class="num">{{ h.net_kg|num }}</td><td class="num">{{ (h.net_kg / f.area_ha)|num }}</td></tr>{% else %}<tr><td colspan="4">{{ empty('Hali terim yo‘q') }}</td></tr>{% endfor %}</tbody></table>
+    <div class="card-h"><h3>So‘nggi reyslar</h3></div>
+    <table class="t"><tbody>{% for l in loads[:10] %}<tr><td><a class="link" href="{{ url_for('ops.load_detail', load_id=l.id) }}">{{ l.trailer_code }} №{{ l.id }}</a></td><td>{{ l.load_date|d }}</td><td class="num">{{ l.net_kg|num if l.net_kg else '—' }}</td><td>{{ status(l.status) }}</td></tr>{% else %}<tr><td>{{ empty('Reys yo‘q') }}</td></tr>{% endfor %}</tbody></table>
+  </section>
+  <section class="card s12"><div class="card-h"><h3>Rasmlar</h3></div><div class="card-b"><div class="photo-grid">{% for p in photos %}{{ photo_card(p) }}{% else %}{{ empty('Rasm yo‘q','camera') }}{% endfor %}</div></div></section>
+</div>
+{% endblock %}
+{% block scripts %}
+<link rel="stylesheet" href="{{ url_for('static', filename='vendor/leaflet/leaflet.css') }}">
+<script src="{{ url_for('static', filename='vendor/leaflet/leaflet.js') }}"></script>
+<script>
+(function () {
+  const el = document.getElementById('fmap'), inp = document.getElementById('poly');
+  const c = (el.dataset.center || '42.3167,59.6').split(',').map(Number);
+  const map = L.map(el).setView(c, 14);
+  L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19 }).addTo(map);
+  let pts = {{ (f.polygon_json or '[]')|safe }};
+  let poly = L.polygon(pts, { color: '#1e9e4a', fillOpacity: .35 }).addTo(map);
+  if (pts.length) map.fitBounds(pts);
+  const editable = !!inp;
+  function upd() { poly.setLatLngs(pts); if (inp) inp.value = pts.length >= 3 ? JSON.stringify(pts) : ''; }
+  if (editable) {
+    map.on('click', e => { pts.push([+e.latlng.lat.toFixed(6), +e.latlng.lng.toFixed(6)]); upd(); });
+    document.getElementById('clear').addEventListener('click', () => { pts = []; upd(); });
+  }
+})();
+</script>
+{% endblock %}

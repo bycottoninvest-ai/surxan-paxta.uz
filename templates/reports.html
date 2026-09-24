@@ -1,0 +1,24 @@
+{% extends 'base.html' %}
+{% from 'macros.html' import icon with context %}
+{% set page_title = 'Hisobotlar' %}
+{% block content %}
+<div class="page-h"><h1>{{ icon('bars','lg') }} Hisobotlar ({{ year }})</h1><span class="sub">Har bir hisobot: ekranda, chop etish/PDF va Excel</span></div>
+<div class="grid">
+  <section class="card s5"><div class="card-b" style="padding:6px 14px">
+    {% for key, label, ico in items %}
+    <div class="brig"><span class="th" style="width:40px;height:40px;border-radius:8px;background:var(--blue-50);color:var(--blue);display:grid;place-items:center">{{ icon(ico) }}</span>
+      <a class="mid b" href="{{ url_for('reports.report', key=key) }}">{{ label }}</a>
+      <a class="btn btn-ghost btn-sm" href="{{ url_for('reports.report', key=key, format='xlsx') }}" title="Excel">{{ icon('download','sm') }} Excel</a>
+      <a class="btn btn-ghost btn-sm" href="{{ url_for('reports.report', key=key, print=1) }}" target="_blank" title="PDF">{{ icon('printer','sm') }}</a></div>
+    {% endfor %}
+  </div></section>
+  <section class="card s7">
+    <div class="card-h"><h3>Mavsumlar solishtirmasi</h3><a class="more" href="{{ url_for('reports.report', key='mavsumlar') }}">Batafsil</a></div>
+    <div class="table-wrap"><table class="t"><thead><tr><th>Mavsum</th><th>Holat</th><th class="num">Tarozi netto (t)</th><th class="num">Qo‘l (t)</th><th class="num">Kombayn (t)</th><th class="num">Qabul (t)</th><th class="num">kg/ga</th></tr></thead>
+      <tbody>{% for s in seasons_cmp %}<tr><td class="b">{{ s.year }}</td><td><span class="badge {{ 'b-green' if s.status == 'OCHIQ' else 'b-gray' }}">{{ 'Joriy' if s.status == 'OCHIQ' else 'Arxiv' }}</span></td>
+        <td class="num">{{ (s.net_kg/1000)|num(1) }}</td><td class="num">{{ (s.hand_kg/1000)|num(1) }}</td><td class="num">{{ (s.combine_kg/1000)|num(1) }}</td><td class="num">{{ (s.accepted_kg/1000)|num(1) }}</td>
+        <td class="num">{{ (s.net_kg / s.area_now)|num if s.area_now else '—' }}</td></tr>{% endfor %}</tbody></table></div>
+    <div class="card-b tiny muted">Yopilgan mavsum uchun maydon yopilgan kundagi holatda saqlanadi — keyingi yil dalalar o‘zgarsa ham eski kg/ga o‘zgarmaydi.</div>
+  </section>
+</div>
+{% endblock %}

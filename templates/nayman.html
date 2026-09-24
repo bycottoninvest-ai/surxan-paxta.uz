@@ -1,0 +1,49 @@
+{% extends 'base.html' %}
+{% from 'macros.html' import icon, csrf, status, file_input with context %}
+{% set page_title = 'Nayman qabul ' ~ wb.number %}
+{% block content %}
+<div class="page-h"><a href="{{ url_for('ops.nayman_list') }}" class="icon-btn">{{ icon('chev-left') }}</a><h1>Nayman qabul — {{ wb.number }}</h1>{{ status(wb.status) }}</div>
+<div class="grid">
+  <section class="card s6">
+    <div class="card-h"><h3>{{ 'Qabulni tuzatish' if receipt else 'Qabul ma’lumoti' }}</h3></div>
+    <div class="card-b">
+      {% if can('nayman.write') and wb.status != 'BEKOR' %}
+      <form method="post" enctype="multipart/form-data" class="form" id="nf">
+        {{ csrf() }}
+        <div class="f h keep"><label>Nakladnoy №</label><input value="{{ wb.number }}" disabled></div>
+        <div class="f h keep"><label>Qabul sanasi <span class="req">*</span></label><input type="date" name="received_date" value="{{ receipt.received_date if receipt else today }}" max="{{ today }}" required></div>
+        <div class="f h keep"><label>Jo‘natilgan (kg)</label><input value="{{ wb.net_kg|num }}" disabled></div>
+        <div class="f h keep"><label>Qabul qilingan (kg) <span class="req">*</span></label><input name="accepted_kg" id="acc" class="green" inputmode="decimal" required value="{{ receipt.accepted_kg if receipt else '' }}" autofocus></div>
+        <div class="f h keep"><label>Farq (kg)</label><input id="diff" disabled class="red" value="{{ '%+.0f'|format(receipt.diff_kg) if receipt else '—' }}"></div>
+        <div class="f h keep"><label>Farq sababi</label><select name="diff_reason"><option value="">—</option>{% for r in reasons %}<option {{ 'selected' if receipt and receipt.diff_reason == r }}>{{ r }}</option>{% endfor %}</select></div>
+        <div class="f h"><label>Qabul qiluvchi</label><input name="receiver_name" value="{{ receipt.receiver_name if receipt and receipt.receiver_name else '' }}" placeholder="Nayman mas’uli"></div>
+        <div class="f h"><label>Narx, so‘m/kg (ixtiyoriy)</label><input name="price_per_kg" inputmode="decimal" value="{{ receipt.price_per_kg if receipt and receipt.price_per_kg else (default_price|int if default_price else '') }}" placeholder="Kelishilmagan bo‘lsa bo‘sh qoldiring"></div>
+        <div class="f"><label>Izoh</label><input name="note" value="{{ receipt.note if receipt and receipt.note else '' }}"></div>
+        <div class="f">{{ file_input('photo', 'Nayman hujjati / tarozi rasmi') }}</div>
+        {% if receipt %}<div class="f"><label>O‘zgartirish sababi <span class="req">*</span></label><input name="edit_reason" required minlength="3"></div>{% endif %}
+        <div class="f"><button class="btn btn-green btn-block btn-xl">{{ icon('check-circle','lg') }} {{ 'Tuzatishni saqlash' if receipt else 'QABUL QILINDI' }}</button></div>
+      </form>
+      {% else %}<div class="notice blue">Qabulni Buxgalter yoki Rahbar kiritadi.</div>{% endif %}
+    </div>
+  </section>
+  <section class="card s6">
+    <div class="card-h"><h3>Nazorat</h3></div>
+    <dl class="kv">
+      <dt>Telashka / dala</dt><dd>{{ wb.trailer_code }} · {{ wb.field_name }}</dd><dt>Brigadir</dt><dd>{{ wb.brigadier_name }}</dd>
+      <dt>Jo‘natilgan (tarozi netto)</dt><dd class="num">{{ wb.net_kg|num }} kg</dd>
+      {% if receipt %}<dt>Qabul</dt><dd class="num">{{ receipt.accepted_kg|num }} kg</dd><dt>Summa</dt><dd class="num">{{ receipt.amount|money if receipt.amount else 'Narx kiritilmagan — hisoblanmadi' }}</dd>{% endif %}
+      {% if expected %}<dt>Kutilayotgan to‘lov ({{ expected.percent|num }}% · {{ expected.days }} kun)</dt><dd class="num">{{ expected.amount|money }} · {{ expected.due_date|d }} gacha</dd>{% endif %}
+    </dl>
+    <div class="card-b tiny muted">Summa majburiy emas. To‘lov qoidasi (masalan 80% / 5 kun) faqat Sozlamalarda yoqilganda hisoblanadi.</div>
+  </section>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+(function () {
+  const acc = document.getElementById('acc'), diff = document.getElementById('diff'); if (!acc) return;
+  const sent = {{ wb.net_kg|tojson }};
+  acc.addEventListener('input', () => { const a = parseFloat(acc.value.replace(',', '.')); if (!(a >= 0)) { diff.value = '—'; return; } const d = Math.round(a - sent); diff.value = (d > 0 ? '+' : '') + d; diff.className = d < 0 ? 'red' : 'green'; });
+})();
+</script>
+{% endblock %}

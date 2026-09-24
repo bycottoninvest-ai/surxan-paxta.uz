@@ -1,0 +1,66 @@
+{% macro icon(name, cls='') -%}
+<svg class="ico {{ cls }}" aria-hidden="true"><use href="{{ url_for('static', filename='icons.svg') }}#{{ name }}"/></svg>
+{%- endmacro %}
+
+{% macro csrf() -%}<input type="hidden" name="_csrf" value="{{ csrf_token() }}">{%- endmacro %}
+
+{% macro uuid_field() -%}<input type="hidden" name="client_uuid" data-uuid>{%- endmacro %}
+
+{% macro kpi(label, value, unit, color, ico, trend=None, note=None, invert=False) -%}
+<div class="kpi">
+  <div class="sq bg-{{ color }}">{{ icon(ico) }}</div>
+  <div style="min-width:0">
+    <div class="label">{{ label }}</div>
+    <div class="value num">{{ value }}{% if unit %} <small>{{ unit }}</small>{% endif %}</div>
+    {% if trend is not none %}
+      {% set good = (trend >= 0) != invert %}
+      <div class="trend {{ 't-up' if good else 't-down' }}">{{ icon('up' if trend >= 0 else 'down', 'xs') }} {{ '%+.1f'|format(trend) }}%</div>
+    {% elif note %}<div class="trend t-muted">{{ note|safe }}</div>{% endif %}
+  </div>
+</div>
+{%- endmacro %}
+
+{% macro status(s) -%}
+{% set labels = {'OCHIQ':'Terim','TOLDI':'TOLDI','TORTILDI':'Tortildi','BEKOR':'Bekor','YARATILDI':'Yo‘lda','QABUL':'Qabul qilindi'} %}
+<span class="badge status-{{ s }}">{% if s == 'TOLDI' %}{{ icon('up','xs') }}{% endif %}{{ labels.get(s, s) }}</span>
+{%- endmacro %}
+
+{% macro photo_card(p, extra='') -%}
+<div class="pcard">
+  <img loading="lazy" src="{{ photo_url(p['thumb_path']) }}" data-full="{{ photo_url(p['path']) }}" data-cap="{{ photo_categories.get(p['category'], p['category']) }} · {{ p['uploaded_at']|d }}{{ ' · ' ~ p['caption'] if p['caption'] }}" alt="">
+  <div class="cap"><b>{{ photo_categories.get(p['category'], p['category']) }}{{ extra }}</b><span>{{ p['uploaded_at']|d }}</span></div>
+</div>
+{%- endmacro %}
+
+{% macro void_button(action, label='Bekor qilish', title='Bekor qilish sababi') -%}
+<button type="button" class="btn btn-ghost btn-sm" data-reason-form="{{ action }}" data-title="{{ title }}" style="color:var(--red)">{{ icon('ban','sm') }} {{ label }}</button>
+{%- endmacro %}
+
+{% macro empty(text, ico='layers') -%}
+<div class="empty">{{ icon(ico) }}{{ text }}</div>
+{%- endmacro %}
+
+{% macro file_input(name, label='Rasm', multiple=False, required=False) -%}
+<label class="file-drop">
+  <input type="file" name="{{ name }}" accept="image/*" capture="environment" {{ 'multiple' if multiple }} {{ 'required' if required }} data-preview>
+  {{ icon('camera','lg') }}<div class="b" style="margin-top:4px">{{ label }}</div><div class="tiny muted">Kamera yoki galereya</div>
+  <div class="previews"></div>
+</label>
+{%- endmacro %}
+
+{% macro season_select() -%}
+<form method="get" class="chip" action="">
+  <span class="muted">Mavsum:</span>
+  <select name="season" onchange="this.form.submit()">{% for y in seasons %}<option value="{{ y }}" {{ 'selected' if y == season }}>{{ y }}</option>{% endfor %}</select>
+</form>
+{%- endmacro %}
+
+{% macro pager(page, has_more) -%}
+{% if page > 1 or has_more %}
+<div class="pager no-print">
+  {% if page > 1 %}<a class="btn btn-light btn-sm" href="{{ season_url(page=page - 1) }}">← Oldingi</a>{% endif %}
+  <span class="chip" style="height:32px">{{ page }}-sahifa</span>
+  {% if has_more %}<a class="btn btn-light btn-sm" href="{{ season_url(page=page + 1) }}">Keyingi →</a>{% endif %}
+</div>
+{% endif %}
+{%- endmacro %}

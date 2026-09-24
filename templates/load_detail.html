@@ -1,0 +1,108 @@
+{% extends 'base.html' %}
+{% from 'macros.html' import icon, csrf, status, photo_card, empty, void_button, file_input with context %}
+{% set page_title = 'Telashka ' ~ ld.trailer_code %}
+{% block content %}
+<div class="page-h">
+  <a href="{{ url_for('ops.loads') }}" class="icon-btn">{{ icon('chev-left') }}</a>
+  <h1>Telashka {{ ld.trailer_code }} — reys №{{ ld.id }}</h1>{{ status(ld.status) }}
+  <span class="spacer"></span>
+  {% if ld.status == 'OCHIQ' and can('harvest.write') %}<a class="btn btn-light" href="{{ url_for('ops.harvest', load=ld.id) }}">{{ icon('plus','sm') }} Terim qo‘shish</a>{% endif %}
+  {% if ld.status == 'TOLDI' and can('weigh.write') %}<a class="btn btn-primary" href="{{ url_for('ops.weigh', load_id=ld.id) }}">{{ icon('scale','sm') }} Taroziga</a>{% endif %}
+  {% if ld.waybill_id %}<a class="btn btn-light" href="{{ url_for('ops.waybill_detail', waybill_id=ld.waybill_id) }}">{{ icon('doc','sm') }} {{ ld.waybill_number }}</a>{% endif %}
+</div>
+<div class="steps">
+  {% set order = ['OCHIQ','TOLDI','TORTILDI'] %}
+  <span class="{{ 'done' if ld.status in ['TOLDI','TORTILDI'] else 'now' if ld.status == 'OCHIQ' }}">{{ icon('sprout','sm') }} Terim</span>
+  <span class="{{ 'done' if ld.status in ['TOLDI','TORTILDI'] }}">{{ icon('check','sm') }} TOLDI</span>
+  <span class="{{ 'done' if ld.weigh_status == 'YAKUNLANDI' else 'now' if ld.status == 'TOLDI' }}">{{ icon('scale','sm') }} Tarozi</span>
+  <span class="{{ 'done' if ld.waybill_id }}">{{ icon('doc','sm') }} Nakladnoy</span>
+  <span class="{{ 'done' if ld.waybill_status == 'QABUL' }}">{{ icon('factory','sm') }} Nayman</span>
+</div>
+
+<div class="grid">
+  <section class="card s5">
+    <div class="card-h"><h3>Asosiy ma’lumot</h3></div>
+    <dl class="kv">
+      <dt>Sana</dt><dd>{{ ld.load_date|d }}</dd>
+      <dt>Brigadir</dt><dd>{{ ld.brigadier_name }}</dd>
+      <dt>Dala</dt><dd>{{ ld.field_code }} · {{ ld.field_name }}</dd>
+      <dt>Traktor</dt><dd>{{ ld.tractor_code or '—' }}</dd>
+      <dt>Telashka</dt><dd>{{ ld.trailer_code }}</dd>
+      <dt>Mashina / haydovchi</dt><dd>{{ ld.vehicle_plate or '—' }} · {{ ld.driver_name or '—' }}</dd>
+      <dt>Ochdi</dt><dd>{{ ld.opened_name }} · {{ ld.opened_at|d }}</dd>
+      {% if ld.full_at %}<dt>TOLDI</dt><dd>{{ ld.full_name_by }} · {{ ld.full_at|d }}</dd>{% endif %}
+      <dt>Qo‘l terimi (dala tarozisi)</dt><dd class="num">{{ ld.hand_kg|num(1) if ld.status != 'OCHIQ' else '—' }} kg</dd>
+      <dt>Kombayn</dt><dd class="num">{{ ld.combine_kg|num(1) if ld.status != 'OCHIQ' else '—' }} kg</dd>
+      <dt class="hl">Ichki jami (dalada)</dt><dd class="hl num">{{ (ld.internal_kg if ld.status != 'OCHIQ' else ld.live_kg)|num(1) }} kg</dd>
+      {% if ld.gross_kg %}<dt>Brutto</dt><dd class="num">{{ ld.gross_kg|num }} kg <span class="small muted">{{ ld.gross_at|d }}</span></dd>{% endif %}
+      {% if ld.tare_kg is not none %}<dt>Tara</dt><dd class="num">{{ ld.tare_kg|num }} kg <span class="small muted">{{ ld.tare_at|d }}</span></dd>
+      <dt class="hl-g">Tarozi netto (yakuniy)</dt><dd class="hl-g num" style="font-size:17px">{{ ld.net_kg|num }} kg</dd>
+      <dt>Farq (netto − ichki)</dt><dd class="num {{ 't-down' if ld.diff_kg and ld.diff_kg < 0 else '' }}">{{ ('%+.1f'|format(ld.diff_kg)) if ld.diff_kg is not none else '—' }} kg{% if ld.diff_reason %}<div class="small muted">{{ ld.diff_reason }}</div>{% endif %}</dd>{% endif %}
+      {% if ld.status == 'BEKOR' %}<dt>Bekor sababi</dt><dd>{{ ld.void_reason }}</dd>{% endif %}
+    </dl>
+    <div class="card-b row">
+      {% if ld.status == 'TOLDI' and can('load.reopen') %}{{ void_button(url_for('ops.load_reopen', load_id=ld.id), 'Qayta ochish', 'Qayta ochish sababi (TOLDI xato bosilgan bo‘lsa)') }}{% endif %}
+      {% if ld.status in ['OCHIQ','TOLDI'] and can('records.void') %}{{ void_button(url_for('ops.load_void', load_id=ld.id), 'Reysni bekor qilish', 'Reysni bekor qilish sababi') }}{% endif %}
+      {% if ld.weigh_status and can('weigh.correct') %}<button class="btn btn-ghost btn-sm" data-toggle="#correct">{{ icon('edit','sm') }} Tortishni tuzatish</button>{% endif %}
+    </div>
+    {% if ld.weigh_status and can('weigh.correct') %}
+    <form id="correct" class="collapse card-b" style="border-top:1px solid var(--line-2)" method="post" action="{{ url_for('ops.weigh_correct', load_id=ld.id) }}" data-confirm="Tortish qiymatlarini o‘zgartirasizmi? Nakladnoy netto ham yangilanadi.">
+      {{ csrf() }}
+      <div class="notice mb">{{ icon('alert') }}Tuzatish nakladnoy nettosini ham yangilaydi. Eski qiymat, sabab va kim tuzatgani auditda qoladi.</div>
+      <div class="form"><div class="f h keep"><label>Brutto</label><input name="gross_kg" value="{{ ld.gross_kg }}" inputmode="decimal"></div>
+        <div class="f h keep"><label>Tara</label><input name="tare_kg" value="{{ ld.tare_kg if ld.tare_kg is not none }}" inputmode="decimal"></div>
+        <div class="f"><label>Sabab <span class="req">*</span></label><input name="reason" required minlength="3"></div>
+        <div class="f"><button class="btn btn-orange">Tuzatishni saqlash</button></div></div>
+    </form>{% endif %}
+  </section>
+
+  <section class="card s7" id="toldi">
+    {% if ld.status == 'OCHIQ' and can('load.full') %}
+    <div class="card-h"><h3>{{ icon('check-circle') }} TOLDI qilish (taroziga yuborish)</h3></div>
+    <div class="card-b">
+      <div class="mini-stats mb"><div class="mini"><span>Jami terim (dala tarozisi)</span><b class="num">{{ ld.live_kg|num(1) }} kg</b></div><div class="mini"><span>Rasmlar</span><b>{{ ld.photo_count }} / kamida {{ min_photos }}</b></div></div>
+      <form method="post" action="{{ url_for('ops.load_full', load_id=ld.id) }}" enctype="multipart/form-data" data-offline="TOLDI {{ ld.trailer_code }}" class="form" data-confirm="{{ ld.trailer_code }} to‘ldimi? Bundan keyin bu reysga terim qo‘shib bo‘lmaydi.">
+        {{ csrf() }}
+        <div class="f">{{ file_input('photos', 'Telashka / paxta / tarozi rasmlari', multiple=True) }}</div>
+        <div class="f"><label>Izoh (ixtiyoriy)</label><input name="note" placeholder="Masalan: TL-02 to‘ldi. T-01 traktor."></div>
+        <div class="f"><button class="btn btn-green btn-block btn-xl">{{ icon('check-circle','lg') }} TOLDI<small>(Taroziga jo‘natish)</small></button></div>
+      </form>
+    </div>
+    {% else %}
+    <div class="card-h"><h3>Rasmlar ({{ photos|length }})</h3>{% if can('photos.upload') %}<button class="btn btn-ghost btn-sm" style="margin-left:auto" data-toggle="#addph">{{ icon('camera','sm') }} Rasm qo‘shish</button>{% endif %}</div>
+    {% endif %}
+    <form id="addph" class="collapse card-b" method="post" action="{{ url_for('ops.load_photos', load_id=ld.id) }}" enctype="multipart/form-data">
+      {{ csrf() }}<div class="form"><div class="f h"><select name="category">{% for k, v in photo_categories.items() %}<option value="{{ k }}">{{ v }}</option>{% endfor %}</select></div><div class="f h">{{ file_input('photos', 'Rasm tanlang', multiple=True) }}</div><div class="f"><button class="btn btn-primary">Saqlash</button></div></div>
+    </form>
+    <div class="card-b"><div class="photo-grid">{% for p in photos %}{{ photo_card(p) }}{% else %}{{ empty('Rasm yo‘q', 'camera') }}{% endfor %}</div></div>
+  </section>
+
+  <section class="card s7">
+    <div class="card-h"><h3>Odamlar ({{ workers|length }}) — dala tarozisi bo‘yicha</h3><span class="muted small" style="margin-left:auto">Qo‘l terimi jami: {{ hand_total|num(1) }} kg</span></div>
+    <div class="table-wrap"><table class="t">
+      <thead><tr><th>№</th><th>F.I.Sh.</th><th class="num">Tortishlar</th><th class="num">Kg</th><th>Birinchi</th><th>Oxirgi</th></tr></thead>
+      <tbody>{% for w in workers %}<tr><td>{{ loop.index }}</td><td><a href="{{ url_for('people.worker_detail', worker_id=w.id) }}">{{ w.full_name }}</a></td><td class="num">{{ w.n }}</td><td class="num b">{{ w.kg|num(1) }}</td><td>{{ w.first_at[11:16] }}</td><td>{{ w.last_at[11:16] }}</td></tr>
+      {% else %}<tr><td colspan="6">{{ empty('Qo‘l terimi yozilmagan', 'users') }}</td></tr>{% endfor %}</tbody>
+    </table></div>
+    <div class="card-b tiny muted">Ishchi kg — dalada tortilgan haqiqiy qiymat. Tarozi nettosi ishchilarga avtomatik qayta taqsimlanmaydi.</div>
+  </section>
+
+  <section class="card s5">
+    <div class="card-h"><h3>{{ icon('history') }} Tarix (kim, qachon)</h3></div>
+    <div class="card-b"><ul class="timeline">
+      {% for a in timeline %}<li><span class="dot">{{ icon('check') }}</span><b>{{ a.action }} · {{ a.entity_type }}</b><span>{{ a.created_at|d }} · {{ a.full_name or 'tizim' }} ({{ a.source }}){% if a.reason %} · Sabab: {{ a.reason }}{% endif %}</span></li>
+      {% else %}<li>{{ empty('Tarix yo‘q') }}</li>{% endfor %}
+    </ul></div>
+  </section>
+
+  <section class="card s12">
+    <div class="card-h"><h3>Barcha terim yozuvlari (bekor qilinganlar bilan)</h3></div>
+    <div class="table-wrap"><table class="t">
+      <thead><tr><th>ID</th><th>Vaqt</th><th>Turi</th><th>F.I.Sh. / Kombayn</th><th class="num">Kg</th><th>Kiritdi</th><th>Manba</th><th>Holat</th></tr></thead>
+      <tbody>{% for e in entries %}<tr class="{{ 'void' if e.voided_at }}"><td>{{ e.id }}</td><td>{{ e.created_at|d }}</td><td>{{ 'Qo‘l' if e.method == 'hand' else 'Kombayn' }}</td><td>{{ e.worker_name or '' }}{{ ' · ' if e.worker_name and e.combine_code }}{{ e.combine_code or '' }}</td>
+        <td class="num">{{ e.kg|num(1) }}</td><td>{{ e.entered_name }}</td><td>{{ e.source }}</td><td class="keep">{% if e.voided_at %}<span class="badge b-gray">Bekor: {{ e.void_reason }}</span>{% else %}<span class="badge b-green">Faol</span>{% endif %}</td></tr>
+      {% else %}<tr><td colspan="8">{{ empty('Yozuv yo‘q') }}</td></tr>{% endfor %}</tbody>
+    </table></div>
+  </section>
+</div>
+{% endblock %}

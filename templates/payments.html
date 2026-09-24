@@ -1,0 +1,46 @@
+{% extends 'base.html' %}
+{% from 'macros.html' import icon, csrf, uuid_field, empty, void_button, file_input with context %}
+{% set page_title = 'To‘lovlar' %}
+{% block content %}
+<div class="page-h"><h1>{{ icon('card','lg') }} To‘lovlar (Naymandan tushum)</h1><span class="spacer"></span><a class="btn btn-light" href="{{ url_for('reports.report', key='tolovlar', format='xlsx') }}">{{ icon('download','sm') }} Excel</a></div>
+<div class="kpis" style="grid-template-columns:repeat(4,minmax(0,1fr))">
+  <div class="kpi"><div class="sq bg-purple">{{ icon('factory') }}</div><div><div class="label">Qabul qilingan</div><div class="value num">{{ fin.accepted_kg|num }} <small>kg</small></div></div></div>
+  <div class="kpi"><div class="sq bg-blue">{{ icon('doc') }}</div><div><div class="label">Hisoblangan summa</div><div class="value num">{{ fin.receivable|num if fin.receivable else '—' }}</div>{% if fin.unpriced %}<div class="trend t-down">{{ fin.unpriced }} ta qabulda narx yo‘q</div>{% endif %}</div></div>
+  <div class="kpi"><div class="sq bg-green">{{ icon('cash') }}</div><div><div class="label">Tushgan</div><div class="value num">{{ fin.received|num }}</div></div></div>
+  <div class="kpi"><div class="sq bg-red">{{ icon('alert') }}</div><div><div class="label">Naymandan qarz</div><div class="value num">{{ fin.debt|num if fin.debt is not none else '—' }}</div>{% if fin.debt is none %}<div class="trend t-muted">Narx kiritilmaguncha hisoblanmaydi</div>{% endif %}</div></div>
+</div>
+<div class="grid">
+  {% if can('payments.write') %}
+  <section class="card s4">
+    <div class="card-h"><h3>{{ icon('plus') }} To‘lov kiritish</h3></div>
+    <div class="card-b"><form method="post" enctype="multipart/form-data" class="form">{{ csrf() }}{{ uuid_field() }}
+      <div class="f"><label>Nakladnoy</label><select name="waybill_id" id="wbsel"><option value="">Umumiy (nakladnoysiz)</option>
+        {% for w in waybills %}<option value="{{ w.id }}" data-rem="{{ w.remaining if w.remaining is not none else '' }}" data-exp="{{ w.expected.amount if w.expected else '' }}">{{ w.number }} · {{ w.net_kg|num }} kg{% if w.remaining is not none %} · qoldiq {{ w.remaining|num }}{% endif %}</option>{% endfor %}</select>
+        <div class="hint" id="wbhint"></div></div>
+      <div class="f h"><label>Sana <span class="req">*</span></label><input type="date" name="payment_date" value="{{ today }}" max="{{ today }}" required></div>
+      <div class="f h"><label>Summa (so‘m) <span class="req">*</span></label><input name="amount" inputmode="numeric" required></div>
+      <div class="f h"><label>To‘lov turi</label><select name="method"><option>Bank o‘tkazmasi</option><option>Naqd</option><option>Boshqa</option></select></div>
+      <div class="f h"><label>To‘lovchi</label><input name="payer" value="Nayman"></div>
+      <div class="f"><label>Izoh</label><input name="note"></div>
+      <div class="f"><label class="check"><input type="checkbox" name="to_cash" value="1"> Naqd pul Asadbek kassasiga kirim qilinsin</label></div>
+      <div class="f">{{ file_input('photo', 'To‘lov hujjati rasmi') }}</div>
+      <div class="f"><button class="btn btn-green btn-block">{{ icon('check-circle','sm') }} To‘lovni saqlash</button></div>
+    </form>
+    {% if rule %}<div class="tiny muted mt">Qoida: {{ rule.percent|num }}% · {{ rule.days }} kun ichida (Sozlamalarda yoqilgan).</div>{% else %}<div class="tiny muted mt">To‘lov qoidasi (masalan 80% / 5 kun) shartnoma tasdiqlanmaguncha o‘chirilgan.</div>{% endif %}
+    </div>
+  </section>
+  {% endif %}
+  <section class="card {{ 's8' if can('payments.write') else 's12' }}">
+    <div class="card-h"><h3>To‘lovlar ({{ year }})</h3></div>
+    <div class="table-wrap"><table class="t">
+      <thead><tr><th>Sana</th><th>Nakladnoy</th><th class="num">Summa</th><th>Turi</th><th>To‘lovchi</th><th>Kiritdi</th><th></th></tr></thead>
+      <tbody>{% for r in rows %}<tr class="{{ 'void' if r.voided_at }}"><td>{{ r.payment_date|d }}</td><td>{{ r.waybill_number or '—' }}</td><td class="num b">{{ r.amount|num }}</td><td>{{ r.method or '—' }}</td><td>{{ r.payer }}</td><td class="small muted">{{ r.created_name }}</td>
+        <td class="keep right">{% if r.voided_at %}<span class="badge b-gray">Bekor: {{ r.void_reason }}</span>{% elif can('payments.write') %}{{ void_button(url_for('finance.payment_void', payment_id=r.id)) }}{% endif %}</td></tr>
+      {% else %}<tr><td colspan="7">{{ empty('To‘lov yo‘q', 'card') }}</td></tr>{% endfor %}</tbody>
+    </table></div>
+  </section>
+</div>
+{% endblock %}
+{% block scripts %}<script>
+(function(){const s=document.getElementById('wbsel'),h=document.getElementById('wbhint');if(!s)return;s.addEventListener('change',()=>{const o=s.selectedOptions[0];let t='';if(o.dataset.rem)t+='Qolgan summa: '+(+o.dataset.rem).toLocaleString('ru-RU')+' so‘m. ';if(o.dataset.exp)t+='Qoida bo‘yicha kutilayotgan: '+(+o.dataset.exp).toLocaleString('ru-RU')+' so‘m.';if(o.value&&!o.dataset.rem)t='Bu nakladnoyda narx/qabul yo‘q — qarz hisoblanmagan.';h.textContent=t;});})();
+</script>{% endblock %}

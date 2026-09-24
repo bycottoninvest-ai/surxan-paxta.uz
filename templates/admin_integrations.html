@@ -1,0 +1,75 @@
+{% extends 'base.html' %}
+{% from 'macros.html' import icon, csrf, empty with context %}
+{% set page_title = 'Integratsiyalar' %}
+{% block content %}
+<div class="page-h"><h1>{{ icon('layers','lg') }} Integratsiyalar</h1><span class="sub">Azizbek ERP (faqat o‘qish API) va TV ekran. Kalitlar serverda faqat xesh ko‘rinishida saqlanadi.</span></div>
+
+{% if new_key %}
+<div class="flash success" style="display:block">
+  <b>{{ message }}</b>
+  <div class="row mt-s"><input class="input" id="nk" readonly value="{{ new_key }}" style="font-family:monospace;flex:1;min-width:260px">
+    <button type="button" class="btn btn-primary btn-sm" onclick="navigator.clipboard.writeText(document.getElementById('nk').value);this.textContent='Nusxalandi ✓'">Nusxalash</button></div>
+  {% if new_key.startswith('spx_tv_') %}<div class="mt-s small">TV havolasi: <code>{{ base }}/tv?k={{ new_key }}</code> — televizor brauzerida bir marta oching.</div>{% endif %}
+</div>
+{% endif %}
+
+<div class="grid">
+  <section class="card s6">
+    <div class="card-h"><h3>{{ icon('database') }} Azizbek ERP</h3>
+      <span class="badge {{ 'b-green' if erp_on else 'b-gray' }}" style="margin-left:auto">{{ 'Yoqilgan' if erp_on else 'O‘chirilgan' }}</span>
+      <form method="post">{{ csrf() }}<input type="hidden" name="action" value="{{ 'erp_off' if erp_on else 'erp_on' }}"><button class="btn btn-sm {{ 'btn-light' if erp_on else 'btn-green' }}">{{ 'O‘chirish' if erp_on else 'Yoqish' }}</button></form></div>
+    <div class="card-b">
+      <p class="small">API manzili: <code>{{ base }}/api/erp/v1/</code> · Autentifikatsiya: <code>Authorization: Bearer &lt;kalit&gt;</code> · Faqat GET. Hujjat: <code>docs/ERP_API.md</code>.</p>
+      <form method="post" class="form">{{ csrf() }}<input type="hidden" name="action" value="create"><input type="hidden" name="kind" value="erp">
+        <div class="f"><label>Kalit nomi</label><input name="name" value="Azizbek ERP"></div>
+        <div class="f"><label>O‘qishga ruxsat berilgan ma’lumotlar</label>
+          <div class="form" style="gap:6px">{% for k, v in scopes.items() %}<label class="check f h"><input type="checkbox" name="scopes" value="{{ k }}" {{ 'checked' if k != 'workers' }}> {{ v }}</label>{% endfor %}</div></div>
+        <div class="f"><button class="btn btn-primary">{{ icon('plus','sm') }} Yangi ERP kalit yaratish</button></div>
+      </form>
+    </div>
+  </section>
+  <section class="card s6">
+    <div class="card-h"><h3>{{ icon('bars') }} TV ekran (/tv)</h3>
+      <span class="badge {{ 'b-green' if tv_on else 'b-gray' }}" style="margin-left:auto">{{ 'Yoqilgan' if tv_on else 'O‘chirilgan' }}</span>
+      <form method="post">{{ csrf() }}<input type="hidden" name="action" value="{{ 'tv_off' if tv_on else 'tv_on' }}"><button class="btn btn-sm {{ 'btn-light' if tv_on else 'btn-green' }}">{{ 'O‘chirish' if tv_on else 'Yoqish' }}</button></form></div>
+    <div class="card-b">
+      <p class="small">TV faqat ishlab chiqarish ko‘rsatkichlarini ko‘radi: terim, tarozi netto, jo‘natilgan/qabul, telashkalar, brigadalar. Pul va ishchi ismlari ko‘rsatilmaydi. Tizimga kirgan foydalanuvchi <a class="link" href="{{ url_for('integrations.tv') }}" target="_blank">/tv</a> ni kalitsiz ochadi.</p>
+      <form method="post" class="row">{{ csrf() }}<input type="hidden" name="action" value="create"><input type="hidden" name="kind" value="tv">
+        <input class="input" name="name" value="Ofis televizori" style="max-width:240px"><button class="btn btn-primary">{{ icon('plus','sm') }} TV kaliti yaratish</button></form>
+    </div>
+  </section>
+
+  <section class="card s12">
+    <div class="card-h"><h3>Kalitlar</h3></div>
+    <div class="table-wrap"><table class="t">
+      <thead><tr><th>Nom</th><th>Turi</th><th>Kalit boshi</th><th>Ruxsatlar</th><th>Yaratildi</th><th>Oxirgi murojaat</th><th>Holat</th><th></th></tr></thead>
+      <tbody>{% for c in clients %}<tr class="{{ 'void' if not c.active }}">
+        <td class="b">{{ c.name }}</td><td>{{ 'ERP' if c.kind == 'erp' else 'TV' }}</td><td><code>spx_{{ c.kind }}_{{ c.key_prefix }}_…</code></td>
+        <td class="keep" style="white-space:normal;max-width:380px">{% if c.kind == 'erp' and c.active %}
+          <form method="post" class="row" style="gap:4px 10px">{{ csrf() }}<input type="hidden" name="action" value="scopes"><input type="hidden" name="id" value="{{ c.id }}">
+            {% set cs = loads(c.scopes) %}{% for k in scopes %}<label class="check tiny"><input type="checkbox" name="scopes" value="{{ k }}" {{ 'checked' if k in cs }} style="width:15px;height:15px">{{ k }}</label>{% endfor %}
+            <button class="btn btn-light btn-sm">Saqlash</button></form>
+          {% else %}<span class="small">{{ loads(c.scopes)|join(', ') }}</span>{% endif %}</td>
+        <td class="small">{{ c.created_at|d }}<br><span class="muted">{{ c.created_name }}</span></td>
+        <td class="small">{{ c.last_used_at|d if c.last_used_at else '—' }}<br><span class="muted">{{ c.last_ip or '' }}</span></td>
+        <td class="keep">{% if c.active %}<span class="badge b-green">Faol</span>{% else %}<span class="badge b-gray">Bekor {{ c.revoked_at|d }}</span>{% endif %}</td>
+        <td class="keep right">{% if c.active %}
+          <form method="post" style="display:inline" data-confirm="Kalitni almashtirasizmi? Eski kalit darhol ishlamay qoladi.">{{ csrf() }}<input type="hidden" name="action" value="rotate"><input type="hidden" name="id" value="{{ c.id }}"><button class="btn btn-light btn-sm">{{ icon('refresh','sm') }} Almashtirish</button></form>
+          <form method="post" style="display:inline" data-confirm="Kalitni bekor qilasizmi?">{{ csrf() }}<input type="hidden" name="action" value="revoke"><input type="hidden" name="id" value="{{ c.id }}"><button class="btn btn-ghost btn-sm" style="color:var(--red)">{{ icon('ban','sm') }} Bekor</button></form>
+        {% endif %}</td></tr>
+      {% else %}<tr><td colspan="8">{{ empty('Hali kalit yaratilmagan') }}</td></tr>{% endfor %}</tbody>
+    </table></div>
+  </section>
+
+  <section class="card s12">
+    <div class="card-h"><h3>{{ icon('history') }} Oxirgi murojaatlar (100 ta)</h3></div>
+    <div class="table-wrap"><table class="t">
+      <thead><tr><th>Vaqt</th><th>Kalit</th><th>So‘rov</th><th class="num">Javob</th><th class="num">Yozuvlar</th><th class="num">ms</th><th>IP</th></tr></thead>
+      <tbody>{% for l in log %}<tr><td class="nowrap">{{ l.at|d }}</td><td>{{ l.name or 'noma’lum' }}{% if l.key_prefix %} <code class="tiny">{{ l.key_prefix }}</code>{% endif %}</td>
+        <td class="small"><code>{{ l.method }} {{ l.path }}{{ '?' ~ l.query if l.query }}</code></td>
+        <td class="num"><span class="badge {{ 'b-green' if l.status == 200 else 'b-red' }}">{{ l.status }}</span></td><td class="num">{{ l.rows if l.rows is not none else '' }}</td><td class="num">{{ l.ms or '' }}</td><td class="tiny">{{ l.ip }}</td></tr>
+      {% else %}<tr><td colspan="7">{{ empty('Murojaat yo‘q') }}</td></tr>{% endfor %}</tbody>
+    </table></div>
+  </section>
+</div>
+{% endblock %}

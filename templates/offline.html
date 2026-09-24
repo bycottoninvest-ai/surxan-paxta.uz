@@ -1,0 +1,9 @@
+{% extends 'bare.html' %}
+{% block content %}
+<section class="card" style="max-width:460px;margin:40px auto;text-align:center"><div class="card-b" style="padding:30px">
+  <img src="{{ url_for('static', filename='img/logo-dark.png') }}" alt="" style="width:180px">
+  <h2>Internet kutilmoqda</h2>
+  <p>Sahifani ochib bo‘lmadi. Oldin kiritilgan va “navbatda” turgan yozuvlar telefonda saqlangan — internet kelishi bilan avtomatik yuboriladi.</p>
+  <button class="btn btn-primary" onclick="location.reload()">Qayta urinish</button>
+</div></section>
+{% endblock %}
