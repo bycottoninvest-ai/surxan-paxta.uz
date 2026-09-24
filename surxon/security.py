@@ -17,8 +17,8 @@ ROLES = {
     'brigadier': 'Brigadir',
     'scale': 'Tarozi xodimi',
     'accountant': 'Buxgalter',
-    'cashier': 'Kassa (Asadbek)',
-    'tally': 'Terimchilar hisobchisi',
+    'cashier': 'Kassa',
+    'tally': 'Hisobchi (terim)',
     'driver': 'Haydovchi',
 }
 

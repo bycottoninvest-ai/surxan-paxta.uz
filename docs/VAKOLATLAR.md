@@ -4,7 +4,7 @@ Jadval koddagi `surxon/security.py` dan avtomatik yaratilgan. Tekshiruv server t
 
 **Brigadir cheklovi:** brigadir foydalanuvchisi bitta brigadaga bog‘lanadi. U faqat o‘z brigadasiga biriktirilgan dalalarda reys ochadi, terim yozadi, TOLDI qiladi, rasm va hisobotlarni ko‘radi. Boshqa brigadaning reysi va rasmi unga 403 qaytaradi.
 
-| Vakolat | Admin | Rahbar | Brigadir | Tarozi xodimi | Buxgalter | Kassa (Asadbek) | Terimchilar hisobchisi | Haydovchi |
+| Vakolat | Admin | Rahbar | Brigadir | Tarozi xodimi | Buxgalter | Kassa | Hisobchi (terim) | Haydovchi |
 |---|---|---|---|---|---|---|---|---|
 | Bosh sahifa va umumiy ko‘rsatkichlar (`dashboard`) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Terim (kg) kiritish, o‘z yozuvini bekor qilish (`harvest.write`) | ✅ | ✅ | ✅ | — | — | — | ✅ | — |
