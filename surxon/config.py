@@ -6,6 +6,15 @@ from zoneinfo import ZoneInfo
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 
+def _timezone(name):
+    """IANA zone; Windows has no tz database unless the 'tzdata' package is installed, so fall back to UTC+5."""
+    try:
+        return ZoneInfo(name)
+    except Exception:
+        from datetime import timedelta, timezone
+        return timezone(timedelta(hours=5), 'UTC+05')
+
+
 class Config:
     def __init__(self, **overrides):
         env = os.environ
@@ -24,7 +33,7 @@ class Config:
         self.TELEGRAM_BOT_TOKEN = env.get('TELEGRAM_BOT_TOKEN', '').strip()
         self.TELEGRAM_WEBHOOK_SECRET = env.get('TELEGRAM_WEBHOOK_SECRET', '').strip()
         self.TELEGRAM_BOT_USERNAME = env.get('TELEGRAM_BOT_USERNAME', '').strip().lstrip('@')
-        self.TZ = ZoneInfo(env.get('APP_TZ', 'Asia/Tashkent'))
+        self.TZ = _timezone(env.get('APP_TZ', 'Asia/Tashkent'))
         self.MAX_UPLOAD_MB = int(env.get('MAX_UPLOAD_MB', '25'))
         # External archives — each one stays "not connected" until its settings are present.
         self.TELEGRAM_ARCHIVE_CHAT_ID = env.get('TELEGRAM_ARCHIVE_CHAT_ID', '').strip()
