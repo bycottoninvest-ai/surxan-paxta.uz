@@ -1,7 +1,13 @@
 @echo off
 chcp 65001 >nul
 title SURXON PAXTA - yangilash
-cd /d "%~dp0"
+rem Run from a temporary copy: this file itself gets replaced during the update,
+rem and cmd.exe would otherwise continue reading the new file at the wrong position.
+if not "%~1"=="--run" (
+  copy /y "%~f0" "%TEMP%\surxon_yangilash.bat" >nul
+  "%TEMP%\surxon_yangilash.bat" --run "%~dp0"
+)
+cd /d "%~2"
 echo.
 echo  GitHub'dan eng yangi versiya yuklanmoqda...
 echo  (data-test va .venv papkalari saqlanadi, ular o'chirilmaydi)
