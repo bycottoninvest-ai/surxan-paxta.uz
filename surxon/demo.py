@@ -134,6 +134,7 @@ def fill_demo(days=8, seed=7):
             store_photo(db, Actor(admin, 'admin', source='demo'), (img / fname).read_bytes(), category=cat, entity_type='trailer_load',
                         entity_id=lid, caption='DEMO', source='demo',
                         links={'season_year': yr, 'load_id': lid, 'field_id': fid, 'brigadier_id': bid})
-        db.execute("INSERT INTO settings(key, value, updated_at) VALUES ('price_per_kg','7800',?) "
-                   "ON CONFLICT(key) DO NOTHING", (now_str(),))
+        for key, val in (('price_per_kg', '7800'), ('worker_rate_hand', '1500'), ('combine_rate', '1500')):
+            db.execute("INSERT INTO settings(key, value, updated_at) VALUES (?,?,?) ON CONFLICT(key) DO NOTHING",
+                       (key, val, now_str()))
     return 'Demo ma’lumotlar yozildi. Demo loginlar paroli: Demo2026!'

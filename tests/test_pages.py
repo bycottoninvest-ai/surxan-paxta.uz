@@ -9,7 +9,7 @@ GET_PAGES = ['/', '/?view=full', '/?view=mobile', '/terim', '/telashkalar', '/ta
              '/admin/foydalanuvchilar', '/admin/brigadirlar', '/admin/dalalar', '/admin/texnikalar', '/admin/sozlamalar',
              '/admin/mavsumlar', '/admin/zaxira', '/admin/integratsiyalar', '/parol', '/qidiruv?q=TL', '/tv',
              '/hisobot/kunlik', '/hisobot/nakladnoylar', '/hisobot/terimchilar', '/hisobot/brigadirlar', '/hisobot/dalalar',
-             '/hisobot/telashkalar', '/hisobot/nayman', '/hisobot/tolovlar', '/hisobot/xarajatlar', '/hisobot/kassa',
+             '/hisobot/telashkalar', '/hisobot/kombaynlar', '/hisobot/nayman', '/hisobot/tolovlar', '/hisobot/xarajatlar', '/hisobot/kassa',
              '/hisobot/mavsumlar']
 
 

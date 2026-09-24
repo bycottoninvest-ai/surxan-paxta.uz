@@ -352,3 +352,26 @@ def test_backup_from_live_wal_database_restores(app, world, tmp_path):
     app2 = create_app(TESTING=True, DATA_DIR=tmp_path / 'r', DB_PATH=backup, UPLOAD_DIR=tmp_path / 'r/u', BACKUP_DIR=tmp_path / 'r/b')
     with app2.app_context():
         assert scalar('SELECT COUNT(*) FROM trailer_loads') == 1
+
+
+def test_tally_clerk_enters_all_brigades_and_combine_pay(app, world):
+    """One 'Hisobchi (terim)' login works for every brigade; combine pay uses its own so'm/kg rate."""
+    admin = world['admin']
+    from conftest import make_user
+    tally = make_user(app, admin, 'sadokat', 'tally')
+    for field, trailer in (('D-04', 'TL-01'), ('D-01', 'TL-02')):     # Juma ota's and Nurim ota's fields
+        lid = open_load(tally, world, trailer=trailer, field=field)
+        assert add(tally, lid, 'Gulbahor opa', '40')['ok']
+    lid = open_load(tally, world, trailer='TL-03', field='D-04')
+    assert tally.post('/terim', {'load_id': lid, 'method': 'combine', 'combine_id': world['eq']['K-01'], 'kg': '1000',
+                                 'client_uuid': uuid4()}).get_json()['ok']
+    # no rate yet -> no money column (never shown as 0)
+    html = admin.get('/hisobot/kombaynlar').get_data(as_text=True)
+    assert 'K-01' in html and 'Kombayn haqi' not in html
+    r = admin.post('/admin/sozlamalar', {'set_combine_rate': '1500', 'set_worker_rate_hand': '1500'})
+    assert r.get_json()['ok'], r.get_data(as_text=True)
+    html = admin.get('/hisobot/kombaynlar').get_data(as_text=True)
+    flat = ''.join(html.split()).replace('\u202f', '').replace('\xa0', '')
+    assert 'Kombayn haqi (1500 so‘m/kg)' in html and '1500000' in flat
+    html = admin.get('/hisobot/terimchilar').get_data(as_text=True)
+    assert 'Ish haqi (1500 so‘m/kg)' in html

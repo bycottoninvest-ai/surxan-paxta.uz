@@ -67,6 +67,27 @@ def _workers(year, args):
     return {'title': f'Terimchilar hisoboti — {year}', 'columns': cols, 'rows': out, 'sum': ['kg', 'earned']}
 
 
+def _combines(year, args):
+    brig = scope()
+    rows = q('''SELECT c.code, c.operator_name, COUNT(DISTINCT h.work_date) days, COUNT(*) n, SUM(h.kg) kg,
+                       MAX(h.work_date) last_day
+                FROM harvests h JOIN equipment c ON c.id=h.combine_id
+                WHERE h.season_year=? AND h.method='combine' AND h.voided_at IS NULL''' + (' AND h.brigadier_id=?' if brig else '') +
+             ' GROUP BY c.id ORDER BY kg DESC', (year,) + ((brig,) if brig else ()))
+    rate = get_float('combine_rate', None)
+    out = []
+    for r in rows:
+        d = dict(r)
+        if rate and can('settlement.view'):
+            d['earned'] = round(d['kg'] * rate)
+        out.append(d)
+    cols = [('code', 'Kombayn', T), ('operator_name', 'Kombaynchi', T), ('days', 'Kunlar', N), ('n', 'Yozuvlar', N),
+            ('kg', 'Jami kg (ichki)', K), ('last_day', 'Oxirgi kun', D)]
+    if rate and can('settlement.view'):
+        cols.append(('earned', f'Kombayn haqi ({rate:g} so‘m/kg)', M))
+    return {'title': f'Kombaynlar hisoboti — {year}', 'columns': cols, 'rows': out, 'sum': ['n', 'kg', 'earned']}
+
+
 def _brigadiers(year, args):
     rows = []
     for r in queries.brigadier_results(year):
@@ -180,13 +201,14 @@ REPORTS = {
     'kunlik': ('Kunlik hisobot', 'calendar', _daily, 'reports.view'),
     'nakladnoylar': ('Nakladnoylar reestri', 'doc', _waybills, 'reports.view'),
     'terimchilar': ('Terimchilar hisoboti', 'users', _workers, 'reports.view'),
+    'kombaynlar': ('Kombaynlar hisoboti', 'combine', _combines, 'reports.view'),
     'brigadirlar': ('Brigadirlar bo‘yicha', 'user', _brigadiers, 'reports.view'),
     'dalalar': ('Dala va hosildorlik', 'map', _fields, 'reports.view'),
     'telashkalar': ('Telashkalar bo‘yicha', 'trailer', _trailers, 'reports.view'),
     'nayman': ('Nayman sverka', 'factory', _nayman, 'reports.view'),
     'tolovlar': ('To‘lovlar hisoboti', 'wallet', _payments, 'reports.finance'),
     'xarajatlar': ('Xarajatlar hisoboti', 'receipt', _expenses, 'reports.finance'),
-    'kassa': ('Asadbek kassasi', 'cash', _cash, 'reports.finance'),
+    'kassa': ('Kassa hisoboti', 'cash', _cash, 'reports.finance'),
     'mavsumlar': ('Mavsumlar solishtirmasi', 'chart', _seasons, 'reports.view'),
 }
 

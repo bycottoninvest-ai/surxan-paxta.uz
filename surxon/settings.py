@@ -7,6 +7,7 @@ DEFAULTS = {
     'destination_name': ('Nayman paxta qabul punkti', 'Qabul qiluvchi (nakladnoyda)'),
     'price_per_kg': ('', 'Paxta narxi, so‘m/kg (bo‘sh = hali kelishilmagan)'),
     'worker_rate_hand': ('', 'Qo‘l terimi ish haqi, so‘m/kg (bo‘sh = hisoblanmaydi)'),
+    'combine_rate': ('', 'Kombayn terimi haqi, so‘m/kg (bo‘sh = hisoblanmaydi)'),
     'diff_threshold_pct': ('2', 'Ichki hisob va tarozi farqi shu % dan oshsa sabab majburiy'),
     'nayman_diff_reason_required': ('1', 'Nayman qabulida farq bo‘lsa sabab majburiy (1/0)'),
     'toldi_min_photos': ('1', 'TOLDI uchun kamida nechta rasm majburiy'),
