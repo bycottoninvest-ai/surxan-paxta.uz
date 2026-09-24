@@ -257,8 +257,8 @@ def add_harvest(actor, *, load_id, method, kg, worker_id=None, worker_name=None,
                    AND created_at >= datetime(?, '-3 minutes')''',
                 (load_id, method, worker_id, combine_id, kg, now_str())).fetchone()
             if recent:
-                raise UserError('Xuddi shu ishchi uchun xuddi shu kg 3 daqiqa ichida allaqachon yozilgan. '
-                                'Rostdan ikkinchi marta bo‘lsa, “takror yozuv” belgisini qo‘yib saqlang.')
+                raise UserError('Bu odamga xuddi shu kg hozirgina yozilgan (takror bo‘lishi mumkin). '
+                                'Rostdan ikkinchi tortish bo‘lsa, “Ha, bu ikkinchi tortish” belgisini qo‘yib qayta saqlang.')
         cur = db.execute(
             '''INSERT INTO harvests(season_year, work_date, load_id, worker_id, field_id, brigadier_id, trailer_id,
                    tractor_id, combine_id, method, kg, note, source, client_uuid, entered_by, created_at)

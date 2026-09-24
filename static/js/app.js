@@ -90,7 +90,8 @@
   $$('form').forEach(arm);
   document.addEventListener('submit', e => {
     const f = e.target;
-    if ((f.method || '').toLowerCase() !== 'post' || e.defaultPrevented) return;
+    // getAttribute: a field named 'method'/'action' inside the form would shadow f.method / f.action
+    if ((f.getAttribute('method') || '').toLowerCase() !== 'post' || e.defaultPrevented) return;
     if (f.dataset.offline) return; // handled below
     const btn = f.querySelector('button:not([type=button])');
     if (f.dataset.busy) { e.preventDefault(); return; }
@@ -186,12 +187,13 @@
     const label = btn ? btn.innerHTML : '';
     if (btn) { btn.disabled = true; btn.innerHTML = 'Saqlanmoqda…'; }
     const entries = formToEntries(form);
-    const item = { id: uuid(), user: userId, action: form.action, entries, label: form.dataset.offline, at: Date.now() };
+    const actionUrl = new URL(form.getAttribute('action') || location.href, location.href).href;
+    const item = { id: uuid(), user: userId, action: actionUrl, entries, label: form.dataset.offline, at: Date.now() };
     const done = () => { delete form.dataset.busy; if (btn) { btn.disabled = false; btn.innerHTML = label; } };
     try {
-      const { status, data } = await send(form.action, entries);
+      const { status, data } = await send(actionUrl, entries);
       if (status === 401) { alert('Sessiya tugagan. Qayta kiring — yozuv saqlanmadi.'); location.href = '/login'; return; }
-      if (!data.ok) { toast(data.error || 'Xatolik', 'error'); done(); return; }
+      if (!data.ok) { toast(data.error || 'Xatolik', 'error'); form.dispatchEvent(new CustomEvent('failed', { detail: data })); done(); return; }
       if (form.dataset.after === 'reset') {
         toast(data.message, 'success');
         form.reset(); arm(form); form.dispatchEvent(new CustomEvent('saved', { detail: data }));
@@ -209,7 +211,7 @@
 
   function toast(msg, kind) {
     let box = $('#toast');
-    if (!box) { box = document.createElement('div'); box.id = 'toast'; box.style.cssText = 'position:fixed;left:50%;transform:translateX(-50%);bottom:84px;z-index:120;max-width:92vw;width:460px'; document.body.appendChild(box); }
+    if (!box) { box = document.createElement('div'); box.id = 'toast'; box.style.cssText = 'position:fixed;left:50%;transform:translateX(-50%);top:12px;z-index:120;max-width:92vw;width:460px'; document.body.appendChild(box); }
     const el = document.createElement('div');
     el.className = 'flash ' + (kind || 'info');
     el.style.boxShadow = '0 10px 30px rgba(7,31,64,.2)';

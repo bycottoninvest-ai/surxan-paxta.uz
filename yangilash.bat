@@ -32,6 +32,7 @@ if exist .venv\Scripts\python.exe (
   .venv\Scripts\python -m pip install --quiet -r requirements.txt
 )
 echo.
+for /f "tokens=3 delims= '" %%v in ('findstr /b "VERSION" surxon\__init__.py') do echo  Yangi versiya: v%%v
 echo  Tayyor. Endi start_test ni ishga tushiring.
 echo.
 pause

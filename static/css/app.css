@@ -428,3 +428,5 @@ dialog.modal form{padding:14px}
   .auth-card{padding:26px 20px}
   .auth-card .logo{width:200px}
 }
+
+.test-strip{display:inline-flex;align-items:center;gap:6px;margin-bottom:10px;padding:4px 12px;border-radius:999px;background:#fff1d6;color:#8a5a00;font-size:12.5px;font-weight:700}

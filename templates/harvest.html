@@ -2,7 +2,7 @@
 {% from 'macros.html' import icon, csrf, uuid_field, status, empty, void_button with context %}
 {% set page_title = 'Terim' %}
 {% block content %}
-<div class="page-h"><h1>{{ icon('sprout','lg') }} Terim kiritish</h1><span class="sub">Har bir tortish aniq telashka reysiga yoziladi</span></div>
+<div class="page-h"><h1>{{ icon('sprout','lg') }} Terim kiritish</h1><span class="sub hide-m">Har bir tortish aniq telashka reysiga yoziladi</span></div>
 
 <div class="grid">
   <section class="card s5">
@@ -46,11 +46,11 @@
           <div class="f" data-for="hand">
             <label>Odam (F.I.Sh.) <span class="req">*</span></label>
             <div class="worker-pick">
-              <input name="worker_name" id="worker-name" autocomplete="off" placeholder="Ismni yozing — ro‘yxatdan tanlang yoki yangi odam" autocapitalize="words">
+              <input name="worker_name" id="worker-name" autocomplete="off" placeholder="Ism Familiya" autocapitalize="words">
               <input type="hidden" name="worker_id" id="worker-id">
               <div class="worker-list" id="worker-list"></div>
             </div>
-            <div class="hint">Yangi odam bo‘lsa, to‘liq ismini yozing — saqlashda avtomatik ro‘yxatga qo‘shiladi.</div>
+            <div class="hint">Yangi odam bo‘lsa, avtomatik qo‘shiladi.</div>
             <div id="worker-selected"></div>
           </div>
           <div class="f" data-for="combine" hidden>
@@ -59,7 +59,7 @@
           </div>
           <div class="f h keep"><label>Kg (tarozida) <span class="req">*</span></label><input name="kg" class="big" inputmode="decimal" required placeholder="0" autocomplete="off"></div>
           <div class="f h keep"><label>Rasm (ixtiyoriy)</label><label class="file-drop" style="padding:10px"><input type="file" name="photo" accept="image/*" capture="environment" data-preview>{{ icon('camera') }} Rasmga olish<div class="previews"></div></label></div>
-          <div class="f"><label class="check"><input type="checkbox" name="confirm_duplicate" value="1"> Takror yozuv (xuddi shu odam, xuddi shu kg — rostdan ikkinchi marta)</label></div>
+          <div class="f" id="dup-box" hidden><label class="check"><input type="checkbox" name="confirm_duplicate" value="1"> Ha, bu ikkinchi tortish (takror emas)</label></div>
           <div class="f"><button class="btn btn-green btn-block btn-xl">Saqlash</button></div>
         </div>
       </form>
@@ -149,6 +149,8 @@
   };
   form.dataset.validate = 'checkHarvest';
   form.addEventListener('queued', () => { sel.innerHTML = ''; wid.value = ''; name.focus(); sync(); });
+  // the 'second weighing' checkbox only appears when the server says it looks like a duplicate
+  form.addEventListener('failed', e => { if (/takror/i.test((e.detail || {}).error || '')) document.getElementById('dup-box').hidden = false; });
 })();
 </script>
 {% endblock %}

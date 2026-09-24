@@ -14,7 +14,7 @@
     <div class="auth-card">
       <img class="logo" src="{{ url_for('static', filename='img/logo-dark.png') }}" alt="SURXON Taxiatosh Textile">
       <div class="ttl">PAXTA HISOB TIZIMI</div>
-      {% if test_mode %}<div class="test-badge">TEST REJIMI</div>{% endif %}
+      {% if test_mode %}<div class="test-badge">TEST REJIMI · v{{ version }}</div>{% endif %}
       {% with messages = get_flashed_messages(with_categories=true) %}{% for cat, msg in messages %}<div class="flash {{ cat }}">{{ msg }}</div>{% endfor %}{% endwith %}
       {% if request.args.get('bye') %}<div class="flash info">Tizimdan chiqdingiz.</div>{% endif %}
       <form method="post" action="{{ url_for('auth.do_login', next=request.args.get('next')) }}">

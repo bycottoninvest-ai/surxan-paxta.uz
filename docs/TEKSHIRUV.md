@@ -1,6 +1,6 @@
 # Tekshiruv natijalari
 
-Sana: 2026-09-25. Ishga tushirish: `pytest -q` (38 test) va `python tools/perf.py`.
+Sana: 2026-09-25. Ishga tushirish: `pytest -q` (42 test) va `python tools/perf.py`.
 
 ## 0. Yakuniy holat — nima bajarildi, nima bajarilmadi
 
@@ -20,7 +20,7 @@ Tizimning o‘zida ham holat halol ko‘rsatiladi: Integratsiyalar sahifasi va `
 
 ## 1. Tekshirildi va o‘tdi
 
-**Avtomatik testlar: 38 / 38 o‘tdi.** (7 tasi yangi: PDF, arxiv navbati, bazani yangi versiyaga ko‘chirish)
+**Avtomatik testlar: 42 / 42 o‘tdi.** (PDF, arxiv navbati, migratsiya va 4 ta frontend JS tekshiruvi)
 
 | Test | Nima tekshirildi |
 |---|---|

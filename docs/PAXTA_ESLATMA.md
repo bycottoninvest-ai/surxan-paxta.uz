@@ -26,7 +26,8 @@ Rollar: admin, rahbar, brigadir (faqat o‘z brigadasi), tarozi, buxgalter, kass
 1. To‘liq tizim (Flask + SQLite WAL, 38 test) — commit `e5a1a10`.
 2. Server tomonida nakladnoy PDF (Nayman nusxasi narxsiz + ichki nusxa, versiyalar), outbox (Telegram arxiv kanali, Google Sheets), rclone mustaqil zaxira, `flask smoke-check`, test rejimi, `start_test.bat`, vaqtinchalik HTTPS va domenga o‘tish skriptlari — `e24b4ab`.
 3. Windows tuzatishlari: Store python yorlig‘ini aniqlash (`0b5fdb9`), `tzdata` + UTC+5 zaxira (`67701b4`).
-4. **Foydalanuvchi kompyuterida test rejimi ishga tushdi** (2026-09-25): dashboard, sun’iy yo‘ldosh xaritasi, ob-havo ishladi. Telefon manzili: `http://192.168.100.66:5000` (Wi-Fi IP o‘zgarishi mumkin). Telefondan kirish hali tasdiqlanmagan.
+4. **Foydalanuvchi kompyuterida test rejimi ishga tushdi** (2026-09-25): dashboard, sun’iy yo‘ldosh xaritasi, ob-havo ishladi. Telefon manzili: `http://192.168.100.66:5000` (Wi-Fi IP o‘zgarishi mumkin). Telefonda login sahifasi ochildi.
+5. **v2.1.0** — telefon tuzatishlari: toza login (faqat “TEST REJIMI · v2.1.0” belgisi), terim formasi soddalashdi, takror kg ogohlantirishi faqat shubhada chiqadi, JS xatolari tuzatildi, `tests/test_frontend.py` (jami 42 test). Playwright telefon emulyatsiyasida tekshirildi (ikki marta bosish = 1 yozuv, oflayn navbat = 1 yozuv).
 
 Test loginlari (faqat test bazasi): `admin / Test2026!`; `juma`, `tarozi01`, `buxgalter`, `asadbek`, `rahbar` — `Demo2026!`.
 

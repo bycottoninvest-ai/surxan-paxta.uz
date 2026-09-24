@@ -67,7 +67,8 @@ def main():
             ensure_missing_documents()
     ip = lan_ip()
     print('\n' + '=' * 64)
-    print('  SURXON PAXTA — TEST REJIMI (alohida sinov bazasi: data-test/)')
+    from surxon import VERSION
+    print(f'  SURXON PAXTA v{VERSION} — TEST REJIMI (alohida sinov bazasi: data-test/)')
     print(f'  Kompyuterda:   http://localhost:{PORT}')
     print(f'  Telefonda:     http://{ip}:{PORT}   (telefon shu Wi-Fi da bo‘lsin)')
     print('  Kirish:        admin / Test2026!    ·  juma, tarozi01, buxgalter, asadbek, rahbar / Demo2026!')
