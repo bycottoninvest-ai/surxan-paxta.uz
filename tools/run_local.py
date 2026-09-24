@@ -12,7 +12,9 @@ import os
 import secrets
 import shutil
 import socket
+import subprocess
 import sys
+import time
 import threading
 import webbrowser
 from pathlib import Path
@@ -31,6 +33,62 @@ def lan_ip():
         return '127.0.0.1'
     finally:
         s.close()
+
+
+def port_busy(port):
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    s.settimeout(0.5)
+    try:
+        return s.connect_ex(('127.0.0.1', port)) == 0
+    finally:
+        s.close()
+
+
+def listening_pids(port):
+    """PIDs listening on the port (Windows: netstat, others: lsof)."""
+    pids = set()
+    try:
+        if os.name == 'nt':
+            out = subprocess.run(['netstat', '-ano', '-p', 'TCP'], capture_output=True, text=True, errors='ignore').stdout
+            for line in out.splitlines():
+                parts = line.split()
+                if len(parts) >= 5 and parts[1].endswith(f':{port}') and parts[3].upper() in ('LISTENING', 'ПРОСЛУШИВАНИЕ'):
+                    pids.add(int(parts[4]))
+                elif len(parts) >= 5 and parts[1].endswith(f':{port}') and parts[2] in ('0.0.0.0:0', '[::]:0'):
+                    pids.add(int(parts[-1]))
+        else:
+            out = subprocess.run(['lsof', '-ti', f'tcp:{port}', '-sTCP:LISTEN'], capture_output=True, text=True).stdout
+            pids = {int(x) for x in out.split()}
+    except (OSError, ValueError):
+        pass
+    pids.discard(os.getpid())
+    pids.discard(0)
+    return pids
+
+
+def free_port(port):
+    """Windows lets a second server bind the same port, and then the OLD one keeps answering
+    (phone shows an old version). Stop whatever already listens on the port before starting."""
+    if not port_busy(port):
+        return
+    print(f'Port {port} band — eski server ishlab turibdi. To‘xtatilmoqda...')
+    for pid in listening_pids(port):
+        if os.name == 'nt':
+            subprocess.run(['taskkill', '/F', '/T', '/PID', str(pid)], capture_output=True)
+        else:
+            try:
+                os.kill(pid, 15)
+            except OSError:
+                pass
+    for _ in range(20):
+        if not port_busy(port):
+            print('Eski server to‘xtatildi.')
+            return
+        time.sleep(0.25)
+    print(f'\nDIQQAT: port {port} ni boshqa dastur egallagan va uni to‘xtatib bo‘lmadi.')
+    print('Barcha qora oynalarni yoping (yoki kompyuterni qayta yoqing) va start_test ni qayta bosing.')
+    input('Enter bosing...')
+    sys.exit(1)
 
 
 def main():
@@ -65,6 +123,7 @@ def main():
         from surxon.services import ensure_missing_documents
         for _ in range(5):
             ensure_missing_documents()
+    free_port(PORT)
     ip = lan_ip()
     print('\n' + '=' * 64)
     from surxon import VERSION
