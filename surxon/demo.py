@@ -53,7 +53,7 @@ def fill_demo(days=8, seed=7):
                 fcode = rnd.choice(list(fids))
                 fid, bid = fids[fcode]
                 hour = 9 + t * 2
-                stamp = f'{d} {hour:02d}:{rnd.randint(0, 59):02d}:00'
+                stamp = f'{d} {hour:02d}:{rnd.randint(0, 20):02d}:00'   # TOLDI + brutto, always before tara (:45)
                 last_today = back == 0 and t == trips - 1
                 status = 'OCHIQ' if last_today else 'TORTILDI'
                 cur = db.execute('''INSERT INTO trailer_loads(season_year, load_date, trailer_id, tractor_id, field_id, brigadier_id,

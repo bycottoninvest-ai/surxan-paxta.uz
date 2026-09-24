@@ -60,6 +60,11 @@ def main():
             from surxon.demo import fill_demo
             print(fill_demo())
             get_db().execute('UPDATE users SET must_change_password=0')
+    with app.test_request_context():
+        # PDFs for sample waybills (on the server the 'worker' service does this)
+        from surxon.services import ensure_missing_documents
+        for _ in range(5):
+            ensure_missing_documents()
     ip = lan_ip()
     print('\n' + '=' * 64)
     print('  SURXON PAXTA — TEST REJIMI (alohida sinov bazasi: data-test/)')
