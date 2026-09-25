@@ -74,7 +74,7 @@ def test_owner_scenario_field_to_punkt(app, world):
 
     # 5. Yunus (Nayman-1) sees it on the way; Ali (Nayman-2) does not
     home = norm(yunus.get('/punkt').get_data(as_text=True))
-    assert f'TL-{year}-000026' in home and 'YO‘LDA' in home and '3 700 kg' in home
+    assert f'TL-{year}-000026' in home and 'Yo‘lda' in home and '3 700 kg' in home and wb['number'] in home
     assert f'TL-{year}-000026' not in ali.get('/punkt').get_data(as_text=True)
     st_json = yunus.get('/punkt/holat').get_json()
     assert st_json['counts']['yolda'] == 1 and st_json['newest']['trip_no'] == f'TL-{year}-000026'
@@ -87,7 +87,7 @@ def test_owner_scenario_field_to_punkt(app, world):
     assert yunus.get(f'/punkt/topish?q=TL-{year}-000026').headers['Location'].endswith(f'/punkt/yuk/{wid}')
     assert yunus.get(f'/punkt/q/TL-{year}-000026').headers['Location'].endswith(f'/punkt/yuk/{wid}')
     page = norm(yunus.get(f'/punkt/yuk/{wid}').get_data(as_text=True))
-    assert '3 700 kg' in page and 'Daladagi vazn' in page
+    assert '3 700 kg' in page and 'Jo‘natilgan' in page and 'dala hisobi' in page
 
     # 7. KELDI
     assert yunus.post(f'/punkt/yuk/{wid}/keldi', {}).get_json()['ok']
@@ -96,29 +96,29 @@ def test_owner_scenario_field_to_punkt(app, world):
     # 8-10. punkt scale 3 480 kg → −220 kg (−5.95 %) → reason is required
     r = yunus.post(f'/punkt/yuk/{wid}/qabul', {'station_kg': '3480'}).get_json()
     assert r['ok'] is False and 'sabab' in r['error'].lower()
-    r = yunus.post(f'/punkt/yuk/{wid}/qabul', {'station_kg': '3480', 'reason': 'Yo‘lda to‘kilgan / yo‘qotish'}).get_json()
+    r = yunus.post(f'/punkt/yuk/{wid}/qabul', {'station_kg': '3480', 'reason': 'Paxta to‘kilgan'}).get_json()
     assert r['ok'], r
     assert (r['diff_kg'], r['diff_pct'], r['level']) == (-220, -5.95, 'alert')
 
     # 11. QABUL QILINDI — a second tap never makes a second receipt
-    r2 = yunus.post(f'/punkt/yuk/{wid}/qabul', {'station_kg': '3400', 'reason': 'Boshqa', 'note': 'xato'}).get_json()
+    r2 = yunus.post(f'/punkt/yuk/{wid}/qabul', {'station_kg': '3400', 'reason': 'Boshqa sabab', 'note': 'xato'}).get_json()
     assert r2['ok'] and r2.get('already')
     with app.app_context():
         assert scalar('SELECT COUNT(*) FROM nayman_receipts WHERE waybill_id=?', (wid,)) == 1
         rec = q('SELECT * FROM nayman_receipts WHERE waybill_id=?', (wid,), one=True)
-        assert (rec['accepted_kg'], rec['diff_kg'], rec['diff_reason']) == (3480, -220, 'Yo‘lda to‘kilgan / yo‘qotish')
+        assert (rec['accepted_kg'], rec['diff_kg'], rec['diff_reason']) == (3480, -220, 'Paxta to‘kilgan')
         assert q('SELECT status FROM waybills WHERE id=?', (wid,), one=True)['status'] == 'QABUL'
         acts = [a['action'] for a in q("SELECT action FROM audit_logs WHERE entity_type='waybill' AND entity_id=? ORDER BY id",
                                        (str(wid),))]
         assert 'ARRIVED' in acts and 'RECEIVE' in acts
     done = norm(yunus.get(f'/punkt/yuk/{wid}').get_data(as_text=True))
-    assert 'Qabul qilindi!' in done and '-220 kg (-5.95%)' in done
+    assert '4. Qabul qilindi' in done and '3 480 kg' in done and '-220 kg' in done and 'Qabul hujjati' in done
 
     # reports see it
     rep = world['admin'].get('/hisobot/punktlar').get_data(as_text=True)
     assert 'Nayman-1' in rep
     rep = world['admin'].get('/hisobot/farq-sabablari').get_data(as_text=True)
-    assert 'Yo‘lda to‘kilgan / yo‘qotish' in rep
+    assert 'Paxta to‘kilgan' in rep
 
 
 def test_empty_trip_cannot_be_finished(app, world):

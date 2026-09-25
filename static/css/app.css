@@ -575,7 +575,7 @@ a.a-tile:active{transform:scale(.98)}
 @media (max-width:600px){.pdf-share-b{grid-template-columns:1fr}}
 
 /* ---- Dala: field clerk's 4-step phone flow ---- */
-.d-wrap{max-width:560px;margin:0 auto;display:grid;gap:12px}
+.d-wrap{max-width:560px;margin:0 auto;display:grid;grid-template-columns:minmax(0,1fr);gap:12px}
 .d-h1{font-size:22px;margin:0;line-height:1.2}
 .d-h3{font-size:16px;margin:10px 0 0}
 .d-top{display:flex;gap:10px;align-items:center}
@@ -585,7 +585,7 @@ a.a-tile:active{transform:scale(.98)}
 .d-l{font-weight:700;font-size:14px;color:var(--text-2);margin-top:4px}
 .d-num{font-size:26px!important;font-weight:800}
 .d-seg{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-.d-seg label{cursor:pointer}.d-seg input{position:absolute;opacity:0;pointer-events:none}
+.d-seg label{cursor:pointer;position:relative}.d-seg input{position:absolute;opacity:0;pointer-events:none}
 .d-seg span{display:flex;align-items:center;justify-content:center;min-height:52px;border:1.5px solid var(--line);border-radius:12px;font-weight:800;font-size:16px;background:#fff}
 .d-seg input:checked+span{background:var(--blue);border-color:var(--blue);color:#fff}
 .d-kg{position:relative}.d-kg span{position:absolute;right:14px;top:50%;transform:translateY(-50%);font-weight:800;color:var(--muted)}
@@ -616,3 +616,32 @@ a.a-tile:active{transform:scale(.98)}
 
 /* the hidden attribute always wins (buttons/labels with their own display value too) */
 [hidden]{display:none!important}
+
+/* ---- Punkt: 4-step receiving flow ---- */
+.pk-card{display:grid;grid-template-columns:96px 1fr auto;gap:10px;align-items:center;background:#fff;border:1px solid var(--line);border-radius:16px;padding:10px;color:inherit;text-decoration:none}
+.pk-card.pk-first{grid-template-columns:96px 1fr;border:2px solid #9cc0f5;background:#f3f8ff}
+.pk-card.pk-static{grid-template-columns:96px 1fr}
+.pk-img{width:96px;max-width:100%;height:80px;border-radius:10px;overflow:hidden;background:#eef2f6;display:flex;align-items:center;justify-content:center;color:var(--muted)}
+.pk-img img{width:100%;height:100%;object-fit:cover}
+.pk-body{display:grid;gap:2px;min-width:0;overflow-wrap:anywhere}.pk-body b{font-size:16px}
+.pk-st{justify-self:start;border-radius:999px;padding:2px 10px;font-size:12px;font-weight:800;margin-top:2px}
+.pk-w{background:#fff3d6;color:#8a5a00}.pk-q{background:#efe9fd;color:#5436b8}
+.pk-open{grid-column:1/-1;min-height:48px;justify-content:center;font-size:17px}
+.pk-arrow{color:var(--muted)}
+.pk-tools{display:grid;grid-template-columns:minmax(0,1fr);gap:8px}.pk-tools>.btn{min-height:48px;justify-content:center}
+.pk-find{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px}.pk-find input{width:100%;min-width:0;min-height:46px;padding:8px 12px;border:1.5px solid var(--line);border-radius:12px;font-size:16px}
+.pk-sel{width:100%;min-height:46px;border-radius:12px}
+.pk-counts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+.pk-counts div{border-radius:12px;padding:8px;text-align:center}
+.pk-counts span{display:block;font-size:12px}.pk-counts b{font-size:24px}
+.pk-c1{background:#e9f7ee;color:#15803d}.pk-c2{background:#eaf2fd;color:#1459b8}.pk-c3{background:#efe9fd;color:#5436b8}
+.pk-net{background:#e9f7ee;border-radius:14px;padding:14px;font-size:18px;color:#15803d}.pk-net b{font-size:28px}
+.pk-diff{border-radius:12px;padding:12px;font-size:18px}.pk-d1{background:#fff3d6;color:#8a5a00}.pk-d0{background:#e9f7ee;color:#15803d}
+.pk-rs{display:grid;gap:6px}.pk-rs label{cursor:pointer;position:relative}.pk-rs input{position:absolute;opacity:0;pointer-events:none}
+.pk-rs span{display:flex;align-items:center;gap:10px;min-height:46px;border:1.5px solid var(--line);border-radius:10px;padding:0 12px;font-size:16px;background:#fff}
+.pk-rs span::before{content:'';width:18px;height:18px;border:2px solid #9aa9bb;border-radius:50%;flex:none}
+.pk-rs input:checked+span{border-color:var(--blue);background:var(--blue-50)}.pk-rs input:checked+span::before{border:6px solid var(--blue)}
+.pk-res{background:#e9f7ee;border-radius:14px;padding:14px;display:grid;gap:6px}
+.pk-res div{display:flex;justify-content:space-between;align-items:baseline}.pk-res span{font-size:16px}
+.pk-res b{font-size:30px}.pk-green{color:#15803d}.pk-red{color:#c2410c}
+.pk-res .tiny{display:block}

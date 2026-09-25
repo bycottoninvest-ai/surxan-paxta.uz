@@ -26,6 +26,8 @@ ROLES = {
 # Punkt operators get a closed, minimal app: only these endpoints (checked on every request).
 STATION_ENDPOINTS = {'static', 'auth.login', 'auth.logout', 'auth.change_password', 'main.health', 'main.manifest',
                      'main.service_worker', 'main.offline', 'main.dashboard'}
+# trip photos on the punkt cards (checked per photo in main.media: only trips sent to that punkt)
+STATION_EXTRA = {'main.media'}
 
 # permission -> roles that hold it. Admin implicitly holds every permission.
 PERMISSIONS = {
@@ -212,7 +214,7 @@ def station_gate():
         return None
     if user['role'] == 'tally' and (ep in TALLY_ENDPOINTS or ep.startswith('dala.')):
         return None
-    if user['role'] == 'station' and (ep in STATION_ENDPOINTS or ep.startswith('punkt.')):
+    if user['role'] == 'station' and (ep in STATION_ENDPOINTS or ep in STATION_EXTRA or ep.startswith('punkt.')):
         return None
     if user['role'] == 'cashier' and ep in CASHIER_ENDPOINTS:
         return None

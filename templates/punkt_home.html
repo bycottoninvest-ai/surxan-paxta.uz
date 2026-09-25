@@ -1,68 +1,70 @@
 {% extends 'base.html' %}
 {% from 'macros.html' import icon, empty with context %}
 {% set page_title = 'Punkt' %}
-{% macro tile(label, value, unit='', note='', cls='') -%}<div class="m-tile {{ cls }}"><span>{{ label }}</span><b class="num{{ ' long' if value|string|length > 9 }}">{{ value }}{% if unit %}<small> {{ unit }}</small>{% endif %}</b>{% if note %}<em>{{ note }}</em>{% endif %}</div>{%- endmacro %}
-{% macro trip_card(t) -%}
-<a class="m-card p-trip" href="{{ url_for('punkt.trip', waybill_id=t.id) }}">
-  <div class="row"><b class="p-no">{{ t.trip_no }}</b><span class="spacer"></span>
-    {% if t.arrived_at %}<span class="badge b-orange">{{ icon('download','xs') }} KELDI</span>{% else %}<span class="badge b-blue">{{ icon('truck','xs') }} YO‘LDA</span>{% endif %}</div>
-  <div class="row mt-s"><span class="muted">{{ t.field_name }} · {{ t.brigadier_name }}</span><span class="spacer"></span><b class="num p-kg">{{ t.net_kg|num }} kg</b></div>
-  <div class="small muted">{{ t.tractor_code or 'transport —' }}{{ ' · ' ~ t.vehicle_plate if t.vehicle_plate }} · jo‘nadi {{ (t.sent_at or '')[11:16] }}{% if not sid and t.station_name %} · {{ t.station_name }}{% endif %}</div>
+{% macro card(t, first=False) -%}
+<a class="pk-card {{ 'pk-first' if first }}" href="{{ url_for('punkt.trip', waybill_id=t.id) }}">
+  <div class="pk-img">{% if t.trip_thumb %}<img loading="lazy" src="{{ photo_url(t.trip_thumb) }}" alt="">{% else %}{{ icon('trailer','lg') }}{% endif %}</div>
+  <div class="pk-body">
+    <b>{{ t.number }} · {{ t.trailer_code }}</b>
+    <span class="small">{{ t.field_name }} · {{ t.brigadier_name }}</span>
+    <span class="small">Jo‘natilgan: <b>{{ t.net_kg|num }} kg</b> <span class="muted">({{ 'dala hisobi' if t.basis == 'dala' else 'tarozi netto' }})</span></span>
+    <span class="tiny muted">{{ t.trip_no }}{% if not sid and t.station_name %} · {{ t.station_name }}{% endif %}</span>
+    {% if t.arrived_at %}<span class="pk-st pk-q">Punktda navbatda</span>{% else %}<span class="pk-st pk-w">Yo‘lda</span>{% endif %}
+  </div>
+  {% if first %}<span class="btn btn-primary btn-block pk-open">Ochish ›</span>{% else %}<span class="pk-arrow">{{ icon('chev-right') }}</span>{% endif %}
 </a>
 {%- endmacro %}
 {% block content %}
-<div class="m-hello"><b>{{ station.name if station else 'Barcha punktlar' }}</b><span>{{ role_labels.get(current_user['role']) }} · {{ current_user['full_name'] }} · {{ today|d }}</span></div>
-{% if current_user['role'] != 'station' and stations|length > 1 %}
-<form class="row mb" method="get"><select name="punkt" onchange="this.form.submit()"><option value="">Barcha punktlar</option>{% for s in stations %}<option value="{{ s.id }}" {{ 'selected' if sid == s.id }}>{{ s.name }}</option>{% endfor %}</select></form>
-{% endif %}
+<div class="d-wrap">
+  <div><h1 class="d-h1">1. Kelgan telashkani tanlang</h1><div class="small muted">Nakladnoylar avtomatik chiqadi · {{ station.name if station else 'Barcha punktlar' }}</div></div>
+  {% if current_user['role'] != 'station' and stations|length > 1 %}
+  <form method="get"><select name="punkt" onchange="this.form.submit()" class="pk-sel"><option value="">Barcha punktlar</option>{% for s in stations %}<option value="{{ s.id }}" {{ 'selected' if sid == s.id }}>{{ s.name }}</option>{% endfor %}</select></form>
+  {% endif %}
+  <div class="p-banner" id="p-banner" hidden><b>🚜 Yangi yuk yo‘lda</b><span data-text></span><a class="btn btn-light btn-sm" data-link href="#">Ko‘rish</a></div>
 
-<div class="p-banner" id="p-banner" hidden><b>🚜 Yangi yuk yo‘lda</b><span data-text></span><a class="btn btn-light btn-sm" data-link href="#">Ko‘rish</a></div>
+  {% set trips = arrived + on_way %}
+  {% for t in trips %}{{ card(t, loop.first) }}{% else %}{{ empty('Hozircha kelayotgan telashka yo‘q', 'trailer') }}{% endfor %}
 
-<div class="m-tiles p-tiles">
-  {{ tile('🚜 Yo‘lda', counts.yolda, 'ta', '', 't-blue') }}
-  {{ tile('📥 Keldi', counts.keldi, 'ta', 'tarozini kutmoqda' if counts.keldi else '', 't-orange') }}
-  {{ tile('✅ Bugun qabul', counts.qabul, 'ta') }}
-  {{ tile('Bugun jami', counts.qabul_kg|num, 'kg', ('dalada ' ~ (counts.dala_kg|num) ~ ' kg') if counts.qabul else '') }}
+  <div class="pk-tools">
+    <form method="get" action="{{ url_for('punkt.find') }}" class="pk-find"><input name="q" inputmode="numeric" autocomplete="off" placeholder="Raqam bilan qidirish" required><button class="btn btn-light">{{ icon('search','sm') }}</button></form>
+    <a class="btn btn-light" href="{{ url_for('punkt.scanner') }}">{{ icon('camera','sm') }} QR skanerlash</a>
+  </div>
+
+  <h3 class="d-h3">Kelayotgan telashkalar</h3>
+  <div class="pk-counts">
+    <div class="pk-c1"><span>Dalada to‘lgan</span><b>{{ counts.dalada }}</b></div>
+    <div class="pk-c2"><span>Yo‘lda</span><b>{{ counts.yolda }}</b></div>
+    <div class="pk-c3"><span>Punktda navbatda</span><b>{{ counts.keldi }}</b></div>
+  </div>
+  <div class="tiny muted center">Oxirgi yangilanish: <span id="pk-upd">{{ now_time }}</span> · Bugun qabul: {{ counts.qabul }} ta, {{ counts.qabul_kg|num }} kg</div>
+
+  {% if received %}
+  <details class="d-more"><summary>Bugun qabul qilinganlar ({{ received|length }})</summary>
+    {% for t in received %}<a class="d-row" href="{{ url_for('punkt.trip', waybill_id=t.id) }}"><div><b>{{ t.number }}</b> · {{ t.trailer_code }}<div class="tiny muted">{{ (t.received_at or '')[11:16] }}</div></div>
+      <div class="num"><b>{{ t.accepted_kg|num }} kg</b><div class="tiny {{ 't-down' if t.nayman_diff_kg < 0 }}">{{ '%+.0f'|format(t.nayman_diff_kg) }} kg</div></div></a>{% endfor %}
+    <a class="small" href="{{ url_for('punkt.history', punkt=sid) }}">To‘liq tarix →</a>
+  </details>
+  {% endif %}
 </div>
-
-<div class="p-actions">
-  <a class="m-act green" href="{{ url_for('punkt.scanner') }}">{{ icon('camera','lg') }}<span>QR skaner</span></a>
-  <form class="p-find" method="get" action="{{ url_for('punkt.find') }}">
-    <label for="p-q">Telashka raqami</label>
-    <div class="row"><input id="p-q" name="q" inputmode="numeric" autocomplete="off" placeholder="Raqam, masalan 26" required>
-    <button class="btn btn-primary">{{ icon('search','sm') }}</button></div>
-  </form>
-</div>
-
-<h3 class="m-h">📥 Keldi — tarozini kutmoqda ({{ arrived|length }})</h3>
-{% for t in arrived %}{{ trip_card(t) }}{% else %}<div class="small muted mb">Hozircha yo‘q.</div>{% endfor %}
-
-<h3 class="m-h">🚜 Yo‘lda kelayotgan yuklar ({{ on_way|length }})</h3>
-{% for t in on_way %}{{ trip_card(t) }}{% else %}{{ empty('Yo‘lda yuk yo‘q', 'trailer') }}{% endfor %}
-
-<h3 class="m-h row">✅ Bugun qabul qilindi ({{ received|length }})<span class="spacer"></span><a class="btn btn-ghost btn-sm" href="{{ url_for('punkt.history', punkt=sid) }}">{{ icon('history','sm') }} Tarix</a></h3>
-{% for t in received %}
-<a class="m-card row" href="{{ url_for('punkt.trip', waybill_id=t.id) }}"><b>{{ t.trip_no }}</b><span class="small muted">{{ (t.received_at or '')[11:16] }}</span><span class="spacer"></span>
-  <span class="num">{{ t.accepted_kg|num }} kg</span>&nbsp;<b class="num {{ 't-down' if t.nayman_diff_kg < 0 else '' }}">{{ '%+.0f'|format(t.nayman_diff_kg) }}</b></a>
-{% else %}<div class="small muted">Bugun hali qabul yo‘q.</div>{% endfor %}
 {% endblock %}
 {% block scripts %}
 <script>
 (() => {
   // new trips appear without anyone refreshing: poll every 20 s, show a banner + vibrate on a new one
   const known = new Set({{ (on_way + arrived)|map(attribute='id')|list|tojson }});
-  const banner = document.getElementById('p-banner');
+  const banner = document.getElementById('p-banner'), upd = document.getElementById('pk-upd');
   const url = {{ url_for('punkt.status_json', punkt=sid)|tojson }};
   async function tick() {
     try {
       const r = await fetch(url, {headers: {'X-Requested-With': 'fetch'}, cache: 'no-store'});
       if (!r.ok) return;
       const d = await r.json();
+      upd.textContent = new Date().toTimeString().slice(0, 5);
       const fresh = d.open_ids.filter(id => !known.has(id));
       if (fresh.length && d.newest) {
         fresh.forEach(id => known.add(id));
         banner.querySelector('[data-text]').textContent =
-          ` ${d.newest.trip_no} · ${d.newest.field || ''} · ${Math.round(d.newest.kg).toLocaleString('ru-RU')} kg · ${d.newest.tractor || ''} · ${d.newest.sent_at}`;
+          ` ${d.newest.trip_no} · ${d.newest.field || ''} · ${Math.round(d.newest.kg).toLocaleString('ru-RU')} kg`;
         banner.querySelector('[data-link]').href = d.newest.url;
         banner.hidden = false;
         if (navigator.vibrate) navigator.vibrate([200, 100, 200]);

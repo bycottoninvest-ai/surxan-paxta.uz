@@ -1,19 +1,24 @@
-# Serverni yangilash (Codex uchun) — v2.7.0
+# Serverni yangilash (Codex uchun) — v2.8.0
 
 Serverni qayta qurmang, `.env`, `data/` va Caddy sozlamasiga tegmang. Vaqtinchalik sslip override'ni qayta yoqmang.
 
 ```bash
 cd /opt/surxan-paxta.uz
 docker compose exec -T app flask --app app backup          # yangilashdan oldin izchil zaxira
-git pull --ff-only                                          # kutilgan: 2.6.0 commiti yoki keyingisi
+git pull --ff-only                                          # kutilgan: v2.8.0 commiti
 docker compose up -d --build
-for i in $(seq 1 40); do curl -fsS https://surxan-paxta.uz/health && break; sleep 3; done   # "version":"2.7.0"
+for i in $(seq 1 40); do curl -fsS https://surxan-paxta.uz/health && break; sleep 3; done   # "version":"2.8.0"
 docker compose exec -T app flask --app app set-webhook      # channel_post yangilanishini qo'shadi (kanallarni tanish uchun)
 docker compose exec -T app flask --app app smoke-check
 ```
 
-Baza avtomatik yangilanadi: yangi ustunlar `trailer_loads.method/rate/rate_unit`, `workers.note`, `tg_chats.bot_status` qo'shiladi.
+Baza avtomatik yangilanadi: yangi ustunlar `nayman_receipts.station_gross_kg/station_tare_kg` (v2.8.0 — punkt brutto/tara),
+`trailer_loads.method/rate/rate_unit`, `workers.note`, `tg_chats.bot_status` (v2.7.0) qo'shiladi.
 Eski yozuvlar o'zgarmaydi. Ilova ishga tushganda migratsiyadan oldin `data/` ichida `*.oldin-v*` zaxira nusxa oladi.
+
+## v2.8.0 da nima o'zgardi
+Punkt operatori ekrani: kelgan telashkalar ro'yxati (rasm bilan) → brutto/tara (netto o'zi) → farq sababi (8 ta, “Boshqa sabab”da matn)
+→ “Qabul qilindi” + qabul hujjati PDF (narxsiz). Hisob-kitob, rollar, rahbar paneli o'zgarmagan.
 
 ## Qaytarish (kerak bo'lsa)
 ```bash

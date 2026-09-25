@@ -676,8 +676,11 @@ def record_nayman(actor, waybill_id, *, accepted_kg, received_date, receiver_nam
 
 # ------------------------------------------------------------------ receiving point (punkt)
 
-STATION_DIFF_REASONS = ['Namlik kamaygan', 'Musur / begona aralashma', 'Yo‘lda to‘kilgan / yo‘qotish', 'Tarozi farqi',
-                        'Qayta tortildi', 'Kombayn (dalada taxminiy kg)', 'Boshqa']
+# the operator picks one; nothing is preselected or guessed. Only “Boshqa sabab” needs a written note.
+# (older receipts keep whatever reason text they were saved with)
+STATION_DIFF_REASONS = ['Tarozilar farqi', 'Tara farqi', 'Paxta to‘kilgan', 'Namlik o‘zgarishi', 'Aralashma ajratilgan',
+                        'Qisman tushirilgan', 'Sabab aniqlanmagan', 'Boshqa sabab']
+OTHER_REASON = 'Boshqa sabab'
 
 
 def _station_trip(db, actor, waybill_id):
@@ -713,9 +716,18 @@ def mark_arrived(actor, waybill_id):
         return True
 
 
-def receive_at_station(actor, waybill_id, *, station_kg, reason='', note='', photo=None):
-    """Punkt scale weight → difference → QABUL QILINDI. A second tap never makes a second receipt."""
+def receive_at_station(actor, waybill_id, *, station_kg=None, reason='', note='', photo=None, gross_kg=None, tare_kg=None):
+    """Punkt scale weight → difference → QABUL QILINDI. A second tap never makes a second receipt.
+    Either brutto + tara (netto = brutto − tara, both kept) or a ready netto from the scale."""
     _need(actor, 'station.receive')
+    if gross_kg is not None or tare_kg is not None:
+        if gross_kg is None or tare_kg is None:
+            raise UserError('Brutto va tarani ikkalasini ham kiriting (yoki tayyor nettoni).')
+        if tare_kg < 0 or gross_kg <= 0:
+            raise UserError('Brutto va tara musbat son bo‘lishi kerak.')
+        if gross_kg <= tare_kg:
+            raise UserError(f'Brutto ({gross_kg:g} kg) taradan ({tare_kg:g} kg) katta bo‘lishi kerak.')
+        station_kg = round(gross_kg - tare_kg, 1)
     with tx() as db:
         wb = _station_trip(db, actor, waybill_id)
         existing = db.execute('SELECT * FROM nayman_receipts WHERE waybill_id=?', (waybill_id,)).fetchone()
@@ -731,24 +743,26 @@ def receive_at_station(actor, waybill_id, *, station_kg, reason='', note='', pho
         diff, pct, level = diff_level(wb['net_kg'], station_kg, db)
         reason = clean_text(reason, 60)
         note = clean_text(note, 300)
-        if level != 'ok':
-            if reason not in STATION_DIFF_REASONS:
-                raise UserError(f'Farq {diff:+g} kg ({pct:+.2f}%). Farq sababini tanlang.')
-            if reason == 'Boshqa' and len(note) < 3:
-                raise UserError('“Boshqa” tanlansa, sababni qisqa yozing.')
+        if level != 'ok' and reason not in STATION_DIFF_REASONS:
+            raise UserError(f'Farq {diff:+g} kg ({pct:+.2f}%). Farq sababini tanlang.')
+        if reason and reason not in STATION_DIFF_REASONS:
+            raise UserError('Sababni ro‘yxatdan tanlang.')
+        if reason == OTHER_REASON and len(note) < 3:
+            raise UserError('“Boshqa sabab” tanlansa, sababni qisqa yozing.')
         full_reason = (f'{reason}: {note}' if reason and note else reason or note) or None
         ts = now_str()
         if not wb['arrived_at']:
             db.execute('UPDATE waybills SET arrived_at=?, arrived_by=? WHERE id=?', (ts, actor.user_id, waybill_id))
         station = db.execute('SELECT name FROM stations WHERE id=?', (wb['station_id'],)).fetchone()
         cur = db.execute('''INSERT INTO nayman_receipts(accepted_kg, diff_kg, diff_reason, received_date, receiver_name,
-                                note, waybill_id, created_by, created_at) VALUES (?,?,?,?,?,?,?,?,?)''',
+                                note, waybill_id, created_by, created_at, station_gross_kg, station_tare_kg) VALUES (?,?,?,?,?,?,?,?,?,?,?)''',
                          (station_kg, diff, full_reason, today_str(),
                           clean_text(f'{actor.name} ({station["name"]})' if station else actor.name, 80),
-                          note or None, waybill_id, actor.user_id, ts))
+                          note or None, waybill_id, actor.user_id, ts, gross_kg, tare_kg))
         db.execute("UPDATE waybills SET status='QABUL', updated_at=? WHERE id=?", (ts, waybill_id))
         audit(db, actor, 'RECEIVE', 'waybill', waybill_id,
               new={'trip_no': wb['trip_no'], 'field_kg': wb['net_kg'], 'station_kg': station_kg, 'diff_kg': diff,
+                   'station_gross_kg': gross_kg, 'station_tare_kg': tare_kg,
                    'diff_pct': pct, 'level': level, 'reason': full_reason, 'status': 'QABUL QILINDI'})
         if photo:
             store_photo(db, actor, photo, category='nayman', entity_type='nayman_receipt', entity_id=cur.lastrowid,

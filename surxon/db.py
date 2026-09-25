@@ -752,6 +752,9 @@ def migrate(db):
     _add_column(db, 'trailer_loads', 'rate', 'INTEGER CHECK (rate IS NULL OR rate > 0)')
     _add_column(db, 'trailer_loads', 'rate_unit', 'TEXT')
     _add_column(db, 'workers', 'note', 'TEXT')
+    # v6: punkt scale brutto and tara kept next to the accepted netto (NULL when a ready netto was typed)
+    _add_column(db, 'nayman_receipts', 'station_gross_kg', 'REAL')
+    _add_column(db, 'nayman_receipts', 'station_tare_kg', 'REAL')
     # Future column changes go here as: if version < N: ALTER TABLE ...
     db.execute('UPDATE schema_version SET version=? WHERE version < ?', (SCHEMA_VERSION, SCHEMA_VERSION))
 

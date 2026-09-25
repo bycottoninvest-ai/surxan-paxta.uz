@@ -306,3 +306,47 @@ def build_workers_report_pdf(ld, lines, *, company, generated_at, generated_by):
     c.drawString(x0, y - 4.5 * mm, 'Punkt/tarozi farqi ishchi haqini o‘z-o‘zidan kamaytirmaydi. Bu hujjat punktga berilmaydi.')
     c.save()
     return buf.getvalue()
+
+
+def build_receipt_pdf(wb, *, company):
+    """PUNKT QABUL HUJJATI: one received trip — no price, wages or worker names."""
+    _fonts()
+    buf = io.BytesIO()
+    c = canvas.Canvas(buf, pagesize=A4)
+    W, H = A4
+    x0, x1 = 18 * mm, W - 18 * mm
+    trip = wb['trip_no'] or wb['number']
+    c.setTitle(f'Qabul {trip}')
+    y = H - 20 * mm
+    c.setFont('DejaVu-Bold', 15)
+    c.drawString(x0, y, company)
+    y -= 10 * mm
+    c.setFont('DejaVu-Bold', 17)
+    c.drawCentredString(W / 2, y, 'PUNKT QABUL HUJJATI')
+    y -= 6 * mm
+    c.setFont('DejaVu', 10)
+    c.drawCentredString(W / 2, y, f'{wb["number"]} · {trip} · {wb["station_name"] or ""}')
+    y -= 10 * mm
+    src = 'dala tarozisi yig‘indisi' if wb['basis'] == 'dala' else 'jo‘natish tarozisi netto'
+    rows = [('Dala', f'{wb["field_code"] or ""} · {wb["field_name"] or ""}'), ('Brigada', wb['brigadier_name'] or '—'),
+            ('Telashka', f'{wb["trailer_code"]}' + (f' · {wb["tractor_code"]}' if wb['tractor_code'] else '')),
+            ('Jo‘natilgan', f'{_num(wb["net_kg"])} kg ({src})')]
+    if wb['station_gross_kg'] is not None:
+        rows += [('Punkt brutto', f'{_num(wb["station_gross_kg"])} kg'), ('Punkt tara', f'{_num(wb["station_tare_kg"])} kg')]
+    rows += [('Punkt netto (qabul)', f'{_num(wb["accepted_kg"])} kg'),
+             ('Farq (qabul − jo‘natilgan)', f'{wb["nayman_diff_kg"]:+,.0f} kg'.replace(',', ' ')),
+             ('Sabab', wb['nayman_diff_reason'] or '—'),
+             ('Qabul qildi', f'{wb["receiver_name"] or "—"} · {_date(wb["received_at"])}')]
+    for k, v in rows:
+        c.rect(x0, y - 9 * mm, 62 * mm, 9 * mm)
+        c.rect(x0 + 62 * mm, y - 9 * mm, x1 - x0 - 62 * mm, 9 * mm)
+        c.setFont('DejaVu', 10)
+        c.drawString(x0 + 2.5 * mm, y - 6 * mm, k)
+        c.setFont('DejaVu-Bold', 11)
+        c.drawString(x0 + 64.5 * mm, y - 6 * mm, str(v)[:60])
+        y -= 9 * mm
+    y -= 12 * mm
+    c.setFont('DejaVu', 9)
+    c.drawString(x0, y, 'Qabul qildi: ____________________        Topshirdi (haydovchi): ____________________')
+    c.save()
+    return buf.getvalue()

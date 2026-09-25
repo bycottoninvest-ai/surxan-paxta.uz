@@ -202,6 +202,9 @@ def can_see_photo(photo):
         return True
     if photo['category'] in FINANCE_PHOTO_CATEGORIES and not sees_finance_photos():
         return False
+    if g.user['role'] == 'station':
+        return bool(photo['load_id'] and photo['category'] in ('trailer', 'cotton', 'nayman') and q(
+            'SELECT 1 FROM trailer_loads WHERE id=? AND station_id=?', (photo['load_id'], g.user['station_id']), one=True))
     if g.user['role'] == 'tally':
         return bool(photo['load_id'] and q('''SELECT 1 FROM trailer_loads tl WHERE tl.id=? AND (tl.opened_by=? OR EXISTS
                                             (SELECT 1 FROM harvests h WHERE h.load_id=tl.id AND h.entered_by=?))''',

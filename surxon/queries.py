@@ -196,7 +196,9 @@ WAYBILL_SELECT = '''SELECT wb.*, tl.trip_no, tl.station_id, st.name station_name
                            w.scale_no, nr.id receipt_id, nr.accepted_kg, nr.diff_kg nayman_diff_kg, nr.diff_reason nayman_diff_reason,
                            nr.received_date, nr.amount receipt_amount,
                            (SELECT COALESCE(SUM(amount),0) FROM payments p WHERE p.waybill_id=wb.id AND p.voided_at IS NULL) paid,
-                           nr.created_at received_at, nr.receiver_name,
+                           nr.created_at received_at, nr.receiver_name, nr.station_gross_kg, nr.station_tare_kg, nr.note receipt_note,
+                           (SELECT p.thumb_path FROM photos p WHERE p.load_id=tl.id AND p.voided_at IS NULL
+                                   AND p.category IN ('trailer','cotton') ORDER BY p.id DESC LIMIT 1) trip_thumb,
                            (SELECT COUNT(DISTINCT h.worker_id) FROM harvests h WHERE h.load_id=tl.id AND h.voided_at IS NULL
                                    AND h.method='hand') workers_count,
                            u.full_name created_name
@@ -262,6 +264,10 @@ def station_trips(station_id=None, *, state='open', day=None, search='', limit=2
 
 def station_counts(station_id, day):
     sf, params = ('AND tl.station_id=?', [station_id]) if station_id else ('', [])
+    # three states, each trip counted in exactly one: full in the field (not yet sent) / on the way / at the punkt
+    dalada = scalar(f"""SELECT COUNT(*) FROM trailer_loads tl WHERE tl.status='TOLDI'
+                          AND NOT EXISTS (SELECT 1 FROM waybills wb WHERE wb.load_id=tl.id AND wb.status<>'BEKOR') {sf}""",
+                    params)
     row = q(f'''SELECT SUM(CASE WHEN wb.status='YARATILDI' AND wb.arrived_at IS NULL THEN 1 ELSE 0 END) yolda,
                        SUM(CASE WHEN wb.status='YARATILDI' AND wb.arrived_at IS NOT NULL THEN 1 ELSE 0 END) keldi,
                        SUM(CASE WHEN wb.status='QABUL' AND substr(nr.created_at,1,10)=? THEN 1 ELSE 0 END) qabul,
@@ -270,7 +276,9 @@ def station_counts(station_id, day):
                 FROM waybills wb JOIN trailer_loads tl ON tl.id=wb.load_id
                 LEFT JOIN nayman_receipts nr ON nr.waybill_id=wb.id
                 WHERE wb.status<>'BEKOR' {sf}''', [day, day, day] + params, one=True)
-    return {k: (row[k] or 0) for k in row.keys()}
+    out = {k: (row[k] or 0) for k in row.keys()}
+    out['dalada'] = dalada
+    return out
 
 
 def find_trip(text, station_id=None, year=None):
