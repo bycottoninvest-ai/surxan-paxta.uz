@@ -1,4 +1,4 @@
-# Serverni yangilash (Codex uchun) — v2.6.1
+# Serverni yangilash (Codex uchun) — v2.7.0
 
 Serverni qayta qurmang, `.env`, `data/` va Caddy sozlamasiga tegmang. Vaqtinchalik sslip override'ni qayta yoqmang.
 
@@ -7,12 +7,21 @@ cd /opt/surxan-paxta.uz
 docker compose exec -T app flask --app app backup          # yangilashdan oldin izchil zaxira
 git pull --ff-only                                          # kutilgan: 2.6.0 commiti yoki keyingisi
 docker compose up -d --build
-for i in $(seq 1 40); do curl -fsS https://surxan-paxta.uz/health && break; sleep 3; done   # "version":"2.6.1"
+for i in $(seq 1 40); do curl -fsS https://surxan-paxta.uz/health && break; sleep 3; done   # "version":"2.7.0"
 docker compose exec -T app flask --app app set-webhook      # channel_post yangilanishini qo'shadi (kanallarni tanish uchun)
 docker compose exec -T app flask --app app smoke-check
 ```
 
-Baza sxemasi o'zgarmaydi (faqat `tg_chats.bot_status` ustuni qo'shiladi, avtomatik).
+Baza avtomatik yangilanadi: yangi ustunlar `trailer_loads.method/rate/rate_unit`, `workers.note`, `tg_chats.bot_status` qo'shiladi.
+Eski yozuvlar o'zgarmaydi. Ilova ishga tushganda migratsiyadan oldin `data/` ichida `*.oldin-v*` zaxira nusxa oladi.
+
+## Qaytarish (kerak bo'lsa)
+```bash
+cd /opt/surxan-paxta.uz
+git log --oneline -3          # oldingi commitni ko'ring
+git checkout <oldingi_commit> && docker compose up -d --build
+```
+Yangi ustunlar eski versiyaga xalaqit bermaydi (ular shunchaki ishlatilmaydi).
 
 ## Yangilangandan keyin foydalanuvchi o'zi qiladi (saytda)
 1. **Admin → Xodimlar va loginlar**: Rahbar — Salayev Aziz; Hisobchi — Asadbek, Mirjalol, Sadokat, Gulbohar; Punkt — Yunus;
