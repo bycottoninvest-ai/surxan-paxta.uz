@@ -366,6 +366,59 @@ def register_cli(app):
             for r, c, f in t['formula_samples']:
                 click.echo(f'  formula {r}-qator {c}-ustun: {f[:80]}')
 
+    @app.cli.command('sheets-sinov')
+    @click.option('--katak', multiple=True, help="Dashboarddagi katak, masalan \"Umumiy hisob!B4\" (qadamlarda o‘qib ko‘rsatiladi)")
+    def sheets_sinov(katak):
+        """Live proof: 1 000 so‘m test income → Sheets row + dashboard change → resend (no double) → void (back)."""
+        from .accounting import add_income
+        from .outbox import configured, run_once, sheets_read, tab_name
+        from .reporting import maybe_refresh_sheet_summary
+        from .security import Actor
+        from .services import void_cash_entry
+        if not configured('sheets'):
+            raise click.ClickException('Google Sheets ulanmagan.')
+        actor = Actor(None, 'admin', source='cli', name='Sheets sinovi')
+
+        def sync():
+            with app.test_request_context():
+                maybe_refresh_sheet_summary()
+                res = run_once(limit=500)
+            if res['errors']:
+                err = dbmod.q("SELECT last_error FROM outbox WHERE channel='sheets' AND last_error IS NOT NULL ORDER BY id DESC",
+                              one=True)
+                raise click.ClickException(f'Sheets yozishda xato: {err["last_error"] if err else res}')
+
+        def look(title, doc):
+            rows = sheets_read(tab_name('KASSA KIRIM-CHIQIM'), 'A1:J5000')
+            mine = [r for r in rows if r and r[0] == doc]
+            summary = {r[0]: r[2] for r in sheets_read(tab_name('UMUMIY'), 'A1:C200') if len(r) > 2}
+            extra = ''
+            for k in katak:
+                sh, rng = k.split('!', 1)
+                v = sheets_read(sh, rng)
+                extra += f' | {k} = {v[0][0] if v and v[0] else "(bo‘sh)"}'
+            click.echo(f'{title:38} SPX qatorlari: {len(rows) - 1:>4} | {doc} qatori: {len(mine)} '
+                       f'({mine[0][9] if mine and len(mine[0]) > 9 else "-"}) | KASSA_QOLDIQ = {summary.get("KASSA_QOLDIQ")}{extra}')
+            return len(rows), len(mine), summary.get('KASSA_QOLDIQ')
+
+        sync()
+        n0, _, k0 = look('0) Boshlanish', '-')
+        with app.test_request_context():
+            cid, doc = add_income(actor, amount=1000, source='SINOV', note='Google Sheets sinovi — darhol bekor qilinadi')
+        sync()
+        n1, m1, k1 = look('1) 1 000 so‘m sinov kirimi yozildi', doc)
+        dbmod.get_db().execute("UPDATE outbox SET status='pending', next_try_at=0 WHERE channel='sheets' AND ref LIKE ?",
+                               (f'KASSA KIRIM-CHIQIM:{doc}:%',))
+        sync()
+        n2, m2, k2 = look('2) O‘sha yozuv qayta yuborildi', doc)
+        with app.test_request_context():
+            void_cash_entry(actor, cid, 'Google Sheets sinovi tugadi')
+        sync()
+        n3, m3, k3 = look('3) Sinov yozuvi bekor qilindi', doc)
+        ok = m1 == 1 and m2 == 1 and n2 == n1 and m3 == 1 and str(k3) == str(k0)
+        click.echo('NATIJA: ' + ('ISHLAYDI — qator bitta, qayta yuborishda ko‘paymadi, bekor qilinganda jami qaytdi.' if ok
+                                 else 'XATO — yuqoridagi qadamlarni ko‘ring.'))
+
     @app.cli.command('holat')
     def holat():
         """Every part of the system: ISHLAYDI / ULANMAGAN / TEKSHIRILMAGAN / XATO — honest, from real checks only."""

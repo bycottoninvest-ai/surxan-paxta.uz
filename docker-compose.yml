@@ -32,6 +32,8 @@ services:
   caddy:
     image: caddy:2
     restart: unless-stopped
+    environment:
+      SITE_ADDRESSES: ${SITE_ADDRESSES:-surxan-paxta.uz, www.surxan-paxta.uz}
     ports:
       - "80:80"
       - "443:443"

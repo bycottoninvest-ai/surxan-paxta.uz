@@ -86,9 +86,14 @@ narx)
   read -rp "Kombayn narxi, so‘m/tonna [1500000]: " K; K=${K:-1500000}
   flask narx --qol "$Q" --kombayn-tonna "$K"
   ;;
+sheets-sinov)
+  # bash tools/sozlash.sh sheets-sinov "Umumiy hisob!B4"   — dashboard katagini ham kuzatish (ixtiyoriy)
+  shift; args=(); for k in "$@"; do args+=(--katak "$k"); done
+  flask sheets-sinov "${args[@]}"
+  ;;
 holat)
   flask holat
   ;;
 *)
-  echo "Foydalanish: bash tools/sozlash.sh telegram | sheets | zaxira | narx | holat"; exit 1;;
+  echo "Foydalanish: bash tools/sozlash.sh telegram | sheets | sheets-sinov | zaxira | narx | holat"; exit 1;;
 esac

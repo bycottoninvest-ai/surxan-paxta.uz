@@ -132,6 +132,84 @@ def maybe_schedule_daily_report():
     return True
 
 
+SUMMARY_HEADER = ['ID', 'Ko‘rsatkich', 'Qiymat', 'Birlik', 'Davr', 'Yangilandi']
+WORKERS_HEADER = ['ID', 'Ishchi', 'Brigada', 'Kg', 'Hisoblangan', 'Avans', 'To‘langan', 'Qoldiq', 'Holat', 'Narxsiz kg']
+
+
+def sheet_summary_rows(year=None):
+    """Totals for Google Sheets dashboards: one row per metric, stable ID in column A (formulas look them up)."""
+    from .accounting import combine_balances, cotton_totals, debts, total_balance, worker_balances
+    from .services import current_season
+    db = get_db()
+    year = year or current_season(db)
+    t = today_str()
+    season = finance_summary(f'{year}-01-01', f'{year}-12-31')
+    today = finance_summary(t, t)
+    workers = worker_balances(year)
+    combines = combine_balances(year)
+    dd = debts(year)
+    c = season['cotton']
+    pending = scalar("SELECT COALESCE(SUM(amount),0) FROM payouts WHERE status='TAYYOR' AND season_year=?", (year,))
+    m = [
+        ('TERILDI_MAVSUM_KG', 'Terildi (dala), mavsum', c['field_kg'], 'kg', str(year)),
+        ('TERILDI_BUGUN_KG', 'Terildi (dala), bugun', today['cotton']['field_kg'], 'kg', t),
+        ('PUNKT_QABUL_MAVSUM_KG', 'Punkt qabul, mavsum', c['punkt_kg'], 'kg', str(year)),
+        ('PUNKT_QABUL_BUGUN_KG', 'Punkt qabul, bugun', today['cotton']['punkt_kg'], 'kg', t),
+        ('FARQ_MAVSUM_KG', 'Farq (qabul qilingan telashkalar)', c['diff_kg'], 'kg', str(year)),
+        ('FARQ_MAVSUM_FOIZ', 'Farq, %', c['diff_pct'] if c['diff_pct'] is not None else '', '%', str(year)),
+        ('KASSA_QOLDIQ', 'Kassa qoldig‘i (hozir)', total_balance(db), 'so‘m', t),
+        ('KASSA_KIRIM_MAVSUM', 'Kassa kirim, mavsum', season['cash_in'], 'so‘m', str(year)),
+        ('KASSA_CHIQIM_MAVSUM', 'Kassa chiqim, mavsum', season['cash_out'], 'so‘m', str(year)),
+        ('KASSA_KIRIM_BUGUN', 'Kassa kirim, bugun', today['cash_in'], 'so‘m', t),
+        ('KASSA_CHIQIM_BUGUN', 'Kassa chiqim, bugun', today['cash_out'], 'so‘m', t),
+        ('TERIM_PULI_HISOBLANGAN', 'Terimchilar puli, hisoblangan', sum(w['earned'] for w in workers), 'so‘m', str(year)),
+        ('TERIM_PULI_NARXSIZ_KG', 'Narxsiz (hisoblanmagan) terim', sum(w['uncalc_kg'] for w in workers), 'kg', str(year)),
+        ('TERIM_PULI_TOLANGAN', 'Terimchilarga to‘langan', sum(w['paid'] for w in workers), 'so‘m', str(year)),
+        ('AVANSLAR', 'Avanslar', sum(w['advances'] for w in workers), 'so‘m', str(year)),
+        ('ISHCHILAR_QOLDIQ', 'Ishchilar qoldig‘i (qarzimiz)', sum(max(0, w['balance']) for w in workers), 'so‘m', str(year)),
+        ('TOLOV_KUTILMOQDA', 'Kassirda kutilayotgan to‘lovlar', pending, 'so‘m', t),
+        ('KOMBAYN_HISOBLANGAN', 'Kombayn, hisoblangan', sum(x['earned'] for x in combines), 'so‘m', str(year)),
+        ('KOMBAYN_TOLANGAN', 'Kombayn, to‘langan', sum(x['paid'] for x in combines), 'so‘m', str(year)),
+        ('KOMBAYN_QOLDIQ', 'Kombayn qoldig‘i', sum(x['balance'] for x in combines), 'so‘m', str(year)),
+        ('XARAJAT_MAVSUM', 'Xarajat, mavsum', season['expenses_total'], 'so‘m', str(year)),
+        ('XARAJAT_BUGUN', 'Xarajat, bugun', today['expenses_total'], 'so‘m', t),
+        ('QARZ_OLISHIMIZ', 'Biz olishimiz kerak', sum(x['remaining'] for x in dd if x['direction'] == 'OLISH'), 'so‘m', str(year)),
+        ('QARZ_BERISHIMIZ', 'Biz berishimiz kerak', sum(x['remaining'] for x in dd if x['direction'] == 'BERISH'), 'so‘m', str(year)),
+    ]
+    rows = [[k, label, v, unit, period, ''] for k, label, v, unit, period in m]
+    wrows = [[f'W-{w["id"]}', w['full_name'], w['brigadier_name'] or '', w['kg'], w['earned'], w['advances'], w['paid'],
+              w['balance'], w['status'], w['uncalc_kg']] for w in workers]
+    return rows, wrows
+
+
+def maybe_refresh_sheet_summary(force=False):
+    """Queue a refresh of SPX UMUMIY / SPX TERIMCHILAR when a number changed (only if Sheets is connected)."""
+    import hashlib
+    import json
+    from .db import tx
+    from .outbox import configured
+    if not configured('sheets'):
+        return False
+    rows, wrows = sheet_summary_rows()
+    digest = hashlib.sha256(json.dumps([rows, wrows], default=str).encode()).hexdigest()[:16]
+    db = get_db()
+    last = db.execute("SELECT value FROM settings WHERE key='sheets_summary_hash'").fetchone()
+    if last and last[0] == digest and not force:
+        return False
+    import time
+    stamp, uniq = now_str(), time.time_ns()       # unique job id even when the same totals come back within a second
+    for r in rows:
+        r[5] = stamp
+    with tx(db):
+        enqueue(db, 'sheets', 'upsert_many', f'summary:{digest}:{uniq}', {'sheet': 'UMUMIY', 'header': SUMMARY_HEADER, 'rows': rows})
+        if wrows:
+            enqueue(db, 'sheets', 'upsert_many', f'workers:{digest}:{uniq}',
+                    {'sheet': 'TERIMCHILAR', 'header': WORKERS_HEADER, 'rows': wrows})
+        db.execute("INSERT INTO settings(key, value, updated_at) VALUES ('sheets_summary_hash', ?, ?) "
+                   "ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at", (digest, stamp))
+    return True
+
+
 def summary_pdf(s, title, company):
     """Server-side PDF of a finance summary (same numbers as the screen and Excel)."""
     from reportlab.lib import colors

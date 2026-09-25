@@ -42,3 +42,41 @@ def test_narx_command_sets_current_rates_only(app, world):
         rows = [(r['kg'], r['rate'], r['amount']) for r in q('SELECT kg, rate, amount FROM harvests ORDER BY id')]
         assert rows == [(10, None, None), (20, 1500, 30_000), (3700, 1_500_000, 5_550_000)]   # 3.7 t × 1 500 000
         assert q("SELECT COUNT(*) n FROM audit_logs WHERE action='TARIFF'", one=True)['n'] == 2
+
+
+def _connect_fake_sheets(app, monkeypatch, tabs=None):
+    import surxon.outbox as ob
+    from fake_sheets import FakeSheets
+    fake = FakeSheets(tabs)
+    monkeypatch.setattr(ob, '_session', lambda: fake)
+    cfg = app.config['SURXON']
+    cfg.GOOGLE_SHEETS_ID, cfg.GOOGLE_SERVICE_ACCOUNT_FILE = 'sheet-id', '/x.json'
+    return fake
+
+
+def test_sheets_live_check_counts_once_and_voids_back(app, world, monkeypatch):
+    # the owner's hand-made dashboard tab with a formula must stay untouched
+    fake = _connect_fake_sheets(app, monkeypatch, {'Umumiy hisob': [['Ko‘rsatkich', 'Qiymat'],
+                                                                   ['Kassa', "=VLOOKUP(\"KASSA_QOLDIQ\";'SPX UMUMIY'!A:C;3;FALSE)"]]})
+    world['bux'].post('/buxgalteriya/kirim', {'amount': '5 000 000', 'source': 'Direktor', 'client_uuid': uuid4()})
+    res = app.test_cli_runner().invoke(args=['sheets-sinov', '--katak', 'Umumiy hisob!B2'])
+    out = res.output
+    assert res.exit_code == 0, out
+    assert 'NATIJA: ISHLAYDI' in out, out
+    lines = [l for l in out.splitlines() if l[:2] in ('0)', '1)', '2)', '3)')]
+    k = [l.split('KASSA_QOLDIQ = ')[1].split(' |')[0] for l in lines]
+    assert k == ['5000000', '5001000', '5001000', '5000000']
+    kassa = fake.tabs['SPX KASSA KIRIM-CHIQIM']
+    ids = [r[0] for r in kassa[1:]]
+    assert len(ids) == len(set(ids)) == 2                                    # INC-…1 and the test INC-…2, once each
+    assert kassa[-1][9].startswith('BEKOR')
+    assert fake.tabs['Umumiy hisob'][1][1].startswith('=VLOOKUP')             # formula untouched
+    assert {'SPX UMUMIY', 'SPX TERIMCHILAR'} <= set(fake.tabs) or 'SPX UMUMIY' in fake.tabs
+
+
+def test_sheets_inspect_is_read_only(app, world, monkeypatch):
+    fake = _connect_fake_sheets(app, monkeypatch, {'Umumiy hisob': [['A', 'B'], ['x', '=1+1']], 'Ishchilar': [['Ism']]})
+    before = {k: [list(r) for r in v] for k, v in fake.tabs.items()}
+    out = app.test_cli_runner().invoke(args=['sheets-inspect']).output
+    assert '[Umumiy hisob] (qo‘lda — tizim YOZMAYDI)' in out and 'formulali katak: 1' in out
+    assert fake.tabs == before

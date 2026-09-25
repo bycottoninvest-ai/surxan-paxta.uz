@@ -1,4 +1,4 @@
-surxan-paxta.uz, www.surxan-paxta.uz {
+{$SITE_ADDRESSES:surxan-paxta.uz, www.surxan-paxta.uz} {
     encode zstd gzip
     header {
         Strict-Transport-Security "max-age=31536000; includeSubDomains"

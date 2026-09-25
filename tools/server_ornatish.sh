@@ -40,14 +40,26 @@ ufw allow 22/tcp >/dev/null; ufw allow 80/tcp >/dev/null; ufw allow 443/tcp >/de
 ufw --force enable >/dev/null
 
 IP=$(curl -4 -fsS https://api.ipify.org || hostname -I | awk '{print $1}')
-DNS_IP=$(dig +short "$DOMAIN" A | tail -n1 || true)
-say "5/6 Server IP: $IP · $DOMAIN → ${DNS_IP:-(hali ulanmagan)}"
+say "5/6 Domen (DNS) — ommaviy DNS orqali tekshiruv, faqat o‘qish"
+DNS_IP=$(dig +short @1.1.1.1 "$DOMAIN" A | grep -E '^[0-9.]+$' | tail -n1 || true)
+WWW_IP=$(dig +short @1.1.1.1 "www.$DOMAIN" A | grep -E '^[0-9.]+$' | tail -n1 || true)
+echo "   Server IP:        $IP"
+echo "   $DOMAIN        → ${DNS_IP:-(yo‘q)}"
+echo "   www.$DOMAIN    → ${WWW_IP:-(yo‘q)}"
+echo "   Boshqa yozuvlar (tegilmaydi):"
+dig +short @1.1.1.1 "$DOMAIN" MX  | sed 's/^/     MX  /'
+dig +short @1.1.1.1 "$DOMAIN" TXT | sed 's/^/     TXT /'
+dig +short @1.1.1.1 "$DOMAIN" NS  | sed 's/^/     NS  /'
 if [ "$DNS_IP" = "$IP" ]; then
   sed -i "s/^APP_DOMAIN=.*/APP_DOMAIN=$DOMAIN/" .env
-  docker compose up -d --build
+  grep -q '^COOKIE_SECURE=' .env && sed -i "s/^COOKIE_SECURE=.*/COOKIE_SECURE=1/" .env || echo "COOKIE_SECURE=1" >> .env
+  # www only if it also points here — otherwise the certificate request for it would fail every hour
+  if [ "$WWW_IP" = "$IP" ]; then SITES="$DOMAIN, www.$DOMAIN"; else SITES="$DOMAIN"; echo "   (www hali ulanmagan — faqat $DOMAIN uchun sertifikat olinadi)"; fi
+  grep -q '^SITE_ADDRESSES=' .env && sed -i "s/^SITE_ADDRESSES=.*/SITE_ADDRESSES=$SITES/" .env || echo "SITE_ADDRESSES=$SITES" >> .env
+  docker compose up -d --build --remove-orphans
   URL="https://$DOMAIN"
 else
-  echo "   Domen hali shu serverga ulanmagan — parolli vaqtinchalik HTTPS manzil ochiladi."
+  echo "   Domen hali shu serverga yo‘naltirilmagan — parolli vaqtinchalik HTTPS manzil ochiladi."
   echo "   Hozir 2 narsa so‘raladi: vaqtinchalik login va parol (o‘zingiz o‘ylab toping, 12+ belgi)."
   bash tools/vaqtinchalik_https.sh "$IP" </dev/tty
   URL="https://$(echo "$IP" | tr . -).sslip.io"
@@ -60,6 +72,12 @@ for i in $(seq 1 30); do
 done
 docker compose ps --format 'table {{.Service}}\t{{.Status}}'
 docker compose exec -T app flask --app app smoke-check || true
+echo; echo "== HTTPS tekshiruvi (sertifikat birinchi marta 1–2 daqiqada olinadi) =="
+for i in $(seq 1 24); do
+  if curl -fsS -o /dev/null -w "   $URL/health → %{http_code}, sertifikat: %{ssl_verify_result} (0 = to‘g‘ri)\n" "$URL/health" 2>/dev/null; then break; fi
+  [ "$i" = 24 ] && echo "   HTTPS hali javob bermadi — 'docker compose logs caddy | tail -30' natijasini yuboring."
+  sleep 5
+done
 
 echo
 echo "================================================================"

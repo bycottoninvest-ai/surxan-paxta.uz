@@ -201,6 +201,40 @@ def sheets_upsert(sheet, row, header=None):
     return 'appended'
 
 
+def sheets_upsert_many(sheet, rows, header=None):
+    """Many id-keyed rows in 3 API calls (read ids, update existing, append new) — used for full refreshes."""
+    cfg = current_app.config['SURXON']
+    sheet = tab_name(sheet)
+    _ensure_tab(sheet, header)
+    sess = _session()
+    r = sess.get(_values_url(sheet, 'A:A'), timeout=30)
+    if r.status_code >= 300:
+        raise RuntimeError(f'Sheets {r.status_code}: {r.text[:300]}')
+    ids = [v[0] if v else '' for v in r.json().get('values', [])]
+    updates, new = [], []
+    for row in rows:
+        if row[0] in ids:
+            updates.append({'range': f"'{sheet}'!A{ids.index(row[0]) + 1}", 'values': [row]})
+        else:
+            new.append(row)
+            ids.append(row[0])
+    if updates:
+        w = sess.post(f'https://sheets.googleapis.com/v4/spreadsheets/{cfg.GOOGLE_SHEETS_ID}/values:batchUpdate',
+                      json={'valueInputOption': 'RAW', 'data': updates}, timeout=60)
+        if w.status_code >= 300:
+            raise RuntimeError(f'Sheets {w.status_code}: {w.text[:300]}')
+    if new:
+        sheets_append(sheet, new)
+    return {'updated': len(updates), 'appended': len(new)}
+
+
+def sheets_read(sheet, rng='A1:Z2000'):
+    r = _session().get(_values_url(sheet, rng), timeout=30)
+    if r.status_code >= 300:
+        raise RuntimeError(f'Sheets {r.status_code}: {r.text[:300]}')
+    return r.json().get('values', [])
+
+
 def sheets_inspect():
     """Read-only look at the spreadsheet: every tab, its header row, size and how many cells hold formulas."""
     cfg = current_app.config['SURXON']
@@ -233,7 +267,9 @@ def sheets_append(sheet, rows):
 
 
 def _send_sheets(job, payload):
-    if payload.get('id'):
+    if job['kind'] == 'upsert_many':
+        sheets_upsert_many(payload['sheet'], payload['rows'], payload.get('header'))
+    elif payload.get('id'):
         sheets_upsert(payload['sheet'], payload['row'], payload.get('header'))
     else:
         sheets_append(tab_name(payload['sheet']), [payload['row']])
@@ -246,6 +282,11 @@ def run_once(limit=50):
     """Send due jobs for configured channels. Returns {'sent': n, 'errors': n, 'skipped_channels': [...]}."""
     from .services import ensure_missing_documents
     ensure_missing_documents()
+    try:
+        from .reporting import maybe_refresh_sheet_summary
+        maybe_refresh_sheet_summary()
+    except Exception as exc:
+        print(f'sheet summary refresh failed: {exc}', flush=True)
     try:
         from .reporting import maybe_schedule_daily_report
         maybe_schedule_daily_report()

@@ -736,5 +736,7 @@ def mirror_debt(db, debt_id):
 def mirror_worker(db, worker_id, year):
     r = next(iter(worker_balances(year, worker_id=worker_id)), None)
     if r:
-        _mirror(db, 'TERIMCHILAR', f'W-{worker_id}', ['ID', 'Ishchi', 'Brigada', 'Kg', 'Hisoblangan', 'Avans', 'To‘langan', 'Qoldiq', 'Holat'],
-                [r['full_name'], r['brigadier_name'] or '', r['kg'], r['earned'], r['advances'], r['paid'], r['balance'], r['status']])
+        from .reporting import WORKERS_HEADER
+        _mirror(db, 'TERIMCHILAR', f'W-{worker_id}', WORKERS_HEADER,
+                [r['full_name'], r['brigadier_name'] or '', r['kg'], r['earned'], r['advances'], r['paid'], r['balance'],
+                 r['status'], r['uncalc_kg']])
