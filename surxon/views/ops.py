@@ -9,7 +9,7 @@ from ..photos import uploads_from_request, read_upload
 from ..security import can, perm_required, require
 from ..services import (NAYMAN_DIFF_REASONS, add_harvest, after_waybill_change, attach_load_photos, correct_weighing, diff_needs_reason,
                         expected_payment, mark_full, open_load, record_gross, record_nayman, record_tare, reopen_load,
-                        void_harvest, void_load, void_waybill)
+                        void_harvest, void_load, void_waybill, admin_trip_void_plan, admin_void_trip)
 from ..settings import get_bool, get_float, get_setting
 from ..utils import UserError, parse_date, parse_int, parse_number, today_str
 from . import PER_PAGE, checkbox, done, form_uuid, page_arg, paginate, post_actor, scope, season_arg
@@ -141,7 +141,11 @@ def load_detail(load_id):
     has_combine = bool(q("SELECT 1 FROM harvests WHERE load_id=? AND method='combine' AND voided_at IS NULL LIMIT 1",
                          (load_id,), one=True))
     auto_waybill = get_bool('auto_waybill_hand') and not has_combine
-    return render_template('load_detail.html', ld=ld, entries=queries.load_harvests(load_id, include_void=True),
+    admin_plan = None
+    if g.user['role'] == 'admin' and ld['status'] != 'BEKOR':
+        from ..db import get_db
+        admin_plan = admin_trip_void_plan(get_db(), load_id)
+    return render_template('load_detail.html', ld=ld, entries=queries.load_harvests(load_id, include_void=True), admin_plan=admin_plan,
                            workers=workers, hand_total=hand_total, photos=queries.photos_for(load_id=load_id),
                            timeline=queries.load_timeline(load_id), min_photos=int(get_float('toldi_min_photos', 1) or 0),
                            auto_waybill=auto_waybill)
@@ -189,6 +193,14 @@ def load_photos(load_id):
 def load_reopen(load_id):
     reopen_load(post_actor(), load_id, request.form.get('reason'))
     return done('Telashka qayta ochildi.', url_for('ops.load_detail', load_id=load_id))
+
+
+@bp.post('/yuk/<int:load_id>/admin-bekor')
+@perm_required('records.void')
+def load_admin_void(load_id):
+    plan = admin_void_trip(post_actor(), load_id, request.form.get('reason'))
+    return done(f'Reys to‘liq bekor qilindi: {plan["kg"]:g} kg, {len(plan["harvests"])} kishi, '
+                f'{len(plan["waybills"])} nakladnoy. Hammasi tarixda qoladi.', url_for('ops.load_detail', load_id=load_id))
 
 
 @bp.post('/yuk/<int:load_id>/bekor')

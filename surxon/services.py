@@ -1505,3 +1505,68 @@ def _sheet_payment(db, payment_id, event):
              'header': ['ID', 'Sana', 'Summa', 'Usul', 'To‘lovchi', 'Nakladnoy', 'Holat'],
              'row': [f'NAY-{p["season_year"]}-{p["id"]:06d}', p['payment_date'], p['amount'], p['method'] or '', p['payer'],
                      p['number'] or '', 'BEKOR: ' + p['void_reason'] if p['voided_at'] else 'OK']})
+
+
+# ------------------------------------------------------------------ admin: cancel a whole trip (test or mistaken)
+
+def admin_trip_void_plan(db, load_id):
+    """What cancelling this trip would touch, and what blocks it. Nothing is changed here."""
+    load = load_row(db, load_id)
+    wbs = db.execute("SELECT * FROM waybills WHERE load_id=? AND status<>'BEKOR'", (load_id,)).fetchall()
+    rec = [db.execute('SELECT * FROM nayman_receipts WHERE waybill_id=?', (w['id'],)).fetchone() for w in wbs]
+    rec = [r for r in rec if r]
+    harv = db.execute('''SELECT h.worker_id, w.full_name, SUM(h.kg) kg, SUM(COALESCE(h.amount,0)) amount, COUNT(*) n
+                         FROM harvests h LEFT JOIN workers w ON w.id=h.worker_id
+                         WHERE h.load_id=? AND h.voided_at IS NULL GROUP BY h.worker_id''', (load_id,)).fetchall()
+    blocks = []
+    if load['status'] == 'BEKOR':
+        blocks.append('Bu reys allaqachon bekor qilingan.')
+    for w in wbs:
+        if db.execute('SELECT 1 FROM payments WHERE waybill_id=? AND voided_at IS NULL', (w['id'],)).fetchone():
+            blocks.append(f'{w["number"]}: naymandan to‘lov bog‘langan — avval to‘lovni bekor qiling.')
+    from .accounting import worker_balances
+    for h in harv:
+        if not h['worker_id']:
+            continue
+        bal = worker_balances(load['season_year'], worker_id=h['worker_id'])
+        if bal and bal[0]['balance'] - h['amount'] < 0:
+            blocks.append(f'{h["full_name"]}: bu reysdan {h["amount"]:,} so‘m hisoblangan, lekin unga pul berib bo‘lingan — '
+                          'bekor qilinsa ortiqcha to‘langan bo‘lib qoladi. Avval to‘lovni tuzating.'.replace(',', ' '))
+    return {'load': load, 'waybills': wbs, 'receipts': rec, 'harvests': harv, 'blocks': blocks,
+            'kg': sum(h['kg'] or 0 for h in harv), 'amount': sum(h['amount'] or 0 for h in harv)}
+
+
+def admin_void_trip(actor, load_id, reason):
+    """Admin only: cancel a trip in any state — field weighings, the waybill and the punkt receipt — in one step.
+    Nothing is erased: rows are marked BEKOR / voided, the receipt is moved into the audit log in full."""
+    if actor is None or actor.role != 'admin':
+        raise UserError('Reysni to‘liq bekor qilishni faqat Admin qila oladi.')
+    reason = _require_reason(reason, 'Bekor qilish')
+    with tx() as db:
+        plan = admin_trip_void_plan(db, load_id)
+        if plan['blocks']:
+            raise UserError(' '.join(plan['blocks']))
+        load, now = plan['load'], now_str()
+        for r in plan['receipts']:
+            db.execute('DELETE FROM nayman_receipts WHERE id=?', (r['id'],))
+            audit(db, actor, 'VOID', 'nayman_receipt', r['id'], old=row_dict(r), reason=f'reys bekor: {reason}')
+        for w in plan['waybills']:
+            db.execute("UPDATE waybills SET status='BEKOR', voided_at=?, voided_by=?, void_reason=?, updated_at=? WHERE id=?",
+                       (now, actor.user_id, reason, now, w['id']))
+            audit(db, actor, 'VOID', 'waybill', w['id'], old={'status': w['status']}, new={'status': 'BEKOR'}, reason=reason)
+            _sheet_waybill(db, w['id'], 'bekor qilindi (admin)')
+        n = db.execute('UPDATE harvests SET voided_at=?, voided_by=?, void_reason=? WHERE load_id=? AND voided_at IS NULL',
+                       (now, actor.user_id, f'reys bekor: {reason}', load_id)).rowcount
+        db.execute("UPDATE trailer_loads SET status='BEKOR', voided_at=?, voided_by=?, void_reason=? WHERE id=?",
+                   (now, actor.user_id, reason, load_id))
+        audit(db, actor, 'VOID', 'trailer_load', load_id, old={'status': load['status']},
+              new={'status': 'BEKOR', 'harvests_voided': n, 'kg': plan['kg'], 'amount': plan['amount']}, reason=reason)
+        wb_ids = [w['id'] for w in plan['waybills']]
+        workers = [h['worker_id'] for h in plan['harvests'] if h['worker_id']]
+        if workers:
+            from .accounting import mirror_worker
+            for wid in workers:
+                mirror_worker(db, wid, load["season_year"])
+    for wid in wb_ids:
+        after_waybill_change(actor, wid, f'bekor: {reason}')
+    return plan
