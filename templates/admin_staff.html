@@ -1,0 +1,47 @@
+{% extends 'base.html' %}
+{% from 'macros.html' import icon, csrf with context %}
+{% set page_title = 'Xodimlar' %}
+{% block content %}
+<div class="page-h"><h1>{{ icon('users','lg') }} Xodimlar va loginlar</h1><span class="sub">Rol yonida ismni yozing → login va parol o‘zi chiqadi. Odam almashsa: eskisini “O‘chirish”, yangisini qo‘shing.</span></div>
+
+{% if issued %}
+<div class="s-issued" id="issued">
+  <div class="s-issued-h">{{ icon('check-circle') }} {{ 'Yangi parol' if issued.reset else 'Login tayyor' }} — {{ issued.name }}</div>
+  <div class="s-cred"><div><span>Sayt</span><b>{{ base_url }}</b></div><div><span>Login</span><b>{{ issued.login }}</b></div><div><span>Parol</span><b>{{ issued.password }}</b></div></div>
+  <div class="small">Shuni qog‘ozga yozib xodimga bering (yoki ekranni rasmga oling). Parol faqat hozir ko‘rinadi — keyin sahifada qayta chiqmaydi.
+    Xodim birinchi kirganda o‘z parolini qo‘yadi.</div>
+  <button type="button" class="btn btn-light btn-sm no-print" onclick="window.print()">{{ icon('printer','sm') }} Chop etish</button>
+</div>
+{% endif %}
+
+{% for key, title, desc in groups %}
+{% set members = people|selectattr('role', 'equalto', key)|list %}
+<section class="card s-role">
+  <div class="card-h"><h3>{{ title }}</h3><span class="badge b-blue">{{ members|selectattr('active')|list|length }} ta</span></div>
+  <div class="card-b">
+    <div class="small muted" style="margin-bottom:8px">{{ desc }}</div>
+    {% for u in members %}
+    <div class="s-person {{ 'off' if not u.active }}">
+      <div><b>{{ u.full_name }}</b> <span class="muted small">login: {{ u.username }}{% if u.station_name %} · {{ u.station_name }}{% endif %}</span>
+        {% if not u.active %}<span class="badge b-gray">o‘chirilgan</span>{% elif u.last_login_at %}<span class="tiny muted"> · oxirgi kirish {{ u.last_login_at[:16] }}</span>{% else %}<span class="tiny muted"> · hali kirmagan</span>{% endif %}</div>
+      <div class="row no-print">
+        {% if u.active %}
+        <form method="post">{{ csrf() }}<input type="hidden" name="action" value="reset"><input type="hidden" name="uid" value="{{ u.id }}"><button class="btn btn-light btn-sm">Yangi parol</button></form>
+        {% if u.id != current_user['id'] %}<form method="post" data-confirm="{{ u.full_name }} o‘chirilsinmi? U endi kira olmaydi, lekin yozgan hamma ma’lumoti saqlanadi.">{{ csrf() }}<input type="hidden" name="action" value="off"><input type="hidden" name="uid" value="{{ u.id }}"><button class="btn btn-ghost btn-sm" style="color:var(--red)">O‘chirish</button></form>{% endif %}
+        {% else %}
+        <form method="post">{{ csrf() }}<input type="hidden" name="action" value="on"><input type="hidden" name="uid" value="{{ u.id }}"><button class="btn btn-ghost btn-sm">Qaytarish</button></form>
+        {% endif %}
+      </div>
+    </div>
+    {% endfor %}
+    {% if key != 'admin' %}
+    <form method="post" class="s-add no-print">{{ csrf() }}<input type="hidden" name="action" value="add"><input type="hidden" name="role" value="{{ key }}">
+      <input name="full_name" required minlength="2" placeholder="Ism familiya — masalan: Mirjalol" autocomplete="off">
+      <button class="btn btn-primary">{{ icon('plus','sm') }} Qo‘shish</button>
+    </form>
+    {% endif %}
+  </div>
+</section>
+{% endfor %}
+<p class="small muted">Telefon, brigada, punktni almashtirish kabi batafsil sozlash: <a href="{{ url_for('admin.users') }}">Foydalanuvchilar (kengaytirilgan)</a>.</p>
+{% endblock %}

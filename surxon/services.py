@@ -10,7 +10,7 @@ from datetime import date, timedelta
 
 from werkzeug.security import generate_password_hash
 
-from .db import next_counter, trip_number, tx
+from .db import get_db, next_counter, trip_number, tx
 from .outbox import enqueue
 from .photos import store_photo
 from .security import ROLES, audit
@@ -1157,6 +1157,90 @@ def save_user(actor, uid, *, username, full_name, role, password='', brigadier_i
             return cur.lastrowid
         except sqlite3.IntegrityError as e:
             _unique_error(e, 'Bu login')
+
+
+STAFF_ROLE_ALIASES = {'hisobchi': 'tally', 'terim': 'tally', 'punkt': 'station', 'buxgalter': 'accountant',
+                      'kassir': 'cashier', 'kassa': 'cashier', 'rahbar': 'manager', 'tarozi': 'scale',
+                      'haydovchi': 'driver', 'brigadir': 'brigadier', 'admin': 'admin'}
+
+
+def random_password():
+    """8 easy-to-read characters (no 0/o/1/l), letters + digits — to be written on paper and changed at first login."""
+    import secrets
+    return (''.join(secrets.choice('abcdefghjkmnpqrstuvwxyz') for _ in range(4))
+            + ''.join(secrets.choice('23456789') for _ in range(4)))
+
+
+def _username_for(db, full_name):
+    tr = str.maketrans({'‘': '', '’': '', "'": '', 'ʻ': '', 'ʼ': '', '`': ''})
+    words = full_name.split()
+    base = ''.join(ch for ch in (words[0] if words else '').lower().translate(tr) if ch.isascii() and ch.isalnum())
+    base = base or 'xodim'
+    name, n = base, 1
+    while db.execute('SELECT 1 FROM users WHERE username=?', (name,)).fetchone():
+        n += 1
+        name = f'{base}{n}'
+    return name
+
+
+def quick_add_user(actor, full_name, role):
+    """Name + role → login and a generated password (shown once). Punkt/kassa get the first active one."""
+    _need(actor, 'users.manage')
+    role = STAFF_ROLE_ALIASES.get((role or '').strip().lower(), (role or '').strip().lower())
+    full_name = clean_text(full_name, 120)
+    if len(full_name) < 2:
+        raise UserError('Ismni yozing.')
+    if role not in ROLES:
+        raise UserError('Rol noto‘g‘ri.')
+    db = get_db()
+    brig = station = box = None
+    if role == 'brigadier':
+        row = db.execute('SELECT id FROM brigadiers WHERE active=1 AND lower(name)=lower(?)', (full_name,)).fetchone()
+        brig = row['id'] if row else None
+        if not brig:
+            raise UserError('Brigadir uchun “Brigadirlar” bo‘limida shu nomli brigada bo‘lishi kerak.')
+    if role == 'station':
+        row = db.execute('SELECT id FROM stations WHERE active=1 ORDER BY id LIMIT 1').fetchone()
+        if not row:
+            raise UserError('Avval “Punktlar” bo‘limida punkt qo‘shing.')
+        station = row['id']
+    if role == 'cashier':
+        row = db.execute('SELECT id FROM cashboxes WHERE active=1 ORDER BY id LIMIT 1').fetchone()
+        box = row['id'] if row else None
+    password = random_password()
+    uid = save_user(actor, None, username=_username_for(db, full_name), full_name=full_name, role=role,
+                    password=password, brigadier_id=brig, station_id=station, cashbox_id=box)
+    user = db.execute('SELECT username FROM users WHERE id=?', (uid,)).fetchone()
+    return uid, user['username'], password
+
+
+def reset_password_random(actor, uid):
+    _need(actor, 'users.manage')
+    password = random_password()
+    with tx() as db:
+        u = db.execute('SELECT * FROM users WHERE id=?', (uid,)).fetchone()
+        if not u:
+            raise UserError('Xodim topilmadi.')
+        db.execute('UPDATE users SET password_hash=?, must_change_password=1 WHERE id=?',
+                   (generate_password_hash(password), uid))
+        audit(db, actor, 'UPDATE', 'user', uid, new={'password_reset': True})
+    return u['full_name'], u['username'], password
+
+
+def set_user_active(actor, uid, active):
+    _need(actor, 'users.manage')
+    with tx() as db:
+        u = db.execute('SELECT * FROM users WHERE id=?', (uid,)).fetchone()
+        if not u:
+            raise UserError('Xodim topilmadi.')
+        if uid == actor.user_id and not active:
+            raise UserError('O‘zingizni o‘chira olmaysiz.')
+        db.execute('UPDATE users SET active=? WHERE id=?', (1 if active else 0, uid))
+        if not active:  # an ex-employee's Telegram must stop working too
+            db.execute('UPDATE users SET telegram_id=NULL WHERE id=?', (uid,))
+            db.execute("UPDATE tg_members SET status='NOFAOL' WHERE user_id=?", (uid,))
+        audit(db, actor, 'UPDATE', 'user', uid, old={'active': bool(u['active'])}, new={'active': bool(active)})
+    return u['full_name']
 
 
 def change_password(actor, uid, new_password):

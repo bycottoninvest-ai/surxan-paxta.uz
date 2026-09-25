@@ -550,3 +550,19 @@ a.a-tile:active{transform:scale(.98)}
 .k-filter-h{flex-wrap:wrap;gap:8px}
 .k-filter-h form{gap:6px;flex-wrap:wrap}.k-filter-h .input{width:150px}
 @media (max-width:600px){.k-filter-h form{width:100%}.k-filter-h .input{flex:1;width:auto;min-width:0}}
+
+/* ---- Xodimlar (quick staff logins) ---- */
+.s-issued{background:#e9f7ee;border:2px solid #16a34a;border-radius:14px;padding:14px 16px;margin-bottom:14px;display:grid;gap:10px}
+.s-issued-h{font-weight:800;font-size:17px;color:#15803d;display:flex;gap:8px;align-items:center}
+.s-cred{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.s-cred div{background:#fff;border-radius:10px;padding:8px 10px;min-width:0}
+.s-cred span{display:block;font-size:12px;color:var(--muted)}
+.s-cred b{display:block;font-size:20px;font-family:ui-monospace,Menlo,Consolas,monospace;word-break:break-all}
+@media (max-width:600px){.s-cred{grid-template-columns:1fr}}
+.s-role{margin-bottom:12px}
+.s-person{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 0;border-bottom:1px solid var(--line-2)}
+.s-person.off{opacity:.55}
+.s-person .row{gap:6px}
+.s-add{display:flex;gap:8px;margin-top:10px}
+.s-add input{flex:1;min-width:0;padding:11px 12px;border:1.5px solid var(--line);border-radius:10px;font-size:15px}
+@media print{.s-role,.page-h,.sidebar,.topbar,.bottom-nav{display:none!important}.s-issued{border-color:#000}}

@@ -98,3 +98,36 @@ def test_bulk_staff_logins(app, tmp_path):
     assert 'allaqachon bor' in r2.output
     assert runner.invoke(args=['xodimlar', 'Ali:bosh']).exit_code != 0
     assert (app.config['SURXON'].DATA_DIR / 'LOGINLAR.txt').read_text(encoding='utf-8').count('login:') == 4
+
+
+def test_staff_page_add_reset_disable(app, admin):
+    import re
+    r = admin.post('/admin/xodimlar', {'action': 'add', 'role': 'tally', 'full_name': 'Mirjalol'}, json_resp=False)
+    html = r.get_data(as_text=True)
+    assert r.status_code == 200 and 'Login tayyor' in html and '>mirjalol<' in html
+    pw = re.search(r'<span>Parol</span><b>([a-z0-9]{8})</b>', html).group(1)
+    assert r.headers['Cache-Control'] == 'no-store'
+    from conftest import Client
+    c = Client(app, 'mirjalol', pw)                    # the generated password really works
+    assert c.get('/').status_code in (200, 302)
+    # the password is never shown again on a plain visit
+    assert pw not in admin.get('/admin/xodimlar').get_data(as_text=True)
+    with app.app_context():
+        from surxon.db import q
+        uid = q("SELECT id FROM users WHERE username='mirjalol'", one=True)['id']
+    r = admin.post('/admin/xodimlar', {'action': 'reset', 'uid': uid}, json_resp=False)
+    new_pw = re.search(r'<span>Parol</span><b>([a-z0-9]{8})</b>', r.get_data(as_text=True)).group(1)
+    assert new_pw != pw
+    admin.post('/admin/xodimlar', {'action': 'off', 'uid': uid}, json_resp=False)
+    with app.app_context():
+        assert q("SELECT active FROM users WHERE id=?", (uid,), one=True)['active'] == 0
+    fresh = app.test_client()
+    fresh.get('/login')
+    # a disabled person cannot log in with either password
+    with fresh.session_transaction() as s:
+        tok = s.get('csrf')
+    r = fresh.post('/login', data={'username': 'mirjalol', 'password': new_pw, '_csrf': tok})
+    assert r.status_code != 302 or '/login' in r.headers.get('Location', '')
+    # same name again = a second person with a different login (e.g. a namesake)
+    r = admin.post('/admin/xodimlar', {'action': 'add', 'role': 'station', 'full_name': 'Mirjalol'}, json_resp=False)
+    assert '>mirjalol2<' in r.get_data(as_text=True)

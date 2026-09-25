@@ -57,6 +57,7 @@
       {{ nav('main.photos', 'Foto arxiv', 'image') }}
       {% if can('audit.view') or can('users.manage') or can('masterdata.write') %}
       <div class="section">Boshqaruv</div>
+      {{ nav('admin.staff', 'Xodimlar va loginlar', 'users', 'users.manage') }}
       {{ nav('admin.users', 'Foydalanuvchilar', 'user', 'users.manage') }}
       {{ nav('admin.brigadiers', 'Brigadirlar', 'users', 'masterdata.write') }}
       {{ nav('admin.stations', 'Punktlar', 'building', 'masterdata.write') }}

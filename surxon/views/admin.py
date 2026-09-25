@@ -1,5 +1,6 @@
 """Master data and administration: users, brigades, fields, equipment, settings, seasons, backups."""
-from flask import Blueprint, abort, current_app, render_template, request, send_from_directory, url_for
+from flask import (Blueprint, abort, current_app, flash, make_response, redirect, render_template, request,
+                   send_from_directory, url_for)
 
 from .. import queries
 from ..db import q, scalar
@@ -7,7 +8,7 @@ from ..security import PERMISSIONS, ROLES, perm_required
 from ..services import (close_season, reopen_season, save_brigadier, save_cashbox, save_equipment, save_field, save_settings, save_station,
                         save_user, telegram_link_code, unlink_telegram)
 from ..settings import all_settings, get_setting
-from ..utils import UserError, parse_int, parse_number
+from ..utils import UserError, clean_text, parse_int, parse_number
 from . import checkbox, done, post_actor, season_arg
 
 bp = Blueprint('admin', __name__, url_prefix='/admin')
@@ -40,6 +41,50 @@ def users():
                            stations=q('SELECT * FROM stations WHERE active=1 ORDER BY name'),
                            cashboxes=q('SELECT * FROM cashboxes WHERE active=1 ORDER BY id'),
                            permissions=PERMISSIONS)
+
+
+STAFF_ROLES = [
+    ('manager', 'Rahbar', 'Hamma narsani ko‘radi: terim, punkt, pul, hisobotlar, kuzatuv (rasm/video).'),
+    ('tally', 'Hisobchi (terim)', 'Dalada har bir terimchining kg ini yozadi, telashka ochadi, “Tugatish”/TOLDI qiladi.'),
+    ('station', 'Punkt operatori', 'Punktda keladigan telashkani QR bilan topadi, punkt tarozisi kg ini yozib qabul qiladi.'),
+    ('accountant', 'Buxgalter', 'Kassa kirimi, xarajat, ishchilarga to‘lovni tayyorlaydi, kunni yopadi, hisobot.'),
+    ('cashier', 'Kassir', 'Buxgalter tayyorlagan to‘lovni odamga beradi va “BERILDI” bosadi, xarajat yozadi.'),
+    ('scale', 'Tarozi xodimi', 'Katta tarozida brutto/tara tortadi (kombayn yuklari uchun). Kerak bo‘lmasa bo‘sh qoladi.'),
+    ('driver', 'Haydovchi', 'Ixtiyoriy: telashka to‘lganda TOLDI + rasm. Kerak bo‘lmasa bo‘sh qoladi.'),
+    ('admin', 'Admin', 'Tizim sozlamalari, loginlar, zaxira. Odatda faqat siz.'),
+]
+
+
+@bp.route('/xodimlar', methods=['GET', 'POST'])
+@perm_required('users.manage')
+def staff():
+    from ..services import quick_add_user, reset_password_random, set_user_active
+    issued = None
+    if request.method == 'POST':
+        actor = post_actor()
+        action = request.form.get('action')
+        uid = parse_int(request.form.get('uid'), 'Xodim', required=False)
+        try:
+            if action == 'add':
+                _uid, login, pw = quick_add_user(actor, request.form.get('full_name', ''), request.form.get('role'))
+                issued = {'name': clean_text(request.form.get('full_name', ''), 120), 'login': login, 'password': pw}
+            elif action == 'reset':
+                name, login, pw = reset_password_random(actor, uid)
+                issued = {'name': name, 'login': login, 'password': pw, 'reset': True}
+            elif action in ('off', 'on'):
+                name = set_user_active(actor, uid, action == 'on')
+                flash(f'{name}: ' + ('qayta faollashtirildi.' if action == 'on' else 'o‘chirildi (kira olmaydi, tarixi saqlanadi).'),
+                      'success')
+                return redirect(url_for('admin.staff'))
+        except UserError as e:
+            flash(str(e), 'error')
+            return redirect(url_for('admin.staff'))
+    people = q('SELECT u.*, st.name station_name FROM users u LEFT JOIN stations st ON st.id=u.station_id '
+               'ORDER BY u.active DESC, u.full_name')
+    resp = make_response(render_template('admin_staff.html', groups=STAFF_ROLES, people=people, issued=issued,
+                                         base_url=request.host_url.rstrip('/')))
+    resp.headers['Cache-Control'] = 'no-store'
+    return resp
 
 
 @bp.post('/foydalanuvchi/<int:uid>/telegram')
