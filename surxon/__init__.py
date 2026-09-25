@@ -14,7 +14,7 @@ from .config import BASE_DIR, Config
 from .security import (PERMISSIONS, ROLES, brigadier_scope, can, csrf_token, load_user, wants_json)
 from .utils import UserError, fmt_date, fmt_money, fmt_num, now_str, today_str, weekday_name
 
-VERSION = '2.11.2'
+VERSION = '2.12.0'
 
 
 def create_app(**overrides):
@@ -51,9 +51,9 @@ def create_app(**overrides):
         dbmod.migrate(conn)
         seed(conn, cfg)
 
-    from .views import acct, admin, auth, dala, finance, hamyon, integrations, kuzatuv, main, ops, people, punkt, reports, yoqilgi
+    from .views import acct, admin, auth, dala, finance, hamyon, integrations, kuzatuv, main, ops, people, punkt, reports, yoqilgi, rahbar
     for bp in (auth.bp, main.bp, ops.bp, people.bp, finance.bp, reports.bp, admin.bp, integrations.bp, punkt.bp, acct.bp,
-               kuzatuv.bp, dala.bp, hamyon.bp, yoqilgi.bp):
+               kuzatuv.bp, dala.bp, hamyon.bp, yoqilgi.bp, rahbar.bp):
         app.register_blueprint(bp)
     from .telegram_bot import bp as tg_bp
     app.register_blueprint(tg_bp)
@@ -159,7 +159,8 @@ def register_template_helpers(app):
     from .photos import CATEGORIES
 
     app.jinja_env.filters.update(num=fmt_num, money=fmt_money, d=fmt_date, weekday=weekday_name,
-                                 tojson_safe=lambda v: json.dumps(v, ensure_ascii=False), fromjson=json.loads)
+                                 tojson_safe=lambda v: json.dumps(v, ensure_ascii=False), fromjson=json.loads,
+                                 mln=lambda v: (f'{v / 1e6:.2f}'.replace('.', ',') + ' mln') if v is not None and abs(v) >= 1e6 else fmt_num(v or 0))
 
     @app.context_processor
     def inject():

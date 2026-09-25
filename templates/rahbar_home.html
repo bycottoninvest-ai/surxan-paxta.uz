@@ -1,0 +1,59 @@
+{% extends 'base.html' %}
+{% from 'macros.html' import icon with context %}
+{% set page_title = 'Direktor paneli' %}
+{% block content %}
+<div class="d-wrap rb">
+  {% with rb_title='Direktor paneli' %}{% include 'partials/rb_head.html' %}{% endwith %}
+  <form class="hm-search" method="get" action="{{ url_for('main.search') }}">{{ icon('search','sm') }}<input name="q" placeholder="Texnika, reys, nakladnoy, dala, ishchi…" autocomplete="off"></form>
+  <div class="rb-grid">
+    <a class="rb-card rb-green" href="{{ url_for('rahbar.cotton', period=period) }}">
+      <div class="rb-h">{{ icon('cotton') }} PAXTA <small>{{ period_label }}</small></div>
+      <b class="rb-big num">{{ cot.field_kg|num }} kg</b><span>terilgan (dala hisobi)</span>
+      <div class="rb-rows"><div><span>Jo‘natilgan netto</span><b class="num">{{ cot.shipped_kg|num }}</b></div>
+        <div><span>Punkt qabul</span><b class="num">{{ cot.received_kg|num }}</b></div>
+        <div><span>Farq{{ ' (' ~ cot.received_n ~ ' reys)' if cot.received_n }}</span><b class="num">{% if cot.diff_pct is not none %}{{ '%+.0f'|format(cot.diff_kg) }} ({{ '%+.1f'|format(cot.diff_pct) }}%){% else %}—{% endif %}</b></div></div></a>
+    <a class="rb-card rb-blue" href="{{ url_for('rahbar.moving') }}">
+      <div class="rb-h">{{ icon('truck') }} YO‘LDA <small>Hozir</small></div>
+      <b class="rb-big num">{{ now.yolda }} reys</b><span>{{ now.yolda_kg|num }} kg yo‘lda</span>
+      <div class="rb-rows"><div><span>Dalada to‘lgan</span><b class="num">{{ now.dalada }}</b></div>
+        <div><span>Punktda navbatda</span><b class="num">{{ now.navbat }}</b></div>
+        <div><span>Terilmoqda</span><b class="num">{{ now.ochiq }}</b></div></div></a>
+    {% if fuel %}
+    <a class="rb-card rb-orange" href="{{ url_for('rahbar.fuel', period=period) }}">
+      <div class="rb-h">{{ icon('fuel') }} SOLYARKA <small>{{ period_label }}</small></div>
+      <b class="rb-big num">{{ fuel.held_l|num }} L</b><span>hozir mas’ullarda</span>
+      <div class="rb-rows"><div><span>Olindi</span><b class="num">{{ fuel.taken_l|num }} L</b></div>
+        <div><span>Berildi</span><b class="num">{{ fuel.given_l|num }} L</b></div>
+        <div><span>Tiketda qoldi</span><b class="num">{{ fuel.tickets_balance|mln }}</b></div></div></a>
+    {% else %}
+    <div class="rb-card rb-off"><div class="rb-h">{{ icon('fuel') }} SOLYARKA</div><b class="rb-big">Ulanmagan</b>
+      <span>Hali tiket ochilmagan — buxgalter Solyarka bo‘limida tiket ochgach raqamlar chiqadi</span></div>
+    {% endif %}
+    <a class="rb-card rb-purple" href="{{ url_for('rahbar.cash', period=period) }}">
+      <div class="rb-h">{{ icon('wallet') }} KASSA <small>qoldiq hozir</small></div>
+      {% if cash.boxes %}<b class="rb-big num">{{ cash.total.now|mln }}</b><span>so‘m</span>
+      <div class="rb-rows"><div><span>Kirim ({{ period_label|lower }})</span><b class="num">+{{ cash.total.inflow|mln }}</b></div>
+        <div><span>Chiqim</span><b class="num">−{{ cash.total.outflow|mln }}</b></div>
+        <div><span>Davr boshida</span><b class="num">{{ cash.total.opening|mln }}</b></div></div>
+      {% else %}<b class="rb-big">Kassa yo‘q</b>{% endif %}</a>
+    <a class="rb-card rb-pink" href="{{ url_for('rahbar.wages', period=period) }}">
+      <div class="rb-h">{{ icon('users') }} ISH HAQI <small>qarz hozir</small></div>
+      <b class="rb-big num">{{ wages.debt_now|mln }}</b><span>{{ wages.owed_people }} kishiga qarz</span>
+      <div class="rb-rows"><div><span>Hisoblandi ({{ period_label|lower }})</span><b class="num">{{ wages.earned_period|mln }}</b></div>
+        <div><span>To‘landi ({{ period_label|lower }})</span><b class="num">{{ wages.paid_period|mln }}</b></div>
+        {% if wages.uncalc_kg %}<div><span>Narxsiz kg</span><b class="num">{{ wages.uncalc_kg|num }}</b></div>{% endif %}</div></a>
+    <a class="rb-card {{ 'rb-red' if red else 'rb-ok' }}" href="{{ url_for('rahbar.checks', period=period) }}">
+      <div class="rb-h">{{ icon('alert') }} TEKSHIRISH</div>
+      <b class="rb-big num">{{ checks|length }} ta</b><span>{{ 'muhim: ' ~ red ~ ' ta' if red else ('hammasi joyida' if not checks else 'e’tibor uchun') }}</span>
+      <div class="rb-list">{% for c in checks[:3] %}<div class="{{ c.level }}">• {{ c.title }}</div>{% endfor %}</div></a>
+  </div>
+  <div class="rb-sec"><b>So‘nggi hodisalar</b></div>
+  <div class="hm-ops">
+    {% for e in feed %}<a class="hm-op" {% if e.link %}href="{{ url_for(e.link[0], **e.link[1]) }}"{% endif %}>
+      <span class="hm-op-ico in">{{ icon(e.icon) }}</span><span class="hm-op-b"><b>{{ e.text }}</b><small>{{ e.date|d }} {{ e.time }}</small></span></a>
+    {% else %}<div class="small muted">Hali hodisa yo‘q.</div>{% endfor %}
+  </div>
+  <a class="hm-more" href="{{ url_for('main.dashboard', view='full') }}">Kompyuter ko‘rinishidagi to‘liq dashboard →</a>
+</div>
+{% endblock %}
+{% block scripts %}{% include 'partials/rb_poll.html' %}{% endblock %}

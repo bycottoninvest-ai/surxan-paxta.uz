@@ -522,16 +522,22 @@ def search(term, limit=8):
     for r in q('SELECT id, number, net_kg FROM waybills WHERE number LIKE ? ORDER BY seq DESC LIMIT ?', (like, limit)):
         out.append({'type': 'Nakladnoy', 'label': r['number'], 'sub': f"{r['net_kg']:,.0f} kg".replace(',', ' '),
                     'endpoint': 'ops.waybill_detail', 'args': {'waybill_id': r['id']}})
-    for r in q('''SELECT tl.id, t.code, tl.status, tl.load_date FROM trailer_loads tl JOIN equipment t ON t.id=tl.trailer_id
-                  WHERE t.code LIKE ? OR tl.vehicle_plate LIKE ? ORDER BY tl.id DESC LIMIT ?''', (like, like, limit)):
-        out.append({'type': 'Telashka', 'label': f"{r['code']} · yuk №{r['id']}", 'sub': f"{r['status']} · {r['load_date']}",
+    for r in q('''SELECT tl.id, t.code, tl.status, tl.load_date, tl.trip_no FROM trailer_loads tl JOIN equipment t ON t.id=tl.trailer_id
+                  WHERE t.code LIKE ? OR tl.vehicle_plate LIKE ? OR tl.trip_no LIKE ? ORDER BY tl.id DESC LIMIT ?''',
+               (like, like, like, limit)):
+        out.append({'type': 'Reys', 'label': f"{r['trip_no'] or ''} · {r['code']}", 'sub': f"{r['status']} · {r['load_date']}",
                     'endpoint': 'ops.load_detail', 'args': {'load_id': r['id']}})
-    for r in q('SELECT id, full_name, phone FROM workers WHERE full_name LIKE ? ORDER BY full_name LIMIT ?', (like, limit)):
-        out.append({'type': 'Ishchi', 'label': r['full_name'], 'sub': r['phone'] or '',
+    wid = term.lstrip('№#').strip()
+    for r in q('SELECT id, full_name, phone FROM workers WHERE full_name LIKE ? OR CAST(id AS TEXT)=? ORDER BY full_name LIMIT ?',
+               (like, wid, limit)):
+        out.append({'type': 'Ishchi', 'label': f"{r['full_name']} №{r['id']}", 'sub': r['phone'] or '',
                     'endpoint': 'people.worker_detail', 'args': {'worker_id': r['id']}})
     for r in q('SELECT id, code, name, area_ha FROM fields WHERE code LIKE ? OR name LIKE ? LIMIT ?', (like, like, limit)):
         out.append({'type': 'Dala', 'label': f"{r['code']} · {r['name']}", 'sub': f"{r['area_ha']:g} ga",
                     'endpoint': 'admin.field_detail', 'args': {'field_id': r['id']}})
     for r in q("SELECT id, code, kind FROM equipment WHERE code LIKE ? OR plate LIKE ? LIMIT ?", (like, like, limit)):
         out.append({'type': 'Texnika', 'label': r['code'], 'sub': r['kind'], 'endpoint': 'admin.equipment', 'args': {}})
-    return out[:20]
+    for r in q('SELECT id, doc_no, status FROM fuel_tickets WHERE doc_no LIKE ? LIMIT ?', (like, limit)):
+        out.append({'type': 'Tiket', 'label': r['doc_no'], 'sub': 'Faol' if r['status'] == 'AKTIV' else 'Yopilgan',
+                    'endpoint': 'yoqilgi.manage', 'args': {}})
+    return out[:24]

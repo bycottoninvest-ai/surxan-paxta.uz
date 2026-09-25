@@ -1,0 +1,21 @@
+<script>
+(function () {
+  const el = document.getElementById('rb-live'); if (!el) return;
+  const t = document.getElementById('rb-live-t'), base = t.textContent;
+  let stamp = el.dataset.stamp, last = base.split('oxirgi yangilanish ')[1] || '';
+  async function tick() {
+    try {
+      const r = await fetch(el.dataset.url, { headers: { 'X-Requested-With': 'fetch' }, cache: 'no-store' });
+      if (!r.ok) throw new Error();
+      const d = await r.json();
+      el.classList.remove('stale');
+      if (String(d.stamp) !== String(stamp)) { t.textContent = 'Yangi amal saqlandi — yangilanmoqda…'; location.reload(); return; }
+      last = d.at; t.textContent = 'Tekshirildi ' + d.at + ' · yangi amal yo‘q';
+    } catch (_) {
+      el.classList.add('stale'); t.textContent = 'Eski ma’lumot — aloqa yo‘q (oxirgi: ' + last + ')';
+    }
+  }
+  setInterval(tick, 20000);
+  window.addEventListener('online', tick); window.addEventListener('offline', tick);
+})();
+</script>

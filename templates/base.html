@@ -48,6 +48,7 @@
       {{ nav('acct.expense_pick', 'Xarajat yozish', 'receipt', None, ['acct.expense_pick', 'acct.expense_new']) }}
       {% else %}
       {{ nav('main.dashboard', 'Bosh sahifa', 'home') }}
+      {% if current_user['role'] in ('admin', 'manager') %}{{ nav('rahbar.home', 'Direktor paneli (telefon)', 'chart', None, ['rahbar.home', 'rahbar.cotton', 'rahbar.moving', 'rahbar.trip', 'rahbar.cash', 'rahbar.wages', 'rahbar.worker', 'rahbar.checks', 'rahbar.fuel']) }}{% endif %}
       {% if current_user['role'] == 'accountant' %}{{ nav('hamyon.home', 'Mening kassam', 'wallet', None, ['hamyon.home', 'hamyon.pay', 'hamyon.pay_worker', 'hamyon.expense', 'hamyon.income', 'hamyon.entry', 'hamyon.fix']) }}
       {{ nav('hamyon.today', 'Bugungi amallar', 'list') }}{% endif %}
       {{ nav('hamyon.fixes', 'Tuzatishlar', 'edit', 'cash.view') }}
@@ -137,6 +138,12 @@
   <a href="{{ url_for('hamyon.today') }}" class="{{ 'active' if ep == 'hamyon.today' }}">{{ icon('list') }}Bugun</a>
   <a href="{{ url_for('hamyon.pay') }}" class="primary">{{ icon('user') }}Pul berish</a>
   <a href="{{ url_for('hamyon.expense') }}" class="{{ 'active' if ep == 'hamyon.expense' }}">{{ icon('receipt') }}Xarajat</a>
+  <a href="#" data-open-nav>{{ icon('menu') }}Boshqa</a>
+  {% elif current_user['role'] == 'manager' %}
+  <a href="{{ url_for('rahbar.home') }}" class="{{ 'active' if ep == 'rahbar.home' }}">{{ icon('home') }}Bosh</a>
+  <a href="{{ url_for('rahbar.cotton') }}" class="{{ 'active' if ep == 'rahbar.cotton' }}">{{ icon('cotton') }}Paxta</a>
+  <a href="{{ url_for('rahbar.cash') }}" class="primary">{{ icon('wallet') }}Kassa</a>
+  <a href="{{ url_for('rahbar.checks') }}" class="{{ 'active' if ep == 'rahbar.checks' }}">{{ icon('alert') }}Tekshirish</a>
   <a href="#" data-open-nav>{{ icon('menu') }}Boshqa</a>
   {% elif current_user['role'] == 'fuel' %}
   <a href="{{ url_for('yoqilgi.home') }}" class="{{ 'active' if ep == 'yoqilgi.home' }}">{{ icon('home') }}Bosh</a>

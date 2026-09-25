@@ -1,0 +1,16 @@
+{% extends 'base.html' %}
+{% from 'macros.html' import icon, empty with context %}
+{% set page_title = f.name %}
+{% block content %}
+<div class="d-wrap rb">
+  {% with rb_title=f.name, rb_back=url_for('rahbar.wages'), rb_no_period=True %}{% include 'partials/rb_head.html' %}{% endwith %}
+  <div class="small muted">№{{ f.id }}{{ ' · ' ~ f.note if f.note }}{{ ' · ' ~ f.brigades|join(', ') if f.brigades }}</div>
+  <div class="hm-fig"><div><span>Ishlagan haqi</span><b class="num hm-green">{{ f.earned|num }}</b></div><div><span>Berilgan</span><b class="num">{{ f.given|num }}</b></div>
+    <div><span>Qarz</span><b class="num hm-red">{{ f.debt|num }}</b></div></div>
+  <div class="rb-sec"><b>Terim (dala / brigada / reys / narx)</b></div>
+  <div class="hm-ops">{% for h in harvests %}<div class="hm-op {{ 'hm-void' if h.voided_at }}"><span class="hm-op-b"><b>{{ h.kg|num }} kg</b><small>{{ h.work_date|d }} · {{ h.field_name or '' }} · {{ h.brigadier_name or '' }} · {{ h.trip_no or '' }}</small></span>
+    <span class="hm-op-s"><b class="num">{{ h.amount|num if h.amount is not none else 'narxsiz' }}</b><small class="tiny muted">{{ h.rate|num if h.rate }} so‘m/kg</small></span></div>{% else %}{{ empty('Terim yo‘q') }}{% endfor %}</div>
+  <div class="rb-sec"><b>Pul berilgan</b></div>
+  <div class="hm-ops">{% for m in money %}<div class="hm-op {{ 'hm-void' if m.voided_at }}"><span class="hm-op-b"><b>{{ m.doc_no }}</b><small>{{ m.entry_date|d }} · {{ m.created_name or '' }}</small></span><span class="hm-op-s"><b class="num">{{ m.amount|num }}</b></span></div>{% else %}{{ empty('To‘lov yo‘q') }}{% endfor %}</div>
+</div>
+{% endblock %}

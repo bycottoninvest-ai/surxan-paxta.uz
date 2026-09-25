@@ -1,0 +1,17 @@
+{% extends 'base.html' %}
+{% from 'macros.html' import icon, empty with context %}
+{% set page_title = 'Yo‘lda' %}
+{% block content %}
+<div class="d-wrap rb">
+  {% with rb_title='Yo‘lda — hozir', rb_back=url_for('rahbar.home'), rb_no_period=True %}{% include 'partials/rb_head.html' %}{% endwith %}
+  <div class="pk-counts"><div class="pk-c1"><span>Dalada to‘lgan</span><b>{{ now.dalada }}</b></div><div class="pk-c2"><span>Yo‘lda</span><b>{{ now.yolda }}</b></div><div class="pk-c3"><span>Punktda navbatda</span><b>{{ now.navbat }}</b></div></div>
+  <div class="hm-ops">
+  {% for t in rows %}<a class="hm-op" href="{{ url_for('rahbar.trip', load_id=t.id) }}"><span class="hm-op-b"><b>{{ t.trailer_code }} · {{ t.trip_no }}</b>
+      <small>{{ t.wb_number or 'nakladnoy yo‘q' }} · {{ t.field_name or '' }} → {{ t.station_name or 'punkt' }}{% if t.sent_at %} · jo‘nadi {{ t.sent_at[11:16] }}{% elif t.full_at %} · to‘ldi {{ t.full_at[11:16] }}{% endif %}</small></span>
+    <span class="hm-op-s"><b class="num">{{ (t.sent_kg or t.internal_kg)|num }} kg</b><span class="badge {{ t.badge }}">{{ t.state }}</span></span></a>
+  {% else %}{{ empty('Hozir yo‘lda yuk yo‘q', 'truck') }}{% endfor %}
+  </div>
+  <div class="tiny muted">Holat faqat saqlangan amaldan olinadi (to‘ldi → nakladnoy → punktga keldi → qabul). Jonli GPS yo‘q — joylashuv ko‘rsatilmaydi.</div>
+</div>
+{% endblock %}
+{% block scripts %}{% include 'partials/rb_poll.html' %}{% endblock %}

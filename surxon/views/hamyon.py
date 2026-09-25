@@ -225,8 +225,8 @@ def entry(cash_id):
     plan = W.pending_plan(pending['id'])[1] if pending and can('expenses.approve') else None
     return render_template('hamyon_entry.html', e=e, photos=photos, corrs=corrs, pending=pending, plan=plan,
                            fresh=request.args.get('yangi') == '1',
-                           may_fix=W.can_correct(current_actor(), e) and not pending,
-                           may_refund=e['kind'] == 'pay' and not e['voided_at'] and can('payouts.prepare'))
+                           may_fix=W.can_correct(current_actor(), e) and not pending and request.args.get('ro') != '1',
+                           may_refund=e['kind'] == 'pay' and not e['voided_at'] and can('payouts.prepare') and request.args.get('ro') != '1')
 
 
 @bp.get('/hamyon/amal/<int:cash_id>.pdf')

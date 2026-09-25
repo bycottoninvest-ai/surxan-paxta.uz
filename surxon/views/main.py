@@ -48,7 +48,9 @@ def dashboard():
     view = request.args.get('view') or request.cookies.get('view')
     if view not in ('full', 'mobile'):
         view = 'mobile' if is_phone() else 'full'
-    if view == 'mobile':
+    if view == 'mobile' and g.user['role'] in ('admin', 'manager') and not request.args.get('eski'):
+        resp = make_response(redirect(url_for('rahbar.home')))       # director's phone panel (read-only)
+    elif view == 'mobile':
         resp = make_response(mobile_home(year, day, brig, kpi))
     else:
         resp = make_response(full_dashboard(year, day, brig, kpi))

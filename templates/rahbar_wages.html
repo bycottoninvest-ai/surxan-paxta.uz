@@ -1,0 +1,24 @@
+{% extends 'base.html' %}
+{% from 'macros.html' import icon, empty with context %}
+{% set page_title = 'Ish haqi' %}
+{% block content %}
+<div class="d-wrap rb">
+  {% with rb_title='Ish haqi', rb_back=url_for('rahbar.home', period=period) %}{% include 'partials/rb_head.html' %}{% endwith %}
+  <div class="hm-fig">
+    <div><span>Hozir qarz ({{ w.owed_people }} kishi)</span><b class="num hm-red">{{ w.debt_now|num }} so‘m</b></div>
+    {% if w.over_now %}<div><span>Qarzdan ortiq berilgan (avans)</span><b class="num">{{ w.over_now|num }} so‘m</b></div>{% endif %}
+    <div><span>Mavsumda hisoblangan</span><b class="num">{{ w.earned_all|num }}</b></div>
+    <div><span>Mavsumda berilgan</span><b class="num">{{ w.given_all|num }}</b></div>
+  </div>
+  <div class="hm-fig">
+    <div><span>{{ period_label }}: hisoblandi ({{ w.worked_people }} kishi)</span><b class="num">{{ w.earned_period|num }}</b></div>
+    <div><span>{{ period_label }}: to‘landi ({{ w.paid_people }} kishi)</span><b class="num">{{ w.paid_period|num }}</b></div>
+    {% if w.uncalc_kg %}<div><span>Narxsiz yozilgan (hisoblanmagan)</span><b class="num">{{ w.uncalc_kg|num }} kg</b></div>{% endif %}
+  </div>
+  <div class="tiny muted">Davrda to‘langan pul oldingi kunlar qarzi uchun ham bo‘lishi mumkin — shuning uchun “hisoblandi − to‘landi” qarz emas. Qarz — yuqoridagi hozirgi raqam.</div>
+  <div class="rb-sec"><b>Qarzi borlar</b></div>
+  <div class="hm-ops">{% for r in owed %}<a class="hm-op" href="{{ url_for('rahbar.worker', worker_id=r.id) }}"><span class="hm-op-b"><b>{{ r.full_name }} <small class="muted">№{{ r.id }}</small></b><small>{{ r.kg|num }} kg · hisoblangan {{ r.earned|num }} · berilgan {{ (r.paid + r.advances)|num }}</small></span>
+    <span class="hm-op-s"><b class="num hm-red">{{ r.balance|num }}</b></span></a>{% else %}{{ empty('Qarz yo‘q', 'users') }}{% endfor %}</div>
+</div>
+{% endblock %}
+{% block scripts %}{% include 'partials/rb_poll.html' %}{% endblock %}

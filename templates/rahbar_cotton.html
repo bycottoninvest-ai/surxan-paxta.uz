@@ -1,0 +1,38 @@
+{% extends 'base.html' %}
+{% from 'macros.html' import icon, empty with context %}
+{% set page_title = 'Paxta' %}
+{% block content %}
+<div class="d-wrap rb">
+  {% with rb_title='Paxta', rb_back=url_for('rahbar.home', period=period) %}{% include 'partials/rb_head.html' %}{% endwith %}
+  <div class="hm-fig">
+    <div><span>Terilgan (dala hisobi)</span><b class="num">{{ cot.field_kg|num }} kg</b></div>
+    <div><span>Jo‘natilgan netto ({{ cot.shipped_n }} reys)</span><b class="num">{{ cot.shipped_kg|num }} kg</b></div>
+    <div><span>Punkt qabul ({{ cot.received_n }} reys)</span><b class="num hm-green">{{ cot.received_kg|num }} kg</b></div>
+    <div><span>Farq — faqat shu qabul qilingan reyslar</span><b class="num {{ 'hm-red' if cot.diff_pct is not none and (cot.diff_pct|abs) > warn_pct }}">{% if cot.diff_pct is not none %}{{ '%+.0f'|format(cot.diff_kg) }} kg ({{ '%+.2f'|format(cot.diff_pct) }}%){% else %}—{% endif %}</b></div>
+    <div><span>Hali qabul qilinmagan (hozir)</span><b class="num">{{ now.yolda + now.navbat }} reys · {{ (now.yolda_kg + now.navbat_kg)|num }} kg</b></div>
+  </div>
+  <div class="tiny muted">Terilgan kg bilan qabul kg farqi “yo‘qotish” emas: yuk yo‘lda bo‘lishi yoki kechagi reys bugun qabul qilinishi mumkin.</div>
+  <div class="rb-tabs rb-tabs2">{% for k, v in (('dalalar','Dalalar'),('brigadalar','Brigadalar'),('terimchilar','Terimchilar'),('reyslar','Reyslar')) %}<a class="{{ 'on' if tab == k }}" href="?period={{ period }}&tab={{ k }}">{{ v }}</a>{% endfor %}</div>
+  <div class="hm-ops">
+  {% if tab == 'dalalar' %}
+    {% for f in rows %}<a class="hm-op" href="{{ url_for('admin.field_detail', field_id=f.id) }}"><span class="hm-op-b"><b>{{ f.code }} · {{ f.name }}</b>
+      <small>{{ f.brigadier_name or '—' }} · qabul {{ f.received_kg|num }} kg{% if f.diff_kg is not none %} · farq {{ '%+.0f'|format(f.diff_kg) }}{% endif %}</small></span>
+      <span class="hm-op-s"><b class="num">{{ f.field_kg|num }} kg</b><small class="tiny muted">terilgan</small></span></a>
+    {% else %}{{ empty('Bu davrda terim yo‘q', 'field') }}{% endfor %}
+  {% elif tab == 'brigadalar' %}
+    {% for b in rows if b.kg or b.accepted_kg %}<div class="hm-op"><span class="hm-op-b"><b>{{ b.name }}</b><small>qo‘l {{ b.hand_kg|num }} · kombayn {{ b.combine_kg|num }} · qabul {{ b.accepted_kg|num }} kg ({{ b.trips }} reys)</small></span>
+      <span class="hm-op-s"><b class="num">{{ b.kg|num }} kg</b></span></div>
+    {% else %}{{ empty('Bu davrda terim yo‘q', 'users') }}{% endfor %}
+  {% elif tab == 'terimchilar' %}
+    {% for w in rows %}<a class="hm-op" href="{{ url_for('rahbar.worker', worker_id=w.id) }}"><span class="hm-op-b"><b>{{ w.full_name }} <small class="muted">№{{ w.id }}</small></b><small>{{ w.brigades or '—' }} · {{ w.n }} marta tortildi</small></span>
+      <span class="hm-op-s"><b class="num">{{ w.kg|num }} kg</b></span></a>
+    {% else %}{{ empty('Bu davrda terim yo‘q', 'users') }}{% endfor %}
+  {% else %}
+    {% for t in rows %}<a class="hm-op" href="{{ url_for('rahbar.trip', load_id=t.id) }}"><span class="hm-op-b"><b>{{ t.trip_no }} · {{ t.trailer_code }}</b><small>{{ t.field_name or '' }} · {{ t.brigadier_name or '' }}{{ ' · ' ~ t.wb_number if t.wb_number }}</small></span>
+      <span class="hm-op-s"><b class="num">{{ (t.accepted_kg if t.accepted_kg is not none else (t.sent_kg or t.internal_kg))|num }} kg</b><span class="badge {{ t.badge }}">{{ t.state }}</span></span></a>
+    {% else %}{{ empty('Bu davrda reys yo‘q', 'trailer') }}{% endfor %}
+  {% endif %}
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}{% include 'partials/rb_poll.html' %}{% endblock %}

@@ -1,0 +1,23 @@
+{% extends 'base.html' %}
+{% from 'macros.html' import icon, empty with context %}
+{% set page_title = 'Kassa' %}
+{% block content %}
+<div class="d-wrap rb">
+  {% with rb_title='Kassa', rb_back=url_for('rahbar.home', period=period) %}{% include 'partials/rb_head.html' %}{% endwith %}
+  {% for b in cash.boxes %}<div class="hm-card"><div class="hm-rv-big hm-in"><span>{{ b.name }} — qoldiq hozir</span><b class="num">{{ b.now|num }} so‘m</b></div>
+    <div class="hm-rv-row"><span>{{ period_label }} boshida</span><b class="num">{{ b.opening|num }}</b></div>
+    <div class="hm-rv-row"><span>Kirim</span><b class="num hm-green">+{{ b.inflow|num }}</b></div>
+    <div class="hm-rv-row"><span>Chiqim</span><b class="num hm-red">−{{ b.outflow|num }}</b></div>
+    <div class="hm-rv-row"><span>{{ period_label }} oxirida</span><b class="num">{{ b.closing|num }}</b></div></div>
+  {% else %}{{ empty('Kassa yaratilmagan', 'wallet') }}{% endfor %}
+  {% if cash.out_groups %}<div class="rb-sec"><b>Chiqimlar bo‘yicha</b></div>
+  <div class="hm-fig">{% for g in cash.out_groups %}<div><span>{{ g.label }}</span><b class="num">{{ g.amount|num }}</b></div>{% endfor %}</div>{% endif %}
+  <div class="rb-sec"><b>Amallar</b></div>
+  <div class="hm-ops">{% for r in ops %}<a class="hm-op {{ 'hm-void' if r.voided_at }}" href="{{ url_for('hamyon.entry', cash_id=r.id, ro=1) }}">
+      <span class="hm-op-b"><b>{{ r.who or r.what }}</b><small>{{ r.what }} · {{ r.entry_date|d }} {{ r.created_at[11:16] }}</small></span>
+      <span class="hm-op-s"><b class="num {{ 'hm-green' if r.direction == 'IN' else 'hm-red' }}">{{ '+' if r.direction == 'IN' else '−' }}{{ r.amount|num }}</b><span class="badge {{ r.badge }}">{{ r.status_label }}</span></span></a>
+  {% else %}{{ empty('Bu davrda amal yo‘q', 'cash') }}{% endfor %}</div>
+  <div class="tiny muted">Hisobdagi qoldiq kun oxirida sanalgan pul bilan solishtiriladi (kun yopish). Solishtirilmagan qoldiq “kamomad” degani emas.</div>
+</div>
+{% endblock %}
+{% block scripts %}{% include 'partials/rb_poll.html' %}{% endblock %}

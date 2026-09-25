@@ -1,0 +1,24 @@
+{% extends 'base.html' %}
+{% from 'macros.html' import icon with context %}
+{% set page_title = t.trip_no %}
+{% block content %}
+<div class="d-wrap rb">
+  {% with rb_title=(t.trip_no or 'Reys'), rb_back=url_for('rahbar.moving'), rb_no_period=True %}{% include 'partials/rb_head.html' %}{% endwith %}
+  <div class="hm-card">
+    <div class="hm-rv-row"><span>Holat</span><span class="badge {{ t.badge }}">{{ t.state }}</span></div>
+    <div class="hm-rv-row"><span>Telashka</span><b>{{ t.trailer_code }}</b></div>
+    <div class="hm-rv-row"><span>Dala · brigada</span><b>{{ t.field_name or '—' }} · {{ t.brigadier_name or '—' }}</b></div>
+    <div class="hm-rv-row"><span>Nakladnoy</span><b>{{ t.wb_number or '—' }}</b></div>
+    <div class="hm-rv-row"><span>Punkt</span><b>{{ t.station_name or '—' }}</b></div>
+    <div class="hm-rv-row"><span>Dala hisobi</span><b class="num">{{ harvest.kg|num }} kg · {{ harvest.people }} kishi</b></div>
+    <div class="hm-rv-row"><span>Jo‘natilgan netto{{ ' (dala tarozisi)' if t.basis == 'dala' else '' }}</span><b class="num">{{ t.sent_kg|num if t.sent_kg else '—' }}</b></div>
+    <div class="hm-rv-row"><span>Punkt qabul</span><b class="num hm-green">{{ t.accepted_kg|num if t.accepted_kg is not none else 'hali qabul qilinmagan' }}</b></div>
+    {% if t.diff_kg is not none %}<div class="hm-rv-row"><span>Farq</span><b class="num {{ 'hm-red' if t.sent_kg and (t.diff_kg|abs) / t.sent_kg * 100 > warn_pct }}">{{ '%+.0f'|format(t.diff_kg) }} kg{{ ' · ' ~ t.diff_reason if t.diff_reason }}</b></div>{% endif %}
+  </div>
+  {% if photos %}<div class="hm-photos">{% for p in photos %}<img src="{{ photo_url(p.thumb_path or p.path) }}" data-full="{{ photo_url(p.path) }}" alt="">{% endfor %}</div>
+  {% else %}<div class="small muted">Bu reysga rasm yuklanmagan.</div>{% endif %}
+  <div class="rb-sec"><b>Harakat tarixi</b></div>
+  <div class="rb-tl">{% for a in timeline %}<div><span>{{ a.created_at[5:16] }}</span><b>{{ {'OPEN':'Ochildi','TOLDI':'To‘ldi / yopildi','FIELD_SUM':'Dala vazni bilan tugatildi','CREATE':'Hujjat yaratildi','ARRIVED':'Punktga keldi','RECEIVE':'Punktda qabul qilindi','GROSS':'Brutto tortildi','TARE':'Tara tortildi'}.get(a.action, a.action) }}</b><small>{{ a.full_name or '' }}</small></div>{% endfor %}</div>
+  <div class="tiny muted">Vaqtlar server saqlagan paytdan. Jonli joylashuv (GPS) yo‘q.</div>
+</div>
+{% endblock %}

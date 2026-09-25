@@ -1,0 +1,13 @@
+{% extends 'base.html' %}
+{% from 'macros.html' import icon, empty with context %}
+{% set page_title = 'Tekshirish' %}
+{% block content %}
+<div class="d-wrap rb">
+  {% with rb_title='Tekshirish kerak', rb_back=url_for('rahbar.home', period=period) %}{% include 'partials/rb_head.html' %}{% endwith %}
+  <div class="hm-ops">{% for c in items %}<a class="hm-op rb-chk-{{ c.level }}" {% if c.link %}href="{{ url_for(c.link[0], **c.link[1]) }}"{% endif %}>
+      <span class="hm-op-ico">{{ icon('alert') }}</span><span class="hm-op-b" style="white-space:normal"><b style="white-space:normal">{{ c.title }}</b><small>{{ c.sub }}{{ ' · ' ~ c.time if c.time }}</small></span></a>
+  {% else %}<div class="d-ok">{{ icon('check-circle','lg') }}<b>Hammasi joyida</b><span class="small">Bu davrda e’tibor talab qiladigan holat yo‘q</span></div>{% endfor %}</div>
+  <div class="tiny muted">Bu ro‘yxat “tekshirish kerak” degani — xulosa emas. Ko‘p yoqilg‘i berilishi o‘g‘irlik degani emas, kassa sanalmagani kamomad degani emas.</div>
+</div>
+{% endblock %}
+{% block scripts %}{% include 'partials/rb_poll.html' %}{% endblock %}
