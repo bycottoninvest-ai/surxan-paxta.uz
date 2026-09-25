@@ -19,6 +19,7 @@
   <span class="{{ 'done' if ld.waybill_status == 'QABUL' }}">{{ icon('factory','sm') }} Nayman</span>
 </div>
 
+{% if ld.waybill_id and ld.waybill_status != 'BEKOR' %}{% set wb_id = ld.waybill_id %}{% set wb_label = (ld.trip_no ~ ' · ' if ld.trip_no else '') ~ ld.waybill_number %}{% include 'partials/pdf_share.html' %}{% endif %}
 <div class="grid">
   <section class="card s5">
     <div class="card-h"><h3>Asosiy ma’lumot</h3></div>

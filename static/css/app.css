@@ -566,3 +566,10 @@ a.a-tile:active{transform:scale(.98)}
 .s-add{display:flex;gap:8px;margin-top:10px}
 .s-add input{flex:1;min-width:0;padding:11px 12px;border:1.5px solid var(--line);border-radius:10px;font-size:15px}
 @media print{.s-role,.page-h,.sidebar,.topbar,.bottom-nav{display:none!important}.s-issued{border-color:#000}}
+
+/* ---- Nakladnoy PDF share (no printer in the field) ---- */
+.pdf-share{border:2px solid #cfe0fb;background:var(--blue-50);border-radius:14px;padding:12px 14px;margin-bottom:14px;display:grid;gap:8px}
+.pdf-share-h{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.pdf-share-b{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.pdf-share-b .btn{justify-content:center;min-height:48px}
+@media (max-width:600px){.pdf-share-b{grid-template-columns:1fr}}

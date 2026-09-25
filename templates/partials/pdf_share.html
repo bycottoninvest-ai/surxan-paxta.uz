@@ -1,0 +1,12 @@
+{# Nakladnoy PDF on the phone: view, share to Telegram etc. (the phone's own share sheet), or download. Needs `wb_id`, `wb_label`. #}
+{% from 'macros.html' import icon with context %}
+{% set pdf_url = url_for('ops.waybill_external_pdf', waybill_id=wb_id) %}
+<div class="pdf-share">
+  <div class="pdf-share-h">{{ icon('doc') }} <b>Nakladnoy PDF</b> <span class="muted small">{{ wb_label }} · punkt nusxasi (faqat kg, narxsiz)</span></div>
+  <div class="pdf-share-b">
+    <a class="btn btn-light" href="{{ pdf_url }}" target="_blank" rel="noopener">{{ icon('eye','sm') }} Ko‘rish</a>
+    <button type="button" class="btn btn-primary" data-pdf-share="{{ pdf_url }}" data-pdf-name="{{ wb_label|replace(' · ', '_')|replace(' ', '_') }}_nakladnoy.pdf" hidden>{{ icon('telegram','sm') }} Ulashish</button>
+    <a class="btn btn-light" href="{{ pdf_url }}?download=1" download>{{ icon('download','sm') }} PDFni yuklab olish</a>
+  </div>
+  <div class="tiny muted">“Ulashish” — telefon oynasi ochiladi: Telegramni va kimga yuborishni o‘zingiz tanlaysiz. Qayta ochish yoki yuborish yangi nakladnoy yaratmaydi.</div>
+</div>

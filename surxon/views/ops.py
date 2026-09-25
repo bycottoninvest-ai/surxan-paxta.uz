@@ -353,6 +353,32 @@ def document(doc_id):
                                download_name=d['path'].rsplit('/', 1)[-1])
 
 
+@bp.get('/nakladnoy/<int:waybill_id>/nakladnoy.pdf')
+@perm_required('waybill.view', 'load.full', 'harvest.write', 'weigh.write')
+def waybill_external_pdf(waybill_id):
+    """The punkt copy (kg and document data only — no price, amount or wages) of THIS waybill, for viewing, saving
+    and sharing from a phone (no printer in the field). Opening or sharing it again never creates a new waybill; the
+    PDF itself is made once and only re-rendered when the weighing is corrected (a new version, same number)."""
+    from flask import current_app, send_from_directory
+    wb = queries.waybill(waybill_id)
+    if not wb or wb['status'] == 'BEKOR':
+        abort(404)
+    if scope() and wb['brigadier_id'] != scope():
+        abort(403)
+    sql = "SELECT * FROM documents WHERE waybill_id=? AND kind='nayman' ORDER BY superseded, version DESC LIMIT 1"
+    d = q(sql, (waybill_id,), one=True)
+    if not d:  # the worker normally makes it within seconds; make it now instead of making the phone wait
+        from ..services import create_waybill_documents
+        from ..security import Actor
+        create_waybill_documents(Actor(None, 'system', source='system', name='tizim'), waybill_id, 'avtomatik')
+        d = q(sql, (waybill_id,), one=True)
+    name = f'{(wb["trip_no"] or wb["number"])}_{wb["number"]}_nakladnoy.pdf'
+    resp = send_from_directory(current_app.config['SURXON'].UPLOAD_DIR, d['path'], mimetype='application/pdf',
+                               as_attachment=request.args.get('download') == '1', download_name=name)
+    resp.headers['Cache-Control'] = 'private, no-store'
+    return resp
+
+
 @bp.post('/nakladnoy/<int:waybill_id>/pdf')
 @perm_required('weigh.write', 'nayman.write', 'waybill.void')
 def waybill_pdf(waybill_id):

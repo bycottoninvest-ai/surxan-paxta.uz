@@ -9,6 +9,7 @@
   <a class="btn btn-primary" href="{{ url_for('ops.waybill_detail', waybill_id=wb.id, print=1, auto=1) }}" target="_blank">{{ icon('printer','sm') }} Chop etish</a>
   {% if wb.status == 'YARATILDI' and can('nayman.write') %}<a class="btn btn-green" href="{{ url_for('ops.nayman', waybill_id=wb.id) }}">{{ icon('factory','sm') }} Nayman qabuli</a>{% endif %}
 </div>
+{% if wb.status != 'BEKOR' %}{% set wb_id = wb.id %}{% set wb_label = (wb.trip_no ~ ' · ' if wb.trip_no else '') ~ wb.number %}{% include 'partials/pdf_share.html' %}{% endif %}
 {% if wb.status == 'BEKOR' %}<div class="flash error">{{ icon('ban','sm') }} Bekor qilingan: {{ wb.void_reason }} ({{ wb.voided_at|d }})</div>{% endif %}
 <div class="grid">
   <section class="card s5">

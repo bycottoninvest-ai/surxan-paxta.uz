@@ -246,3 +246,31 @@
 
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('/service-worker.js').catch(() => { });
 })();
+
+// ---- nakladnoy PDF: share the FILE to the phone's share sheet (Telegram etc.), fall back to download.
+// The PDF is fetched in advance: iOS Safari only opens the share sheet if share() runs straight from the tap.
+(function () {
+  const btns = document.querySelectorAll('[data-pdf-share]');
+  if (!btns.length) return;
+  btns.forEach(btn => {
+    const url = btn.dataset.pdfShare, name = btn.dataset.pdfName || 'nakladnoy.pdf';
+    let file = null;
+    const canFiles = typeof navigator.canShare === 'function' && typeof File === 'function';
+    if (canFiles) {
+      fetch(url, { credentials: 'same-origin' }).then(r => r.ok ? r.blob() : null).then(b => {
+        if (!b) return;
+        const f = new File([b], name, { type: 'application/pdf' });
+        if (navigator.canShare({ files: [f] })) { file = f; btn.hidden = false; }
+      }).catch(() => {});
+    }
+    btn.addEventListener('click', () => {
+      if (file) {
+        navigator.share({ files: [file], title: name }).catch(err => {
+          if (err && err.name !== 'AbortError') location.href = url + '?download=1';
+        });
+      } else {
+        location.href = url + '?download=1';
+      }
+    });
+  });
+})();

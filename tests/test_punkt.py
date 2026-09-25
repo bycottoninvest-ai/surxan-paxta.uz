@@ -180,3 +180,37 @@ def test_trip_numbers_unique_under_parallel_opening(app, world):
     [t.join() for t in threads]
     assert not errors and len(set(numbers)) == 4
     assert sorted(int(n[-6:]) for n in numbers) == [1, 2, 3, 4]
+
+
+def test_nakladnoy_pdf_on_phone_view_share_download(app, world):
+    """No printer in the field: the tally clerk opens / shares / downloads the punkt copy from the phone.
+    Opening it again never makes a new waybill or a new document; the copy has kg but no price or wages."""
+    tally, yunus, ali, st = setup(app, world)
+    with app.app_context():
+        get_db().execute("INSERT OR REPLACE INTO settings(key, value, updated_at) VALUES ('price_per_kg','9876','x')")
+    lid = tally.post('/telashkalar/ochish', {'trailer_id': world['eq']['TL-02'], 'field_id': world['f']['D-04'],
+                                            'client_uuid': uuid4()}).get_json()['load_id']
+    assert add(tally, lid, 'Gulbohar opa', '85')['ok'] and add(tally, lid, 'Mirjalol', '95')['ok']
+    r = tally.post(f'/yuk/{lid}/toldi', files={'photos': jpeg()}).get_json()
+    assert r['ok']
+    wid = r['waybill_id']
+    page = tally.get(r['redirect']).get_data(as_text=True)          # the tally clerk lands on the trip page
+    assert 'data-pdf-share' in page and 'PDFni yuklab olish' in page and f'/nakladnoy/{wid}/nakladnoy.pdf' in page
+    with app.app_context():
+        docs_before = scalar('SELECT COUNT(*) FROM documents WHERE waybill_id=?', (wid,))
+        wbs_before = scalar('SELECT COUNT(*) FROM waybills')
+    view = tally.get(f'/nakladnoy/{wid}/nakladnoy.pdf')
+    assert view.status_code == 200 and view.mimetype == 'application/pdf' and view.data[:4] == b'%PDF'
+    assert 'attachment' not in view.headers.get('Content-Disposition', '')
+    dl = tally.get(f'/nakladnoy/{wid}/nakladnoy.pdf?download=1')
+    assert 'attachment' in dl.headers['Content-Disposition'] and 'nakladnoy.pdf' in dl.headers['Content-Disposition']
+    assert dl.data == view.data                                     # the very same document every time
+    text = norm(pdf_text(view.data))
+    assert '180' in text and 'PUNKT UCHUN NAKLADNOY' in text
+    assert '9876' not in text and '9 876' not in text and 'so‘m' not in text and 'Gulbohar' not in text
+    with app.app_context():
+        assert scalar('SELECT COUNT(*) FROM documents WHERE waybill_id=?', (wid,)) == docs_before
+        assert scalar('SELECT COUNT(*) FROM waybills') == wbs_before
+    # other roles/brigades: a brigadier of another brigade may not fetch it; unknown ids are 404
+    assert world['nurim'].get(f'/nakladnoy/{wid}/nakladnoy.pdf').status_code == 403
+    assert tally.get('/nakladnoy/99999/nakladnoy.pdf').status_code == 404
