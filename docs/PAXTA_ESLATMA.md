@@ -75,24 +75,36 @@ Azizbek topshirig‘i: 1) hisobot kanali — ma’lumot doim tushib turadi va sa
 - To‘siq: dalalar kiritilmagan (nomi/gektar/brigada Azizbekdan). Bir reys = bir dala (aralashtirilmaydi).
 - Kompyuterdagi Wi-Fi router DNS (192.168.100.1) domenni topmagan edi → kompyuterga 1.1.1.1/8.8.8.8 qo‘yildi.
 
-## HOZIR QAYERDA TO‘XTADIK (keyingi qadam — Azizbekda)
-1. **DNS (sayt.uz → Domenlarim → surxan-paxta.uz → DNS):** avval mavjud yozuvlar rasmini olish; faqat `A @ → 88.198.122.72` va `A www → 88.198.122.72`; MX/TXT/NS ga tegmaslik. Domen faollashgan (Azizbek aytdi), DNS tekshiruvi hali qilinmagan.
-2. **Serverga o‘rnatish:** `ssh root@88.198.122.72`, keyin
-   `curl -fsSL https://raw.githubusercontent.com/bycottoninvest-ai/surxan-paxta.uz/main/tools/server_ornatish.sh -o ornatish.sh && bash ornatish.sh`
-   → “5/6 Domen” va “HTTPS tekshiruvi” rasmini kutyapmiz.
-3. Keyin tartib: `sozlash.sh narx` → `telegram` → `sheets` (inspect natijasi bo‘yicha “Umumiy hisob”/“Ishchilar” formulalarini yozib berish) → `sheets-sinov "Umumiy hisob!B4"` → `zaxira` (Hetzner Storage Box BX11 ~3,8–4 €/oy — Azizbek roziligi kerak) → `holat`.
-4. Claude muhitidan server, domen, DNS va docs.google.com ko‘rinmaydi (tarmoq yopiq) — tekshiruvlar serverda bajariladi, natija rasm/matn qilib yuboriladi.
-5. Kutilayotgan biznes ma’lumotlari: boshlang‘ich kassa qoldig‘i, dalalar/gektar, xodimlar loginlari (Asadbek, Mirjalol, Sadokat, Gulbohar — hisobchi; Yunus — punkt; buxgalter va kassir kimligi), punktlar ro‘yxati.
+## 2026-09-26 — v2.8.0 … v2.12.2 (sayt ishlayapti: https://surxan-paxta.uz)
 
-Test loginlari (faqat test bazasi): `admin / Test2026!`; `juma`, `tarozi01`, `buxgalter`, `asadbek`, `rahbar` — `Demo2026!`.
+- v2.8.0 punkt (brutto/tara, farq sababi, QR) · v2.9.0 buxgalter telefoni `/hamyon` (tekshir → tasdiq, tuzatish)
+- v2.10.0 solyarka `/yoqilgi` (rol “Yoqilg‘i mas’uli” — Hayitvoy; zapravka/tiket/QR yorliqlar; berishda kamera rasmi)
+- v2.11.0 dalalar KML/GeoJSON import (57 dala haqiqiy bazaga saqlangan), xaritada chizish; v2.11.1 SW kesh tuzatish
+- v2.11.2 Google xarita kaliti Admin → Integratsiyalar’da · v2.12.0 Direktor paneli `/rahbar` (telefon, faqat ko‘rish)
+- v2.12.1 Google Sheets’ni Integratsiyalar’dan ulash (havola + service account .json)
+- v2.12.2 Admin: “Reysni to‘liq bekor qilish” (tortish + nakladnoy + punkt qabuli, sabab bilan, o‘chirmasdan)
+- Rollar bo‘yicha rasmli PDF qo‘llanmalar: `docs/qollanma/` (hisobchi, punkt, buxgalter, kassir, yoqilg‘i, direktor, admin)
+
+## HOZIR QAYERDA TO‘XTADIK (keyingi qadam)
+
+1. Serverda oxirgi tasdiqlangan versiya v2.11.1; Codex’ga v2.12.2 yangilash + faqat-o‘qish yozuvlar soni so‘ralgan.
+2. Ertalab haqiqiy ish boshlanadi: avval Admin → Zaxira → “Hozir zaxira olish”, keyin test reys(lar)ni
+   “Reysni to‘liq bekor qilish” bilan, solyarka/kassa sinovlarini “Bekor” bilan tozalash → direktor paneli 0.
+   Test nakladnoy PA-000001 ni olgan — raqamlar qayta ishlatilmaydi (ataylab).
+3. Google xarita kaliti (loyiha bycotton-tizim, “surxan-xarita”) — Integratsiyalar’ga kiritilishi kerak.
+4. Google Sheets: service account yaratish → .json → Integratsiyalar → jadvalni email’ga “Editor” → Sinov.
+   Jadval: 1eWl21webrxSAV_NDdvv8dX1lWmu5gSEMSD1fvMWh8Mw (tizim faqat SPX… varaqlariga yozadi).
+5. Solyarka: zapravka qo‘shilgan, QR yorliqlar chop etilgan; tiket ochish va Hayitvoy bilan birinchi sinov qoldi.
+6. TV dashboard: foydalanuvchi o‘z dizaynlarini olib keladi → `/tv` ni shu dizayn bo‘yicha qayta qurish.
+7. Direktor panelining keyingi qismi: HOZIR filtri, muammolar markazi (Yangi/Ko‘rilmoqda/Yopilgan), texnika sahifasi (TR-07).
 
 ## Bajarilmagan / kutilmoqda
 
-- **Server (Hetzner) ga o‘rnatish** — `docs/DEPLOYMENT.md`, domen faol bo‘lmasa `tools/vaqtinchalik_https.sh`, keyin `tools/domen_ulash.sh`.
-- **Haqiqiy telefon + Telegram bilan qabul sinovi** — `docs/QABUL_SINOVI.md` (18 qadam), server kerak.
-- Telegram bot tokeni, arxiv kanali, Google Sheets xizmat akkaunti, rclone zaxira joyi — `docs/ARXIVLAR.md` (hammasi “ulanmagan”).
-- Biznes ma’lumotlari: 9.8 ga farq (310.2 vs 320), dala konturlari, narx, ish haqi stavkasi, kassa boshlang‘ich qoldig‘i, 80%/5 kun qoidasi — `docs/OCHIQ_MASALALAR.md`.
-- Azizbek ERP jonli ulanishi — tafsilotlar berilmagan (API tayyor: `docs/ERP_API.md`).
+- Serverdan tashqari zaxira (Hetzner Storage Box sotib olingan) — `bash tools/sozlash.sh zaxira`, root parol kerak;
+  osonroq yo‘l (Integratsiyalar’dan ulash) hali qilinmagan.
+- Test ishchi ismlarini yashirish (kerak bo‘lsa).
+- Biznes ma’lumotlari — `docs/OCHIQ_MASALALAR.md`. Azizbek ERP jonli ulanishi — `docs/ERP_API.md`.
+- Deploy faqat Codex orqali (Claude SSH qila olmaydi): har versiyada `docs/CODEX_YANGILASH.md` + Codex xabari.
 
 ## Muhim qarorlar (nega shunday)
 
