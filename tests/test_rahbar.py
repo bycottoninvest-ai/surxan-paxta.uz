@@ -96,3 +96,20 @@ def test_fuel_card_when_used(app, world):
     assert 'SOLYARKA' in home and 'Ulanmagan' not in home and '100 L' in home
     page = flat(world['rahbar'].get('/rahbar/solyarka').get_data(as_text=True))
     assert 'ZP-01' in page and 'o‘lchangan sarf emas' in page
+
+
+def test_tv_board_shows_trips_and_only_field_photos(app, world):
+    admin = world['admin']
+    admin.post('/admin/sozlamalar', {'set_auto_waybill_hand': '1', 'set_season_target_kg': '1000'})
+    tally = make_user(app, admin, 'mirjalol', 'tally')
+    wb, lid = trip(app, world, tally, ['100', '150'])
+    d = world['rahbar'].get('/tv/data.json').get_json()
+    assert d['kpi']['today'] == 250 and d['kpi']['season'] == 250 and d['kpi']['target_pct'] == 25.0
+    assert d['flow']['yolda'] == 1 and d['flow']['yolda_kg'] == 250
+    assert any(t['state'] == 'Yo‘lda' for t in d['trailers'])
+    assert d['brigades'][0]['kg'] == 250 and d['workers'][0]['kg'] == 150
+    assert d['photos'] and world['rahbar'].get(f'/tv/foto/{d["photos"][0]["id"]}').status_code == 200
+    with app.app_context():
+        get_db().execute("UPDATE photos SET category='cash'")
+    assert world['rahbar'].get(f'/tv/foto/{d["photos"][0]["id"]}').status_code == 404   # never cash/fuel/document photos
+    assert app.test_client().get(f'/tv/foto/{d["photos"][0]["id"]}').status_code == 403  # no key, no photo

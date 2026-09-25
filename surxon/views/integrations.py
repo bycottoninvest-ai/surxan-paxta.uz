@@ -717,7 +717,8 @@ def tv():
     ok, info = _tv_allowed()
     if not ok:
         return render_template('tv_denied.html'), 403
-    resp = make_response(render_template('tv.html'))
+    gkey = current_app.config['SURXON'].GOOGLE_MAPS_KEY or (get_setting('google_maps_key') or '').strip()
+    resp = make_response(render_template('tv.html', gmaps_key=gkey))
     if info and request.args.get('k'):
         # keep the key in an httpOnly cookie so it disappears from the address bar after first open
         resp.set_cookie('surxon_tv', info[1], max_age=3600 * 24 * 365, httponly=True, samesite='Lax',
@@ -732,25 +733,25 @@ def tv_data():
     ok, info = _tv_allowed()
     if not ok:
         return _err(403, 'tv_denied', 'TV kaliti noto‘g‘ri yoki TV ulanishi o‘chirilgan.', started=started)
-    db = get_db()
-    year = current_season(db)
-    day = today_str()
-    k = queries.day_kpis(year, day)
-    trailers = [{'code': t['trailer_code'], 'status': t['status'] or 'BOSH',
-                 'kg': (t['internal_kg'] if t['status'] == 'TOLDI' else t['live_kg']) or 0,
-                 'field': t['field_name'], 'tractor': t['tractor_code']} for t in queries.active_trailers()]
-    brigs = [{'name': b['name'], 'net_kg': b['net_kg'], 'area_ha': b['area_ha'],
-              'kg_ha': round(b['net_kg'] / b['area_ha']) if b['area_ha'] else None} for b in queries.brigadier_results(year)]
-    series = queries.harvest_series(year, 'daily', day)
-    season_net = scalar('''SELECT COALESCE(SUM(w.net_kg),0) FROM weighings w JOIN trailer_loads tl ON tl.id=w.load_id
-                           WHERE tl.season_year=? AND w.status='YAKUNLANDI' ''', (year,))
+    from ..tvboard import build
+    data = build(current_season(get_db()))
     if info and info[0]:
         _log(info[0]['id'], 200, started=started)
-    resp = jsonify({'generated_at': now_str(), 'season': year, 'date': day,
-                    'kpi': {'harvest': k['harvest'], 'hand': k['hand'], 'combine': k['combine'], 'net': k['net'],
-                            'sent': k['sent'], 'accepted': k['accepted'], 'in_transit': k['in_transit'],
-                            'season_net': season_net, 'trailers_busy': k['trailers_busy'], 'trailers_total': k['trailers_total']},
-                    'trailers': trailers, 'brigadiers': brigs, 'series': series,
-                    'target': get_float('daily_target_kg', None)})
+    resp = jsonify(data)
     resp.headers['Cache-Control'] = 'no-store'
+    return resp
+
+
+@bp.get('/tv/foto/<int:photo_id>')
+def tv_photo(photo_id):
+    """Thumbnails of field / trailer photos only (never cash, fuel or document photos)."""
+    ok, _ = _tv_allowed()
+    if not ok:
+        abort(403)
+    p = q("SELECT * FROM photos WHERE id=? AND voided_at IS NULL AND category IN ('trailer','field')", (photo_id,), one=True)
+    if not p:
+        abort(404)
+    from flask import send_from_directory
+    resp = make_response(send_from_directory(current_app.config['SURXON'].UPLOAD_DIR, p['thumb_path'] or p['path'], max_age=3600))
+    resp.headers['Cache-Control'] = 'private, max-age=3600'
     return resp

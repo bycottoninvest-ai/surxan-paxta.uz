@@ -1,115 +1,278 @@
 <!doctype html>
 <html lang="uz"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex">
-<title>SURXON · TV</title>
+<title>SURXAN-PAXTA · TV</title>
 <link rel="icon" href="{{ url_for('static', filename='img/favicon.png') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='vendor/leaflet/leaflet.css') }}">
 <style>
-  :root{--bg:#071f40;--card:#0d2c55;--line:#1d4478;--text:#fff;--muted:#9fb6d6;--green:#2fc16a;--orange:#ffa53a;--purple:#9b7bff;--blue:#4aa3ff;--red:#ff5b7f}
-  *{box-sizing:border-box}html,body{margin:0;height:100%;background:var(--bg);color:var(--text);font-family:Roboto,system-ui,Arial,sans-serif;overflow:hidden}
-  .wrap{display:grid;grid-template-rows:auto auto 1fr;height:100vh;padding:1.6vh 1.6vw;gap:1.6vh}
-  header{display:flex;align-items:center;gap:2vw}
-  header img{height:6vh}
-  header h1{font-size:3.2vh;margin:0;font-weight:700;letter-spacing:.1vw}
-  header .sp{flex:1}
-  .clock{font-size:4.5vh;font-weight:800;font-variant-numeric:tabular-nums}
-  .state{font-size:2vh;padding:.8vh 1.2vw;border-radius:99px;background:#12406f}
-  .state.bad{background:var(--red);animation:none}
-  .kpis{display:grid;grid-template-columns:repeat(5,1fr);gap:1.2vw}
-  .k{background:var(--card);border:1px solid var(--line);border-radius:1.4vh;padding:1.6vh 1.2vw}
-  .k .l{font-size:2.2vh;color:var(--muted)}
-  .k .v{font-size:6.4vh;font-weight:900;font-variant-numeric:tabular-nums;line-height:1.1;margin-top:.6vh}
-  .k .v small{font-size:2.6vh;font-weight:600;color:var(--muted)}
-  .k .s{font-size:2vh;color:var(--muted);margin-top:.4vh}
-  .main{display:grid;grid-template-columns:1.25fr 1fr;gap:1.2vw;min-height:0}
-  .panel{background:var(--card);border:1px solid var(--line);border-radius:1.4vh;padding:1.6vh 1.2vw;min-height:0;display:flex;flex-direction:column}
-  .panel h2{font-size:2.6vh;margin:0 0 1.2vh;font-weight:700}
-  .col{display:grid;grid-template-rows:1fr 1fr;gap:1.2vw;min-height:0}
-  .tr{display:grid;grid-template-columns:repeat(4,1fr);gap:1vw}
-  .t{border-radius:1vh;padding:1.2vh 1vw;background:#12396a;border-left:.6vh solid #54708f}
-  .t b{font-size:3.2vh;display:block}.t .kg{font-size:4.2vh;font-weight:900;font-variant-numeric:tabular-nums}
-  .t .st{font-size:2vh;font-weight:700}.t .f{font-size:1.9vh;color:var(--muted)}
-  .t.OCHIQ{border-color:var(--blue)}.t.TOLDI{border-color:var(--green);background:#0f4a3a}
-  .b{display:grid;grid-template-columns:18vw 1fr 12vw;align-items:center;gap:1vw;margin:.9vh 0;font-size:2.6vh}
-  .bar{height:2.6vh;background:#12396a;border-radius:99px;overflow:hidden}.bar span{display:block;height:100%;background:var(--green);border-radius:99px}
-  .b .n{text-align:right;font-weight:800;font-variant-numeric:tabular-nums}
-  .chart{flex:1;min-height:0;display:flex;align-items:flex-end;gap:1vw;padding-top:1vh}
-  .chart .d{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;gap:.6vh}
-  .chart .st{width:70%;display:flex;flex-direction:column-reverse;border-radius:.6vh .6vh 0 0;overflow:hidden}
-  .chart .h{background:var(--green)}.chart .c{background:var(--orange)}
-  .chart .lab{font-size:1.8vh;color:var(--muted)}.chart .val{font-size:1.8vh;font-weight:700}
-  .legend{font-size:1.9vh;color:var(--muted);margin-top:.6vh}.legend i{display:inline-block;width:1.6vh;height:1.6vh;border-radius:50%;vertical-align:-.2vh;margin:0 .4vw 0 1vw}
-  .offline{position:fixed;inset:auto 0 0 0;background:var(--red);color:#fff;text-align:center;font-size:3vh;font-weight:800;padding:1.4vh;display:none}
+:root{--bg:#04142b;--card:#0a2448;--card2:#0d2c57;--line:#1b477f;--text:#fff;--muted:#9db6d8;--green:#2fd26e;--lime:#a7d948;--yellow:#ffc53a;--red:#ff4f6d;--blue:#3aa0ff;--cyan:#39d0ff}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:#020b18;color:var(--text);font-family:'Roboto Condensed','Arial Narrow',Roboto,Arial,sans-serif;overflow:hidden}
+#stage{width:1920px;height:1080px;position:absolute;left:0;top:0;transform-origin:0 0;background:radial-gradient(1200px 600px at 50% 0,#0b2a55 0,#04142b 60%);padding:12px 14px;display:grid;grid-template-rows:84px 146px 1fr 58px;gap:12px}
+.card{background:linear-gradient(180deg,var(--card2),var(--card));border:1px solid var(--line);border-radius:10px;position:relative;overflow:hidden;min-height:0}
+.h{font-size:19px;font-weight:700;letter-spacing:.3px;text-transform:uppercase;padding:10px 14px 6px;color:#e8f1ff;display:flex;align-items:center;gap:8px}
+.h small{font-size:15px;color:var(--cyan);font-weight:600}
+.h .r{margin-left:auto;font-size:13px;color:var(--muted);text-transform:none;font-weight:400}
+.num{font-variant-numeric:tabular-nums}.muted{color:var(--muted)}
+.empty{color:var(--muted);font-size:17px;padding:10px 14px;grid-column:1/-1}
+svg.i{width:1em;height:1em;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;vertical-align:-.12em}
+header{display:grid;grid-template-columns:300px 330px 1fr 150px 190px 250px 160px;gap:10px}
+header>div{background:linear-gradient(180deg,var(--card2),var(--card));border:1px solid var(--line);border-radius:10px;display:flex;flex-direction:column;justify-content:center;padding:0 14px;overflow:hidden}
+.logo{background:#fff!important;align-items:center}.logo img{height:62px}
+.title b{font-size:30px;letter-spacing:.5px}.title span{font-size:18px;color:var(--muted)}
+.banner{background:linear-gradient(90deg,rgba(4,20,43,.15),rgba(4,20,43,.7)),url('{{ url_for('static', filename='img/hero-field.jpg') }}') center/cover!important;align-items:flex-end;padding-right:24px!important}
+.banner i{white-space:nowrap;font-size:32px;font-weight:800;font-style:italic;color:#fff;text-shadow:0 2px 10px #000;letter-spacing:.5px}
+.date b{font-size:26px}.date span{font-size:18px;color:var(--muted)}
+.clock{font-size:46px;font-weight:800;color:var(--cyan);align-items:center}
+.live{font-size:16px}.live b{display:flex;align-items:center;gap:8px;font-size:18px;margin-bottom:4px}
+.dot{width:12px;height:12px;border-radius:50%;background:var(--green);box-shadow:0 0 10px var(--green);animation:p 2s infinite;display:inline-block;flex:none}
+@keyframes p{50%{opacity:.35}}
+.live.stale .dot{background:var(--yellow);box-shadow:0 0 10px var(--yellow)}.live.stale b{color:var(--yellow)}
+.weather{flex-direction:row!important;align-items:center;gap:10px}.weather .ic{font-size:40px;color:var(--yellow)}.weather b{font-size:24px;display:block}.weather span{font-size:13px;color:var(--muted)}
+.kpis{display:grid;grid-template-columns:1fr 1fr 1fr 1fr .9fr 1fr;gap:10px}
+.k{display:flex;align-items:center;gap:14px;padding:0 16px}.k>div{min-width:0}
+.k .ico{font-size:52px;color:var(--green);flex:none}
+.k .l{font-size:19px;font-weight:700;text-transform:uppercase;color:#e8f1ff}
+.k .v{font-size:42px;font-weight:800;line-height:1.02;white-space:nowrap}.k .v small{font-size:26px;font-weight:600}
+.k .s{font-size:16px;color:var(--muted);white-space:nowrap}.k .s b{color:#fff}
+.ring{width:106px;height:106px;flex:none;position:relative}.ring svg{transform:rotate(-90deg)}.ring b{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:26px}
+.imgtile{background:linear-gradient(90deg,rgba(4,20,43,.85),rgba(4,20,43,.1)),url('{{ url_for('static', filename='img/sidebar-cotton.jpg') }}') center/cover;display:flex;align-items:center;padding:0 22px;font-size:26px;font-weight:800;line-height:1.15;text-shadow:0 2px 6px #000}
+main{display:grid;grid-template-columns:505px 1fr 488px;gap:12px;min-height:0}
+.col{display:flex;flex-direction:column;gap:12px;min-height:0}
+.flow{display:grid;grid-template-columns:1fr 24px 1fr 24px 1fr 24px 1fr;align-items:center;padding:4px 12px 12px}
+.st{border:2px solid var(--green);border-radius:10px;padding:6px 8px;background:rgba(47,210,110,.08);height:118px;display:flex;flex-direction:column}
+.st.b{border-color:var(--blue);background:rgba(58,160,255,.1)}
+.st .t{display:flex;align-items:center;justify-content:space-between;font-size:34px;color:var(--green)}.st.b .t{color:var(--blue)}
+.st .t b{font-size:38px;color:#fff}.st .n{font-size:14px;line-height:1.1;margin-top:2px}.st .kg{margin-top:auto;font-size:17px;font-weight:700;white-space:nowrap}
+.arr{color:var(--green);font-size:24px;text-align:center}
+.tl{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;padding:4px 12px 12px}
+.tl div{border:1.5px solid #2d5a8f;border-radius:8px;padding:7px 8px;font-size:16px;background:rgba(255,255,255,.03)}
+.tl div b{display:flex;align-items:center;gap:6px;font-size:18px}.tl div b:before{content:'';width:12px;height:12px;border-radius:50%;background:#7d8ea5}
+.tl .field,.tl .road,.tl .done{border-color:var(--green)}.tl .field b:before,.tl .road b:before,.tl .done b:before{background:var(--green)}
+.tl .done{background:rgba(47,210,110,.1)}
+.tl .full{border-color:var(--lime)}.tl .full b:before{background:var(--lime)}
+.tl .queue{border-color:var(--blue);background:rgba(58,160,255,.12)}.tl .queue b:before{background:var(--blue)}
+.cmb{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:4px 12px 12px}
+.cmb>div{border:1px solid #2d5a8f;border-radius:8px;display:flex;gap:12px;padding:10px;align-items:center;background:rgba(255,255,255,.03)}
+.cmb .pic{width:72px;height:72px;border-radius:8px;flex:none;background:linear-gradient(180deg,#2f8f3a,#1b5e25);display:flex;align-items:center;justify-content:center;font-size:54px;color:#e9ffe0}
+.cmb b{font-size:22px}.cmb .on{color:var(--green);font-size:15px;display:flex;align-items:center;gap:6px;white-space:nowrap}.cmb .off{color:var(--muted);font-size:16px}
+.cmb .kg{font-size:28px;font-weight:800;white-space:nowrap}.cmb .s{font-size:14px;color:var(--muted)}
+.strip{flex:1;min-height:60px;border-radius:10px;background:linear-gradient(0deg,rgba(4,20,43,.35),rgba(4,20,43,0)),url('{{ url_for('static', filename='img/hero-field.jpg') }}') center 70%/cover;border:1px solid var(--line)}
+#map{position:absolute;inset:44px 10px 10px 10px;border-radius:8px;background:#0b1b30}
+.legend{position:absolute;right:70px;top:54px;z-index:500;background:rgba(4,20,43,.88);border:1px solid var(--line);border-radius:8px;padding:10px 12px;font-size:15px}
+.legend div{display:flex;align-items:center;gap:8px;margin:3px 0}.legend i{width:14px;height:14px;border-radius:50%}
+.mstat{position:absolute;left:20px;bottom:20px;z-index:500;background:rgba(4,20,43,.88);border:1px solid var(--line);border-radius:8px;padding:10px 14px;font-size:19px;line-height:1.5}
+.lbl{background:none;border:none;box-shadow:none;color:#fff;font-weight:700;font-size:11px;text-shadow:0 0 3px #000,0 0 3px #000;padding:0}.lbl:before{display:none}
+.shots{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;padding:4px 12px 12px;height:calc(100% - 44px)}
+.shots div{border-radius:8px;background:#0b1b30 center/cover;position:relative;border:1px solid #2d5a8f;overflow:hidden}
+.shots div span{position:absolute;left:6px;bottom:6px;background:rgba(0,0,0,.6);padding:2px 8px;border-radius:6px;font-size:14px}
+.shots .none{display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:16px}
+table{width:100%;border-collapse:collapse;font-size:18px}
+td,th{padding:5px 8px;text-align:left;white-space:nowrap}th{font-size:15px;color:var(--muted);font-weight:500}
+.rk{display:inline-flex;width:24px;height:24px;border-radius:5px;align-items:center;justify-content:center;font-weight:800;background:#2d5a8f;font-size:15px}
+.rk1{background:#2fd26e;color:#04142b}.rk2{background:#3aa0ff;color:#04142b}.rk3{background:#ffc53a;color:#04142b}
+.bar{height:10px;border-radius:5px;background:#1a3a66;overflow:hidden;width:120px}.bar i{display:block;height:100%;border-radius:5px}
+.fu{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;padding:2px 12px 12px;height:calc(100% - 44px)}
+.fu div{border-radius:8px;border:1.5px solid var(--green);display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;background:rgba(47,210,110,.08)}
+.fu div.b{border-color:var(--blue);background:rgba(58,160,255,.1)}.fu div.y{border-color:var(--yellow);background:rgba(255,197,58,.1)}
+.fu .ic{font-size:28px}.fu b{font-size:24px;white-space:nowrap}.fu span{font-size:14px;color:var(--muted)}
+footer{display:grid;grid-template-columns:1fr 280px 190px;gap:10px}
+footer>div{background:linear-gradient(180deg,var(--card2),var(--card));border:1px solid var(--line);border-radius:10px;display:flex;align-items:center;overflow:hidden;padding:0 16px;font-size:18px}
+.tick{flex:1;overflow:hidden;white-space:nowrap;-webkit-mask-image:linear-gradient(90deg,transparent,#000 3%,#000 97%,transparent);mask-image:linear-gradient(90deg,transparent,#000 3%,#000 97%,transparent)}
+.tick>div{display:inline-block;padding-left:100%;animation:scroll 70s linear infinite}
+.tick span{margin-right:56px}.tick span b{color:var(--cyan);margin-right:10px}
+@keyframes scroll{to{transform:translateX(-100%)}}
+.lh{display:flex;align-items:center;gap:10px;font-weight:800;font-size:22px;color:var(--green);margin-right:18px;flex:none}
 </style></head>
-<body>
-<div class="wrap">
+<body data-gmaps="{{ gmaps_key or '' }}">
+<div id="stage">
   <header>
-    <img src="{{ url_for('static', filename='img/logo-light.png') }}" alt="SURXON">
-    <h1>PAXTA HISOB TIZIMI · <span id="season"></span>-mavsum · <span id="date"></span></h1>
-    <span class="sp"></span>
-    <span class="state" id="state">Yuklanmoqda…</span>
-    <span class="clock" id="clock">--:--</span>
+    <div class="logo"><img src="{{ url_for('static', filename='img/logo-dark.png') }}" alt="SURXON"></div>
+    <div class="title"><b>SURXAN-PAXTA.UZ</b><span>Har bir dala — Vatanimiz boyligi</span></div>
+    <div class="banner"><i>Paxtamiz — kelajagimiz!</i></div>
+    <div class="date"><b id="d-date">—</b><span id="d-wd"></span></div>
+    <div class="clock num" id="clock">--:--:--</div>
+    <div class="live" id="live"><b><span class="dot"></span><span id="live-t">Jonli ma’lumot</span></b><span>Oxirgi yangilanish: <span id="upd" class="num">—</span></span></div>
+    <div class="weather"><span class="ic" id="w-ic">☀</span><div><b id="w-t">—</b><span id="w-p"></span></div></div>
   </header>
+
   <section class="kpis">
-    <div class="k"><div class="l">Bugungi terim (dala)</div><div class="v" id="k-harvest">—</div><div class="s" id="k-split"></div></div>
-    <div class="k"><div class="l">Tarozi netto (bugun)</div><div class="v" id="k-net">—</div><div class="s" id="k-season"></div></div>
-    <div class="k"><div class="l">Naymanga jo‘natilgan</div><div class="v" id="k-sent">—</div><div class="s" id="k-transit"></div></div>
-    <div class="k"><div class="l">Nayman qabul qildi</div><div class="v" id="k-acc">—</div><div class="s">bugun</div></div>
-    <div class="k"><div class="l">Telashkalar band</div><div class="v" id="k-tr">—</div><div class="s" id="k-target"></div></div>
+    <div class="card k"><span class="ico"><svg class="i" viewBox="0 0 24 24"><path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.5 19 2c1 2 2 4.2 1 8-1.3 5-5 8-9 10Z"/><path d="M2 21c0-3 1.9-5.4 5.1-6"/></svg></span>
+      <div><div class="l">Bugun terildi</div><div class="v num" id="k-today">—</div><div class="s">Qo‘l terimi <b id="k-hand">—</b></div><div class="s">Kombayn <b id="k-comb">—</b></div></div></div>
+    <div class="card k"><span class="ico"><svg class="i" viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-8M22 20H2"/></svg></span>
+      <div><div class="l">Mavsum jami</div><div class="v num" id="k-season">—</div><div class="s" id="k-plan"></div></div></div>
+    <div class="card k"><div class="ring"><svg width="106" height="106"><defs><linearGradient id="g"><stop offset="0" stop-color="#3aa0ff"/><stop offset="1" stop-color="#2fd26e"/></linearGradient></defs><circle cx="53" cy="53" r="44" stroke="#1a3a66" stroke-width="12" fill="none"/><circle id="ring" cx="53" cy="53" r="44" stroke="url(#g)" stroke-width="12" fill="none" stroke-linecap="round" stroke-dasharray="0 999"/></svg><b class="num" id="k-pct">—</b></div>
+      <div><div class="l">Reja bajarilishi</div><div class="s" style="font-size:24px;color:#fff" id="k-target">—</div><div class="s" style="font-size:24px;color:#fff" id="k-done"></div></div></div>
+    <div class="card k"><span class="ico"><svg class="i" viewBox="0 0 24 24"><path d="M1 3h15v13H1zM16 8h4l3 3v5h-7"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg></span>
+      <div><div class="l">Punktga qabul</div><div class="v num" id="k-rec">—</div><div class="s" id="k-rec-s">Bugun, jami</div></div></div>
+    <div class="card k"><span class="ico"><svg class="i" viewBox="0 0 24 24"><path d="M12 3v18M5 7h14M5 7l-3 7a4 4 0 0 0 6 0L5 7ZM19 7l-3 7a4 4 0 0 0 6 0l-3-7ZM8 21h8"/></svg></span>
+      <div><div class="l">Farq</div><div class="v num" id="k-diff">—</div><div class="s">Dala va punkt qabuli</div></div></div>
+    <div class="card imgtile">SIFATLI PAXTA —<br>BARQAROR KELAJAK</div>
   </section>
-  <section class="main">
+
+  <main>
     <div class="col">
-      <div class="panel"><h2>Telashkalar (hozir)</h2><div class="tr" id="trailers"></div></div>
-      <div class="panel"><h2>Oxirgi 8 kun terimi (dala, kg)</h2><div class="chart" id="chart"></div>
-        <div class="legend"><i style="background:var(--green)"></i>Qo‘l terimi<i style="background:var(--orange)"></i>Kombayn</div></div>
+      <div class="card"><div class="h">Reyslar oqimi <small>(hozir)</small></div>
+        <div class="flow">
+          <div class="st"><div class="t"><svg class="i" viewBox="0 0 24 24"><path d="M3 17h13V9H9l-3 3H3zM16 12h3l2 3v2h-5"/><circle cx="6.5" cy="18" r="2"/><circle cx="17.5" cy="18" r="2"/></svg><b class="num" id="f-dalada">—</b></div><div class="n">Dalada<br>to‘lmoqda</div><div class="kg num" id="f-dalada-kg"></div></div>
+          <div class="arr">➜</div>
+          <div class="st b"><div class="t"><svg class="i" viewBox="0 0 24 24"><path d="M1 3h15v13H1zM16 8h4l3 3v5h-7"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg><b class="num" id="f-yolda">—</b></div><div class="n">Yo‘lda</div><div class="kg num" id="f-yolda-kg"></div></div>
+          <div class="arr" style="color:var(--blue)">➜</div>
+          <div class="st b"><div class="t"><svg class="i" viewBox="0 0 24 24"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 3v3h6V3M9 11h6M9 15h6"/></svg><b class="num" id="f-navbat">—</b></div><div class="n">Punktda<br>navbatda</div><div class="kg num" id="f-navbat-kg"></div></div>
+          <div class="arr">➜</div>
+          <div class="st"><div class="t"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="m8 12 3 3 5-6"/></svg><b class="num" id="f-qabul">—</b></div><div class="n">Qabul qilindi<br>(bugun)</div><div class="kg num" id="f-qabul-kg"></div></div>
+        </div></div>
+      <div class="card"><div class="h">Telashkalar holati</div><div class="tl" id="tl"></div></div>
+      <div class="card"><div class="h">Kombaynlar <small>(bugun)</small></div><div class="cmb" id="cmb"></div></div>
+      <div class="strip"></div>
     </div>
-    <div class="panel"><h2>Brigadalar natijasi (mavsum, tarozi netto)</h2><div id="brigs"></div></div>
-  </section>
+
+    <div class="col">
+      <div class="card" style="flex:1"><div class="h">Dalalar xaritasi <small>(hosildorlik, kg/ga)</small></div>
+        <div id="map"></div>
+        <div class="legend"><div style="font-weight:700;margin-bottom:4px">Hosildorlik (kg/ga)</div>
+          <div><i style="background:#2fd26e"></i>&gt; 2 500</div><div><i style="background:#a7d948"></i>1 500 – 2 500</div>
+          <div><i style="background:#ffc53a"></i>800 – 1 500</div><div><i style="background:#ff4f6d"></i>&lt; 800</div><div><i style="background:#7d8ea5"></i>Terim yo‘q</div></div>
+        <div class="mstat" id="mstat"></div>
+      </div>
+      <div class="card" style="height:250px;flex:none"><div class="h">Daladan jonli kadrlar <span class="r">Yangilanadi: 30 soniyada</span></div><div class="shots" id="shots"></div></div>
+    </div>
+
+    <div class="col">
+      <div class="card" style="height:262px;flex:none"><div class="h">Brigadalar reytingi <small>(bugun)</small></div>
+        <div style="padding:0 8px"><table><thead><tr><th>#</th><th>Brigada</th><th>Terim (kg)</th><th>Kishi</th><th>kg/kishi</th><th></th></tr></thead><tbody id="br"></tbody></table></div></div>
+      <div class="card" style="flex:1"><div class="h">Soatlik terim grafigi
+          <span class="r"><span style="color:var(--blue)">■</span> Bugun &nbsp; <span style="color:#c9d6e8">- -</span> Kecha</span></div>
+        <svg id="chart" viewBox="0 0 470 210" style="width:100%;height:calc(100% - 44px);padding:0 8px 8px"></svg></div>
+      <div style="display:grid;grid-template-columns:1.15fr 1fr;gap:12px;height:238px;flex:none">
+        <div class="card"><div class="h">Solyarka <small>(bugun)</small></div><div class="fu" id="fu"></div></div>
+        <div class="card"><div class="h" style="font-size:16px">Eng yaxshi terimchilar</div>
+          <div style="padding:0 6px"><table style="font-size:16px"><tbody id="tw"></tbody></table></div></div>
+      </div>
+    </div>
+  </main>
+
+  <footer>
+    <div><span class="lh"><span class="dot"></span>JONLI LENTA</span><div class="tick"><div id="tick"></div></div></div>
+    <div style="gap:10px;color:var(--cyan)"><svg class="i" viewBox="0 0 24 24" style="font-size:24px"><path d="M12 22s7-7.1 7-12a7 7 0 0 0-14 0c0 4.9 7 12 7 12Z"/><circle cx="12" cy="10" r="2.5"/></svg><span id="place" style="text-transform:uppercase"></span></div>
+    <div style="gap:8px;font-size:17px;line-height:1.1"><span style="font-size:34px;color:var(--green)">❦</span>Toza paxta —<br>toza istiqbol</div>
+  </footer>
 </div>
-<div class="offline" id="offline">ALOQA UZILDI — ko‘rsatilgan ma’lumot eskirgan bo‘lishi mumkin</div>
+
+<script src="{{ url_for('static', filename='vendor/leaflet/leaflet.js') }}"></script>
+<script src="{{ url_for('static', filename='js/basemap.js') }}"></script>
 <script>
 (function () {
   const $ = id => document.getElementById(id);
-  const fmt = n => n == null ? '—' : Math.round(n).toLocaleString('ru-RU').replace(/,/g, ' ');
   const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-  let last = 0;
-  setInterval(() => { const d = new Date(); $('clock').textContent = d.toTimeString().slice(0, 5); tick(); }, 1000);
-  function tick() {
-    if (!last) return;
-    const age = Math.round((Date.now() - last) / 1000);
-    const stale = age > 120;
-    $('state').className = 'state' + (stale ? ' bad' : '');
-    $('state').textContent = 'Yangilandi: ' + new Date(last).toTimeString().slice(0, 8) + (stale ? ' · ' + Math.round(age / 60) + ' daqiqa oldin' : '');
-    $('offline').style.display = stale ? 'block' : 'none';
+  const fmt = n => n == null ? '—' : String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+  const kg = n => n == null ? '—' : fmt(n) + ' kg';
+  // the 1920×1080 stage fits any screen (Full HD, 4K, a laptop)
+  function fit() { const s = Math.min(innerWidth / 1920, innerHeight / 1080), st = $('stage'); st.style.transform = `scale(${s})`; st.style.left = (innerWidth - 1920 * s) / 2 + 'px'; st.style.top = (innerHeight - 1080 * s) / 2 + 'px'; }
+  addEventListener('resize', fit); fit();
+  // the clock shows the farm's (server) time, whatever time zone the TV itself is set to
+  let skew = 0;
+  const clock = () => { $('clock').textContent = new Date(Date.now() + skew).toISOString().slice(11, 19); }; clock(); setInterval(clock, 1000);
+
+  let map, layer, fitted = false;
+  const colour = f => !f.kg_ha ? '#7d8ea5' : f.kg_ha > 2500 ? '#2fd26e' : f.kg_ha >= 1500 ? '#a7d948' : f.kg_ha >= 800 ? '#ffc53a' : '#ff4f6d';
+  function drawMap(d) {
+    const s = d.fields_stat;
+    $('mstat').innerHTML = `<div>▦ <b>${s.n}</b> ta dala</div><div>◩ <b>${fmt(s.ha)}</b> ga</div><div>◎ O‘rtacha <b>${s.avg ? fmt(s.avg) + ' kg/ga' : '—'}</b></div>`;
+    if (!window.L) return;
+    if (!map) {
+      const c = (d.map_center || '42.3,59.6').split(',').map(Number);
+      map = L.map('map', { zoomControl: false, attributionControl: false, dragging: false, scrollWheelZoom: false, doubleClickZoom: false, boxZoom: false, keyboard: false, touchZoom: false, zoomSnap: .25 }).setView(c, 13);
+      if (window.spxBasemap) spxBasemap(map); else L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}').addTo(map);
+      layer = L.layerGroup().addTo(map);
+    }
+    layer.clearLayers(); const b = [];
+    d.fields.forEach(f => {
+      if (!f.poly || f.poly.length < 3) return;
+      L.polygon(f.poly, { color: '#ffffff', weight: 1, opacity: .75, fillColor: colour(f), fillOpacity: .62 }).addTo(layer)
+        .bindTooltip(esc(f.code), { permanent: true, direction: 'center', className: 'lbl' });
+      b.push(...f.poly);
+    });
+    if (b.length && !fitted) { map.fitBounds(b, { padding: [16, 16] }); fitted = true; }
   }
+  function chart(rows) {
+    const W = 470, H = 210, l = 44, r = 8, t = 10, bt = 24;
+    const max = Math.max(1000, ...rows.map(x => Math.max(x.today, x.yesterday)));
+    const step = Math.pow(10, Math.floor(Math.log10(max))) / 2, top = Math.ceil(max / step) * step;
+    const x = i => l + (W - l - r) * (i + .5) / rows.length, y = v => t + (H - t - bt) * (1 - v / top), bw = (W - l - r) / rows.length * .55;
+    let s = '<defs><linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#39d0ff"/><stop offset="1" stop-color="#1b6fe0"/></linearGradient></defs>';
+    for (let k = 0; k <= 4; k++) { const v = top * k / 4; s += `<line x1="${l}" x2="${W - r}" y1="${y(v)}" y2="${y(v)}" stroke="#1b3d6b"/><text x="${l - 6}" y="${y(v) + 4}" fill="#9db6d8" font-size="11" text-anchor="end">${fmt(v)}</text>`; }
+    rows.forEach((d, i) => {
+      if (d.today) s += `<rect x="${x(i) - bw / 2}" y="${y(d.today)}" width="${bw}" height="${y(0) - y(d.today)}" rx="2" fill="url(#bg)"/>`;
+      if (i % 2 === 0) s += `<text x="${x(i)}" y="${H - 6}" fill="#9db6d8" font-size="11" text-anchor="middle">${d.h}</text>`;
+    });
+    s += `<polyline fill="none" stroke="#c9d6e8" stroke-width="1.6" stroke-dasharray="5 4" points="${rows.map((d, i) => x(i) + ',' + y(d.yesterday)).join(' ')}"/>`;
+    $('chart').innerHTML = s;
+  }
+  function render(d) {
+    const k = d.kpi, dt = d.date.split('-');
+    $('d-date').textContent = `${dt[2]}.${dt[1]}.${dt[0]}`; $('d-wd').textContent = d.weekday;
+    $('k-today').innerHTML = fmt(k.today) + ' <small>kg</small>';
+    $('k-hand').textContent = kg(k.hand); $('k-comb').textContent = kg(k.combine);
+    $('k-season').innerHTML = fmt(k.season) + ' <small>kg</small>';
+    $('k-plan').textContent = k.target ? 'Reja: ' + kg(k.target) : 'Mavsum rejasi kiritilmagan';
+    const pct = k.target_pct;
+    $('k-pct').textContent = pct == null ? '—' : pct.toFixed(1).replace('.', ',') + '%';
+    $('ring').setAttribute('stroke-dasharray', `${2 * Math.PI * 44 * Math.min(1, (pct || 0) / 100)} 999`);
+    $('k-target').textContent = k.target ? kg(k.target) : 'Reja kiritilmagan';
+    $('k-done').textContent = k.target ? kg(k.season) : '';
+    $('k-rec').innerHTML = fmt(k.received) + ' <small>kg</small>'; $('k-rec-s').textContent = `Bugun, ${k.received_n} ta reys`;
+    $('k-diff').textContent = k.diff_pct == null ? '—' : (k.diff_pct > 0 ? '+' : k.diff_pct < 0 ? '−' : '') + Math.abs(k.diff_pct).toFixed(1).replace('.', ',') + '%';
+    const f = d.flow;
+    [['dalada', f.dalada, f.dalada_kg], ['yolda', f.yolda, f.yolda_kg], ['navbat', f.navbat, f.navbat_kg], ['qabul', f.qabul, f.qabul_kg]]
+      .forEach(([id, n, w]) => { $('f-' + id).textContent = n; $('f-' + id + '-kg').textContent = w ? kg(w) : '—'; });
+    $('tl').innerHTML = d.trailers.length ? d.trailers.slice(0, 10).map(t => `<div class="${t.key}"><b>${esc(t.code)}</b>${esc(t.state)}</div>`).join('') : '<div class="empty">Telashka kiritilmagan</div>';
+    $('cmb').innerHTML = d.combines.length ? d.combines.slice(0, 2).map(c => `<div><div class="pic"><svg class="i" viewBox="0 0 24 24"><path d="M2 16h11V8H6L2 12zM13 11h5l3 3v2h-8"/><circle cx="6" cy="17" r="3"/><circle cx="18" cy="18" r="2"/><path d="M6 8V5h4"/></svg></div><div><b>${esc(c.code)}</b>
+        ${c.kg ? '<div class="on"><span class="dot"></span>Bugun ishladi</div>' : '<div class="off">Bugun yozuv yo‘q</div>'}
+        <div class="kg num">${kg(c.kg)}</div><div class="s">${c.last_at ? 'Oxirgi yozuv ' + esc(c.last_at.slice(5, 16).replace('-', '.')) : 'Hali yozuv yo‘q'}</div></div></div>`).join('')
+      : '<div class="empty">Kombayn kiritilmagan</div>';
+    drawMap(d);
+    $('shots').innerHTML = [0, 1, 2].map(i => { const p = d.photos[i]; return p ? `<div style="background-image:url('/tv/foto/${p.id}')"><span>${esc(p.code)} · ${esc(p.at)}</span></div>` : '<div class="none">Hali rasm yo‘q</div>'; }).join('');
+    const mx = Math.max(1, ...d.brigades.map(b => b.per || 0));
+    $('br').innerHTML = d.brigades.length ? d.brigades.slice(0, 5).map((b, i) => `<tr><td><span class="rk rk${i + 1}">${i + 1}</span></td><td>${esc(b.name)}</td><td class="num">${fmt(b.kg)}</td><td class="num">${b.people}</td><td class="num">${fmt(b.per)}</td>
+        <td><div class="bar"><i style="width:${Math.round((b.per || 0) / mx * 100)}%;background:${i < 3 ? 'var(--green)' : 'var(--yellow)'}"></i></div></td></tr>`).join('')
+      : '<tr><td colspan="6" class="muted" style="padding:14px 8px">Bugun hali qo‘l terimi yozilmagan</td></tr>';
+    chart(d.hourly);
+    $('fu').innerHTML = d.fuel ? `<div><span class="ic">⛽</span><b class="num">${fmt(d.fuel.taken)}<small style="font-size:16px"> L</small></b><span>Bugun olindi</span></div>
+        <div class="b"><span class="ic">⛽</span><b class="num">${fmt(d.fuel.given)}<small style="font-size:16px"> L</small></b><span>Texnikaga berildi</span></div>
+        <div class="${d.fuel.flagged ? 'y' : ''}"><span class="ic">${d.fuel.flagged ? '⚠' : '✓'}</span><b class="num">${d.fuel.flagged}</b><span>Tekshirish kerak</span></div>`
+      : '<div style="grid-column:1/-1"><span class="ic">⛽</span><b style="font-size:22px">Ulanmagan</b><span>Solyarka hisobi hali boshlanmagan</span></div>';
+    $('tw').innerHTML = d.workers == null ? '<tr><td class="muted">Sozlamada o‘chirilgan</td></tr>' : d.workers.length
+      ? d.workers.map((w, i) => `<tr><td>${i + 1}</td><td>${esc(w.name)}</td><td class="num" style="text-align:right">${fmt(w.kg)}</td></tr>`).join('')
+      : '<tr><td class="muted" style="padding:14px 8px">Bugun hali yozuv yo‘q</td></tr>';
+    const items = d.feed.length ? d.feed.map(x => `<span><b>${esc(x.time)}</b>${esc(x.text)}</span>`).join('') : '<span>Bugun hali hodisa yo‘q</span>';
+    if ($('tick').dataset.v !== items) { $('tick').innerHTML = items; $('tick').dataset.v = items; }
+    $('place').textContent = (d.weather.place || '') + ', O‘zbekiston';
+    $('upd').textContent = d.generated_at.slice(11, 19);
+  }
+  const WMO = c => c === 0 ? ['☀', 'Ochiq osmon'] : c <= 2 ? ['⛅', 'Qisman bulutli'] : c === 3 ? ['☁', 'Bulutli'] : c <= 48 ? ['🌫', 'Tuman'] : c <= 67 ? ['🌧', 'Yomg‘ir'] : c <= 77 ? ['❄', 'Qor'] : c <= 82 ? ['🌦', 'Jala'] : ['⛈', 'Momaqaldiroq'];
+  async function weather(w) {
+    $('w-p').textContent = w.place || '';
+    try {
+      const r = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${w.lat}&longitude=${w.lon}&current=temperature_2m,weather_code&timezone=auto`);
+      const d = await r.json(), [ic, t] = WMO(d.current.weather_code), v = Math.round(d.current.temperature_2m);
+      $('w-ic').textContent = ic; $('w-t').textContent = (v > 0 ? '+' : '') + v + '°C'; $('w-p').innerHTML = esc(w.place) + '<br>' + t;
+    } catch (_) { }
+  }
+  let wOn = false;
   async function load() {
     try {
       const r = await fetch('/tv/data.json', { credentials: 'same-origin', cache: 'no-store' });
-      if (r.status === 403) { location.reload(); return; }
-      const d = await r.json();
-      last = Date.now();
-      $('season').textContent = d.season; $('date').textContent = d.date.split('-').reverse().join('.');
-      const k = d.kpi;
-      $('k-harvest').innerHTML = fmt(k.harvest) + ' <small>kg</small>';
-      $('k-split').textContent = 'qo‘l ' + fmt(k.hand) + ' · kombayn ' + fmt(k.combine);
-      $('k-net').innerHTML = fmt(k.net) + ' <small>kg</small>';
-      $('k-season').textContent = 'mavsum: ' + fmt(k.season_net / 1000) + ' t';
-      $('k-sent').innerHTML = fmt(k.sent) + ' <small>kg</small>';
-      $('k-transit').textContent = 'yo‘lda: ' + k.in_transit + ' ta nakladnoy';
-      $('k-acc').innerHTML = fmt(k.accepted) + ' <small>kg</small>';
-      $('k-tr').textContent = k.trailers_busy + ' / ' + k.trailers_total;
-      $('k-target').textContent = d.target ? 'reja: ' + fmt(d.target) + ' kg (' + Math.round(k.harvest / d.target * 100) + '%)' : '';
-      const lab = { OCHIQ: 'Terim', TOLDI: 'TOLDI → tarozi', BOSH: 'Bo‘sh' };
-      $('trailers').innerHTML = d.trailers.map(t => `<div class="t ${esc(t.status)}"><b>${esc(t.code)}</b><div class="kg">${t.status === 'BOSH' ? '—' : fmt(t.kg) + ' kg'}</div><div class="st">${esc(lab[t.status] || t.status)}</div><div class="f">${esc(t.field || '')} ${t.tractor ? '· ' + esc(t.tractor) : ''}</div></div>`).join('');
-      const max = Math.max(1, ...d.brigadiers.map(b => b.net_kg));
-      $('brigs').innerHTML = d.brigadiers.map(b => `<div class="b"><span>${esc(b.name)}<br><small style="color:var(--muted);font-size:1.9vh">${fmt(b.area_ha)} ga · ${b.kg_ha == null ? '—' : fmt(b.kg_ha) + ' kg/ga'}</small></span><div class="bar"><span style="width:${b.net_kg / max * 100}%"></span></div><span class="n">${fmt(b.net_kg / 1000)} t</span></div>`).join('');
-      const s = d.series, tot = s.hand.map((h, i) => h + s.combine[i]), m = Math.max(1, ...tot);
-      $('chart').innerHTML = s.labels.map((l, i) => `<div class="d"><span class="val">${fmt(tot[i] / 1000)}t</span><div class="st" style="height:${tot[i] / m * 80}%"><div class="h" style="flex:${s.hand[i]}"></div><div class="c" style="flex:${s.combine[i]}"></div></div><span class="lab">${esc(l)}</span></div>`).join('');
-      tick();
-    } catch (e) { tick(); if (!last) { $('state').className = 'state bad'; $('state').textContent = 'Aloqa yo‘q'; $('offline').style.display = 'block'; } }
+      if (!r.ok) throw new Error(r.status);
+      const d = await r.json(); render(d);
+      const g = d.generated_at.match(/(\d+)-(\d+)-(\d+) (\d+):(\d+):(\d+)/);
+      if (g) skew = Date.UTC(+g[1], g[2] - 1, +g[3], +g[4], +g[5], +g[6]) - Date.now();
+      $('live').classList.remove('stale'); $('live-t').textContent = 'Jonli ma’lumot';
+      if (!wOn) { wOn = true; weather(d.weather); setInterval(() => weather(d.weather), 30 * 60e3); }
+    } catch (e) { $('live').classList.add('stale'); $('live-t').textContent = 'Eski ma’lumot'; }
   }
   load(); setInterval(load, 30000);
-  // reload the whole page every 6 hours to pick up new versions
-  setTimeout(() => location.reload(), 6 * 3600 * 1000);
+  setTimeout(() => location.reload(), 6 * 3600e3);    // picks up a new version without anyone touching the TV
 })();
 </script>
 </body></html>

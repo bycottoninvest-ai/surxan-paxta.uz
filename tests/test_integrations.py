@@ -116,7 +116,9 @@ def test_tv_access_and_no_private_data(app, world):
     data = tv.get('/tv/data.json').get_json()                 # cookie set on first open
     body = str(data)
     assert data['kpi']['net'] == 100
-    assert 'Gulbahor' not in body and '777777' not in body and 'amount' not in body
+    assert '777777' not in body and 'amount' not in body and 'so‘m' not in body     # never money on the TV
+    world['admin'].post('/admin/sozlamalar', {'set_tv_show_workers': '0'})
+    assert 'Gulbahor' not in str(tv.get('/tv/data.json').get_json())            # names can be switched off
     assert world['juma'].get('/tv/data.json').status_code == 200   # logged-in users need no key
     world['admin'].post('/admin/integratsiyalar', {'action': 'tv_off'})
     assert tv.get('/tv/data.json').status_code == 403

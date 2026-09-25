@@ -30,6 +30,8 @@ DEFAULTS = {
     'weather_place': ('Taxiatosh', 'Ob-havo joy nomi'),
     'map_center': ('42.3167,59.6000', 'Xarita markazi (lat,lon)'),
     'daily_target_kg': ('', 'Kunlik terim rejasi, kg (bo‘sh = reja ko‘rsatilmaydi)'),
+    'season_target_kg': ('', 'Mavsum terim rejasi, kg — TV’dagi “Reja bajarilishi” (bo‘sh = ko‘rsatilmaydi)'),
+    'tv_show_workers': ('1', 'TV’da bugungi eng yaxshi 5 terimchi (ism + familiya bosh harfi) ko‘rsatilsinmi (1/0)'),
     'report_feed': ('1', 'Hisobot kanaliga har bir muhim hodisa (reys tugadi, punkt qabul, kassa kirim/chiqim, kuzatuv '
                          'kechikishi) darhol yoziladi (1/0). Kunlik hisobot bundan tashqari keladi'),
     'kuzatuv_deadline_min': ('120', 'Kuzatuv: rasm/video so‘rovi javobi uchun necha daqiqa beriladi (keyin “KECHIKDI”)'),

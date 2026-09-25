@@ -26,7 +26,7 @@ Foydalanuvchi **“paxta”** desa (yoki shunga o‘xshash: “paxtani och”, �
 - Rol tekshiruvi `services.py` da (`_need`), web va Telegram uchun bir xil.
 - Nayman PDF nusxasida narx/summa yo‘q.
 - Namunaviy ma’lumot faqat `APP_MODE=test` va `data-test/` da.
-- Har o‘zgarishdan keyin: `pytest -q` (hozir 122 test o‘tadi), keyin commit + push (`main`).
+- Har o‘zgarishdan keyin: `pytest -q` (hozir 123 test o‘tadi), keyin commit + push (`main`).
 
 ## Tez buyruqlar
 
