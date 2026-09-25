@@ -351,6 +351,11 @@ def test_backup_from_live_wal_database_restores(app, world, tmp_path):
     assert restored.execute('PRAGMA integrity_check').fetchone()[0] == 'ok'
     assert restored.execute("SELECT value FROM settings WHERE key='probe'").fetchone()[0] == 'in-wal'
     assert restored.execute('SELECT SUM(kg) FROM harvests').fetchone()[0] == 85
+    # CSV archive of every business table next to the database copy (readable without this program)
+    import zipfile
+    z = zipfile.ZipFile(sorted(cfg.BACKUP_DIR.glob('surxon_csv_*.zip'))[-1])
+    assert {'harvests.csv', 'cash_entries.csv', 'payouts.csv', 'audit_logs.csv'} <= set(z.namelist())
+    assert 'kg' in z.read('harvests.csv').decode('utf-8-sig').splitlines()[0]
     live.close()
     # the restored file boots as a working app
     from surxon import create_app

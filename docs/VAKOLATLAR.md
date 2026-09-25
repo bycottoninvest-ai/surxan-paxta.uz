@@ -2,11 +2,15 @@
 
 Jadval koddagi `surxon/security.py` dan avtomatik yaratilgan. Tekshiruv server tomonida, xizmat qatlamida bajariladi: web, telefon va Telegram bot uchun bir xil. Menyuni yashirish himoya hisoblanmaydi — ruxsatsiz so‘rov 403 yoki xato bilan qaytadi.
 
+**Kassir cheklovi:** kassir faqat buxgalter tayyorlagan to‘lovlarni “berildi” qiladi, o‘z kassasining bugungi holatini ko‘radi va xarajat yozadi (buxgalter tasdiqlaydi). Kassa kitobi, hisobotlar, terim, telashka va boshqa sahifalar unga server tomonida yopiq.
+
+**Dala hisobchisi va punkt operatori** buxgalteriya/kassa ma’lumotlarini ko‘rmaydi.
+
 **Punkt operatori cheklovi:** punkt operatori (masalan Yunus) bitta punktga bog‘lanadi. U faqat o‘z punktiga jo‘natilgan telashkalarni ko‘radi va qabul qiladi; boshqa barcha sahifalar (terim, kassa, admin, hisobotlar, qidiruv) server tomonida yopiq — so‘rov punkt ekraniga qaytariladi yoki 403 bo‘ladi.
 
 **Brigadir cheklovi:** brigadir foydalanuvchisi bitta brigadaga bog‘lanadi. U faqat o‘z brigadasiga biriktirilgan dalalarda reys ochadi, terim yozadi, TOLDI qiladi, rasm va hisobotlarni ko‘radi. Boshqa brigadaning reysi va rasmi unga 403 qaytaradi.
 
-| Vakolat | Admin | Rahbar | Brigadir | Tarozi xodimi | Buxgalter | Kassa | Hisobchi (terim) | Haydovchi | Punkt operatori |
+| Vakolat | Admin | Rahbar | Brigadir | Tarozi xodimi | Buxgalter | Kassir | Hisobchi (terim) | Haydovchi | Punkt operatori |
 |---|---|---|---|---|---|---|---|---|---|
 | Bosh sahifa va umumiy ko‘rsatkichlar (`dashboard`) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | — |
 | Punkt ekrani: yo‘ldagi va kelgan yuklarni ko‘rish (`station.view`) | ✅ | ✅ | — | — | ✅ | — | — | — | ✅ |
@@ -21,14 +25,23 @@ Jadval koddagi `surxon/security.py` dan avtomatik yaratilgan. Tekshiruv server t
 | Nakladnoylarni ko‘rish (`waybill.view`) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | — | ✅ | — |
 | Nakladnoyni bekor qilish (`waybill.void`) | ✅ | ✅ | — | — | — | — | — | — | — |
 | Nayman qabulini kiritish (`nayman.write`) | ✅ | ✅ | — | — | ✅ | — | — | — | — |
-| To‘lovlarni ko‘rish (`payments.view`) | ✅ | ✅ | — | — | ✅ | ✅ | — | — | — |
-| To‘lov kiritish/bekor qilish (`payments.write`) | ✅ | ✅ | — | — | ✅ | ✅ | — | — | — |
-| Kassani ko‘rish (`cash.view`) | ✅ | ✅ | — | — | ✅ | ✅ | — | — | — |
-| Kassa kirim/chiqim (`cash.write`) | ✅ | — | — | — | ✅ | ✅ | — | — | — |
-| Xarajat kiritish (`expenses.write`) | ✅ | ✅ | — | — | ✅ | ✅ | — | — | — |
-| Ishchilar hisob-kitobi (`settlement.view`) | ✅ | ✅ | — | — | ✅ | ✅ | ✅ | — | — |
-| Ishlab chiqarish hisobotlari (`reports.view`) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | — | — |
-| Moliyaviy hisobotlar (`reports.finance`) | ✅ | ✅ | — | — | ✅ | ✅ | — | — | — |
+| Nayman to‘lovlarini ko‘rish (`payments.view`) | ✅ | ✅ | — | — | ✅ | — | — | — | — |
+| Nayman to‘lovini kiritish (`payments.write`) | ✅ | ✅ | — | — | ✅ | — | — | — | — |
+| Kassa kitobini ko‘rish (`cash.view`) | ✅ | ✅ | — | — | ✅ | — | — | — | — |
+| Kassa kirimi / avans / boshqa kassa yozuvi (`cash.write`) | ✅ | — | — | — | ✅ | — | — | — | — |
+| O‘z kassasi smenasi (bugungi kirim/chiqim/qoldiq) (`cash.shift`) | ✅ | ✅ | — | — | ✅ | ✅ | — | — | — |
+| Xarajat yozish (`expenses.write`) | ✅ | ✅ | — | — | ✅ | ✅ | — | — | — |
+| Xarajatni tasdiqlash / bekor qilish (`expenses.approve`) | ✅ | — | — | — | ✅ | — | — | — | — |
+| Ishchi va kombayn pul hisobini ko‘rish (`settlement.view`) | ✅ | ✅ | — | — | ✅ | — | — | — | — |
+| Buxgalteriya bo‘limi (`acct.view`) | ✅ | ✅ | — | — | ✅ | — | — | — | — |
+| To‘lov buyruqlarini ko‘rish (`payouts.view`) | ✅ | ✅ | — | — | ✅ | ✅ | — | — | — |
+| To‘lovni tayyorlash / bekor qilish / qaytarish (`payouts.prepare`) | ✅ | — | — | — | ✅ | — | — | — | — |
+| “Pul berildi” (naqd berish) (`payouts.pay`) | ✅ | — | — | — | ✅ | ✅ | — | — | — |
+| Kombayn tarifi va ish hajmi (`combine.finance`) | ✅ | — | — | — | ✅ | — | — | — | — |
+| Debitor / kreditor (`debts.write`) | ✅ | — | — | — | ✅ | — | — | — | — |
+| Kunni yopish (`dayclose`) | ✅ | — | — | — | ✅ | — | — | — | — |
+| Ishlab chiqarish hisobotlari (`reports.view`) | ✅ | ✅ | ✅ | ✅ | ✅ | — | ✅ | — | — |
+| Moliya hisobotlari (PDF/Excel) (`reports.finance`) | ✅ | ✅ | — | — | ✅ | — | — | — | — |
 | Foto arxivni ko‘rish (`photos.view`) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | — |
 | Rasm yuklash (`photos.upload`) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | — |
 | Rasmni yashirish (`photos.void`) | ✅ | ✅ | — | — | — | — | — | — | — |

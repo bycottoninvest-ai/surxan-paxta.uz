@@ -252,7 +252,8 @@ def test_permissions_money_is_closed_to_field_and_punkt(app, world):
         for url in money:
             assert who.get(url).status_code in (302, 403), (url,)
     # the cashier: only prepared payments and their own box
-    for url in ('/buxgalteriya', '/buxgalteriya/kassa', '/buxgalteriya/hisobot', '/kassa', '/buxgalteriya/qarzlar'):
+    for url in ('/buxgalteriya', '/buxgalteriya/kassa', '/buxgalteriya/hisobot', '/kassa', '/buxgalteriya/qarzlar', '/telashkalar',
+                '/nakladnoylar', '/foto', '/hisobotlar'):
         assert kassa.get(url).status_code in (302, 403), url
     assert kassa.get('/kassir').status_code == 200
     assert kassa.post('/buxgalteriya/tolov', {'kind': 'worker', 'target_id': 1, 'amount': '1'}).status_code == 403
@@ -316,3 +317,25 @@ def test_finance_report_numbers_and_exports(app, world):
     assert x.status_code == 200 and x.data[:2] == b'PK'
     home = flat(bux.get('/buxgalteriya').get_data(as_text=True))
     assert '46550000' in home and 'KIRIM' in home and 'KUNNIYOPISH' in home
+
+
+def test_erp_api_reads_accounting_read_only(app, world):
+    from test_integrations import api, make_key
+    admin, juma, bux, kassa = world['admin'], world['juma'], world['bux'], world['kassa']
+    admin.post('/admin/sozlamalar', {'set_worker_rate_hand': '1500'})
+    income(bux, '1 000 000')
+    lid = open_load(juma, world)
+    add(juma, lid, 'Akmal', '100')
+    r = prepare(bux, wid(app, 'Akmal'))
+    kassa.post(f'/buxgalteriya/tolov/{r["payout_id"]}/berildi', {})
+    key = make_key(admin, ['payouts', 'cash', 'harvests'])
+    b = api(app, key, '/worker-balances').get_json()
+    assert b['data'][0]['earned'] == 150_000 and b['data'][0]['paid'] == 150_000 and b['data'][0]['worker_name'] is None
+    p = api(app, key, '/payouts').get_json()['data'][0]
+    assert p['status'] == 'BERILDI' and p['doc_no'].startswith('PAY-')
+    c = api(app, key, '/cash-entries').get_json()['data']
+    assert {x['doc_no'][:3] for x in c} == {'INC', 'PAY'}
+    h = api(app, key, '/harvests').get_json()['data'][0]
+    assert (h['rate'], h['amount']) == (1500, 150_000)
+    assert api(app, key, '/debts').status_code == 403                       # scope not granted
+    assert app.test_client().post('/api/erp/v1/payouts', headers={'Authorization': f'Bearer {key}'}).status_code == 405

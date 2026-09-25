@@ -45,6 +45,13 @@ Rollar: admin, rahbar, brigadir (faqat o‘z brigadasi), tarozi, buxgalter, kass
    - Baza v4. Yangilanishdan oldin avtomatik nusxa olinadi: `*.oldin-vN-*.bak`. Checkpoint commit: `1eb2ecc`.
    - Test rejimi loginlari: `mirjalol` (hisobchi), `yunus` (punkt) / `Demo2026!`.
    - Rasmlardagi “BYCOTTON” brendi ishlatilmagan, logotip SURXON TAXIATOSH.
+8. **v2.4.0 — Buxgalteriya va kassa (2026-09-25)**, batafsil: `docs/BUXGALTERIYA.md`:
+   - Baza v5: `harvests.rate/rate_unit/amount` (narx tarixi), `cashboxes`, `payouts` (TAYYOR→BERILDI), `combine_work`, `cash_days`, `debts`, INC/EXP/PAY/ADJ/DEB raqamlar.
+   - Kod: `surxon/accounting.py` (qoidalar), `surxon/reporting.py` (hisobot, Telegram kunlik hisobot), `surxon/views/acct.py` (/buxgalteriya, /kassir).
+   - Rollar: buxgalter — hammasi moliyaviy; kassir — faqat tayyor to‘lovlar + o‘z kassasi (server gate); hisobchi/punkt — moliya yopiq.
+   - Sheets upsert (ID bo‘yicha, dublikat yo‘q); Telegram hisobot kanali `TELEGRAM_REPORT_CHAT_ID` (+ ixtiyoriy `TELEGRAM_REPORT_BOT_TOKEN`).
+   - ERP API: /payouts, /worker-balances, /combines, /debts, /cash-days (+ doc_no, rate, amount).
+   - Test rejimi: buxgalter / asadbek (kassir) / Demo2026!.
 
 Test loginlari (faqat test bazasi): `admin / Test2026!`; `juma`, `tarozi01`, `buxgalter`, `asadbek`, `rahbar` — `Demo2026!`.
 

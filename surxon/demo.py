@@ -148,3 +148,34 @@ def ensure_demo_punkt():
     db.execute('UPDATE trailer_loads SET station_id=? WHERE station_id IS NULL', (st['id'],))
     db.execute("UPDATE waybills SET destination=? WHERE destination='Nayman paxta qabul punkti'", (st['name'],))
     _backfill_trip_numbers(db)
+    ensure_demo_accounting(db)
+
+
+def ensure_demo_accounting(db):
+    """Test mode only: rates on sample weighings, combine tariffs, director money, two payments waiting for the cashier."""
+    from .db import _backfill_doc_numbers
+    if not db.execute('SELECT 1 FROM cashboxes LIMIT 1').fetchone():
+        db.execute("INSERT INTO cashboxes(name, created_at) VALUES ('Paxta mavsumi kassasi', ?)", (now_str(),))
+    box = db.execute('SELECT MIN(id) FROM cashboxes').fetchone()[0]
+    for t in ('cash_entries', 'expenses'):
+        db.execute(f'UPDATE {t} SET cashbox_id=? WHERE cashbox_id IS NULL', (box,))
+    db.execute("UPDATE harvests SET rate=1500, rate_unit='kg', amount=CAST(ROUND(kg*1500) AS INTEGER) "
+               "WHERE method='hand' AND rate IS NULL AND source='demo'")
+    db.execute("UPDATE equipment SET tariff_type='tonna', tariff_rate=250000 WHERE kind='kombayn' AND tariff_type IS NULL")
+    db.execute("UPDATE harvests SET rate=250000, rate_unit='tonna', amount=CAST(ROUND(kg*250) AS INTEGER) "
+               "WHERE method='combine' AND rate IS NULL AND source='demo'")
+    db.execute("UPDATE users SET cashbox_id=? WHERE role='cashier' AND cashbox_id IS NULL", (box,))
+    _backfill_doc_numbers(db)
+    if db.execute("SELECT 1 FROM cash_entries WHERE category='income'").fetchone():
+        return
+    from .accounting import add_income, prepare_payout, worker_balances
+    from .security import Actor
+    acc = db.execute("SELECT id, full_name FROM users WHERE role='accountant' ORDER BY id LIMIT 1").fetchone()
+    if not acc:
+        return
+    actor = Actor(acc['id'], 'accountant', name=acc['full_name'])
+    add_income(actor, amount=50_000_000, source='Direktor', note='DEMO: mavsum xarajatlari uchun')
+    year = db.execute('SELECT MAX(year) FROM seasons').fetchone()[0]
+    for w in sorted(worker_balances(year), key=lambda r: -r['payable'])[:2]:
+        if w['payable'] > 0:
+            prepare_payout(actor, kind='worker', target_id=w['id'], note='DEMO')

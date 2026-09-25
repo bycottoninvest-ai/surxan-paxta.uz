@@ -40,7 +40,9 @@ SCOPES = {
     'receivables': 'Naymandan qarzdorlik',
     'payments': 'To‘lovlar (tushum)',
     'expenses': 'Xarajatlar',
-    'cash': 'Kassa yozuvlari va qoldig‘i',
+    'cash': 'Kassa yozuvlari, qoldig‘i va kun yopilishlari',
+    'payouts': 'Ishchi / kombayn hisobi: hisoblangan, to‘langan, qoldiq, to‘lov buyruqlari',
+    'debts': 'Debitor / kreditor',
 }
 
 UNITS = {'mass': 'kg', 'money': 'UZS (so‘m, butun son)', 'area': 'ga (gektar)', 'yield': 'kg/ga',
@@ -389,7 +391,7 @@ def api_harvests():
     name = 'w.full_name' if 'workers' in g.erp_scopes else 'NULL'
     sel = f'''SELECT h.id, h.season_year, h.work_date, h.load_id, h.method, h.kg, h.worker_id, {name} AS worker_name,
                      h.field_id, f.code field_code, h.brigadier_id, b.name brigadier_name, t.code trailer_code,
-                     c.code combine_code, h.source, h.created_at, h.voided_at, h.void_reason,
+                     c.code combine_code, h.rate, h.rate_unit, h.amount, h.source, h.created_at, h.voided_at, h.void_reason,
                      {upd('h.created_at', 'h.voided_at')} AS updated_at
               FROM harvests h LEFT JOIN workers w ON w.id=h.worker_id LEFT JOIN fields f ON f.id=h.field_id
               LEFT JOIN brigadiers b ON b.id=h.brigadier_id LEFT JOIN equipment t ON t.id=h.trailer_id
@@ -500,7 +502,7 @@ def api_payments():
 @bp.get(API + '/expenses')
 @erp_endpoint('expenses')
 def api_expenses():
-    sel = f'''SELECT e.id, e.season_year, e.expense_date, e.category, e.amount, e.field_id, f.code field_code,
+    sel = f'''SELECT e.id, e.doc_no, e.status, e.season_year, e.expense_date, e.category, e.amount, e.field_id, f.code field_code,
                      eq.code equipment_code, e.payer, e.note, CASE WHEN e.cash_entry_id IS NOT NULL THEN 1 ELSE 0 END from_cash,
                      e.created_at, e.voided_at, e.void_reason, {upd('e.created_at', 'e.voided_at')} AS updated_at
               FROM expenses e LEFT JOIN fields f ON f.id=e.field_id LEFT JOIN equipment eq ON eq.id=e.equipment_id'''
@@ -513,10 +515,12 @@ def api_expenses():
 @erp_endpoint('cash')
 def api_cash():
     name = 'w.full_name' if 'workers' in g.erp_scopes else 'NULL'
-    sel = f'''SELECT c.id, c.season_year, c.entry_date, c.direction, c.category, c.amount, c.worker_id, {name} AS worker_name,
-                     c.counterparty, c.note, c.expense_id, c.payment_id, c.created_at, c.voided_at, c.void_reason,
+    sel = f'''SELECT c.id, c.doc_no, c.cashbox_id, cb.name cashbox_name, c.season_year, c.entry_date, c.direction, c.category,
+                     c.amount, c.worker_id, {name} AS worker_name, c.combine_id, c.source,
+                     c.counterparty, c.note, c.expense_id, c.payment_id, c.payout_id, c.debt_id, c.created_at, c.voided_at,
+                     c.void_reason,
                      {upd('c.created_at', 'c.voided_at')} AS updated_at
-              FROM cash_entries c LEFT JOIN workers w ON w.id=c.worker_id'''
+              FROM cash_entries c LEFT JOIN workers w ON w.id=c.worker_id LEFT JOIN cashboxes cb ON cb.id=c.cashbox_id'''
     f = Filters('entry_date', 'updated_at', None, 'season_year')
     rows, total, mx = f.run(sel, 'id')
     return envelope([_status_fields(r) for r in rows], f, total, mx)
@@ -527,6 +531,63 @@ def api_cash():
 def api_cash_balance():
     year = int(request.args['season']) if request.args.get('season', '').isdigit() else current_season(get_db())
     return envelope(_finance_block(year).get('cash_balance'), extra={'season': year})
+
+
+@bp.get(API + '/cash-days')
+@erp_endpoint('cash')
+def api_cash_days():
+    sel = '''SELECT cd.id, cd.day, cd.cashbox_id, cb.name cashbox_name, cd.opening, cd.inflow, cd.outflow, cd.system_balance,
+                    cd.counted, cd.diff, cd.reason, cd.closed_at, cd.closed_at AS updated_at, CAST(substr(cd.day,1,4) AS INTEGER) season_year
+             FROM cash_days cd JOIN cashboxes cb ON cb.id=cd.cashbox_id'''
+    f = Filters('day', 'updated_at', None, 'season_year')
+    rows, total, mx = f.run(sel, 'id')
+    return envelope(rows, f, total, mx, extra={'note': 'diff = counted − system_balance; farq kassa kitobiga ADJ yozuvi bo‘lib tushgan.'})
+
+
+@bp.get(API + '/payouts')
+@erp_endpoint('payouts')
+def api_payouts():
+    name = 'w.full_name' if 'workers' in g.erp_scopes else 'NULL'
+    sel = f'''SELECT p.id, p.doc_no, p.season_year, p.kind, p.purpose, p.worker_id, {name} AS worker_name, p.combine_id,
+                     e.code combine_code, p.amount, p.status, p.prepared_at, p.paid_at, p.cashbox_id, p.voided_at, p.void_reason,
+                     substr(p.prepared_at,1,10) prepared_date, {upd('p.prepared_at', 'p.paid_at', 'p.voided_at')} AS updated_at
+              FROM payouts p LEFT JOIN workers w ON w.id=p.worker_id LEFT JOIN equipment e ON e.id=p.combine_id'''
+    f = Filters('prepared_date', 'updated_at', None, 'season_year')
+    rows, total, mx = f.run(sel, 'id')
+    return envelope(rows, f, total, mx, extra={'statuses': {'TAYYOR': 'kassirda kutilmoqda', 'BERILDI': 'naqd berilgan',
+                                                             'BEKOR': 'berilmasdan bekor qilingan'}})
+
+
+@bp.get(API + '/worker-balances')
+@erp_endpoint('payouts')
+def api_worker_balances():
+    from ..accounting import worker_balances
+    year = int(request.args['season']) if request.args.get('season', '').isdigit() else current_season(get_db())
+    show_names = 'workers' in g.erp_scopes
+    rows = [{'worker_id': r['id'], 'worker_name': r['full_name'] if show_names else None, 'kg': r['kg'], 'earned': r['earned'],
+             'uncalculated_kg': r['uncalc_kg'], 'advances': r['advances'], 'paid': r['paid'], 'pending_order': r['pending'],
+             'balance': r['balance'], 'status': r['status']} for r in worker_balances(year)]
+    return envelope(rows, extra={'season': year, 'note': 'earned — har tortish o‘z vaqtidagi narxda (qayta hisoblanmaydi); '
+                                                        'uncalculated_kg — narx kiritilmagan paytdagi kg (0 deb hisoblanmagan).'})
+
+
+@bp.get(API + '/combines')
+@erp_endpoint('payouts')
+def api_combines():
+    from ..accounting import combine_balances
+    year = int(request.args['season']) if request.args.get('season', '').isdigit() else current_season(get_db())
+    keys = ('id', 'code', 'operator_name', 'tariff_type', 'tariff_rate', 'kg', 'work_days', 'hectares', 'earned', 'paid',
+            'pending', 'balance', 'uncalc_kg')
+    return envelope([{k: c[k] for k in keys} for c in combine_balances(year)], extra={'season': year})
+
+
+@bp.get(API + '/debts')
+@erp_endpoint('debts')
+def api_debts():
+    from ..accounting import debts
+    year = int(request.args['season']) if request.args.get('season', '').isdigit() else current_season(get_db())
+    return envelope(debts(year), extra={'season': year, 'directions': {'OLISH': 'biz olishimiz kerak',
+                                                                         'BERISH': 'biz berishimiz kerak'}})
 
 
 @bp.route(API + '/<path:rest>', methods=['POST', 'PUT', 'PATCH', 'DELETE'])

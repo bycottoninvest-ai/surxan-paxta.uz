@@ -1,4 +1,4 @@
-"""Consistent backups: SQLite online-backup API (safe while the app is running) + photo archive."""
+"""Consistent backups: SQLite online-backup API (safe while the app is running) + CSV archive + photo archive."""
 import sqlite3
 import tarfile
 import time
@@ -20,6 +20,7 @@ def run_backup(cfg):
         src.close()
     if ok != 'ok':
         raise RuntimeError(f'Backup integrity check failed: {ok}')
+    csv_out = export_csv(db_out, cfg.BACKUP_DIR / f'surxon_csv_{stamp}.zip')
     photos_out = cfg.BACKUP_DIR / f'surxon_photos_{stamp}.tar.gz'
     uploads = Path(cfg.UPLOAD_DIR)
     # Photos are append-only, so an incremental tar of the last 2 days plus a weekly full copy is enough.
@@ -43,7 +44,7 @@ def run_backup(cfg):
     fulls = sorted(cfg.BACKUP_DIR.glob('surxon_photos_*_full.tar.gz'))
     for old in fulls[:-8]:
         old.unlink()
-    msg = (f'Zaxira tayyor: {db_out.name} ({db_out.stat().st_size // 1024} KB), '
+    msg = (f'Zaxira tayyor: {db_out.name} ({db_out.stat().st_size // 1024} KB), {csv_out.name}, '
            f'{photos_out.name} ({count} ta rasm fayli{", to‘liq" if full else ""}). Eski fayllar o‘chirildi: {removed}.')
     if cfg.OFFSITE_RCLONE_REMOTE:
         try:
@@ -56,6 +57,34 @@ def run_backup(cfg):
     else:
         msg += ' Mustaqil (serverdan tashqari) zaxira ulanmagan.'
     return msg
+
+
+CSV_TABLES = ['harvests', 'trailer_loads', 'weighings', 'waybills', 'nayman_receipts', 'payments', 'cash_entries',
+              'expenses', 'payouts', 'combine_work', 'cash_days', 'debts', 'workers', 'fields', 'brigadiers', 'equipment',
+              'stations', 'cashboxes', 'seasons', 'audit_logs']
+
+
+def export_csv(db_file, out_zip):
+    """Every business table as CSV (UTF-8 with BOM, opens in Excel) — readable for years without this program."""
+    import csv
+    import io
+    import zipfile
+    con = sqlite3.connect(str(db_file))
+    try:
+        with zipfile.ZipFile(out_zip, 'w', zipfile.ZIP_DEFLATED) as z:
+            for t in CSV_TABLES:
+                try:
+                    cur = con.execute(f'SELECT * FROM {t}')
+                except sqlite3.OperationalError:
+                    continue
+                buf = io.StringIO()
+                w = csv.writer(buf)
+                w.writerow([d[0] for d in cur.description])
+                w.writerows(cur.fetchall())
+                z.writestr(f'{t}.csv', '\ufeff' + buf.getvalue())
+    finally:
+        con.close()
+    return out_zip
 
 
 def offsite_copy(cfg, test=False):

@@ -189,15 +189,25 @@ def load_user():
     return station_gate()
 
 
+# Cashier: only prepared payments, their own cash box shift and quick expenses.
+CASHIER_ENDPOINTS = STATION_ENDPOINTS | {'acct.cashier', 'acct.payout_pay', 'acct.payouts', 'acct.expense_pick',
+                                         'acct.expense_new'}
+
+
 def station_gate():
-    """A punkt operator's login opens only the punkt screens — enforced here for every request, not just hidden menus."""
+    """Punkt operator and cashier logins open only their own screens — enforced here for every request, not just
+    hidden menus."""
     user = g.get('user')
     ep = request.endpoint or ''
-    if not user or user['role'] != 'station' or ep in STATION_ENDPOINTS or ep.startswith('punkt.'):
+    if not user or user['role'] not in ('station', 'cashier'):
+        return None
+    if user['role'] == 'station' and (ep in STATION_ENDPOINTS or ep.startswith('punkt.')):
+        return None
+    if user['role'] == 'cashier' and ep in CASHIER_ENDPOINTS:
         return None
     if wants_json():
         return jsonify(ok=False, error='Bu amal uchun huquqingiz yo‘q.'), 403
-    return redirect(url_for('punkt.home'))
+    return redirect(url_for('punkt.home' if user['role'] == 'station' else 'acct.cashier'))
 
 
 def login_required(fn):

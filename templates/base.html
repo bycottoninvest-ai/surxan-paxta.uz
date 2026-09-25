@@ -26,19 +26,14 @@
       <div class="sub">PAXTA HISOB TIZIMI</div><div class="sub2">TAXIATOSH</div>
     </div>
     <nav class="nav">
-      {% if current_user['role'] in ('accountant', 'cashier') %}
-  <a href="{{ url_for('main.dashboard') }}" class="{{ 'active' if ep in ('acct.home', 'acct.cashier') }}">{{ icon('home') }}Bosh</a>
-  {% if current_user['role'] == 'accountant' %}<a href="{{ url_for('acct.workers') }}" class="{{ 'active' if ep == 'acct.workers' }}">{{ icon('users') }}To‘lovlar</a>
-  <a href="{{ url_for('acct.expense_pick') }}" class="primary">{{ icon('plus') }}Xarajat</a>
-  <a href="{{ url_for('acct.cash') }}" class="{{ 'active' if ep == 'acct.cash' }}">{{ icon('cash') }}Kassa</a>
-  {% else %}<a href="{{ url_for('acct.payouts', status='BERILDI', period='bugun') }}">{{ icon('history') }}Berilgan</a>
-  <a href="{{ url_for('acct.cashier') }}" class="primary">{{ icon('cash') }}To‘lash</a>
-  <a href="{{ url_for('acct.expense_pick') }}">{{ icon('receipt') }}Xarajat</a>{% endif %}
-  <a href="#" data-open-nav>{{ icon('menu') }}Boshqa</a>
-  {% elif current_user['role'] == 'station' %}
+      {% if current_user['role'] == 'station' %}
       {{ nav('punkt.home', 'Punkt', 'factory', None, ['punkt.home', 'punkt.trip']) }}
       {{ nav('punkt.scanner', 'QR skaner', 'camera') }}
       {{ nav('punkt.history', 'Bugungi tarix', 'history') }}
+      {% elif current_user['role'] == 'cashier' %}
+      {{ nav('acct.cashier', 'Pul beriladiganlar', 'cash') }}
+      {{ nav('acct.payouts', 'To‘lovlar tarixi', 'history') }}
+      {{ nav('acct.expense_pick', 'Xarajat yozish', 'receipt', None, ['acct.expense_pick', 'acct.expense_new']) }}
       {% else %}
       {{ nav('main.dashboard', 'Bosh sahifa', 'home') }}
       {{ nav('ops.harvest', 'Terim (Qo‘l terimi)', 'sprout', 'harvest.write') }}
@@ -118,7 +113,16 @@
   </div>
 </div>
 <nav class="bottom-nav">
-  {% if current_user['role'] == 'station' %}
+      {% if current_user['role'] in ('accountant', 'cashier') %}
+  <a href="{{ url_for('main.dashboard') }}" class="{{ 'active' if ep in ('acct.home', 'acct.cashier') }}">{{ icon('home') }}Bosh</a>
+  {% if current_user['role'] == 'accountant' %}<a href="{{ url_for('acct.workers') }}" class="{{ 'active' if ep == 'acct.workers' }}">{{ icon('users') }}To‘lovlar</a>
+  <a href="{{ url_for('acct.expense_pick') }}" class="primary">{{ icon('plus') }}Xarajat</a>
+  <a href="{{ url_for('acct.cash') }}" class="{{ 'active' if ep == 'acct.cash' }}">{{ icon('cash') }}Kassa</a>
+  {% else %}<a href="{{ url_for('acct.payouts', status='BERILDI', period='bugun') }}">{{ icon('history') }}Berilgan</a>
+  <a href="{{ url_for('acct.cashier') }}" class="primary">{{ icon('cash') }}To‘lash</a>
+  <a href="{{ url_for('acct.expense_pick') }}">{{ icon('receipt') }}Xarajat</a>{% endif %}
+  <a href="#" data-open-nav>{{ icon('menu') }}Boshqa</a>
+  {% elif current_user['role'] == 'station' %}
   <a href="{{ url_for('punkt.home') }}" class="{{ 'active' if ep == 'punkt.home' }}">{{ icon('factory') }}Punkt</a>
   <a href="{{ url_for('punkt.history') }}" class="{{ 'active' if ep == 'punkt.history' }}">{{ icon('history') }}Tarix</a>
   <a href="{{ url_for('punkt.scanner') }}" class="primary">{{ icon('camera') }}QR</a>

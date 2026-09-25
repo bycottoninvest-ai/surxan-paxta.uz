@@ -17,6 +17,7 @@ Holat belgilari halol ko‘rsatiladi:
 |---|---|---|
 | Nakladnoy PDF (serverda, avtomatik, versiyalar bilan) | ✅ tayyor, testlangan | ✅ ishlaydi (tashqi xizmat kerak emas) |
 | Yopiq Telegram arxiv kanali (PDF + reys rasmlari) | ✅ tayyor, soxta Telegram bilan testlangan | ❌ **ulanmagan** — bot tokeni va kanal ID si yo‘q |
+| Telegram hisobot kanali (kunlik hisobot, ogohlantirishlar) | ✅ tayyor, testlangan | ❌ **ulanmagan** — kanal ID si yo‘q |
 | Google Sheets nazorat nusxasi | ✅ tayyor, soxta Sheets bilan testlangan | ❌ **ulanmagan** — Google xizmat akkaunti va jadval yo‘q |
 | Mustaqil (serverdan tashqari) zaxira | ✅ tayyor (rclone) | ❌ **ulanmagan** — zaxira joyi (bulut) tanlanmagan |
 | Serverdagi kunlik zaxira | ✅ tayyor, tiklash testlangan | ⏳ server ishga tushgach ishlaydi |
@@ -56,3 +57,18 @@ Har qatorda voqea ID si bor. Bu nusxa **nazorat uchun**, asosiy hisob tizimning 
 4. `docker compose up -d` → Integratsiyalar → **Sinov**.
 
 Har tungi zaxiradan keyin yangi fayllar nusxalanadi. `rclone copy` masofadagi fayllarni o‘chirmaydi. Iloji bo‘lsa, versiyalash yoqilgan bucket va faqat yozish huquqli kalit ishlating.
+
+
+## Telegram hisobot kanali (faqat o‘qish)
+
+Bu kanal Azizbek loyihasidan alohida, faqat SURXAN-PAXTA.UZ uchun. Unga odamlar yozmaydi — tizim yuboradi.
+
+1. Telegram'da **yopiq kanal** yarating, masalan “SURXAN-PAXTA hisobot”. Rahbar va buxgalterni obunachi qiling.
+2. Botni kanalga **admin** qiling. Asosiy bot bo‘lishi mumkin; alohida bot xohlasangiz, @BotFather'dan yangi bot oching.
+3. Kanal ID sini oling (−100… bilan boshlanadi).
+4. Serverdagi `.env` ga yozing: `TELEGRAM_REPORT_CHAT_ID=-100…`. Alohida bot bo‘lsa, `TELEGRAM_REPORT_BOT_TOKEN=…` ham yozing. Keyin `docker compose up -d`.
+5. Integratsiyalar sahifasida “Telegram hisobot kanali” → **Sinov**.
+
+Kanalga keladi: kunlik hisobot (sozlama `report_time`, odatda 21:00, yoki kun yopilganda — kuniga bir marta), katta kg farqi, kassa farqi, tasdiqlanmagan xarajatlar. Xabar yo‘qolsa ham asl ma’lumot serverda qoladi.
+
+Google Sheets varaqlari (avtomatik yaratiladi): KASSA KIRIM-CHIQIM, TO‘LOVLAR, AVANSLAR, XARAJATLAR, TERIMCHILAR, PAXTA-PUNKT, DEBITOR-KREDITOR, KUNLIK-YOPILISH, NAYMAN TO‘LOVLARI. Har qator ID bilan yangilanadi — qayta yuborilsa ham takror qator bo‘lmaydi.

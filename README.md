@@ -42,6 +42,7 @@ Bitta backend va bitta baza bilan ishlaydi. Uning bir necha xil ko‘rinishi bor
 - [Serverdagi qabul sinovi bayonnomasi](docs/QABUL_SINOVI.md)
 - [Zaxira nusxa va tiklash, migratsiya](docs/TIKLASH.md)
 - [Daladan punktgacha: telashka, nakladnoy, punkt tarozisi](docs/PUNKT.md)
+- [Buxgalteriya va kassa](docs/BUXGALTERIYA.md)
 - [Vakolatlar jadvali](docs/VAKOLATLAR.md)
 - [Azizbek ERP API](docs/ERP_API.md)
 - [Tekshiruv natijalari va tezlik o‘lchovi](docs/TEKSHIRUV.md)
@@ -65,7 +66,7 @@ surxon/
   outbox.py            Telegram arxiv kanali va Google Sheets'ga ishonchli yuborish
   views/               sahifalar, ERP API, TV
 templates/  static/    dizayn
-tests/                 51 ta avtomatik test
+tests/                 64 ta avtomatik test
 tools/                 skrinshot va tezlik o‘lchovi
 ```
 

@@ -32,7 +32,9 @@ Limit: bir kalitga daqiqasiga 120 ta so‘rov (`429 rate_limited`).
 | `receivables` | `/receivables` — Naymandan qarzdorlik; `summary` ichida qarz bloki |
 | `payments` | `/payments` |
 | `expenses` | `/expenses` |
-| `cash` | `/cash-entries`, `/cash-balance`; `summary` ichida kassa bloki |
+| `cash` | `/cash-entries`, `/cash-balance`, `/cash-days`; `summary` ichida kassa bloki |
+| `payouts` | `/worker-balances`, `/payouts`, `/combines` — hisoblangan / to‘langan / qoldiq, to‘lov buyruqlari |
+| `debts` | `/debts` — debitor / kreditor |
 
 ## Umumiy parametrlar (ro‘yxat endpointlari)
 
@@ -103,6 +105,13 @@ Narx yoki boshlang‘ich qoldiq noma’lum bo‘lsa, summa `null` qaytadi. Yonid
 | `/api/erp/v1/expenses` | expenses | Xarajatlar |
 | `/api/erp/v1/cash-entries` | cash | Kassa daftari |
 | `/api/erp/v1/cash-balance` | cash | Kassa qoldig‘i yoki `not_calculated` |
+| `/api/erp/v1/cash-days` | cash | Kun yopilishlari: tizim, real, farq, sabab |
+| `/api/erp/v1/worker-balances?season=` | payouts | Har ishchi: kg, hisoblangan (har tortish o‘z narxida), narxsiz kg, avans, to‘langan, qoldiq, holat |
+| `/api/erp/v1/payouts` | payouts | To‘lov buyruqlari: PAY-raqam, TAYYOR / BERILDI / BEKOR |
+| `/api/erp/v1/combines?season=` | payouts | Kombayn tarifi, kg, kun, gektar, hisoblangan, to‘langan, qoldiq |
+| `/api/erp/v1/debts?season=` | debts | Biz olamiz / biz beramiz, qolgan summa |
+
+`/harvests` da `rate`, `rate_unit`, `amount` — tortish paytidagi narx va summa (keyin qayta hisoblanmaydi). `/cash-entries` va `/expenses` da `doc_no` (INC-/EXP-/PAY-/ADJ-…) — har operatsiyaning o‘zgarmas ID si.
 
 ## Xato kodlari
 
