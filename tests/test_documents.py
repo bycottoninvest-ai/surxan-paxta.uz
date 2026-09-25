@@ -96,6 +96,7 @@ def test_archive_delivery_when_configured(app, world, monkeypatch):
     monkeypatch.setattr(ob, 'telegram_upload', lambda method, fields, files, token=None: sent.append((method, fields, list(files))) or {'ok': True})
     monkeypatch.setattr(ob, 'sheets_append', lambda sheet, r: rows.append((sheet, r)))
     monkeypatch.setattr(ob, 'sheets_upsert', lambda sheet, r, header=None: rows.append((sheet, r)))
+    monkeypatch.setattr(ob, 'sheets_upsert_many', lambda sheet, rs, header=None: rows.append((sheet, rs)))
     cfg = app.config['SURXON']
     cfg.TELEGRAM_ARCHIVE_CHAT_ID, cfg.GOOGLE_SHEETS_ID, cfg.GOOGLE_SERVICE_ACCOUNT_FILE = '-100123', 'sheet', '/x.json'
     lid, wid = chain(world)
@@ -106,7 +107,7 @@ def test_archive_delivery_when_configured(app, world, monkeypatch):
         methods = [m for m, _, _ in sent]
         assert methods.count('sendDocument') == 2 and methods.count('sendPhoto') == 1
         assert all(f['chat_id'] == '-100123' for _, f, _ in sent)
-        assert {'PAXTA-PUNKT', 'NAYMAN TO‘LOVLARI'} <= {s for s, _ in rows}
+        assert {'PAXTA-PUNKT', 'NAYMAN TO‘LOVLARI', 'UMUMIY'} <= {s for s, _ in rows}
         assert ob.run_once()['sent'] == 0                    # nothing sent twice
         st = {s['channel']: s['state'] for s in ob.status()}
         assert st['telegram_archive'] == 'working' and st['sheets'] == 'working' and st['offsite'] == 'not_connected'
