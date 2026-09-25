@@ -10,7 +10,7 @@ from contextlib import contextmanager
 
 from flask import current_app, g
 
-SCHEMA_VERSION = 8
+SCHEMA_VERSION = 9
 
 SCHEMA = r'''
 CREATE TABLE IF NOT EXISTS brigadiers (
@@ -752,6 +752,33 @@ CREATE TABLE IF NOT EXISTS fuel_ops (
 );
 CREATE INDEX IF NOT EXISTS idx_fuel_ops_keeper ON fuel_ops(keeper_id, id);
 CREATE INDEX IF NOT EXISTS idx_fuel_ops_equipment ON fuel_ops(equipment_id, created_at);
+
+-- v9: field contours imported from KML / GeoJSON. A batch is parsed and kept for review; nothing reaches the
+-- fields table until the person confirms names, areas and brigades. Re-importing matches by source_id (no duplicates).
+CREATE TABLE IF NOT EXISTS field_imports (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  filename TEXT,
+  sha256 TEXT NOT NULL,
+  count INTEGER NOT NULL,
+  map_total_ha REAL NOT NULL,
+  data_json TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'KORIB_CHIQISH' CHECK (status IN ('KORIB_CHIQISH','SAQLANDI','BEKOR')),
+  created_by INTEGER REFERENCES users(id),
+  created_at TEXT NOT NULL,
+  saved_by INTEGER REFERENCES users(id),
+  saved_at TEXT,
+  result_json TEXT
+);
+-- v9: which brigade a field was given to, and from when (past trips keep the brigade written on them)
+CREATE TABLE IF NOT EXISTS field_assignments (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  field_id INTEGER NOT NULL REFERENCES fields(id),
+  brigadier_id INTEGER REFERENCES brigadiers(id),
+  from_date TEXT NOT NULL,
+  set_by INTEGER REFERENCES users(id),
+  set_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_field_assign ON field_assignments(field_id, id);
 CREATE INDEX IF NOT EXISTS idx_media_items_thumb ON media_items(thumb_path);
 
 CREATE TABLE IF NOT EXISTS schema_version (version INTEGER NOT NULL);
@@ -867,6 +894,13 @@ def migrate(db):
     _add_column(db, 'equipment', 'fuel_carrier', 'INTEGER NOT NULL DEFAULT 0')
     _add_column(db, 'equipment', 'qr_token', 'TEXT')
     db.execute('CREATE UNIQUE INDEX IF NOT EXISTS uq_equipment_qr ON equipment(qr_token)')
+    # v9: where a field's area comes from (map = computed from the contour, not yet confirmed; qo‘lda / tasdiqlangan =
+    # a person entered or confirmed it), the computed map area kept apart, and the contour's source id (KML-001…)
+    _add_column(db, 'fields', 'source_id', 'TEXT')
+    _add_column(db, 'fields', 'map_area_ha', 'REAL')
+    _add_column(db, 'fields', 'area_source', "TEXT CHECK (area_source IS NULL OR area_source IN ('xarita','qo‘lda','tasdiqlangan'))")
+    db.execute('CREATE UNIQUE INDEX IF NOT EXISTS uq_fields_source ON fields(source_id)')
+    _add_column(db, 'field_seasons', 'crop', 'TEXT')
     # Future column changes go here as: if version < N: ALTER TABLE ...
     db.execute('UPDATE schema_version SET version=? WHERE version < ?', (SCHEMA_VERSION, SCHEMA_VERSION))
 

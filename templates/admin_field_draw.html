@@ -1,0 +1,60 @@
+{% extends 'base.html' %}
+{% from 'macros.html' import icon, csrf with context %}
+{% set page_title = 'Xaritada dala chizish' %}
+{% block content %}
+<div class="page-h"><a href="{{ url_for('admin.fields') }}" class="icon-btn">{{ icon('chev-left') }}</a><h1>{{ icon('map','lg') }} Xaritada yangi dala chizish</h1>
+  <span class="sub">Burchaklarni ketma-ket bosing → maydon o‘zi hisoblanadi → nom va brigadir → Saqlash. Mavjud dalalar kulrang ko‘rinadi.</span></div>
+<div class="fi-wrap">
+  <section class="card fi-map-card"><div class="map tall" id="dmap" data-center="{{ map_center }}"></div>
+    <div class="fd-bar" style="padding:8px 10px">
+      <button type="button" class="btn btn-light btn-sm" id="fd-undo">↶ Oxirgi nuqta</button>
+      <button type="button" class="btn btn-light btn-sm" id="fd-del" disabled>Tanlangan nuqtani o‘chirish</button>
+      <button type="button" class="btn btn-ghost btn-sm" id="fd-clear">Tozalash</button>
+      <span class="spacer"></span><span>Maydon: <span class="fd-area" id="fd-area">0.00 ga</span></span></div>
+    <div class="tiny muted" style="padding:0 10px 8px">Nuqtani surish — tortib boring. Ikki nuqta orasiga qo‘shish — o‘rtadagi kichik doirani bosing.
+      Maydon WGS84 bo‘yicha hisoblanadi va “xaritadan hisoblangan” deb saqlanadi (tasdiqlangan maydonni pastda yozsa bo‘ladi).
+      Fon surati jonli emas.</div>
+    <div class="hm-msg warn" id="fd-overlap" hidden></div></section>
+  <section class="card"><div class="card-b">
+    <form method="post" class="form" id="fd-form">{{ csrf() }}<input type="hidden" name="polygon_json" id="fd-poly">
+      <div class="f h"><label>Kod <span class="req">*</span></label><input name="code" value="{{ code }}" required></div>
+      <div class="f h"><label>Nomi / kontur <span class="req">*</span></label><input name="name" value="Dala {{ code[2:] }}" required></div>
+      <div class="f h"><label>Brigadir</label><select name="brigadier_id"><option value="">—</option>{% for b in brigadiers %}<option value="{{ b.id }}">{{ b.name }}</option>{% endfor %}</select></div>
+      <div class="f h"><label>Ekin</label><select name="crop"><option value="">—</option>{% for c in crops %}<option>{{ c }}</option>{% endfor %}</select></div>
+      <div class="f h"><label>Tasdiqlangan ga <span class="muted">(ixtiyoriy)</span></label><input name="confirmed_ha" inputmode="decimal" placeholder="bo‘sh = xaritadagi"></div>
+      <div class="f"><button class="btn btn-primary btn-block" id="fd-save" disabled>Saqlash</button></div>
+    </form></div></section>
+</div>
+<script type="application/json" id="fd-others">{{ others|tojson }}</script>
+{% endblock %}
+{% block scripts %}
+<link rel="stylesheet" href="{{ url_for('static', filename='vendor/leaflet/leaflet.css') }}">
+<script src="{{ url_for('static', filename='vendor/leaflet/leaflet.js') }}"></script>
+<script src="{{ url_for('static', filename='js/basemap.js') }}?v={{ version }}"></script>
+<script src="{{ url_for('static', filename='js/fielddraw.js') }}?v={{ version }}"></script>
+<script>
+(function () {
+  const el = document.getElementById('dmap'), c = (el.dataset.center || '42.3167,59.6').split(',').map(Number);
+  const map = L.map(el).setView(c, 14); spxBasemap(map);
+  const others = JSON.parse(document.getElementById('fd-others').textContent), all = [];
+  others.forEach(o => { L.polygon(o.poly, { color: '#f5b700', weight: 1.5, dashArray: '4 3', fillOpacity: .12, interactive: false }).addTo(map)
+    .bindTooltip(o.code, { permanent: false }); all.push(...o.poly); });
+  if (all.length) map.fitBounds(all, { padding: [20, 20] });
+  const inside = (p, poly) => { let r = false; for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const [yi, xi] = poly[i], [yj, xj] = poly[j];
+    if (((yi > p[0]) !== (yj > p[0])) && (p[1] < (xj - xi) * (p[0] - yi) / (yj - yi) + xi)) r = !r; } return r; };
+  const ed = spxEditor(map, { points: [], onChange: (pts, ha) => {
+    document.getElementById('fd-area').textContent = ha.toFixed(2) + ' ga';
+    document.getElementById('fd-poly').value = pts.length >= 3 ? JSON.stringify(pts) : '';
+    document.getElementById('fd-save').disabled = pts.length < 3;
+    const hit = others.filter(o => pts.some(p => inside(p, o.poly)) || o.poly.some(p => pts.length >= 3 && inside(p, pts))).map(o => o.code);
+    const w = document.getElementById('fd-overlap'); w.hidden = !hit.length;
+    w.textContent = hit.length ? 'Diqqat: yangi chegara mavjud dala bilan ustma-ust tushyapti — ' + hit.join(', ') + '. Tekshiring.' : '';
+  }, onSelect: i => { document.getElementById('fd-del').disabled = i < 0; } });
+  ed.start();
+  document.getElementById('fd-undo').addEventListener('click', () => ed.undo());
+  document.getElementById('fd-del').addEventListener('click', () => ed.removeSelected());
+  document.getElementById('fd-clear').addEventListener('click', () => ed.clear());
+})();
+</script>
+{% endblock %}

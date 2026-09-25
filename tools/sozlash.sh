@@ -101,6 +101,17 @@ sheets-sinov)
 holat)
   flask holat
   ;;
+google)
+  echo "Google Cloud’dagi Map Tiles API kalitini nusxalab qo‘ying (ekranda ko‘rinmaydi), keyin Enter."
+  echo "Bo‘sh qoldirsangiz — Google foni o‘chiriladi (bepul Esri foni qoladi)."
+  read -rsp "   KALIT: " K; echo
+  K=$(echo "$K" | tr -d '[:space:]')
+  if [ -n "$K" ] && ! [[ "$K" =~ ^AIza[0-9A-Za-z_-]{30,}$ ]]; then echo "Kalit ko‘rinishi noto‘g‘ri (AIza… bilan boshlanadi)"; exit 1; fi
+  setenv GOOGLE_MAPS_KEY "$K"
+  restart
+  [ -n "$K" ] && echo "✅ Kalit saqlandi. Saytda xarita → qatlamlar → “Google sun’iy yo‘ldosh”. Ochilmasa: kalit cheklovi (sayt manzili) va billingni tekshiring." \
+             || echo "Google foni o‘chirildi."
+  ;;
 *)
-  echo "Foydalanish: bash tools/sozlash.sh telegram | sheets | sheets-sinov | zaxira | narx | holat"; exit 1;;
+  echo "Foydalanish: bash tools/sozlash.sh telegram | sheets | sheets-sinov | zaxira | narx | google | holat"; exit 1;;
 esac

@@ -101,7 +101,7 @@ def equipment_live(day):
 
 def field_yields(year, brig=None):
     extra = ' AND f.brigadier_id=?' if brig else ''
-    return q(f'''SELECT f.id, f.code, f.name, COALESCE(fs.area_ha, f.area_ha) area_ha, f.polygon_json, b.name brigadier_name,
+    return q(f'''SELECT f.id, f.code, f.name, COALESCE(fs.area_ha, f.area_ha) area_ha, f.polygon_json, f.area_source, b.name brigadier_name,
                         COALESCE((SELECT SUM(w.net_kg) FROM weighings w JOIN trailer_loads tl ON tl.id=w.load_id
                                    WHERE tl.field_id=f.id AND tl.season_year=? AND w.status='YAKUNLANDI'),0) net_kg,
                         COALESCE((SELECT SUM(kg) FROM harvests h WHERE h.field_id=f.id AND h.season_year=?

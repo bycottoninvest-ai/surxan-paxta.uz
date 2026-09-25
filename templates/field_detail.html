@@ -2,12 +2,36 @@
 {% from 'macros.html' import icon, csrf, status, photo_card, empty with context %}
 {% set page_title = f.name %}
 {% block content %}
-<div class="page-h"><a href="{{ url_for('admin.fields') }}" class="icon-btn">{{ icon('chev-left') }}</a><h1>{{ f.code }} · {{ f.name }}</h1><span class="badge b-blue">{{ f.area_ha|num(1) }} ga</span><span class="badge b-gray">{{ f.brigadier_name or 'brigadir yo‘q' }}</span></div>
+<div class="page-h"><a href="{{ url_for('admin.fields') }}" class="icon-btn">{{ icon('chev-left') }}</a><h1>{{ f.code }} · {{ f.name }}</h1><span class="badge b-blue">{{ f.area_ha|num(2) }} ga</span>{% if f.area_source == 'xarita' %}<span class="badge b-orange">xaritadan hisoblangan — tasdiqlanmagan</span>{% endif %}<span class="badge b-gray">{{ f.brigadier_name or 'brigadir yo‘q' }}</span></div>
+{% set conf = f.area_source != 'xarita' %}
+<section class="card mb"><div class="card-h"><h3>{{ icon('chart') }} {{ year }} mavsumi — shu dala bo‘yicha</h3></div>
+  <div class="card-b"><div class="a-tiles">
+    <div class="m-tile a-tile"><span>DALA TERIM KG</span><b class="num">{{ stats.field_kg|num }}</b><small>{{ stats.people }} kishi{% if stats.first %} · {{ stats.first|d }} – {{ stats.last|d }}{% endif %}</small></div>
+    <div class="m-tile a-tile"><span>JO‘NATILGAN (NETTO)</span><b class="num">{{ stats.sent_kg|num }}</b><small>{{ stats.sent_n }} reys · jami {{ stats.trips }} reys</small></div>
+    <div class="m-tile a-tile t-green"><span>PUNKT QABUL KG</span><b class="num">{{ stats.rec_kg|num }}</b><small>{{ stats.rec_n }} reys{% if stats.diff_kg is not none %} · farq {{ '%+.0f'|format(stats.diff_kg) }} kg (shu reyslar){% endif %}</small></div>
+    <div class="m-tile a-tile"><span>YO‘LDA (HALI QABUL QILINMAGAN)</span><b class="num">{{ stats.moving_kg|num }}</b><small>{{ stats.moving_n }} reys — yo‘qotish emas</small></div>
+    <div class="m-tile a-tile {{ '' if conf else 't-orange' }}"><span>HOSILDORLIK (PUNKT QABUL KG / GA)</span>
+      <b class="num">{{ (stats.rec_kg / f.area_ha)|num if f.area_ha and stats.rec_kg else '—' }}</b>
+      <small>{{ stats.rec_kg|num }} kg ÷ {{ f.area_ha|num(2) }} ga · {% if conf %}maydon tasdiqlangan{% else %}<b>maydon tasdiqlanmagan — taxminiy</b>{% endif %}</small></div>
+  </div>
+  <div class="small mt">Maydon: <b>{{ f.area_ha|num(2) }} ga</b> ({{ {'xarita': 'xaritadan hisoblangan', 'tasdiqlangan': 'tasdiqlangan', 'qo‘lda': 'qo‘lda kiritilgan'}.get(f.area_source, 'qo‘lda kiritilgan') }})
+    {% if f.map_area_ha %} · xaritadagi kontur: {{ f.map_area_ha|num(2) }} ga{% endif %}{% if f.source_id %} · manba: {{ f.source_id }}{% endif %}
+    {% if fseason and fseason.crop %} · {{ year }} ekini: <b>{{ fseason.crop }}</b>{% endif %}</div>
+  {% if can('masterdata.write') and not conf %}
+  <form method="post" action="{{ url_for('admin.field_confirm_area', field_id=f.id) }}" class="row mt">{{ csrf() }}
+    <input name="area_ha" value="{{ f.area_ha }}" inputmode="decimal" style="width:120px"><button class="btn btn-light btn-sm">Ish maydonini tasdiqlash (ga)</button>
+    <span class="tiny muted">Xaritadagi raqamni yoki hujjatdagi aniq maydonni kiriting.</span></form>{% endif %}
+  {% if assignments %}<div class="tiny muted mt">Brigadir tarixi: {% for a in assignments %}{{ a.from_date|d }} — {{ a.brigadier_name or 'yo‘q' }} ({{ a.by_name }}){{ '; ' if not loop.last }}{% endfor %}. Oldingi reyslar o‘z brigadasi bilan qoladi.</div>{% endif %}
+  </div></section>
 <div class="grid">
   <section class="card s7">
-    <div class="card-h"><h3>{{ icon('map') }} Xarita</h3>{% if can('masterdata.write') %}<span class="small muted" style="margin-left:auto">Chizish: xaritada nuqtalarni bosing, keyin “Saqlash”</span>{% endif %}</div>
+    <div class="card-h"><h3>{{ icon('map') }} Xarita</h3>{% if can('masterdata.write') %}<button type="button" class="btn btn-light btn-sm" id="edit-poly" style="margin-left:auto">{{ 'Chegarani o‘zgartirish' if f.polygon_json else 'Chegara chizish' }}</button>{% endif %}</div>
     <div class="card-b">
       <div class="map tall" id="fmap" data-center="{{ map_center }}"></div>
+      <div class="fd-bar" id="fd-tools" hidden><button type="button" class="btn btn-light btn-sm" id="fd-undo">↶ Oxirgi nuqta</button>
+        <button type="button" class="btn btn-light btn-sm" id="fd-del" disabled>Tanlangan nuqtani o‘chirish</button>
+        <span class="tiny muted">Burchakni tortib suring; o‘rtadagi doira — yangi nuqta. Keyin “Saqlash”.</span></div>
+      <div class="small">Xaritadagi maydon: <b id="fd-area-live">—</b></div>
       {% if can('masterdata.write') %}
       <form method="post" action="{{ url_for('admin.fields') }}" class="form mt">{{ csrf() }}
         <input type="hidden" name="id" value="{{ f.id }}"><input type="hidden" name="polygon_json" id="poly" value="{{ f.polygon_json or '' }}">
@@ -17,7 +41,7 @@
         <div class="f t"><label>Brigadir</label><select name="brigadier_id"><option value="">—</option>{% for b in brigadiers %}<option value="{{ b.id }}" {{ 'selected' if b.id == f.brigadier_id }}>{{ b.name }}</option>{% endfor %}</select></div>
         <div class="f t"><label>Izoh</label><input name="notes" value="{{ f.notes or '' }}"></div>
         <div class="f t"><label class="check" style="margin-top:28px"><input type="checkbox" name="active" value="1" {{ 'checked' if f.active }}> Faol</label></div>
-        <div class="f row"><button type="button" class="btn btn-light" id="clear">Chegarani tozalash</button><button class="btn btn-primary">Saqlash</button></div>
+        <div class="f row"><button type="button" class="btn btn-light" id="clear" hidden>Chegarani tozalash</button><button class="btn btn-primary">Saqlash</button></div>
       </form>{% endif %}
     </div>
   </section>
@@ -28,27 +52,34 @@
     <div class="card-h"><h3>So‘nggi reyslar</h3></div>
     <table class="t"><tbody>{% for l in loads[:10] %}<tr><td><a class="link" href="{{ url_for('ops.load_detail', load_id=l.id) }}">{{ l.trailer_code }} №{{ l.id }}</a></td><td>{{ l.load_date|d }}</td><td class="num">{{ l.net_kg|num if l.net_kg else '—' }}</td><td>{{ status(l.status) }}</td></tr>{% else %}<tr><td>{{ empty('Reys yo‘q') }}</td></tr>{% endfor %}</tbody></table>
   </section>
-  <section class="card s12"><div class="card-h"><h3>Rasmlar</h3></div><div class="card-b"><div class="photo-grid">{% for p in photos %}{{ photo_card(p) }}{% else %}{{ empty('Rasm yo‘q','camera') }}{% endfor %}</div></div></section>
+  <section class="card s12"><div class="card-h"><h3>Rasmlar</h3><span class="small muted" style="margin-left:auto">Dala va shu daladan ketgan reyslarning haqiqiy rasmlari</span></div><div class="card-b"><div class="photo-grid">{% for p in (photos|list + trip_photos|list) %}{{ photo_card(p) }}{% else %}{{ empty('Rasm yo‘q','camera') }}{% endfor %}</div></div></section>
 </div>
 {% endblock %}
 {% block scripts %}
 <link rel="stylesheet" href="{{ url_for('static', filename='vendor/leaflet/leaflet.css') }}">
 <script src="{{ url_for('static', filename='vendor/leaflet/leaflet.js') }}"></script>
+<script src="{{ url_for('static', filename='js/basemap.js') }}?v={{ version }}"></script>
+<script src="{{ url_for('static', filename='js/fielddraw.js') }}?v={{ version }}"></script>
 <script>
 (function () {
   const el = document.getElementById('fmap'), inp = document.getElementById('poly');
   const c = (el.dataset.center || '42.3167,59.6').split(',').map(Number);
-  const map = L.map(el).setView(c, 14);
-  L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19 }).addTo(map);
-  let pts = {{ (f.polygon_json or '[]')|safe }};
-  let poly = L.polygon(pts, { color: '#1e9e4a', fillOpacity: .35 }).addTo(map);
-  if (pts.length) map.fitBounds(pts);
-  const editable = !!inp;
-  function upd() { poly.setLatLngs(pts); if (inp) inp.value = pts.length >= 3 ? JSON.stringify(pts) : ''; }
-  if (editable) {
-    map.on('click', e => { pts.push([+e.latlng.lat.toFixed(6), +e.latlng.lng.toFixed(6)]); upd(); });
-    document.getElementById('clear').addEventListener('click', () => { pts = []; upd(); });
-  }
+  const map = L.map(el).setView(c, 14); spxBasemap(map);
+  const start = {{ (f.polygon_json or '[]')|safe }};
+  const area = document.getElementById('fd-area-live');
+  let editing = false;
+  const ed = spxEditor(map, { points: start, onChange: (pts, ha) => {
+    if (inp && editing) inp.value = pts.length >= 3 ? JSON.stringify(pts) : '';
+    if (area) area.textContent = pts.length >= 3 ? ha.toFixed(2) + ' ga' : '—'; },
+    onSelect: i => { const d = document.getElementById('fd-del'); if (d) d.disabled = i < 0; } });
+  if (start.length) map.fitBounds(start, { padding: [20, 20] });
+  // editing only after the button: an accidental tap never moves an imported contour
+  const btn = document.getElementById('edit-poly');
+  if (inp && btn) btn.addEventListener('click', () => {
+    editing = true; ed.start(); btn.hidden = true; document.getElementById('fd-tools').hidden = false; document.getElementById('clear').hidden = false;
+  });
+  const bind = (id, fn) => { const b = document.getElementById(id); if (b) b.addEventListener('click', fn); };
+  bind('fd-undo', () => ed.undo()); bind('fd-del', () => ed.removeSelected()); bind('clear', () => ed.clear());
 })();
 </script>
 {% endblock %}

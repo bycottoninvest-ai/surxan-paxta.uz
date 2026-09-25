@@ -64,8 +64,9 @@
   if (mapEl && dataEl && window.L) {
     const fields = JSON.parse(dataEl.textContent || '[]');
     const c = (mapEl.dataset.center || '42.3167,59.6').split(',').map(Number);
-    const map = L.map(mapEl, { zoomControl: true, attributionControl: false }).setView(c, 13);
-    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom: 18 }).addTo(map);
+    const map = L.map(mapEl, { zoomControl: true, attributionControl: true }).setView(c, 13);
+    if (window.spxBasemap) spxBasemap(map);
+    else L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom: 18 }).addTo(map);
     const yields = fields.filter(f => f.area).map(f => f.net / f.area);
     const maxY = Math.max(1, ...yields);
     const brigColors = ['#2f80ed', '#f28b1c', '#1e9e4a', '#6c4bd8', '#ee2f5b', '#13a5b5'];
@@ -87,7 +88,7 @@
         const col = colour(f, mode);
         const p = L.polygon(f.poly, { color: col, weight: 2, fillColor: col, fillOpacity: .38 }).addTo(layer);
         const y = f.area ? Math.round(f.net / f.area) : 0;
-        p.bindTooltip(`<b>${f.name}</b><br>${f.area} ga${f.net ? '<br>' + fmt(y) + ' kg/ga' : ''}`, { permanent: true, direction: 'center', className: 'map-label' });
+        p.bindTooltip(`<b>${f.name}</b><br>${f.area} ga${f.confirmed === false ? ' (xarita)' : ''}${f.net ? '<br>' + fmt(y) + ' kg/ga' + (f.confirmed === false ? ' ~' : '') : ''}`, { permanent: true, direction: 'center', className: 'map-label' });
         p.on('click', () => location.href = f.url);
         bounds.push(...f.poly);
       });

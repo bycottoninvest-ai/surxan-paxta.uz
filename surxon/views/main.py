@@ -113,6 +113,7 @@ def full_dashboard(year, day, brig, kpi):
         seasons_cmp=queries.season_comparison(), fin=fin, setup=setup, kuz=_kuz(day),
         target=get_float('daily_target_kg', None), map_center=get_setting('map_center'),
         fields_json=[{'id': f['id'], 'code': f['code'], 'name': f['name'], 'area': f['area_ha'],
+                      'confirmed': f['area_source'] != 'xarita',
                       'brigadier': f['brigadier_name'], 'net': f['net_kg'], 'active': f['active_loads'],
                       'poly': json.loads(f['polygon_json']) if f['polygon_json'] else None,
                       'url': url_for('admin.field_detail', field_id=f['id'])} for f in fields],

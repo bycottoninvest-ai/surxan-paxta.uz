@@ -2,7 +2,8 @@
 {% from 'macros.html' import icon, csrf, empty with context %}
 {% set page_title = 'Dalalar' %}
 {% block content %}
-<div class="page-h"><h1>{{ icon('field','lg') }} Dalalar va maydon ({{ year }})</h1></div>
+<div class="page-h"><h1>{{ icon('field','lg') }} Dalalar va maydon ({{ year }})</h1>{% if can('masterdata.write') %}<a class="btn btn-primary btn-sm" style="margin-left:auto" href="{{ url_for('admin.fields_import') }}">{{ icon('map','sm') }} KML / GeoJSON import</a>
+  <a class="btn btn-light btn-sm" href="{{ url_for('admin.field_draw') }}">{{ icon('plus','sm') }} Xaritada chizish</a>{% endif %}</div>
 {% set diff = known_total - total_area %}
 <div class="notice mb">{{ icon('alert') }}<div><b>Tasdiqlanmagan maydon:</b> tizimdagi faol dalalar jami <b>{{ total_area|num(1) }} ga</b>.
   Oldin aytilgan umumiy maydon {{ known_total|num(1) }} ga{% if diff|abs > 0.05 %} — farq <b>{{ diff|num(1) }} ga</b> hali hal qilinmagan{% endif %}.
@@ -21,8 +22,8 @@
   {% endif %}
   <section class="card {{ 's8' if can('masterdata.write') else 's12' }}"><div class="card-h"><h3>Dalalar</h3></div>
     <div class="table-wrap"><table class="t"><thead><tr><th>Kod</th><th>Nomi</th><th>Brigadir</th><th class="num">Ga</th><th class="num">Ichki kg</th><th class="num">Netto kg</th><th class="num">kg/ga</th><th>Xarita</th></tr></thead>
-      <tbody>{% for f in rows %}<tr><td class="b"><a class="link" href="{{ url_for('admin.field_detail', field_id=f.id) }}">{{ f.code }}</a></td><td>{{ f.name }}</td><td>{{ f.brigadier_name or '—' }}</td><td class="num">{{ f.area_ha|num(1) }}</td>
-        <td class="num">{{ f.internal_kg|num }}</td><td class="num b">{{ f.net_kg|num }}</td><td class="num">{{ (f.net_kg / f.area_ha)|num if f.area_ha else '—' }}</td>
+      <tbody>{% for f in rows %}<tr><td class="b"><a class="link" href="{{ url_for('admin.field_detail', field_id=f.id) }}">{{ f.code }}</a></td><td>{{ f.name }}</td><td>{{ f.brigadier_name or '—' }}</td><td class="num">{{ f.area_ha|num(2) }}{% if f.area_source == 'xarita' %}<div class="tiny" style="color:var(--orange)">xarita, tasdiqlanmagan</div>{% endif %}</td>
+        <td class="num">{{ f.internal_kg|num }}</td><td class="num b">{{ f.net_kg|num }}</td><td class="num">{{ (f.net_kg / f.area_ha)|num if f.area_ha else '—' }}{% if f.area_source == 'xarita' and f.net_kg %}<div class="tiny muted">taxminiy</div>{% endif %}</td>
         <td>{% if f.polygon_json %}<span class="badge b-green">bor</span>{% else %}<span class="badge b-gray">yo‘q</span>{% endif %}</td></tr>
       {% else %}<tr><td colspan="8">{{ empty('Dalalar hali kiritilmagan', 'field') }}</td></tr>{% endfor %}</tbody>
       {% if rows %}<tfoot><tr><td colspan="3">Jami</td><td class="num">{{ total_area|num(1) }}</td><td class="num">{{ rows|sum(attribute='internal_kg')|num }}</td><td class="num">{{ rows|sum(attribute='net_kg')|num }}</td><td colspan="2"></td></tr></tfoot>{% endif %}

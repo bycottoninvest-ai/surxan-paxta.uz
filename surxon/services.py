@@ -1113,23 +1113,42 @@ def save_field(actor, fid, *, code, name, area_ha, brigadier_id=None, notes='', 
             pts = json.loads(polygon_json)
             if not (isinstance(pts, list) and len(pts) >= 3 and all(len(p) == 2 for p in pts)):
                 raise ValueError
-            polygon_json = json.dumps([[round(float(a), 6), round(float(b), 6)] for a, b in pts])
+            polygon_json = json.dumps([[float(a), float(b)] for a, b in pts])
         except (ValueError, TypeError):
             raise UserError('Xarita chegarasi noto‘g‘ri (kamida 3 nuqta kerak).')
     with tx() as db:
         try:
+            from .geo import poly_area_ha
             if fid:
                 old = db.execute('SELECT * FROM fields WHERE id=?', (fid,)).fetchone()
-                db.execute('''UPDATE fields SET code=?, name=?, area_ha=?, brigadier_id=?, notes=?, polygon_json=?, active=?
-                              WHERE id=?''', (code, name, area_ha, brigadier_id, clean_text(notes), polygon_json,
-                                              1 if active else 0, fid))
+                map_area, source = old['map_area_ha'], old['area_source']
+                if old['area_ha'] is not None and abs(area_ha - old['area_ha']) < 0.05:
+                    area_ha = old['area_ha']                     # the form shows 1–2 decimals: unchanged, keep full value
+                if polygon_json and old['polygon_json'] and json.loads(polygon_json) == json.loads(old['polygon_json']):
+                    polygon_json = old['polygon_json']          # unchanged contour: keep the original coordinates as stored
+                elif polygon_json != old['polygon_json']:
+                    map_area = poly_area_ha(json.loads(polygon_json)) if polygon_json else None
+                    if source == 'xarita' and map_area and area_ha == old['area_ha']:
+                        area_ha = map_area                       # an unconfirmed map area follows the redrawn contour
+                if area_ha != old['area_ha'] and not (source == 'xarita' and area_ha == map_area):
+                    source = 'qo‘lda'                            # a person typed a different area
+                db.execute('''UPDATE fields SET code=?, name=?, area_ha=?, brigadier_id=?, notes=?, polygon_json=?, active=?,
+                              map_area_ha=?, area_source=? WHERE id=?''', (code, name, area_ha, brigadier_id, clean_text(notes),
+                                                                      polygon_json, 1 if active else 0, map_area, source, fid))
+                if brigadier_id != old['brigadier_id']:
+                    db.execute('INSERT INTO field_assignments(field_id, brigadier_id, from_date, set_by, set_at) VALUES (?,?,?,?,?)',
+                               (fid, brigadier_id, today_str(), actor.user_id, now_str()))
                 audit(db, actor, 'UPDATE', 'field', fid, old=row_dict(old),
                       new={'code': code, 'name': name, 'area_ha': area_ha, 'brigadier_id': brigadier_id,
-                           'polygon': bool(polygon_json), 'active': bool(active)})
+                           'polygon': bool(polygon_json), 'active': bool(active), 'area_source': source})
                 return fid
-            cur = db.execute('''INSERT INTO fields(code, name, area_ha, brigadier_id, notes, polygon_json, created_at)
-                                VALUES (?,?,?,?,?,?,?)''', (code, name, area_ha, brigadier_id, clean_text(notes),
-                                                            polygon_json, now_str()))
+            cur = db.execute('''INSERT INTO fields(code, name, area_ha, brigadier_id, notes, polygon_json, created_at, map_area_ha,
+                                    area_source) VALUES (?,?,?,?,?,?,?,?,'qo‘lda')''',
+                             (code, name, area_ha, brigadier_id, clean_text(notes), polygon_json, now_str(),
+                              poly_area_ha(json.loads(polygon_json)) if polygon_json else None))
+            if brigadier_id:
+                db.execute('INSERT INTO field_assignments(field_id, brigadier_id, from_date, set_by, set_at) VALUES (?,?,?,?,?)',
+                           (cur.lastrowid, brigadier_id, today_str(), actor.user_id, now_str()))
             audit(db, actor, 'CREATE', 'field', cur.lastrowid, new={'code': code, 'name': name, 'area_ha': area_ha})
             return cur.lastrowid
         except sqlite3.IntegrityError as e:

@@ -1,0 +1,21 @@
+{% extends 'base.html' %}
+{% from 'macros.html' import icon, csrf, empty with context %}
+{% set page_title = 'Dalalar importi' %}
+{% block content %}
+<div class="page-h"><a href="{{ url_for('admin.fields') }}" class="icon-btn">{{ icon('chev-left') }}</a><h1>{{ icon('map','lg') }} Dala konturlarini import qilish</h1>
+  <span class="sub">KML (Google Earth) yoki GeoJSON → xaritada tekshirish → nom, brigadir, maydon → tasdiqlash. Tasdiqlanmaguncha bazaga hech narsa yozilmaydi.</span></div>
+<section class="card"><div class="card-b">
+  <form method="post" enctype="multipart/form-data" class="row">{{ csrf() }}
+    <input type="file" name="file" accept=".kml,.geojson,.json,application/vnd.google-earth.kml+xml,application/geo+json" required>
+    <button class="btn btn-primary">{{ icon('map','sm') }} Faylni o‘qish</button></form>
+  <div class="tiny muted mt">Koordinatalar o‘zgartirilmaydi va soddalashtirilmaydi. Maydon WGS84 bo‘yicha hisoblanadi va “xaritadan hisoblangan” deb belgilanadi.
+    Shu faylni qayta yuklasangiz, dalalar manba raqami (KML-001…) bo‘yicha topiladi — dublikat yaratilmaydi.</div>
+</div></section>
+<section class="card"><div class="card-h"><h3>Oldingi importlar</h3></div><div class="card-b">
+  {% if imports %}<div class="table-wrap"><table class="t"><thead><tr><th>Sana</th><th>Fayl</th><th class="num">Kontur</th><th class="num">Xarita ga</th><th>Holat</th><th>Kim</th></tr></thead><tbody>
+  {% for i in imports %}<tr><td>{{ i.created_at[:16] }}</td><td><a class="link" href="{{ url_for('admin.fields_import_review', import_id=i.id) }}">{{ i.filename or '—' }}</a></td>
+    <td class="num">{{ i.count }}</td><td class="num">{{ i.map_total_ha|num(2) }}</td>
+    <td>{{ {'KORIB_CHIQISH': 'Ko‘rib chiqilmoqda', 'SAQLANDI': 'Saqlangan', 'BEKOR': 'Bekor'}[i.status] }}{% if i.result_json %} <span class="tiny muted">{{ i.result_json }}</span>{% endif %}</td><td>{{ i.by_name }}</td></tr>{% endfor %}
+  </tbody></table></div>{% else %}{{ empty('Import hali qilinmagan', 'map') }}{% endif %}
+</div></section>
+{% endblock %}

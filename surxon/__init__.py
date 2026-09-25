@@ -14,7 +14,7 @@ from .config import BASE_DIR, Config
 from .security import (PERMISSIONS, ROLES, brigadier_scope, can, csrf_token, load_user, wants_json)
 from .utils import UserError, fmt_date, fmt_money, fmt_num, now_str, today_str, weekday_name
 
-VERSION = '2.10.0'
+VERSION = '2.11.0'
 
 
 def create_app(**overrides):
@@ -71,9 +71,9 @@ def create_app(**overrides):
         resp.headers.setdefault('Permissions-Policy', 'geolocation=(self), camera=(self)')
         resp.headers.setdefault(
             'Content-Security-Policy',
-            "default-src 'self'; img-src 'self' data: blob: https://*.arcgisonline.com https://*.tile.openstreetmap.org; "
+            "default-src 'self'; img-src 'self' data: blob: https://*.arcgisonline.com https://*.tile.openstreetmap.org https://tile.googleapis.com; "
             "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; "
-            "script-src 'self' 'unsafe-inline'; connect-src 'self' https://api.open-meteo.com; frame-ancestors 'self'")
+            "script-src 'self' 'unsafe-inline'; connect-src 'self' https://api.open-meteo.com https://tile.googleapis.com; frame-ancestors 'self'")
         if request.endpoint and not request.endpoint.startswith('static') and (g.get('user') or resp.mimetype == 'text/html'):
             resp.headers['Cache-Control'] = 'no-store'  # phones must never show an old page after an update
         return gzip_response(resp)
@@ -182,6 +182,7 @@ def register_template_helpers(app):
             'photo_categories': CATEGORIES, 'my_brigade': brigadier_scope(),
             'bot_username': app.config['SURXON'].TELEGRAM_BOT_USERNAME,
             'test_mode': app.config['SURXON'].APP_MODE == 'test',
+            'gmaps_key': app.config['SURXON'].GOOGLE_MAPS_KEY if user else '',
         }
 
     @app.template_global()

@@ -1,20 +1,26 @@
-# Serverni yangilash (Codex uchun) — v2.10.0
+# Serverni yangilash (Codex uchun) — v2.11.0
 
 Serverni qayta qurmang, `.env`, `data/` va Caddy sozlamasiga tegmang. Vaqtinchalik sslip override'ni qayta yoqmang.
 
 ```bash
 cd /opt/surxan-paxta.uz
 docker compose exec -T app flask --app app backup          # yangilashdan oldin izchil zaxira
-git pull --ff-only                                          # kutilgan: v2.10.0 commiti
+git pull --ff-only                                          # kutilgan: v2.11.0 commiti
 docker compose up -d --build
-for i in $(seq 1 40); do curl -fsS https://surxan-paxta.uz/health && break; sleep 3; done   # "version":"2.10.0"
+for i in $(seq 1 40); do curl -fsS https://surxan-paxta.uz/health && break; sleep 3; done   # "version":"2.11.0"
 docker compose exec -T app flask --app app set-webhook      # channel_post yangilanishini qo'shadi (kanallarni tanish uchun)
 docker compose exec -T app flask --app app smoke-check
 ```
 
-Baza avtomatik yangilanadi (sxema v8): yangi jadvallar `fuel_stations, fuel_tickets, fuel_ticket_funds, fuel_prices, fuel_scans, fuel_ops` va `equipment.fuel_type/fuel_carrier/qr_token` (v2.10.0 — solyarka); `cash_corrections` (v2.9.0 — kassa tuzatishlari); yangi ustunlar `nayman_receipts.station_gross_kg/station_tare_kg` (v2.8.0 — punkt brutto/tara),
+Baza avtomatik yangilanadi (sxema v9): `field_imports, field_assignments` va `fields.source_id/map_area_ha/area_source`, `field_seasons.crop` (v2.11.0 — dalalar importi); yangi jadvallar `fuel_stations, fuel_tickets, fuel_ticket_funds, fuel_prices, fuel_scans, fuel_ops` va `equipment.fuel_type/fuel_carrier/qr_token` (v2.10.0 — solyarka); `cash_corrections` (v2.9.0 — kassa tuzatishlari); yangi ustunlar `nayman_receipts.station_gross_kg/station_tare_kg` (v2.8.0 — punkt brutto/tara),
 `trailer_loads.method/rate/rate_unit`, `workers.note`, `tg_chats.bot_status` (v2.7.0) qo'shiladi.
 Eski yozuvlar o'zgarmaydi. Ilova ishga tushganda migratsiyadan oldin `data/` ichida `*.oldin-v*` zaxira nusxa oladi.
+
+## v2.11.0 da nima o'zgardi
+Dalalar: KML/GeoJSON import (tekshirish → nom/brigadir/maydon → tasdiqlash; qayta import dublikatsiz), xaritada yangi dala
+chizish va chegarani tahrirlash, maydon manbai (xarita / tasdiqlangan), brigadir tarixi, dala sahifasida haqiqiy hisoblar.
+Google sun’iy yo‘ldosh foni ixtiyoriy: kalit faqat serverda `bash tools/sozlash.sh google` bilan kiritiladi (chatga yuborilmaydi).
+Sxema v8 → v9: ishga tushganda `*.oldin-v8-*.bak`. Dalalarni haqiqiy bazaga foydalanuvchining o‘zi saytda tasdiqlab saqlaydi.
 
 ## v2.10.0 da nima o'zgardi
 Solyarka moduli: yangi rol “Yoqilg‘i mas’uli” (/yoqilgi — faqat QR bilan olish/berish, berishda kamera rasmi),

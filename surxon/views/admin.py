@@ -170,6 +170,73 @@ def fields():
                            map_center=get_setting('map_center'))
 
 
+@bp.route('/dalalar/import', methods=['GET', 'POST'])
+@perm_required('masterdata.write')
+def fields_import():
+    from .. import field_import as FI
+    if request.method == 'POST':
+        f = request.files.get('file')
+        iid = FI.create_import(post_actor(), f.read() if f else None, f.filename if f else '')
+        return done('Fayl o‘qildi — xaritada tekshiring, keyin tasdiqlang. Hali hech narsa saqlanmadi.',
+                    url_for('admin.fields_import_review', import_id=iid))
+    return render_template('admin_fields_import.html', imports=q('''SELECT i.id, i.filename, i.count, i.map_total_ha, i.status,
+                           i.created_at, i.saved_at, i.result_json, u.full_name by_name FROM field_imports i
+                           LEFT JOIN users u ON u.id=i.created_by ORDER BY i.id DESC LIMIT 20'''))
+
+
+@bp.route('/dalalar/import/<int:import_id>', methods=['GET', 'POST'])
+@perm_required('masterdata.write')
+def fields_import_review(import_id):
+    from .. import field_import as FI
+    if request.method == 'POST':
+        actor = post_actor()
+        if request.form.get('action') == 'cancel':
+            FI.cancel_import(actor, import_id)
+            return done('Import bekor qilindi — bazaga hech narsa yozilmadi.', url_for('admin.fields_import'))
+        choices = {}
+        for key, val in request.form.items():
+            if '__' not in key:
+                continue
+            name, _, idx = key.partition('__')
+            if idx.isdigit():
+                choices.setdefault(int(idx), {})[name] = val
+        res = FI.confirm_import(actor, import_id, choices, season_arg())
+        return done(f'Saqlandi: {res["created"]} ta yangi dala, {res["updated"]} ta yangilandi, {res["skipped"]} ta tashlab ketildi.',
+                    url_for('admin.fields'))
+    imp, rows = FI.get_import(import_id)
+    if not imp:
+        abort(404)
+    current_total = scalar("SELECT COALESCE(SUM(area_ha),0) FROM fields WHERE active=1")
+    return render_template('admin_fields_import_review.html', imp=imp, rows=rows, crops=FI.CROPS, known_total=KNOWN_AREA_TOTAL,
+                           current_total=current_total, brigadiers=q('SELECT * FROM brigadiers WHERE active=1 ORDER BY name'),
+                           map_center=get_setting('map_center'))
+
+
+@bp.route('/dalalar/chizish', methods=['GET', 'POST'])
+@perm_required('masterdata.write')
+def field_draw():
+    from .. import field_import as FI
+    if request.method == 'POST':
+        fid, ha = FI.create_drawn_field(post_actor(), code=request.form.get('code', ''), name=request.form.get('name', ''),
+                                        polygon=request.form.get('polygon_json') or '[]',
+                                        brigadier_id=parse_int(request.form.get('brigadier_id'), 'Brigadir', required=False),
+                                        confirmed_ha=request.form.get('confirmed_ha'), crop=request.form.get('crop'), year=season_arg())
+        return done(f'Yangi dala saqlandi: xaritada {ha:.2f} ga.', url_for('admin.field_detail', field_id=fid))
+    import json as _j
+    return render_template('admin_field_draw.html', code=FI.next_code(), crops=FI.CROPS, map_center=get_setting('map_center'),
+                           brigadiers=q('SELECT * FROM brigadiers WHERE active=1 ORDER BY name'),
+                           others=[{'code': f['code'], 'poly': _j.loads(f['polygon_json'])} for f in
+                                   q('SELECT code, polygon_json FROM fields WHERE polygon_json IS NOT NULL AND active=1')])
+
+
+@bp.post('/dala/<int:field_id>/maydon')
+@perm_required('masterdata.write')
+def field_confirm_area(field_id):
+    from .. import field_import as FI
+    FI.confirm_area(post_actor(), field_id, request.form.get('area_ha'))
+    return done('Maydon tasdiqlandi.', url_for('admin.field_detail', field_id=field_id))
+
+
 @bp.get('/dala/<int:field_id>')
 @perm_required('masterdata.write', 'reports.view')
 def field_detail(field_id):
@@ -180,7 +247,16 @@ def field_detail(field_id):
     history = q('''SELECT tl.season_year year, COUNT(tl.id) loads, COALESCE(SUM(w.net_kg),0) net_kg
                    FROM trailer_loads tl LEFT JOIN weighings w ON w.load_id=tl.id AND w.status='YAKUNLANDI'
                    WHERE tl.field_id=? AND tl.status<>'BEKOR' GROUP BY tl.season_year ORDER BY tl.season_year DESC''', (field_id,))
-    return render_template('field_detail.html', f=f, history=history,
+    from .. import field_import as FI
+    year = season_arg()
+    return render_template('field_detail.html', f=f, history=history, stats=FI.field_stats(field_id, year), year=year,
+                           assignments=q('''SELECT a.*, b.name brigadier_name, u.full_name by_name FROM field_assignments a
+                                            LEFT JOIN brigadiers b ON b.id=a.brigadier_id LEFT JOIN users u ON u.id=a.set_by
+                                            WHERE a.field_id=? ORDER BY a.id DESC''', (field_id,)),
+                           fseason=q('SELECT * FROM field_seasons WHERE field_id=? AND year=?', (field_id, year), one=True),
+                           trip_photos=q('''SELECT p.* FROM photos p JOIN trailer_loads tl ON tl.id=p.load_id WHERE tl.field_id=?
+                                            AND p.voided_at IS NULL AND p.category IN ('trailer','cotton','nayman','weigh_gross','weigh_tare')
+                                            ORDER BY p.id DESC LIMIT 12''', (field_id,)),
                            loads=q(queries.LOAD_SELECT + ' WHERE tl.field_id=? ORDER BY tl.id DESC LIMIT 30', (field_id,)),
                            photos=q('SELECT * FROM photos WHERE field_id=? AND voided_at IS NULL ORDER BY id DESC LIMIT 24',
                                     (field_id,)),

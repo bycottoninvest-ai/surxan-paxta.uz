@@ -1,0 +1,98 @@
+{% extends 'base.html' %}
+{% from 'macros.html' import icon, csrf with context %}
+{% set page_title = 'Importni tekshirish' %}
+{% set ok_rows = rows|selectattr('problems', 'equalto', [])|list %}
+{% set total = ok_rows|sum(attribute='map_ha') %}
+{% set editable = imp.status == 'KORIB_CHIQISH' %}
+{% block content %}
+<div class="page-h"><a href="{{ url_for('admin.fields_import') }}" class="icon-btn">{{ icon('chev-left') }}</a><h1>{{ icon('map','lg') }} {{ imp.filename or 'Import' }}</h1>
+  <span class="badge {{ 'b-orange' if editable else 'b-green' }}">{{ 'Ko‘rib chiqilmoqda — hali saqlanmagan' if editable else ('Saqlangan' if imp.status == 'SAQLANDI' else 'Bekor qilingan') }}</span></div>
+<div class="notice mb">{{ icon('alert') }}<div>
+  Faylda <b>{{ rows|length }} ta kontur</b>, xaritadan hisoblangan jami <b>{{ total|num(2) }} ga</b>.
+  Oldin aytilgan umumiy maydon {{ known_total|num(1) }} ga — farq <b>{{ '%+.2f'|format(total - known_total) }} ga</b>. Bu farq avtomatik yopilmaydi va 320 ga almashtirilmaydi:
+  har bir dalaning ish maydonini alohida tasdiqlang (bo‘sh qolsa “xaritadan hisoblangan, tasdiqlanmagan” bo‘lib turadi).
+  Hozir tizimdagi faol dalalar jami: {{ current_total|num(2) }} ga.
+  {% set bad = rows|rejectattr('problems', 'equalto', [])|list %}{% if bad %}<br><b style="color:var(--red)">{{ bad|length }} ta konturda xato bor — ular saqlanmaydi (pastda sababi).</b>{% endif %}
+</div></div>
+<div class="fi-wrap">
+  <section class="card fi-map-card"><div class="map tall" id="imap" data-center="{{ map_center }}"></div>
+    <div class="tiny muted" style="padding:6px 10px">Sun’iy yo‘ldosh fon: © Esri (World Imagery) — surat sanasi noma’lum, jonli emas. Fon ochilmasa ham konturlar va ro‘yxat ishlaydi.</div></section>
+  <form method="post" class="card fi-list">{{ csrf() }}
+    {% if editable %}<div class="fi-bulk">
+      <label class="check"><input type="checkbox" id="fi-all" checked> Hammasi</label>
+      <select id="fi-brig"><option value="">— brigadir —</option>{% for b in brigadiers %}<option value="{{ b.id }}">{{ b.name }}</option>{% endfor %}</select>
+      <button type="button" class="btn btn-light btn-sm" id="fi-apply">Belgilanganlarga biriktirish</button>
+      <select id="fi-crop"><option value="">— ekin —</option>{% for c in crops %}<option>{{ c }}</option>{% endfor %}</select>
+      <button type="button" class="btn btn-light btn-sm" id="fi-apply-crop">Ekinni qo‘yish</button>
+      <span class="small muted" id="fi-count"></span></div>{% endif %}
+    <div class="fi-rows">
+    {% for r in rows %}
+    <div class="fi-row {{ 'fi-bad' if r.problems }}" data-i="{{ r.i }}" id="row-{{ r.i }}">
+      <label class="fi-take"><input type="checkbox" name="take__{{ r.i }}" value="1" {{ 'checked' if not r.problems }} {{ 'disabled' if r.problems or not editable }}><b>{{ r.source_id }}</b></label>
+      <div class="fi-f"><label>Kod</label><input name="code__{{ r.i }}" value="{{ r.code }}" {{ 'disabled' if not editable }}></div>
+      <div class="fi-f fi-name"><label>Nomi / kontur</label><input name="name__{{ r.i }}" value="{{ r.name }}" {{ 'disabled' if not editable }}></div>
+      <div class="fi-f fi-num"><label>Xarita ga</label><b>{{ r.map_ha|num(2) }}</b></div>
+      <div class="fi-f fi-num"><label>Tasdiqlangan ga</label><input name="confirmed_ha__{{ r.i }}" inputmode="decimal" placeholder="—" {{ 'disabled' if not editable }}></div>
+      <div class="fi-f"><label>Brigadir</label><select name="brigadier_id__{{ r.i }}" data-brig {{ 'disabled' if not editable }}><option value="">—</option>{% for b in brigadiers %}<option value="{{ b.id }}" {{ 'selected' if b.id == r.current_brigadier_id }}>{{ b.name }}</option>{% endfor %}</select></div>
+      <div class="fi-f"><label>Ekin</label><select name="crop__{{ r.i }}" data-crop {{ 'disabled' if not editable }}><option value="">—</option>{% for c in crops %}<option>{{ c }}</option>{% endfor %}</select></div>
+      <label class="check fi-act"><input type="checkbox" name="active__{{ r.i }}" value="1" checked {{ 'disabled' if not editable }}> Faol</label>
+      <div class="fi-state tiny">{% if r.problems %}<span style="color:var(--red)">✗ {{ r.problems|join('; ') }}</span>
+        {% elif r.match == 'update' %}<span class="badge b-blue">Mavjud: {{ r.match_code }} — yangilanadi (ID saqlanadi)</span>
+        {% elif r.match == 'link' %}<span class="badge b-blue">Mavjud {{ r.match_code }} ga kontur qo‘shiladi</span>
+        {% else %}<span class="badge b-green">Yangi dala</span>{% endif %}
+        {% for n in r.notes %}<span class="muted"> · {{ n }}</span>{% endfor %}
+        {% if r.current_area_source in ('qo‘lda', 'tasdiqlangan') %}<span class="muted"> · hozirgi maydon {{ r.current_area|num(2) }} ga saqlanadi (qo‘lda kiritilgan)</span>{% endif %}</div>
+    </div>
+    {% endfor %}
+    </div>
+    {% if editable %}<div class="fi-foot">
+      <button class="btn btn-primary btn-lg" data-confirm="Belgilangan dalalar bazaga saqlansinmi? Nomlar, brigadirlar va maydonlarni tekshirdingizmi?">✅ Tasdiqlash va saqlash</button>
+      <button class="btn btn-ghost" name="action" value="cancel" formnovalidate data-confirm="Import bekor qilinsinmi? Bazaga hech narsa yozilmaydi.">Bekor qilish</button>
+    </div>{% endif %}
+  </form>
+</div>
+<script type="application/json" id="fi-data">{{ rows|map(attribute='poly')|list|tojson }}</script>
+{% endblock %}
+{% block scripts %}
+<link rel="stylesheet" href="{{ url_for('static', filename='vendor/leaflet/leaflet.css') }}">
+<script src="{{ url_for('static', filename='vendor/leaflet/leaflet.js') }}"></script>
+<script src="{{ url_for('static', filename='js/basemap.js') }}?v={{ version }}"></script>
+<script>
+(function () {
+  const polys = JSON.parse(document.getElementById('fi-data').textContent);
+  const rows = [...document.querySelectorAll('.fi-row')];
+  const el = document.getElementById('imap'), c = (el.dataset.center || '42.3167,59.6').split(',').map(Number);
+  const map = L.map(el).setView(c, 13);
+  spxBasemap(map);
+  const layers = {}, all = [];
+  rows.forEach((row, k) => {
+    const pts = polys[k]; if (!pts || pts.length < 3) return;
+    const bad = row.classList.contains('fi-bad');
+    const p = L.polygon(pts, { color: bad ? '#ee2f5b' : '#ffd400', weight: 2, fillOpacity: .18 }).addTo(map);
+    p.bindTooltip(row.querySelector('input[name^=code__]').value || row.dataset.i, { permanent: true, direction: 'center', className: 'map-label' }); p.closeTooltip();
+    p.on('click', () => focus(row.dataset.i, true));
+    layers[row.dataset.i] = p; all.push(...pts);
+  });
+  if (all.length) map.fitBounds(all, { padding: [10, 10] });
+  // 57 labels overlap when zoomed out: show them only from zoom 15 (tap a contour to see its row at any zoom)
+  const labels = () => Object.values(layers).forEach(p => map.getZoom() >= 15 ? p.openTooltip() : p.closeTooltip());
+  map.on('zoomend', labels); labels();
+  function focus(i, scroll) {
+    rows.forEach(r => r.classList.toggle('fi-on', r.dataset.i == i));
+    Object.entries(layers).forEach(([k, p]) => p.setStyle({ color: k == i ? '#1e9eff' : (document.getElementById('row-' + k).classList.contains('fi-bad') ? '#ee2f5b' : '#ffd400'), weight: k == i ? 4 : 2 }));
+    if (scroll) document.getElementById('row-' + i).scrollIntoView({ block: 'center', behavior: 'smooth' });
+  }
+  rows.forEach(r => r.addEventListener('focusin', () => { focus(r.dataset.i, false); const p = layers[r.dataset.i]; if (p) map.fitBounds(p.getBounds(), { maxZoom: 16 }); }));
+  rows.forEach(r => { const inp = r.querySelector('input[name^=code__]'); if (inp) inp.addEventListener('input', () => { const p = layers[r.dataset.i]; if (p) p.setTooltipContent(inp.value); }); });
+  const takes = [...document.querySelectorAll('input[name^=take__]:not([disabled])')];
+  const count = () => { const n = takes.filter(t => t.checked).length; const e = document.getElementById('fi-count'); if (e) e.textContent = n + ' ta belgilangan'; };
+  takes.forEach(t => t.addEventListener('change', count)); count();
+  const allBox = document.getElementById('fi-all');
+  if (allBox) allBox.addEventListener('change', () => { takes.forEach(t => t.checked = allBox.checked); count(); });
+  const apply = (sel, attr) => { const v = document.getElementById(sel).value;
+    rows.forEach(r => { const t = r.querySelector('input[name^=take__]'); if (t && t.checked && !t.disabled) r.querySelector(attr).value = v; }); };
+  const a1 = document.getElementById('fi-apply'); if (a1) a1.addEventListener('click', () => apply('fi-brig', '[data-brig]'));
+  const a2 = document.getElementById('fi-apply-crop'); if (a2) a2.addEventListener('click', () => apply('fi-crop', '[data-crop]'));
+})();
+</script>
+{% endblock %}

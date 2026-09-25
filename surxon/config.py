@@ -33,6 +33,9 @@ class Config:
         self.TELEGRAM_BOT_TOKEN = env.get('TELEGRAM_BOT_TOKEN', '').strip()
         self.TELEGRAM_WEBHOOK_SECRET = env.get('TELEGRAM_WEBHOOK_SECRET', '').strip()
         self.TELEGRAM_BOT_USERNAME = env.get('TELEGRAM_BOT_USERNAME', '').strip().lstrip('@')
+        # Google Map Tiles API key (satellite background). Browser-side key: restrict it to this site's address
+        # and to the Map Tiles API in Google Cloud. Empty = the free Esri background is used.
+        self.GOOGLE_MAPS_KEY = env.get('GOOGLE_MAPS_KEY', '').strip()
         self.TZ = _timezone(env.get('APP_TZ', 'Asia/Tashkent'))
         self.MAX_UPLOAD_MB = int(env.get('MAX_UPLOAD_MB', '25'))
         # External archives — each one stays "not connected" until its settings are present.
