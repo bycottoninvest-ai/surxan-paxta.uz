@@ -35,6 +35,8 @@ def dashboard():
         return redirect(url_for('acct.home'))
     if g.user['role'] == 'cashier':
         return redirect(url_for('acct.cashier'))
+    if g.user['role'] == 'tally':
+        return redirect(url_for('dala.home'))
     year = season_arg()
     day = request.args.get('date') or today_str()
     try:
@@ -106,7 +108,8 @@ def full_dashboard(year, day, brig, kpi):
         receipts=q('''SELECT nr.*, wb.number FROM nayman_receipts nr JOIN waybills wb ON wb.id=nr.waybill_id
                       WHERE nr.received_date=? ORDER BY nr.id DESC LIMIT 6''', (day,)),
         events=queries.recent_events(6),
-        photos=q('SELECT * FROM photos WHERE voided_at IS NULL ORDER BY id DESC LIMIT 6'),
+        photos=q('SELECT * FROM photos WHERE voided_at IS NULL' + ('' if sees_finance_photos() else
+                 " AND category NOT IN ('cash','expense','payment')") + ' ORDER BY id DESC LIMIT 6'),
         seasons_cmp=queries.season_comparison(), fin=fin, setup=setup, kuz=_kuz(day),
         target=get_float('daily_target_kg', None), map_center=get_setting('map_center'),
         fields_json=[{'id': f['id'], 'code': f['code'], 'name': f['name'], 'area': f['area_ha'],
@@ -161,6 +164,8 @@ def media(path):
     photo = q('SELECT * FROM photos WHERE path=? OR thumb_path=?', (path, path), one=True)
     if not photo:
         return _kuzatuv_media(path)
+    if not can_see_photo(photo):
+        abort(404)
     brig = scope()
     if brig and photo['brigadier_id'] not in (None, brig) and photo['uploaded_by'] != g.user['id']:
         abort(403)
@@ -180,6 +185,28 @@ def _kuzatuv_media(path):
                                              conditional=True))
     resp.headers['Cache-Control'] = 'private, max-age=2592000'
     return resp
+
+
+FINANCE_PHOTO_CATEGORIES = ('cash', 'expense', 'payment')
+
+
+def sees_finance_photos():
+    return can('acct.view') or can('cash.view') or can('payments.view')
+
+
+def can_see_photo(photo):
+    """Money photos (kassa, xarajat cheklari, to‘lovlar) only for finance roles or whoever took them; a field clerk
+    only the photos of the trips they worked on (or took themselves)."""
+    uid = g.user['id']
+    if photo['uploaded_by'] == uid:
+        return True
+    if photo['category'] in FINANCE_PHOTO_CATEGORIES and not sees_finance_photos():
+        return False
+    if g.user['role'] == 'tally':
+        return bool(photo['load_id'] and q('''SELECT 1 FROM trailer_loads tl WHERE tl.id=? AND (tl.opened_by=? OR EXISTS
+                                            (SELECT 1 FROM harvests h WHERE h.load_id=tl.id AND h.entered_by=?))''',
+                                         (photo['load_id'], uid, uid), one=True))
+    return True
 
 
 @bp.route('/foto', methods=['GET', 'POST'])
@@ -215,6 +242,9 @@ def photos():
         where.append('p.brigadier_id=?'); params.append(int(f['brigadier']))
     if scope():
         where.append('(p.brigadier_id=? OR p.uploaded_by=?)'); params += [scope(), g.user['id']]
+    if not sees_finance_photos():
+        where.append(f"(p.category NOT IN ({','.join('?' * len(FINANCE_PHOTO_CATEGORIES))}) OR p.uploaded_by=?)")
+        params += [*FINANCE_PHOTO_CATEGORIES, g.user['id']]
     page = max(1, int(f.get('page', '1') or 1) if f.get('page', '1').isdigit() else 1)
     rows = q(f'''SELECT p.*, u.full_name uploaded_name, t.code trailer_code, fl.name field_name, b.name brigadier_name,
                         wb.number waybill_number, tl.id lid

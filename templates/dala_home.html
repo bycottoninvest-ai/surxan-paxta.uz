@@ -1,0 +1,28 @@
+{% extends 'base.html' %}
+{% from 'macros.html' import icon, empty with context %}
+{% set page_title = 'Dala' %}
+{% block content %}
+<div class="d-wrap">
+  <h1 class="d-h1">Salom, {{ current_user['full_name'].split()[0] }}</h1>
+  <div class="small muted">Bugun siz yozdingiz: <b>{{ today.kg|num }} kg</b> · {{ today.people }} kishi</div>
+
+  {% for t in open_trips %}
+  <a class="d-continue" href="{{ url_for('dala.trip', load_id=t.id) }}">
+    <div class="small">Ochiq telashka</div>
+    <b>{{ t.trip_no }} · {{ t.trailer_code }}</b>
+    <div class="small">{{ t.field_name }} · {{ t.brigadier_name }} · {{ 'Kombayn' if t.method == 'combine' else 'Qo‘l terimi' }}{% if t.rate %} · {{ t.rate|num }} so‘m/kg{% endif %}</div>
+    <div class="d-continue-f"><span>{{ t.n }} tortish · <b>{{ t.kg|num }} kg</b></span><span class="btn btn-green">Davom ettirish →</span></div>
+  </a>
+  {% endfor %}
+
+  <a class="btn btn-primary btn-block d-big" href="{{ url_for('dala.new_trip') }}">{{ icon('plus') }} Yangi telashka</a>
+
+  {% if done_trips %}
+  <h3 class="d-h3">Yopilgan telashkalarim (7 kun)</h3>
+  {% for t in done_trips %}
+  <a class="d-row" href="{{ url_for('dala.docs', load_id=t.id) }}"><div><b>{{ t.trip_no }}</b> · {{ t.trailer_code }}<div class="tiny muted">{{ t.field_name }} · {{ (t.full_at or '')[:16] }}</div></div>
+    <div class="num"><b>{{ (t.net_kg or 0)|num }} kg</b><div class="tiny muted">{{ t.waybill_number or '' }}</div></div></a>
+  {% endfor %}
+  {% endif %}
+</div>
+{% endblock %}

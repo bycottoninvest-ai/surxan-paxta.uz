@@ -747,6 +747,11 @@ def migrate(db):
     _backfill_doc_numbers(db)
     # v6: whether the bot is admin / member / removed in a chat (channels are picked on the Integrations page)
     _add_column(db, 'tg_chats', 'bot_status', 'TEXT')
+    # v6: the pay rate is chosen once per trip (so‘m/kg for hand AND combine) and frozen on every weighing
+    _add_column(db, 'trailer_loads', 'method', "TEXT CHECK (method IS NULL OR method IN ('hand','combine'))")
+    _add_column(db, 'trailer_loads', 'rate', 'INTEGER CHECK (rate IS NULL OR rate > 0)')
+    _add_column(db, 'trailer_loads', 'rate_unit', 'TEXT')
+    _add_column(db, 'workers', 'note', 'TEXT')
     # Future column changes go here as: if version < N: ALTER TABLE ...
     db.execute('UPDATE schema_version SET version=? WHERE version < ?', (SCHEMA_VERSION, SCHEMA_VERSION))
 

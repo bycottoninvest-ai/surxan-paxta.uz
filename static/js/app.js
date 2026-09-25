@@ -210,7 +210,7 @@
       } else { location.href = data.redirect || location.href; }
     } catch (_) {
       await qPut(item);
-      toast('Internet yo‘q — yozuv telefonda saqlandi va internet kelganda avtomatik yuboriladi.', 'warn');
+      toast('Internet yo‘q — yozuv NAVBATDA: serverga hali yetmagan. Internet kelganda o‘zi yuboriladi.', 'warn');
       form.reset(); arm(form); form.dispatchEvent(new CustomEvent('queued'));
       $$('.previews', form).forEach(p => p.innerHTML = '');
       done(); showSync();

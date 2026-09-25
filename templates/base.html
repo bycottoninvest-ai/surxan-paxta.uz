@@ -30,6 +30,10 @@
       {{ nav('punkt.home', 'Punkt', 'factory', None, ['punkt.home', 'punkt.trip']) }}
       {{ nav('punkt.scanner', 'QR skaner', 'camera') }}
       {{ nav('punkt.history', 'Bugungi tarix', 'history') }}
+      {% elif current_user['role'] == 'tally' %}
+      {{ nav('dala.home', 'Dala ishi', 'sprout', None, ['dala.home', 'dala.trip', 'dala.close', 'dala.docs']) }}
+      {{ nav('dala.new_trip', 'Yangi telashka', 'plus') }}
+      {{ nav('auth.change_password', 'Parolni almashtirish', 'shield') }}
       {% elif current_user['role'] == 'cashier' %}
       {{ nav('acct.cashier', 'Pul beriladiganlar', 'cash') }}
       {{ nav('acct.payouts', 'To‘lovlar tarixi', 'history') }}
@@ -125,6 +129,10 @@
   <a href="{{ url_for('acct.cashier') }}" class="primary">{{ icon('cash') }}To‘lash</a>
   <a href="{{ url_for('acct.expense_pick') }}">{{ icon('receipt') }}Xarajat</a>{% endif %}
   <a href="#" data-open-nav>{{ icon('menu') }}Boshqa</a>
+  {% elif current_user['role'] == 'tally' %}
+  <a href="{{ url_for('dala.home') }}" class="{{ 'active' if ep == 'dala.home' }}">{{ icon('home') }}Bosh</a>
+  <a href="{{ url_for('dala.new_trip') }}" class="primary">{{ icon('plus') }}Yangi</a>
+  <a href="{{ url_for('auth.logout') }}">{{ icon('logout') }}Chiqish</a>
   {% elif current_user['role'] == 'station' %}
   <a href="{{ url_for('punkt.home') }}" class="{{ 'active' if ep == 'punkt.home' }}">{{ icon('factory') }}Punkt</a>
   <a href="{{ url_for('punkt.history') }}" class="{{ 'active' if ep == 'punkt.history' }}">{{ icon('history') }}Tarix</a>

@@ -51,9 +51,9 @@ def create_app(**overrides):
         dbmod.migrate(conn)
         seed(conn, cfg)
 
-    from .views import acct, admin, auth, finance, integrations, kuzatuv, main, ops, people, punkt, reports
+    from .views import acct, admin, auth, dala, finance, integrations, kuzatuv, main, ops, people, punkt, reports
     for bp in (auth.bp, main.bp, ops.bp, people.bp, finance.bp, reports.bp, admin.bp, integrations.bp, punkt.bp, acct.bp,
-               kuzatuv.bp):
+               kuzatuv.bp, dala.bp):
         app.register_blueprint(bp)
     from .telegram_bot import bp as tg_bp
     app.register_blueprint(tg_bp)

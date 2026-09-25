@@ -1,0 +1,30 @@
+{% extends 'base.html' %}
+{% from 'macros.html' import icon, csrf with context %}
+{% set page_title = 'Telashkani yopish' %}
+{% block content %}
+<div class="d-wrap">
+  <div class="d-top"><a class="icon-btn" href="{{ url_for('dala.trip', load_id=ld.id) }}">{{ icon('chev-left') }}</a><h1 class="d-h1">3. Rasm va tasdiq</h1></div>
+  <div class="d-sum">
+    <div><b>{{ totals.people }}</b> {{ 'kombayn' if ld.method == 'combine' else 'kishi' }} · <b>{{ totals.n }}</b> tortish · <b>{{ totals.kg|num }} kg</b></div>
+    <div>Jami haq: <b class="d-money">{{ totals.amount|num }} so‘m</b>{% if totals.uncalc %} <span class="t-down small">(+ narxsiz yozuvlar)</span>{% endif %}</div>
+    <div class="tiny muted">{{ ld.trip_no }} · {{ ld.field_name }} · {{ ld.trailer_code }} · {{ ld.rate|num if ld.rate else '—' }} so‘m/kg</div>
+  </div>
+  {% if not totals.n %}
+  <div class="notice">{{ icon('alert','sm') }} Bu telashkada hali tortish yo‘q — bo‘sh telashkani yopib bo‘lmaydi.</div>
+  {% else %}
+  <details class="d-more"><summary>Kim qancha ({{ lines|length }})</summary>
+    {% for l in lines %}<div class="d-line"><span>{{ l.name }}</span><b>{{ l.kg|num(1) if l.kg % 1 else l.kg|num }} kg</b><span class="tiny muted">{{ l.amount|num if l.amount is not none else '—' }}</span></div>{% endfor %}</details>
+  <form method="post" enctype="multipart/form-data" class="d-form" id="d-close">{{ csrf() }}
+    <label class="d-l">Telashka rasmi</label>
+    <label class="file-drop d-photo"><input type="file" name="photos" accept="image/*" capture="environment" required data-preview>{{ icon('camera','lg') }}<b>Rasmga olish</b><span class="tiny muted">kamera ochilmasa — galereyadan tanlang</span><div class="previews"></div></label>
+    <button class="btn btn-green btn-block d-big">{{ icon('check','sm') }} Tasdiqlash va yopish</button>
+    <div class="tiny muted">Server tasdiqlamaguncha telashka yopilmaydi. Rasm yuklanmasa — qayta urinasiz, hech narsa yo‘qolmaydi.</div>
+  </form>
+  {% endif %}
+</div>
+{% endblock %}
+{% block scripts %}<script>
+document.getElementById('d-close')?.addEventListener('submit', e => {
+  if (!navigator.onLine) { e.preventDefault(); alert('Internet yo‘q. Telashkani yopish uchun internet kerak — yozilgan kg lar saqlangan, yo‘qolmaydi.'); }
+});
+</script>{% endblock %}

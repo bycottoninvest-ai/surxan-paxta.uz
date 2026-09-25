@@ -1,0 +1,23 @@
+{% extends 'base.html' %}
+{% from 'macros.html' import icon with context %}
+{% set page_title = 'Hujjatlar' %}
+{% block content %}
+<div class="d-wrap">
+  <div class="d-top"><a class="icon-btn" href="{{ url_for('dala.home') }}">{{ icon('chev-left') }}</a><h1 class="d-h1">4. Hujjatlar tayyor</h1></div>
+  {% if ld.status == 'OCHIQ' %}
+  <div class="notice">{{ icon('alert','sm') }} Bu telashka hali yopilmagan. <a href="{{ url_for('dala.trip', load_id=ld.id) }}">Davom ettirish</a></div>
+  {% else %}
+  <div class="d-ok">{{ icon('check-circle','lg') }}<b>Telashka yopildi</b><span class="small">{{ ld.trip_no }} · {{ totals.kg|num }} kg{% if ld.waybill_number %} · {{ ld.waybill_number }}{% endif %}</span></div>
+  {% set doc_url = url_for('dala.workers_pdf', load_id=ld.id) %}{% set doc_file = (ld.trip_no or ld.id)|string ~ '_ishchilar_hisoboti.pdf' %}
+  {% set doc_title = 'Kombayn hisoboti (ichki)' if ld.method == 'combine' else 'Ishchilar hisoboti (ichki)' %}{% set doc_sub = 'Ism · kg · narx · summa — punktga berilmaydi' %}
+  {% include 'partials/doc_card.html' %}
+  {% if ld.waybill_id and ld.waybill_status != 'BEKOR' %}
+  {% set doc_url = url_for('ops.waybill_external_pdf', waybill_id=ld.waybill_id) %}{% set doc_file = (ld.trip_no or '') ~ '_' ~ ld.waybill_number ~ '_nakladnoy.pdf' %}
+  {% set doc_title = 'Punkt nakladnoyi' %}{% set doc_sub = 'Dala · telashka · sana · reys · kg (haqsiz)' %}
+  {% include 'partials/doc_card.html' %}
+  {% else %}<div class="notice">Punkt nakladnoyi: telashka katta tarozida tortilgach chiqadi.</div>{% endif %}
+  <div class="tiny muted">“Ulashish” — telefon oynasi ochiladi: Telegramni va kimga yuborishni o‘zingiz tanlaysiz. Qayta ochish yoki yuborish yangi hujjat yaratmaydi.</div>
+  {% endif %}
+  <a class="btn btn-primary btn-block d-big" href="{{ url_for('dala.new_trip') }}">{{ icon('plus') }} Yangi telashka</a>
+</div>
+{% endblock %}

@@ -147,6 +147,16 @@ def find_or_create_worker(db, actor, full_name, phone='', brigadier_id=None, all
     return cur.lastrowid, True
 
 
+def _new_worker(db, actor, full_name, brigadier_id=None):
+    full_name = clean_text(full_name, 120)
+    if len(full_name) < 2:
+        raise UserError('Ishchi F.I.Sh. kiritilishi shart.')
+    cur = db.execute('INSERT INTO workers(full_name, name_key, brigadier_id, created_by, created_at) VALUES (?,?,?,?,?)',
+                     (full_name, name_key(full_name), brigadier_id or actor.brigadier_id, actor.user_id, now_str()))
+    audit(db, actor, 'CREATE', 'worker', cur.lastrowid, new={'full_name': full_name, 'same_name_allowed': True})
+    return cur.lastrowid
+
+
 def create_worker(actor, full_name, phone='', brigadier_id=None, photo=None):
     _need(actor, 'workers.write')
     with tx() as db:
@@ -186,8 +196,19 @@ def update_worker(actor, worker_id, full_name, phone, active, photo=None):
 # ------------------------------------------------------------------ trailer loads
 
 def open_load(actor, *, trailer_id, field_id, brigadier_id, tractor_id=None, vehicle_plate='', driver_name='',
-              note='', client_uuid=None, load_date=None, station_id=None):
+              note='', client_uuid=None, load_date=None, station_id=None, method=None, rate=None):
+    """method + rate (so‘m/kg) are set once for the whole trip: every weighing is priced at that rate and the rate
+    becomes the default for the next trip. A later rate never changes this trip or earlier ones."""
     _need(actor, 'load.open')
+    if method is not None:
+        if method not in ('hand', 'combine'):
+            raise UserError('Terim turini tanlang: qo‘l terimi yoki kombayn.')
+        try:
+            rate = int(round(float(str(rate).replace(' ', '').replace(',', '.'))))
+        except (TypeError, ValueError):
+            raise UserError('Terim narxini kiriting (so‘m/kg).')
+        if rate <= 0 or rate > 100000:
+            raise UserError('Terim narxi so‘m/kg da bo‘lishi kerak (masalan 1500).')
     with tx() as db:
         if client_uuid:
             dup = db.execute('SELECT id FROM trailer_loads WHERE client_uuid=?', (client_uuid,)).fetchone()
@@ -219,14 +240,22 @@ def open_load(actor, *, trailer_id, field_id, brigadier_id, tractor_id=None, veh
             (season, load_date or today_str(), trailer_id, tractor_id or None, field_id, brigadier_id,
              clean_text(vehicle_plate, 30), clean_text(driver_name, 80), clean_text(note), client_uuid,
              actor.user_id, now_str(), trip_no, station['id'] if station else None))
+        if method is not None:
+            db.execute("UPDATE trailer_loads SET method=?, rate=?, rate_unit='kg' WHERE id=?", (method, rate, cur.lastrowid))
+            # the last rate used is offered on the next trip (no retyping); it never touches existing records
+            key = 'worker_rate_hand' if method == 'hand' else 'combine_rate_kg'
+            db.execute('INSERT INTO settings(key, value, updated_at, updated_by) VALUES (?,?,?,?) ON CONFLICT(key) DO UPDATE '
+                       'SET value=excluded.value, updated_at=excluded.updated_at, updated_by=excluded.updated_by',
+                       (key, str(rate), now_str(), actor.user_id))
         audit(db, actor, 'OPEN', 'trailer_load', cur.lastrowid,
               new={'trip_no': trip_no, 'trailer': trailer['code'], 'field_id': field_id, 'brigadier_id': brigadier_id,
-                   'tractor_id': tractor_id, 'station': station['name'] if station else None})
+                   'tractor_id': tractor_id, 'station': station['name'] if station else None,
+                   'method': method, 'rate': rate, 'rate_unit': 'so‘m/kg' if method else None})
         return cur.lastrowid
 
 
 def add_harvest(actor, *, load_id, method, kg, worker_id=None, worker_name=None, combine_id=None, note='',
-                client_uuid=None, source='web', confirm_duplicate=False):
+                client_uuid=None, source='web', confirm_duplicate=False, new_worker=False):
     """Record one weighing next to the trailer. Returns (harvest_id, info dict)."""
     _need(actor, 'harvest.write')
     if method not in ('hand', 'combine'):
@@ -248,7 +277,10 @@ def add_harvest(actor, *, load_id, method, kg, worker_id=None, worker_name=None,
             raise UserError(f'{kg:g} kg juda katta (chegara {max_kg:g} kg). Raqamni tekshiring.')
         created_worker = False
         if method == 'hand':
-            if not worker_id and worker_name:
+            if not worker_id and worker_name and new_worker:
+                # "+ Yangi odam": a different person, even if someone with the same name already exists
+                worker_id, created_worker = _new_worker(db, actor, worker_name, load['brigadier_id']), True
+            elif not worker_id and worker_name:
                 worker_id, created_worker = find_or_create_worker(db, actor, worker_name, brigadier_id=load['brigadier_id'])
             if not worker_id:
                 raise UserError('Ishchi tanlanishi shart.')
@@ -273,7 +305,10 @@ def add_harvest(actor, *, load_id, method, kg, worker_id=None, worker_name=None,
                 raise UserError('Bu odamga xuddi shu kg hozirgina yozilgan (takror bo‘lishi mumkin). '
                                 'Rostdan ikkinchi tortish bo‘lsa, “Ha, bu ikkinchi tortish” belgisini qo‘yib qayta saqlang.')
         from .accounting import after_combine_harvest, price_harvest
-        rate, rate_unit, amount = price_harvest(db, method, kg, combine_id)     # frozen: never recalculated later
+        if load['method'] and load['method'] != method:
+            raise UserError('Bu telashka ' + ('qo‘l terimi' if load['method'] == 'hand' else 'kombayn') +
+                            ' uchun ochilgan. Boshqa turdagi terim uchun alohida telashka oching.')
+        rate, rate_unit, amount = price_harvest(db, method, kg, combine_id, load)     # frozen: never recalculated later
         cur = db.execute(
             '''INSERT INTO harvests(season_year, work_date, load_id, worker_id, field_id, brigadier_id, trailer_id,
                    tractor_id, combine_id, method, kg, note, source, client_uuid, entered_by, created_at, rate, rate_unit, amount)
@@ -282,7 +317,7 @@ def add_harvest(actor, *, load_id, method, kg, worker_id=None, worker_name=None,
              load['trailer_id'], load['tractor_id'], combine_id, method, kg, clean_text(note), source, client_uuid,
              actor.user_id, now_str(), rate, rate_unit, amount))
         hid = cur.lastrowid
-        if method == 'combine':
+        if method == 'combine' and not load['rate']:   # a per-kg trip rate replaces the machine's day tariff
             after_combine_harvest(db, actor, load['season_year'], combine_id, today_str(), load['field_id'])
         audit(db, actor, 'CREATE', 'harvest', hid,
               new={'load_id': load_id, 'method': method, 'kg': kg, 'worker_id': worker_id, 'combine_id': combine_id,

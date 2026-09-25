@@ -163,7 +163,9 @@ def build_waybill_pdf(wb, *, copy, company, version, generated_at, generated_by,
     y -= 6 * mm
     field_sum = wb['basis'] == 'dala'
     if field_sum:
-        weights = [('Og‘irlik manbai', 'Dala tarozisi yig‘indisi'), ('Dala vazni (netto)', f'{_num(wb["net_kg"])} kg')]
+        # not a weighbridge netto: the sum of the field-scale weighings (the punkt weighs it again)
+        weights = [('Og‘irlik manbai', 'Dala tarozisi yig‘indisi (tarozi netto emas)'),
+                   ('Dala hisobidagi kg', f'{_num(wb["net_kg"])} kg')]
     else:
         weights = [('Brutto', f'{_num(wb["gross_kg"])} kg'), ('Tara', f'{_num(wb["tare_kg"])} kg'),
                    ('Netto', f'{_num(wb["net_kg"])} kg')]
@@ -222,5 +224,85 @@ def build_waybill_pdf(wb, *, copy, company, version, generated_at, generated_by,
     c.drawString(x0, 14 * mm, f'SURXON PAXTA HISOB TIZIMI · {wb["number"]} · {version}-versiya · yaratildi {generated_at} · {generated_by}')
     c.drawString(x0, 10 * mm, 'Raqam tizim tomonidan beriladi va takrorlanmaydi. Oldingi versiyalar arxivda saqlanadi.')
     c.showPage()
+    c.save()
+    return buf.getvalue()
+
+
+def build_workers_report_pdf(ld, lines, *, company, generated_at, generated_by):
+    """ICHKI: ISHCHILAR HISOBOTI for one trip — every picker (or combine) with kg, the rate frozen on those weighings,
+    the amount, and the totals. Internal only (never given to the punkt)."""
+    _fonts()
+    buf = io.BytesIO()
+    c = canvas.Canvas(buf, pagesize=A4)
+    W, H = A4
+    x0, x1 = 16 * mm, W - 16 * mm
+    trip = ld['trip_no'] or f'№{ld["id"]}'
+    c.setTitle(f'Ishchilar hisoboti {trip}')
+
+    def header():
+        y = H - 18 * mm
+        c.setFont('DejaVu-Bold', 15)
+        c.drawString(x0, y, company)
+        c.setFont('DejaVu', 9)
+        c.drawRightString(x1, y, f'Chop: {_date(generated_at)} · {generated_by or ""}')
+        y -= 9 * mm
+        c.setFont('DejaVu-Bold', 16)
+        c.drawCentredString(W / 2, y, 'ISHCHILAR HISOBOTI (ichki)')
+        y -= 6 * mm
+        c.setFont('DejaVu', 9.5)
+        kind = 'Kombayn terimi' if ld['method'] == 'combine' else 'Qo‘l terimi'
+        c.drawCentredString(W / 2, y, f'{trip} · {_date(ld["load_date"])} · {ld["field_code"] or ""} {ld["field_name"] or ""} · '
+                                      f'{ld["brigadier_name"] or ""} · {ld["trailer_code"]} · {kind}')
+        return y - 8 * mm
+
+    cols = [('Ism / kombayn', x0 + 2 * mm, 'l'), ('Tortish', x0 + 92 * mm, 'r'), ('Kg', x0 + 115 * mm, 'r'),
+            ('Narx, so‘m/kg', x0 + 145 * mm, 'r'), ('Summa, so‘m', x1 - 2 * mm, 'r')]
+
+    def head_row(y):
+        c.setFillColor(colors.HexColor('#eef3fa'))
+        c.rect(x0, y - 7 * mm, x1 - x0, 7 * mm, stroke=0, fill=1)
+        c.setFillColor(colors.black)
+        c.setFont('DejaVu-Bold', 9.5)
+        for t, x, a in cols:
+            (c.drawString if a == 'l' else c.drawRightString)(x, y - 5 * mm, t)
+        return y - 7 * mm
+
+    y = head_row(header())
+    tot_kg = tot_amt = 0
+    uncalc = False
+    people = set()
+    for i, ln in enumerate(lines):
+        if y < 30 * mm:
+            c.showPage()
+            y = head_row(header())
+        c.setFont('DejaVu', 10)
+        name = ln['name'][:44]
+        vals = [name, str(ln['n']), _num(ln['kg'], 1 if ln['kg'] % 1 else 0),
+                _num(ln['rate']) if ln['rate'] else 'hisoblanmagan',
+                _num(ln['amount']) if ln['amount'] is not None else '—']
+        for (t, x, a), v in zip(cols, vals):
+            (c.drawString if a == 'l' else c.drawRightString)(x, y - 5.5 * mm, v)
+        c.setStrokeColor(colors.HexColor('#dfe6ef'))
+        c.line(x0, y - 7.5 * mm, x1, y - 7.5 * mm)
+        c.setStrokeColor(colors.black)
+        y -= 7.5 * mm
+        tot_kg += ln['kg']
+        people.add(ln['key'])
+        if ln['amount'] is None:
+            uncalc = True
+        else:
+            tot_amt += ln['amount']
+    y -= 3 * mm
+    c.setFillColor(colors.HexColor('#e8f6ec'))
+    c.rect(x0, y - 9 * mm, x1 - x0, 9 * mm, stroke=0, fill=1)
+    c.setFillColor(colors.black)
+    c.setFont('DejaVu-Bold', 11)
+    c.drawString(x0 + 2 * mm, y - 6.2 * mm, f'JAMI: {len(people)} ' + ('kombayn' if ld['method'] == 'combine' else 'kishi'))
+    c.drawRightString(x0 + 115 * mm, y - 6.2 * mm, f'{_num(tot_kg, 1 if tot_kg % 1 else 0)} kg')
+    c.drawRightString(x1 - 2 * mm, y - 6.2 * mm, f'{_num(tot_amt)} so‘m' + (' + hisoblanmagan' if uncalc else ''))
+    y -= 16 * mm
+    c.setFont('DejaVu', 8.5)
+    c.drawString(x0, y, 'Kg — dala tarozisida har tortish. Narx — o‘sha tortish paytida qotirilgan narx (keyin o‘zgarmaydi).')
+    c.drawString(x0, y - 4.5 * mm, 'Punkt/tarozi farqi ishchi haqini o‘z-o‘zidan kamaytirmaydi. Bu hujjat punktga berilmaydi.')
     c.save()
     return buf.getvalue()

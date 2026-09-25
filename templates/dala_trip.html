@@ -1,0 +1,88 @@
+{% extends 'base.html' %}
+{% from 'macros.html' import icon, csrf, uuid_field with context %}
+{% set page_title = ld.trip_no %}
+{% block content %}
+<div class="d-wrap" id="d-trip" data-state="{{ url_for('dala.state', load_id=ld.id) }}">
+  <div class="d-top"><a class="icon-btn" href="{{ url_for('dala.home') }}">{{ icon('chev-left') }}</a>
+    <div><h1 class="d-h1">2. {{ 'Kombayn va kg' if method == 'combine' else 'Odam va kilogramm' }}</h1>
+      <div class="small muted">{{ ld.field_name }} · {{ ld.trailer_code }} · {{ ld.brigadier_name }} · <b>{{ ld.rate|num if ld.rate else '—' }} so‘m/kg</b></div></div></div>
+
+  <form method="post" action="{{ url_for('dala.weigh', load_id=ld.id) }}" class="d-form" id="d-entry" data-offline="Tortish {{ ld.trip_no }}" data-after="reset" autocomplete="off">
+    {{ csrf() }}{{ uuid_field() }}
+    {% if method == 'combine' %}
+    <label class="d-l">Kombayn</label>
+    <select name="combine_id" required data-keep>{% for c in combines %}<option value="{{ c.id }}">{{ c.code }}{{ ' · ' ~ c.operator_name if c.operator_name }}</option>{% endfor %}</select>
+    {% else %}
+    <label class="d-l">Ismni qidiring</label>
+    <input type="hidden" name="worker_id" id="d-wid"><input type="hidden" name="new_worker" id="d-new">
+    <input name="worker_name" id="d-name" required placeholder="Ism yoki familiya" autocapitalize="words" class="d-name">
+    <div id="d-sugg" class="d-sugg"></div>
+    {% endif %}
+    <label class="d-l">Kilogramm</label>
+    <div class="d-kg"><input name="kg" id="d-kgin" inputmode="decimal" required placeholder="0" class="d-num"><span>kg</span></div>
+    <label class="d-dup" id="d-dup" hidden><input type="checkbox" name="confirm_duplicate" value="1"> Ha, bu shu odamning yana bir tortishi (takror emas)</label>
+    <button class="btn btn-primary btn-block d-big" id="d-save">Saqlash va keyingisi →</button>
+  </form>
+
+  <div class="d-tot" id="d-tot">
+    <div><span>{{ 'Kombayn' if method == 'combine' else 'Kishi' }}</span><b data-t="people">{{ totals.people }}</b></div>
+    <div><span>Tortish</span><b data-t="n">{{ totals.n }}</b></div>
+    <div><span>Jami kg</span><b data-t="kg">{{ totals.kg|num }}</b></div>
+    <div><span>Summa, so‘m</span><b data-t="amount">{{ totals.amount|num }}</b></div>
+  </div>
+  <div id="d-queue" class="notice" hidden></div>
+  <div class="d-list" id="d-list">
+    {% for r in recent %}<div class="d-line"><span>{{ r.name }}</span><b>{{ r.kg|num(1) if r.kg % 1 else r.kg|num }} kg</b><span class="tiny muted">{{ r.created_at[11:16] }}</span></div>{% endfor %}
+  </div>
+  {% if totals.n %}<a class="small" href="{{ url_for('ops.load_detail', load_id=ld.id) }}">Barcha tortishlar va tuzatish →</a>{% endif %}
+
+  <a class="btn btn-light btn-block d-big" href="{{ url_for('dala.close', load_id=ld.id) }}">{{ icon('check-circle') }} Telashkani yopish</a>
+</div>
+{% endblock %}
+{% block scripts %}<script>
+(function(){
+  const form = document.getElementById('d-entry'), list = document.getElementById('d-list'), tot = document.getElementById('d-tot');
+  const name = document.getElementById('d-name'), wid = document.getElementById('d-wid'), nw = document.getElementById('d-new');
+  const sugg = document.getElementById('d-sugg'), dup = document.getElementById('d-dup'), kg = document.getElementById('d-kgin');
+  const fmt = v => Number(v || 0).toLocaleString('ru-RU').replace(/,/g, ' ');
+  const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  function render(totals, recent) {
+    tot.querySelector('[data-t=people]').textContent = totals.people;
+    tot.querySelector('[data-t=n]').textContent = totals.n;
+    tot.querySelector('[data-t=kg]').textContent = fmt(totals.kg);
+    tot.querySelector('[data-t=amount]').textContent = fmt(totals.amount);
+    list.innerHTML = recent.map(r => `<div class="d-line"><span>${esc(r.name)}</span><b>${fmt(r.kg)} kg</b><span class="tiny muted">${r.created_at.slice(11,16)}</span></div>`).join('');
+  }
+  if (name) {
+    let timer;
+    const pick = (id, label, isNew) => { wid.value = id || ''; nw.value = isNew ? '1' : ''; name.value = label; sugg.innerHTML = isNew
+      ? `<div class="tiny" style="color:var(--green)">+ Yangi odam qo‘shiladi: <b>${esc(label)}</b></div>` : `<div class="tiny" style="color:var(--green)">✓ Tanlandi</div>`; kg.focus(); };
+    name.addEventListener('input', () => {
+      wid.value = ''; nw.value = ''; dup.hidden = true;
+      clearTimeout(timer);
+      const t = name.value.trim();
+      if (t.length < 2) { sugg.innerHTML = ''; return; }
+      timer = setTimeout(async () => {
+        let ws = [];
+        try { ws = (await (await fetch('/api/workers?q=' + encodeURIComponent(t), {headers: {'X-Requested-With': 'fetch'}})).json()).workers || []; } catch (_) {}
+        sugg.innerHTML = ws.slice(0, 6).map(w => `<button type="button" class="d-pick" data-id="${w.id}" data-name="${esc(w.name)}">${esc(w.name)} <span class="tiny muted">${esc(w.phone || '#' + w.id)}</span></button>`).join('')
+          + `<button type="button" class="d-pick d-add" data-new="1">+ Yangi odam: <b>${esc(t)}</b></button>`;
+      }, 180);
+    });
+    sugg.addEventListener('click', e => { const b = e.target.closest('.d-pick'); if (!b) return;
+      if (b.dataset.new) pick('', name.value.trim(), true); else pick(b.dataset.id, b.dataset.name, false); });
+  }
+  const comb = form.querySelector('[name=combine_id]');
+  let keepComb = comb ? comb.value : null;
+  form.addEventListener('submit', () => { if (comb) keepComb = comb.value; }, true);
+  const restore = () => { if (comb && keepComb) comb.value = keepComb; };
+  form.addEventListener('saved', restore); form.addEventListener('queued', restore);
+  form.addEventListener('saved', e => { if (e.detail && e.detail.totals) render(e.detail.totals, e.detail.recent);
+    dup.hidden = true; if (sugg) sugg.innerHTML = ''; if (wid) { wid.value = ''; nw.value = ''; }
+    (name || kg).focus(); });
+  form.addEventListener('failed', e => { if (/takror|hozirgina/.test((e.detail && e.detail.error) || '')) dup.hidden = false; });
+  form.addEventListener('queued', () => { const q = document.getElementById('d-queue'); q.hidden = false;
+    q.innerHTML = '<div>⚠️ Internet yo‘q — oxirgi yozuv <b>NAVBATDA</b> (serverga hali yetmagan). Internet kelganda o‘zi yuboriladi; shungacha “saqlandi” hisoblanmaydi.</div>';
+    (name || kg).focus(); });
+})();
+</script>{% endblock %}

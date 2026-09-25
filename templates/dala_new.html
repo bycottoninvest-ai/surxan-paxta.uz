@@ -1,0 +1,40 @@
+{% extends 'base.html' %}
+{% from 'macros.html' import icon, csrf, uuid_field with context %}
+{% set page_title = 'Yangi telashka' %}
+{% block content %}
+<div class="d-wrap">
+  <div class="d-top"><a class="icon-btn" href="{{ url_for('dala.home') }}">{{ icon('chev-left') }}</a><h1 class="d-h1">1. Telashka ochish</h1></div>
+  {% if not fields %}
+  <div class="notice">{{ icon('alert','sm') }} <div><b>Dala hali qo‘shilmagan.</b><br>Administrator dala qo‘shishi kerak — keyin shu yerda tanlaysiz.</div></div>
+  {% elif not trailers %}
+  <div class="notice">{{ icon('alert','sm') }} <div><b>Bo‘sh telashka yo‘q.</b><br>Hamma telashkada ochiq ish bor — avval ularni yoping.</div></div>
+  {% else %}
+  <form method="post" class="d-form" id="d-open">{{ csrf() }}{{ uuid_field() }}
+    <label class="d-l">Dala</label>
+    <select name="field_id" required id="d-field">{% for f in fields %}<option value="{{ f.id }}" data-brig="{{ f.brigadier_id or '' }}">{{ f.code }} · {{ f.name }}</option>{% endfor %}</select>
+    <label class="d-l">Telashka</label>
+    <select name="trailer_id" required>{% for t in trailers %}<option value="{{ t.id }}">{{ t.code }}{{ ' · ' ~ t.plate if t.plate }}</option>{% endfor %}</select>
+    <label class="d-l">Terim turi</label>
+    <div class="d-seg"><label><input type="radio" name="method" value="hand" checked data-rate="{{ rate_hand }}"><span>Qo‘l terimi</span></label>
+      <label><input type="radio" name="method" value="combine" data-rate="{{ rate_combine }}"><span>Kombayn</span></label></div>
+    <label class="d-l">Brigadir</label>
+    <select name="brigadier_id" required id="d-brig"><option value="">— tanlang —</option>{% for b in brigadiers %}<option value="{{ b.id }}">{{ b.name }}</option>{% endfor %}</select>
+    <label class="d-l">Terim narxi <span class="muted">(so‘m/kg)</span></label>
+    <input name="rate" id="d-rate" inputmode="numeric" required value="{{ rate_hand }}" placeholder="masalan 1500" autocomplete="off" class="d-num">
+    <div class="tiny muted">Shu telashkadagi hamma tortish shu narxda hisoblanadi. Keyingi telashkada ham o‘zi chiqadi; o‘zgarsa shu yerda almashtirasiz. Eski hisoblar o‘zgarmaydi.</div>
+    {% if tractors %}<details class="d-more"><summary>Traktor (ixtiyoriy)</summary><select name="tractor_id"><option value="">—</option>{% for t in tractors %}<option value="{{ t.id }}">{{ t.code }}</option>{% endfor %}</select></details>{% endif %}
+    <button class="btn btn-primary btn-block d-big">Boshlash →</button>
+  </form>
+  {% endif %}
+</div>
+{% endblock %}
+{% block scripts %}<script>
+(function(){
+  const f = document.getElementById('d-field'), b = document.getElementById('d-brig'), r = document.getElementById('d-rate');
+  if (!f) return;
+  const pick = () => { const o = f.selectedOptions[0]; if (o && o.dataset.brig) b.value = o.dataset.brig; };
+  f.addEventListener('change', pick); pick();
+  let typed = false; r.addEventListener('input', () => typed = true);
+  document.querySelectorAll('input[name=method]').forEach(m => m.addEventListener('change', () => { if (!typed) r.value = m.dataset.rate || ''; }));
+})();
+</script>{% endblock %}

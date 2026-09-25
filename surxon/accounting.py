@@ -52,8 +52,12 @@ def hand_rate(db=None):
     return int(round(r)) if r and r > 0 else None
 
 
-def price_harvest(db, method, kg, combine_id):
-    """(rate, unit, amount) to freeze on a new harvest row. None amount = no rate set yet ("hisoblanmagan")."""
+def price_harvest(db, method, kg, combine_id, load=None):
+    """(rate, unit, amount) to freeze on a new harvest row. None amount = no rate set yet ("hisoblanmagan").
+    A trip opened with its own rate (so‘m/kg, hand or combine) prices every weighing of that trip at that rate."""
+    keys = load.keys() if load is not None else ()
+    if load is not None and 'rate' in keys and load['rate'] and load['method'] == method:
+        return load['rate'], 'kg', int(round(kg * load['rate']))
     if method == 'hand':
         rate = hand_rate(db)
         return (rate, 'kg', int(round(kg * rate))) if rate else (None, None, None)

@@ -197,12 +197,20 @@ CASHIER_ENDPOINTS = STATION_ENDPOINTS | {'acct.cashier', 'acct.payout_pay', 'acc
                                          'acct.expense_new'}
 
 
+# Field clerk: only the four-step field screens (and the few trip endpoints they use) — no reports, money, staff,
+# equipment/field admin or the general photo archive, whatever URL is typed.
+TALLY_ENDPOINTS = STATION_ENDPOINTS | {'main.api_workers', 'main.media', 'ops.harvest', 'ops.load_open', 'ops.load_full',
+                                       'ops.load_detail', 'ops.harvest_void', 'ops.load_photos', 'ops.waybill_external_pdf'}
+
+
 def station_gate():
     """Punkt operator and cashier logins open only their own screens — enforced here for every request, not just
     hidden menus."""
     user = g.get('user')
     ep = request.endpoint or ''
-    if not user or user['role'] not in ('station', 'cashier'):
+    if not user or user['role'] not in ('station', 'cashier', 'tally'):
+        return None
+    if user['role'] == 'tally' and (ep in TALLY_ENDPOINTS or ep.startswith('dala.')):
         return None
     if user['role'] == 'station' and (ep in STATION_ENDPOINTS or ep.startswith('punkt.')):
         return None
@@ -210,7 +218,7 @@ def station_gate():
         return None
     if wants_json():
         return jsonify(ok=False, error='Bu amal uchun huquqingiz yo‘q.'), 403
-    return redirect(url_for('punkt.home' if user['role'] == 'station' else 'acct.cashier'))
+    return redirect(url_for({'station': 'punkt.home', 'cashier': 'acct.cashier', 'tally': 'dala.home'}[user['role']]))
 
 
 def login_required(fn):

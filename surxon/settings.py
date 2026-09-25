@@ -7,6 +7,7 @@ DEFAULTS = {
     'destination_name': ('Nayman paxta qabul punkti', 'Qabul qiluvchi (nakladnoyda)'),
     'price_per_kg': ('', 'Paxta narxi, so‘m/kg (bo‘sh = hali kelishilmagan)'),
     'worker_rate_hand': ('', 'Qo‘l terimi narxi, so‘m/kg. Har tortishda shu paytdagi narx saqlanadi; o‘zgartirilsa eski hisob o‘zgarmaydi (bo‘sh = hisoblanmaydi)'),
+    'combine_rate_kg': ('', 'Kombayn terimi narxi, so‘m/kg (oxirgi telashkada kiritilgani — keyingisida o‘zi chiqadi)'),
     'income_sources': ('Direktor, Nayman (paxta puli), Boshqa', 'Kassa kirimi manbalari (vergul bilan)'),
     'sheets_prefix': ('SPX ', 'Google Sheets: tizim yozadigan varaqlar nomi oldidagi belgi (qo‘lda qilingan varaqlarga tegmaslik uchun)'),
     'report_time': ('21:00', 'Telegram kunlik hisobot vaqti (HH:MM); kun yopilsa, darhol yuboriladi'),

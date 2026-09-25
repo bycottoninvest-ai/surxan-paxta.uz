@@ -1,0 +1,10 @@
+{# One document card: Ko‘rish / Ulashish (phone share sheet → Telegram) / Saqlash. Needs doc_url, doc_file, doc_title, doc_sub. #}
+{% from 'macros.html' import icon with context %}
+<div class="d-doc">
+  <div class="d-doc-h"><span class="d-doc-ico">{{ icon('doc') }}</span><div><b>{{ doc_title }}</b><div class="small muted">{{ doc_sub }}</div></div></div>
+  <div class="d-doc-b">
+    <a class="btn btn-light" href="{{ doc_url }}" target="_blank" rel="noopener">{{ icon('eye','sm') }} Ko‘rish</a>
+    <button type="button" class="btn btn-primary" data-pdf-share="{{ doc_url }}" data-pdf-name="{{ doc_file }}" hidden>{{ icon('telegram','sm') }} Ulashish</button>
+    <a class="btn btn-light" href="{{ doc_url }}?download=1" download>{{ icon('download','sm') }} Saqlash</a>
+  </div>
+</div>
