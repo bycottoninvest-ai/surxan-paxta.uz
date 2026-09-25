@@ -88,6 +88,8 @@
     {{ act(url_for('ops.waybills', period='today'), 'doc', 'Nakladnoylar') }}
     {{ act(url_for('reports.index'), 'bars', 'Hisobotlar') }}
   </div>
+  {% if kuz %}<h3 class="m-h">{{ icon('video','sm') }} Kuzatuv · <a href="{{ url_for('kuzatuv.home') }}">barchasi</a></h3>
+  <div class="m-card">{% include 'partials/k_strip.html' %}</div>{% endif %}
   <h3 class="m-h">Telashkalar hozir</h3>
   <div class="m-card">{% for t in trailers %}<div class="row" style="padding:6px 0;border-bottom:1px solid var(--line-2)"><b>{{ t.trailer_code }}</b>{% if t.status %}{{ status(t.status) }}{% else %}<span class="badge b-gray">Bo‘sh</span>{% endif %}<span class="small muted">{{ t.field_name or '' }}</span><span class="spacer"></span><b class="num">{{ ((t.internal_kg if t.status == 'TOLDI' else t.live_kg)|num ~ ' kg') if t.status else '' }}</b></div>{% endfor %}</div>
 {% endif %}

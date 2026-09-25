@@ -1,0 +1,67 @@
+{% extends 'base.html' %}
+{% from 'macros.html' import icon, csrf, empty with context %}
+{% set page_title = 'Kuzatuv · Odamlar' %}
+{% set st_badge = {'YANGI': 'b-orange', 'FAOL': 'b-green', 'NOFAOL': 'b-gray'} %}
+{% set st_label = {'YANGI': 'Tasdiq kutmoqda', 'FAOL': 'Faol', 'NOFAOL': 'O‘chirilgan'} %}
+{% set src_label = {'admin': 'qo‘lda qo‘shilgan', 'guruh': 'guruhdan', 'bot': 'botga yozgan', 'tizim': 'tizim foydalanuvchisi'} %}
+{% block content %}
+<div class="page-h"><h1>{{ icon('users','lg') }} Kuzatuv · Odamlar</h1><span class="sub">Kimdan rasm/video so‘raladi: traktorchi, brigadir, agronom…</span></div>
+{% set k_active = 'people' %}{% include 'partials/k_tabs.html' %}
+
+<div class="notice blue mb">{{ icon('telegram','sm') }}<div><b>Odam qanday qo‘shiladi?</b><br>
+  1) Pastda ismini yozing → chiqqan havolani unga yuboring → u bosib “Start” qiladi.<br>
+  2) Yoki botni ishchi Telegram guruhiga qo‘shing (admin qiling) — guruhdagi odamlar o‘zi ro‘yxatga tushadi.<br>
+  3) Tizim foydalanuvchilari (hisobchi, punkt…) Telegramni ulaganda o‘zi qo‘shiladi.</div></div>
+
+{% if can('kuzatuv.manage') %}
+<details class="card"><summary class="card-h"><h3>{{ icon('plus') }} Yangi odam qo‘shish</h3></summary>
+  <form method="post" class="card-b form">{{ csrf() }}
+    <div class="f h"><label>Ism <span class="req">*</span></label><input name="full_name" required placeholder="Mirjalol"></div>
+    <div class="f h"><label>Vazifasi</label><input name="role_label" list="k-roles" placeholder="Traktorchi"></div>
+    <div class="f h"><label>Texnika (ixtiyoriy)</label><select name="equipment_id"><option value="">—</option>{% for e in equipment %}<option value="{{ e.id }}">{{ e.code }} ({{ e.kind }})</option>{% endfor %}</select></div>
+    <div class="f h"><label>Dala (ixtiyoriy)</label><select name="field_id"><option value="">—</option>{% for f in fields %}<option value="{{ f.id }}">{{ f.code }} · {{ f.name }}</option>{% endfor %}</select></div>
+    <div class="f"><button class="btn btn-primary">Qo‘shish va havola olish</button></div>
+  </form></details>
+<datalist id="k-roles"><option value="Traktorchi"><option value="Brigadir"><option value="Agronom"><option value="Kombaynchi"><option value="Haydovchi"><option value="Hisobchi"><option value="Qorovul"></datalist>
+{% endif %}
+
+{% for m in rows %}
+<div class="m-card" id="m{{ m.id }}">
+  <div class="row"><b>{{ m.full_name }}</b>{% if m.role_label %}<span class="muted small">{{ m.role_label }}</span>{% endif %}<span class="spacer"></span>
+    <span class="badge {{ st_badge[m.status] }}">{{ st_label[m.status] }}</span></div>
+  <div class="tiny muted">{{ src_label.get(m.source, m.source) }}
+    {% if m.telegram_id %} · Telegram ulangan{% if m.username %} (@{{ m.username }}){% endif %}{% if m.dm_ok %} · botni ochgan{% else %} · faqat guruhda{% endif %}{% else %} · <span style="color:var(--red)">Telegram hali ulanmagan</span>{% endif %}
+    {% if m.equipment_code %} · {{ m.equipment_code }}{% endif %}{% if m.field_name %} · {{ m.field_name }}{% endif %}
+    · {{ m.n_items }} ta rasm/video{% if m.last_media_at %} (oxirgisi {{ m.last_media_at[:16] }}){% endif %}</div>
+  {% if not m.telegram_id and m.link_code %}
+    <div class="k-link">{% if links[m.id] %}<input readonly value="{{ links[m.id] }}" onclick="this.select()"> <a class="btn btn-light btn-sm" target="_blank" rel="noopener" href="https://t.me/share/url?url={{ links[m.id]|urlencode }}&text={{ ('SURXAN-PAXTA kuzatuv: ' ~ m.full_name ~ ', shu havolani bosib Start qiling')|urlencode }}">{{ icon('telegram','sm') }} Ulashish</a>
+      {% else %}<span class="small">Botga shu buyruqni yozsin: <b>/start {{ m.link_code }}</b></span> <span class="tiny muted">(TELEGRAM_BOT_USERNAME sozlansa, tayyor havola chiqadi)</span>{% endif %}</div>
+  {% endif %}
+  {% if can('kuzatuv.manage') %}
+  <details><summary class="small" style="color:var(--blue);cursor:pointer">Tahrirlash</summary>
+    <form method="post" class="form" style="margin-top:8px">{{ csrf() }}<input type="hidden" name="member_id" value="{{ m.id }}">
+      <div class="f h"><label>Ism</label><input name="full_name" value="{{ m.full_name }}" required></div>
+      <div class="f h"><label>Vazifasi</label><input name="role_label" list="k-roles" value="{{ m.role_label or '' }}"></div>
+      <div class="f h"><label>Holat</label><select name="status">{% for k, v in st_label.items() %}<option value="{{ k }}" {{ 'selected' if m.status == k }}>{{ v }}</option>{% endfor %}</select></div>
+      <div class="f h"><label>Tizim foydalanuvchisi</label><select name="user_id"><option value="">—</option>{% for u in users %}<option value="{{ u.id }}" {{ 'selected' if m.user_id == u.id }}>{{ u.full_name }} ({{ u.username }})</option>{% endfor %}</select></div>
+      <div class="f h"><label>Texnika</label><select name="equipment_id"><option value="">—</option>{% for e in equipment %}<option value="{{ e.id }}" {{ 'selected' if m.equipment_id == e.id }}>{{ e.code }}</option>{% endfor %}</select></div>
+      <div class="f h"><label>Dala</label><select name="field_id"><option value="">—</option>{% for f in fields %}<option value="{{ f.id }}" {{ 'selected' if m.field_id == f.id }}>{{ f.code }} · {{ f.name }}</option>{% endfor %}</select></div>
+      <div class="f row"><button class="btn btn-primary btn-sm">Saqlash</button>
+        {% if m.status == 'YANGI' %}<button class="btn btn-green btn-sm" name="status" value="FAOL">Tasdiqlash</button>{% endif %}</div>
+    </form>
+    {% if not m.telegram_id %}<form method="post">{{ csrf() }}<input type="hidden" name="action" value="link"><input type="hidden" name="member_id" value="{{ m.id }}"><button class="btn btn-ghost btn-sm">Yangi havola</button></form>{% endif %}
+  </details>
+  {% endif %}
+</div>
+{% else %}{{ empty('Hali odam yo‘q', 'users') }}{% endfor %}
+
+<section class="card"><div class="card-h"><h3>{{ icon('telegram') }} Telegram guruhlar</h3></div>
+  <div class="card-b">
+  {% for c in chats %}
+    <div class="row" style="padding:6px 0;border-bottom:1px solid var(--line)"><b>{{ c.title or c.chat_id }}</b>
+      {% if c.is_work %}<span class="badge b-green">Ishchi guruh</span>{% else %}<span class="badge b-gray">tasdiqlanmagan</span>{% endif %}<span class="spacer"></span>
+      {% if can('kuzatuv.manage') %}<form method="post">{{ csrf() }}<input type="hidden" name="action" value="group"><input type="hidden" name="chat_id" value="{{ c.chat_id }}"><input type="hidden" name="on" value="{{ '0' if c.is_work else '1' }}">
+        <button class="btn {{ 'btn-ghost' if c.is_work else 'btn-green' }} btn-sm">{{ 'Olib tashlash' if c.is_work else 'Ishchi guruh qilish' }}</button></form>{% endif %}</div>
+  {% else %}<div class="note">Bot hali birorta guruhga qo‘shilmagan. Telegramda ishchi guruhingizga botni qo‘shing va <b>admin</b> qiling (shunda guruhdagi yangi odamlarni va rasmlarni ko‘radi). Keyin bu yerda “Ishchi guruh qilish” ni bosing.</div>{% endfor %}
+  </div></section>
+{% endblock %}

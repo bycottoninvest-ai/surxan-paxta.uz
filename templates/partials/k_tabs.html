@@ -1,0 +1,6 @@
+{% from 'macros.html' import icon with context %}
+<div class="k-tabs no-print">
+  <a class="chip-btn {{ 'on' if k_active == 'home' }}" href="{{ url_for('kuzatuv.home') }}">{{ icon('video','xs') }} Rasm / video</a>
+  <a class="chip-btn {{ 'on' if k_active == 'people' }}" href="{{ url_for('kuzatuv.people') }}">{{ icon('users','xs') }} Odamlar</a>
+  <a class="chip-btn {{ 'on' if k_active == 'rules' }}" href="{{ url_for('kuzatuv.rules') }}">{{ icon('clock','xs') }} Jadval</a>
+</div>

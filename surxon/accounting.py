@@ -146,7 +146,23 @@ def book_cash(db, actor, *, direction, category, amount, entry_date=None, cashbo
           new={'doc_no': doc_no, 'direction': direction, 'category': category, 'amount': amount, 'cashbox_id': cashbox_id,
                'worker_id': worker_id, 'combine_id': combine_id, 'payout_id': payout_id, 'source': source})
     mirror_cash(db, cid)
+    _feed_cash(db, cid)
     return cid, doc_no
+
+
+def _feed_cash(db, cid):
+    from .reporting import feed
+    from .services import CASH_CATEGORIES
+    e = db.execute('''SELECT ce.*, w.full_name worker, eq.code combine, cb.name box, u.full_name by_name
+                      FROM cash_entries ce LEFT JOIN workers w ON w.id=ce.worker_id
+                      LEFT JOIN equipment eq ON eq.id=ce.combine_id LEFT JOIN cashboxes cb ON cb.id=ce.cashbox_id
+                      LEFT JOIN users u ON u.id=ce.created_by WHERE ce.id=?''', (cid,)).fetchone()
+    label = CASH_CATEGORIES.get(e['category'], ('', e['category']))[1]
+    who = e['worker'] or e['combine'] or e['counterparty'] or ''
+    sign = '🟢 KIRIM' if e['direction'] == 'IN' else '🔴 CHIQIM'
+    feed(db, f'cash:{cid}', f'{sign} {fmt_som(e["amount"])} · {label}' + (f' · {who}' if who else '')
+         + f'\n{e["doc_no"]} · {e["box"] or "kassa"}' + (f' · {e["by_name"]}' if e['by_name'] else '')
+         + (f'\n{e["note"]}' if e['note'] else ''))
 
 
 def add_income(actor, *, amount, source, cashbox_id=None, note='', photo=None, client_uuid=None, entry_date=None):

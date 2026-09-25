@@ -10,7 +10,7 @@ from contextlib import contextmanager
 
 from flask import current_app, g
 
-SCHEMA_VERSION = 5
+SCHEMA_VERSION = 6
 
 SCHEMA = r'''
 CREATE TABLE IF NOT EXISTS brigadiers (
@@ -552,6 +552,100 @@ CREATE TABLE IF NOT EXISTS channel_status (
   ok_count INTEGER NOT NULL DEFAULT 0,
   error_count INTEGER NOT NULL DEFAULT 0
 );
+
+-- v6: "Kuzatuv" — the system asks people (tractor drivers, brigadiers, agronomists...) for photos/videos
+-- through the Telegram bot; the answers show on the manager's dashboard.
+CREATE TABLE IF NOT EXISTS tg_chats (
+  chat_id TEXT PRIMARY KEY,
+  title TEXT,
+  type TEXT,
+  is_work INTEGER NOT NULL DEFAULT 0,       -- confirmed by admin/manager as the work group
+  first_seen_at TEXT NOT NULL,
+  last_seen_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS tg_members (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  full_name TEXT NOT NULL,
+  role_label TEXT,                          -- Traktorchi, Brigadir, Agronom ... (free text)
+  telegram_id TEXT UNIQUE,
+  username TEXT,
+  user_id INTEGER UNIQUE REFERENCES users(id),
+  equipment_id INTEGER REFERENCES equipment(id),
+  field_id INTEGER REFERENCES fields(id),
+  status TEXT NOT NULL DEFAULT 'YANGI' CHECK (status IN ('YANGI','FAOL','NOFAOL')),
+  source TEXT NOT NULL DEFAULT 'admin',     -- admin / guruh / bot / tizim
+  link_code TEXT UNIQUE,
+  dm_ok INTEGER NOT NULL DEFAULT 0,         -- has opened the bot privately, so the bot may write to them directly
+  group_chat_id TEXT,
+  created_at TEXT NOT NULL,
+  last_seen_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS media_rules (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  title TEXT NOT NULL,
+  text TEXT NOT NULL,
+  kind TEXT NOT NULL DEFAULT 'any' CHECK (kind IN ('photo','video','any')),
+  times TEXT NOT NULL,                      -- "09:00,16:00"
+  weekdays TEXT NOT NULL DEFAULT '1234567', -- 1 = Monday
+  members_json TEXT NOT NULL DEFAULT '[]',  -- member ids
+  deadline_min INTEGER NOT NULL DEFAULT 120,
+  active INTEGER NOT NULL DEFAULT 1,
+  created_by INTEGER REFERENCES users(id),
+  created_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS media_requests (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  member_id INTEGER NOT NULL REFERENCES tg_members(id),
+  text TEXT NOT NULL,
+  kind TEXT NOT NULL DEFAULT 'any' CHECK (kind IN ('photo','video','any')),
+  rule_id INTEGER REFERENCES media_rules(id),
+  slot TEXT,                                -- rule firing "YYYY-MM-DD HH:MM" (one request per member per slot)
+  requested_by INTEGER REFERENCES users(id),
+  created_at TEXT NOT NULL,
+  due_at TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'KUTILMOQDA' CHECK (status IN ('KUTILMOQDA','JAVOB','KECHIKDI','BEKOR')),
+  sent_at TEXT,
+  sent_via TEXT,                            -- dm / group
+  chat_id TEXT,
+  tg_message_id INTEGER,
+  send_attempts INTEGER NOT NULL DEFAULT 0,
+  send_error TEXT,
+  reminded_at TEXT,
+  answered_at TEXT,
+  late_alerted INTEGER NOT NULL DEFAULT 0
+);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_media_req_slot ON media_requests(rule_id, member_id, slot) WHERE rule_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_media_req_member ON media_requests(member_id, status);
+CREATE INDEX IF NOT EXISTS idx_media_req_msg ON media_requests(chat_id, tg_message_id);
+
+CREATE TABLE IF NOT EXISTS media_items (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  request_id INTEGER REFERENCES media_requests(id),
+  member_id INTEGER NOT NULL REFERENCES tg_members(id),
+  kind TEXT NOT NULL CHECK (kind IN ('photo','video')),
+  path TEXT,                                -- NULL when a video is over the 20 MB Bot API download limit
+  thumb_path TEXT,
+  size_bytes INTEGER,
+  duration_s INTEGER,
+  caption TEXT,
+  lat REAL,
+  lon REAL,
+  chat_id TEXT,
+  tg_message_id INTEGER,
+  tg_file_id TEXT,
+  tg_file_unique_id TEXT UNIQUE,
+  note TEXT,
+  created_at TEXT NOT NULL,
+  void_reason TEXT,
+  voided_by INTEGER REFERENCES users(id),
+  voided_at TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_media_items_created ON media_items(created_at);
+CREATE INDEX IF NOT EXISTS idx_media_items_path ON media_items(path);
+CREATE INDEX IF NOT EXISTS idx_media_items_thumb ON media_items(thumb_path);
 
 CREATE TABLE IF NOT EXISTS schema_version (version INTEGER NOT NULL);
 '''

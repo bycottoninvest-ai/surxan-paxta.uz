@@ -29,6 +29,10 @@ DEFAULTS = {
     'weather_place': ('Taxiatosh', 'Ob-havo joy nomi'),
     'map_center': ('42.3167,59.6000', 'Xarita markazi (lat,lon)'),
     'daily_target_kg': ('', 'Kunlik terim rejasi, kg (bo‘sh = reja ko‘rsatilmaydi)'),
+    'report_feed': ('1', 'Hisobot kanaliga har bir muhim hodisa (reys tugadi, punkt qabul, kassa kirim/chiqim, kuzatuv '
+                         'kechikishi) darhol yoziladi (1/0). Kunlik hisobot bundan tashqari keladi'),
+    'kuzatuv_deadline_min': ('120', 'Kuzatuv: rasm/video so‘rovi javobi uchun necha daqiqa beriladi (keyin “KECHIKDI”)'),
+    'kuzatuv_late_alert': ('1', 'Kuzatuv: javob kechiksa hisobot kanaliga yozilsin (1/0)'),
     'notify_telegram': ('1', 'Rahbar/Adminga Telegram xabarnomalar (1/0)'),
     'erp_enabled': ('0', 'Azizbek ERP ulanishi yoqilgan (1/0) — Integratsiyalar sahifasida boshqariladi'),
     'tv_enabled': ('0', 'TV ekrani ulanishi yoqilgan (1/0) — Integratsiyalar sahifasida boshqariladi'),

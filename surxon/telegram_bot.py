@@ -44,8 +44,11 @@ def tg_download(file_id):
         return resp.read()
 
 
-def send(chat_id, text, buttons=None):
+def send(chat_id, text, buttons=None, reply_to=None):
     payload = {'chat_id': chat_id, 'text': text[:MAX_TEXT], 'disable_web_page_preview': True}
+    if reply_to:
+        payload['reply_to_message_id'] = reply_to
+        payload['allow_sending_without_reply'] = True
     if buttons:
         payload['reply_markup'] = {'inline_keyboard': buttons}
     try:
@@ -176,6 +179,8 @@ def _chat_of(update):
 
 
 def process_update(update):
+    if update.get('my_chat_member') or update.get('chat_member'):
+        return _on_member_update(update.get('my_chat_member') or update['chat_member'])
     if update.get('callback_query'):
         cb = update['callback_query']
         try:
@@ -185,9 +190,96 @@ def process_update(update):
         _dispatch(cb['message']['chat']['id'], cb['from'], data=cb.get('data', ''), update_id=update.get('update_id'))
     elif update.get('message'):
         m = update['message']
-        if m.get('chat', {}).get('type') != 'private':
+        ctype = m.get('chat', {}).get('type')
+        if ctype in ('group', 'supergroup'):
+            return _on_group_message(m)
+        if ctype != 'private':
             return
         _dispatch(m['chat']['id'], m['from'], message=m, update_id=update.get('update_id'))
+
+
+# ------------------------------------------------------------------ kuzatuv (work group + photo/video requests)
+
+def _on_member_update(upd):
+    """Bot added to / removed from a group, or (bot is admin) someone joined the group."""
+    from . import kuzatuv
+    chat = upd.get('chat') or {}
+    with tx() as db:
+        kuzatuv.chat_seen(db, chat)
+        new = upd.get('new_chat_member') or {}
+        who = new.get('user') or {}
+        if who and not who.get('is_bot') and new.get('status') in ('member', 'administrator', 'creator', 'restricted'):
+            kuzatuv.seen(db, who, chat)
+        elif who and not who.get('is_bot') and new.get('status') in ('left', 'kicked'):
+            _left(db, who, chat)
+
+
+def _left(db, who, chat):
+    work = db.execute('SELECT 1 FROM tg_chats WHERE chat_id=? AND is_work=1', (str(chat.get('id')),)).fetchone()
+    if work:
+        db.execute("UPDATE tg_members SET status='NOFAOL' WHERE telegram_id=? AND source='guruh' AND user_id IS NULL",
+                   (str(who['id']),))
+
+
+def _on_group_message(m):
+    """Work group: register everyone the bot sees; photos/videos that answer a request are stored.
+    Other chatter in the group is ignored (the bot never answers ordinary messages there)."""
+    from . import kuzatuv
+    chat = m['chat']
+    with tx() as db:
+        info = kuzatuv.chat_seen(db, chat)
+        for who in m.get('new_chat_members') or []:
+            kuzatuv.seen(db, who, chat)
+        if m.get('left_chat_member'):
+            _left(db, m['left_chat_member'], chat)
+        member = kuzatuv.seen(db, m.get('from'), chat) if m.get('from') else None
+    if not info or not info['is_work'] or not member or member['status'] != 'FAOL' or not kuzatuv.media_of(m):
+        return
+    reply_to = (m.get('reply_to_message') or {}).get('message_id')
+    req = kuzatuv.open_request_for(get_db(), member, chat['id'], reply_to)
+    if not req:
+        return  # a photo not asked for, in a busy group: not stored (people send it privately to the bot instead)
+    kuzatuv.save_incoming(member, m, req)
+    send(chat['id'], f'✅ Qabul qilindi — {member["full_name"]}, rahmat.', reply_to=m.get('message_id'))
+
+
+def _kuzatuv_private(chat, sender, message):
+    """Private message from someone who is not (or not only) a system user: kuzatuv member flow."""
+    from . import kuzatuv
+    with tx() as db:
+        member = kuzatuv.seen(db, sender, private=True)
+    if not member:
+        return
+    if member['status'] == 'YANGI':
+        return send(chat, '🔒 Bu Telegram akkaunt tizimga ulanmagan.\n'
+                          f'Siz kuzatuv ro‘yxatiga yozildingiz ({member["full_name"]}). Rahbar tasdiqlagach, '
+                          'bot sizdan ish joyidan rasm/video so‘raydi.\n'
+                          f'(Sizning ID: {sender["id"]})')
+    if member['status'] != 'FAOL':
+        return send(chat, 'Siz kuzatuv ro‘yxatida faol emassiz. Rahbarga murojaat qiling.')
+    if kuzatuv.media_of(message):
+        return _kuzatuv_media(chat, member, message)
+    open_n = q("SELECT COUNT(*) c FROM media_requests WHERE member_id=? AND status IN ('KUTILMOQDA','KECHIKDI')",
+               (member['id'],), one=True)['c']
+    send(chat, f'👋 {member["full_name"]}, siz SURXAN-PAXTA kuzatuv ro‘yxatidasiz.\n'
+               + (f'Sizdan {open_n} ta rasm/video so‘ralgan — shu yerga yuboring.' if open_n else
+                  'Hozir so‘rov yo‘q. Rahbar so‘raganda shu yerga xabar keladi; ish joyidan rasm/video yuborsangiz ham saqlanadi.'))
+
+
+def _kuzatuv_media(chat, member, message):
+    from . import kuzatuv
+    reply_to = (message.get('reply_to_message') or {}).get('message_id')
+    req = kuzatuv.open_request_for(get_db(), member, chat, reply_to)
+    item = kuzatuv.save_incoming(member, message, req)
+    if item is None:
+        return send(chat, 'Bu fayl allaqachon qabul qilingan.')
+    row = q('SELECT kind, path, note FROM media_items WHERE id=?', (item,), one=True)
+    what = 'Video' if row['kind'] == 'video' else 'Rasm'
+    extra = f'\n⚠️ {row["note"]}' if row['note'] else ''
+    left = q("SELECT COUNT(*) c FROM media_requests WHERE member_id=? AND status IN ('KUTILMOQDA','KECHIKDI')",
+             (member['id'],), one=True)['c']
+    return send(chat, f'✅ {what} qabul qilindi va rahbarga ko‘rinadi.' + (f'\nSo‘rov: {req["text"]}' if req else '')
+                + extra + (f'\nYana {left} ta so‘rov ochiq.' if left else ''))
 
 
 def _link_account(chat, tid, code):
@@ -202,8 +294,40 @@ def _link_account(chat, tid, code):
         db.execute('UPDATE users SET telegram_id=?, tg_link_code=NULL, tg_link_expires=NULL WHERE id=?', (tid, user['id']))
         from .security import audit
         audit(db, Actor.from_user(user, source='telegram'), 'TG_LINK', 'user', user['id'], new={'telegram_id': tid})
+        from .kuzatuv import link_system_user
+        link_system_user(db, db.execute('SELECT * FROM users WHERE id=?', (user['id'],)).fetchone())
     user = q('SELECT * FROM users WHERE id=?', (user['id'],), one=True)
     show_menu(chat, user, f'✅ Akkaunt ulandi: {user["full_name"]}.\nEndi botdan foydalanishingiz mumkin.')
+
+
+def _link_member(chat, sender, code):
+    from . import kuzatuv
+    with tx() as db:
+        member = kuzatuv.link_by_code(db, code, sender)
+    if not member:
+        return send(chat, '❌ Havola eskirgan yoki noto‘g‘ri. Rahbardan yangi havola so‘rang.')
+    send(chat, f'✅ Ulandi: {member["full_name"]}' + (f' ({member["role_label"]})' if member['role_label'] else '')
+         + '.\nRahbar ish joyidan rasm yoki video so‘raganda shu yerga xabar keladi. Javobni shu yerga yuborasiz.')
+    kuzatuv.deliver_pending(member_id=member['id'])   # anything asked before they joined arrives now
+
+
+def _goes_to_kuzatuv(user, message):
+    """A linked system user's photo/video goes to kuzatuv when it answers a request (reply or open request) and they
+    are not in the middle of a TOLDI / scale / archive photo step. Videos always go to kuzatuv."""
+    from . import kuzatuv
+    got = kuzatuv.media_of(message)
+    if not got:
+        return False
+    step, _st = get_state(str(user['telegram_id']))
+    if step in ('toldi_photos', 'scale_gross', 'scale_tare', 'archive_photos'):
+        return False
+    if got[0] == 'video':
+        return True
+    m = q('SELECT * FROM tg_members WHERE telegram_id=? AND status=?', (str(user['telegram_id']), 'FAOL'), one=True)
+    if not m:
+        return False
+    reply_to = (message.get('reply_to_message') or {}).get('message_id')
+    return kuzatuv.open_request_for(get_db(), m, message['chat']['id'], reply_to) is not None
 
 
 def _dispatch(chat, sender, data=None, message=None, update_id=None):
@@ -211,13 +335,18 @@ def _dispatch(chat, sender, data=None, message=None, update_id=None):
     text = ((message or {}).get('text') or '').strip()
     if text.startswith('/start'):
         parts = text.split(maxsplit=1)
+        if len(parts) == 2 and parts[1].strip().upper().startswith('K-'):
+            return _link_member(chat, sender, parts[1])
         if len(parts) == 2:
             return _link_account(chat, tid, parts[1])
     user = q('SELECT * FROM users WHERE telegram_id=? AND active=1', (tid,), one=True)
     if not user:
-        send(chat, f'🔒 Bu Telegram akkaunt tizimga ulanmagan.\nAdmin “Foydalanuvchilar” bo‘limida sizga ulash kodi beradi, '
-                   f'keyin shu yerga /start KOD yuboring.\n(Sizning ID: {tid})')
-        return
+        return _kuzatuv_private(chat, sender, message or {})
+    if message and _goes_to_kuzatuv(user, message):
+        from . import kuzatuv
+        with tx() as db:
+            member = kuzatuv.seen(db, sender, private=True)
+        return _kuzatuv_media(chat, member, message)
     try:
         if data:
             return _on_callback(chat, user, data, update_id)

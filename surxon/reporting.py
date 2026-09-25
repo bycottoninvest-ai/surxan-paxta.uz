@@ -104,6 +104,11 @@ def report_text(day):
         warn.append(f'🟡 Tasdiqlanmagan xarajat: {s["unchecked_expenses"]} ta')
     if warn:
         lines += ['', 'Ogohlantirishlar:'] + warn
+    from .kuzatuv import day_stats
+    k = day_stats(day)
+    if k['requests'] or k['items']:
+        lines += ['', f'Kuzatuv: {k["requests"]} ta so‘rov, {k["answered"]} ta javob, {k["late"]} ta kechikdi · '
+                      f'{k["photos"]} rasm, {k["videos"]} video']
     lines += ['', 'Asl ma’lumot serverda. Bu kanalga yozilmaydi.']
     return '\n'.join(lines)
 
@@ -115,6 +120,15 @@ def enqueue_daily_report(db, day):
 
 def enqueue_alert(db, key, text):
     enqueue(db, 'telegram_report', 'alert', f'alert:{key}', {'text': f'SURXAN-PAXTA.UZ\n{text}'})
+
+
+def feed(db, key, text):
+    """One line into the read-only report channel for every important event (trip finished, punkt receipt, every cash
+    movement, kuzatuv lateness). Queued in the caller's transaction; the key makes a retried operation post once."""
+    from .settings import get_bool
+    if not get_bool('report_feed', db):
+        return
+    enqueue(db, 'telegram_report', 'feed', f'feed:{key}', {'text': f'{text}\n🕒 {now_str()[:16]}'})
 
 
 def maybe_schedule_daily_report():

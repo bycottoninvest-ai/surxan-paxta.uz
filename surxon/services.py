@@ -520,6 +520,12 @@ def _issue_waybill(db, actor, load, net):
     db.execute('UPDATE photos SET waybill_id=? WHERE load_id=?', (cur.lastrowid, load['id']))
     audit(db, actor, 'CREATE', 'waybill', cur.lastrowid, new={'number': number, 'load_id': load['id'], 'net_kg': net})
     _sheet_waybill(db, cur.lastrowid, 'yaratildi')
+    from .reporting import feed
+    info = db.execute('''SELECT tl.trip_no, f.name field, b.name brig FROM trailer_loads tl LEFT JOIN fields f ON f.id=tl.field_id
+                         LEFT JOIN brigadiers b ON b.id=tl.brigadier_id WHERE tl.id=?''', (load['id'],)).fetchone()
+    feed(db, f'wb:{cur.lastrowid}', f'🚛 Reys tugadi: {info["trip_no"] or ""} · {number}\n'
+                                   f'{info["field"] or ""} · {info["brig"] or ""} · {net:,.0f} kg'.replace(',', ' ')
+         + (f'\n→ {station["name"]}' if station else ''))
     return cur.lastrowid, number
 
 
@@ -715,6 +721,10 @@ def receive_at_station(actor, waybill_id, *, station_kg, reason='', note='', pho
                         links={'season_year': wb['season_year'], 'load_id': wb['load_id'], 'waybill_id': waybill_id,
                                'field_id': wb['field_id'], 'brigadier_id': wb['brigadier_id']})
         _sheet_waybill(db, waybill_id, 'punktda qabul qilindi')
+        from .reporting import feed
+        feed(db, f'rcv:{waybill_id}', f'🏭 Punktda qabul: {wb["trip_no"]} · {station["name"] if station else ""}\n'
+                                     f'Dala {wb["net_kg"]:,.0f} kg → punkt {station_kg:,.0f} kg · farq {diff:+,.0f} kg ({pct:+.2f}%)'
+                                     .replace(',', ' ') + (f'\nSabab: {full_reason}' if full_reason else ''))
         if level == 'alert':
             from .reporting import enqueue_alert
             enqueue_alert(db, f'kg:{waybill_id}', f'🔴 Katta kg farqi: {wb["trip_no"]} · dala {wb["net_kg"]:g} kg, '

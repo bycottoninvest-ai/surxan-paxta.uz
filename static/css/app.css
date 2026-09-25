@@ -522,3 +522,31 @@ a.a-tile:active{transform:scale(.98)}
 .a-strong{font-weight:800;background:#eef4fb;border-radius:8px;padding:8px 10px}
 .t-up{color:#15803d}
 @media (min-width:901px){.a-tiles{grid-template-columns:repeat(4,1fr)}.a-actions{grid-template-columns:repeat(4,1fr)}.a-cats{grid-template-columns:repeat(3,1fr)}}
+
+/* ---- Kuzatuv (photo/video requests) ---- */
+.k-tabs{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 12px}
+.k-tiles{grid-template-columns:repeat(2,1fr)}
+@media (min-width:901px){.k-tiles{grid-template-columns:repeat(4,1fr)}}
+.k-tpl{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}
+.k-tpl .chip-btn{white-space:normal;text-align:left}
+.k-people span{font-size:14px;padding:9px 12px}
+.k-people small{font-weight:500;color:var(--muted)}
+.k-list{display:grid;gap:10px}
+.k-req{border:1px solid var(--line);border-radius:12px;padding:10px 12px;background:#fff}
+.k-req.late{border-color:#f7c3cf;background:#fff7f9}
+.k-act{margin-top:6px;gap:6px}
+.k-grid video{width:100%;aspect-ratio:4/3;background:#0b1220;border-radius:10px 10px 0 0;display:block;object-fit:cover}
+.k-novideo{position:relative;aspect-ratio:4/3;background:#0b1220;color:#fff;border-radius:10px 10px 0 0;display:flex;align-items:flex-end;overflow:hidden}
+.k-novideo img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:.55}
+.k-novideo span{position:relative;font-size:12px;padding:8px;line-height:1.3}
+.k-link{display:flex;gap:6px;align-items:center;margin-top:8px;flex-wrap:wrap}
+.k-link input{flex:1;min-width:0;font-size:13px;padding:8px;border:1px solid var(--line);border-radius:8px;background:#f7f9fc}
+.k-strip{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+@media (min-width:901px){.k-strip{grid-template-columns:repeat(6,1fr)}}
+.k-strip a{position:relative;display:block;aspect-ratio:1;border-radius:10px;overflow:hidden;background:#0b1220}
+.k-strip img{width:100%;height:100%;object-fit:cover}
+.k-strip span{position:absolute;left:0;right:0;bottom:0;background:linear-gradient(transparent,rgba(0,0,0,.7));color:#fff;font-size:11px;padding:10px 6px 4px;line-height:1.2}
+.k-strip .ico{position:absolute;top:6px;right:6px;color:#fff}
+.k-filter-h{flex-wrap:wrap;gap:8px}
+.k-filter-h form{gap:6px;flex-wrap:wrap}.k-filter-h .input{width:150px}
+@media (max-width:600px){.k-filter-h form{width:100%}.k-filter-h .input{flex:1;width:auto;min-width:0}}

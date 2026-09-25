@@ -46,6 +46,9 @@ Jadval koddagi `surxon/security.py` dan avtomatik yaratilgan. Tekshiruv server t
 | Rasm yuklash (`photos.upload`) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | — |
 | Rasmni yashirish (`photos.void`) | ✅ | ✅ | — | — | — | — | — | — | — |
 | Reysni bekor qilish (`records.void`) | ✅ | ✅ | — | — | — | — | — | — | — |
+| Kuzatuv: odamlardan kelgan rasm/videolarni ko‘rish (`kuzatuv.view`) | ✅ | ✅ | — | — | — | — | — | — | — |
+| Kuzatuv: rasm/video so‘rash, eslatish, bekor qilish (`kuzatuv.request`) | ✅ | ✅ | — | — | — | — | — | — | — |
+| Kuzatuv: odamlar, ishchi guruh, jadval, faylni yashirish (`kuzatuv.manage`) | ✅ | ✅ | — | — | — | — | — | — | — |
 | Dala, texnika, brigada (`masterdata.write`) | ✅ | ✅ | — | — | — | — | — | — | — |
 | Audit tarixi (`audit.view`) | ✅ | ✅ | — | — | ✅ | — | — | — | — |
 | Loginlar (`users.manage`) | ✅ | — | — | — | — | — | — | — | — |

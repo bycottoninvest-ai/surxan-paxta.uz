@@ -1,6 +1,6 @@
 # PAXTA — ish tarixi va joriy holat (keyingi sessiya uchun eslatma)
 
-Oxirgi yangilanish: 2026-09-25 (kechqurun). Yozgan: Claude (bulutdagi sessiya “Yangi loya qilash”).
+Oxirgi yangilanish: 2026-09-25 (kech, v2.5.0 — ikki bot). Yozgan: Claude (bulutdagi sessiya “Yangi loya qilash”).
 
 ## Foydalanuvchi
 
@@ -55,6 +55,15 @@ Rollar: admin, rahbar, brigadir (faqat o‘z brigadasi), tarozi, buxgalter, kass
 9. **Server ulanishlari tayyorlandi (kod, 69 test):** `tools/sozlash.sh telegram|sheets|sheets-sinov|zaxira|narx|holat` (sirlar faqat serverda, ko‘rinmay kiritiladi), `flask backup-verify [--offsite]` (alohida bazaga tiklab solishtiradi), `flask holat` (ISHLAYDI/ULANMAGAN/TEKSHIRILMAGAN/XATO), `flask sheets-inspect` (faqat o‘qish), `flask sheets-sinov` (1 000 so‘m sinov → qayta yuborish → bekor), `SPX UMUMIY` jadvali (dashboard formulalari uchun ID-li jami ko‘rsatkichlar). Tizim faqat `SPX ` varaqlariga yozadi, qo‘lda qilingan varaq/formulalarga tegmaydi. Batafsil: `docs/SERVER_ULASH.md`.
 10. **Narxlar (Azizbek):** qo‘l 1 500 so‘m/kg, kombayn 1 500 000 so‘m/tonna. 250 000 — faqat eski sinov, endi hech qayerda yo‘q.
 11. **Google Sheets:** https://docs.google.com/spreadsheets/d/1eWl21webrxSAV_NDdvv8dX1lWmu5gSEMSD1fvMWh8Mw — “Umumiy hisob”, “Ishchilar” va boshqa varaqlar bor. Talab: ularni SPX ma’lumotlariga formulalar bilan bog‘lash (ustun/ID/sana/birlik tekshiruvi), sinov yozuvida dashboard yangilanishini ko‘rsatish, qayta yuborishda ikki marta hisoblanmasin.
+
+## v2.5.0 — ikki Telegram bot (2026-09-25 kech)
+Azizbek topshirig‘i: 1) hisobot kanali — ma’lumot doim tushib turadi va saqlanadi, hech kim yozolmaydi;
+2) kuzatuv — tizim odamlardan (traktorchi, brigadir, agronom) rasm/video so‘raydi, javob rahbar dashboardida ko‘rinadi.
+- Batafsil: `docs/KUZATUV.md`. Sahifa: `/kuzatuv` (Rasm/video, Odamlar, Jadval), bosh sahifada “Kuzatuv (bugun)”.
+- Baza v6: `tg_chats`, `tg_members`, `media_rules`, `media_requests`, `media_items`. Kod: `surxon/kuzatuv.py`,
+  `surxon/telegram_bot.py` (guruh, `K-` havola, rasm/video), `surxon/views/kuzatuv.py`. Worker har ~30 s `kuzatuv.tick()`.
+- Hisobot kanaliga `reporting.feed()`: reys tugadi, punkt qabul, har bir kassa harakati, kuzatuv kechikdi.
+- 77 test o‘tadi. Haqiqiy Telegram bilan sinalmagan (token serverda kiritilgach).
 
 ## HOZIR QAYERDA TO‘XTADIK (keyingi qadam — Azizbekda)
 1. **DNS (sayt.uz → Domenlarim → surxan-paxta.uz → DNS):** avval mavjud yozuvlar rasmini olish; faqat `A @ → 88.198.122.72` va `A www → 88.198.122.72`; MX/TXT/NS ga tegmaslik. Domen faollashgan (Azizbek aytdi), DNS tekshiruvi hali qilinmagan.

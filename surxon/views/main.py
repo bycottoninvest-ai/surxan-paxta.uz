@@ -6,7 +6,7 @@ from flask import (Blueprint, abort, current_app, g, jsonify, make_response, red
 from .. import queries
 from ..db import get_db, q, scalar
 from ..photos import CATEGORIES, uploads_from_request
-from ..security import login_required, perm_required, require
+from ..security import can, login_required, perm_required, require
 from ..services import upload_archive_photo, void_photo
 from ..settings import get_float, get_setting
 from ..utils import UserError, parse_date, parse_int, today_str
@@ -76,7 +76,14 @@ def mobile_home(year, day, brig, kpi):
         ctx['cash_today'] = q('''SELECT COALESCE(SUM(CASE WHEN direction='IN' THEN amount END),0) inflow,
                                         COALESCE(SUM(CASE WHEN direction='OUT' THEN amount END),0) outflow
                                  FROM cash_entries WHERE entry_date=? AND voided_at IS NULL''', (day,), one=True)
-    return render_template('mobile_home.html', **ctx)
+    return render_template('mobile_home.html', kuz=_kuz(day), **ctx)
+
+
+def _kuz(day):
+    if not can('kuzatuv.view'):
+        return None
+    from ..kuzatuv import day_stats, latest
+    return {'stats': day_stats(day), 'latest': latest(6)}
 
 
 def full_dashboard(year, day, brig, kpi):
@@ -100,7 +107,7 @@ def full_dashboard(year, day, brig, kpi):
                       WHERE nr.received_date=? ORDER BY nr.id DESC LIMIT 6''', (day,)),
         events=queries.recent_events(6),
         photos=q('SELECT * FROM photos WHERE voided_at IS NULL ORDER BY id DESC LIMIT 6'),
-        seasons_cmp=queries.season_comparison(), fin=fin, setup=setup,
+        seasons_cmp=queries.season_comparison(), fin=fin, setup=setup, kuz=_kuz(day),
         target=get_float('daily_target_kg', None), map_center=get_setting('map_center'),
         fields_json=[{'id': f['id'], 'code': f['code'], 'name': f['name'], 'area': f['area_ha'],
                       'brigadier': f['brigadier_name'], 'net': f['net_kg'], 'active': f['active_loads'],
@@ -153,13 +160,24 @@ def media(path):
         abort(404)
     photo = q('SELECT * FROM photos WHERE path=? OR thumb_path=?', (path, path), one=True)
     if not photo:
-        abort(404)
+        return _kuzatuv_media(path)
     brig = scope()
     if brig and photo['brigadier_id'] not in (None, brig) and photo['uploaded_by'] != g.user['id']:
         abort(403)
     if photo['voided_at'] and not g.user['role'] in ('admin', 'manager'):
         abort(404)
     resp = make_response(send_from_directory(current_app.config['SURXON'].UPLOAD_DIR, path, max_age=86400 * 30))
+    resp.headers['Cache-Control'] = 'private, max-age=2592000'
+    return resp
+
+
+def _kuzatuv_media(path):
+    """Kuzatuv photos/videos: only for those who may see the kuzatuv page. Range requests work, so videos play on phones."""
+    item = q('SELECT * FROM media_items WHERE path=? OR thumb_path=?', (path, path), one=True)
+    if not item or not can('kuzatuv.view') or (item['voided_at'] and g.user['role'] not in ('admin', 'manager')):
+        abort(404)
+    resp = make_response(send_from_directory(current_app.config['SURXON'].UPLOAD_DIR, path, max_age=86400 * 30,
+                                             conditional=True))
     resp.headers['Cache-Control'] = 'private, max-age=2592000'
     return resp
 

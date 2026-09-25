@@ -1,0 +1,11 @@
+{% from 'macros.html' import icon with context %}
+<div class="row small" style="margin-bottom:8px;gap:10px;flex-wrap:wrap">
+  <span>So‘raldi: <b>{{ kuz.stats.requests }}</b></span><span>Javob: <b style="color:var(--green)">{{ kuz.stats.answered }}</b></span>
+  <span>Kutilmoqda: <b>{{ kuz.stats.waiting }}</b></span>{% if kuz.stats.late %}<span>Kechikdi: <b style="color:var(--red)">{{ kuz.stats.late }}</b></span>{% endif %}
+  {% if kuz.stats.pending_people %}<a href="{{ url_for('kuzatuv.people') }}" class="badge b-orange">{{ kuz.stats.pending_people }} ta yangi odam tasdiq kutmoqda</a>{% endif %}
+</div>
+{% if kuz.latest %}<div class="k-strip">{% for i in kuz.latest %}
+  <a href="{{ url_for('kuzatuv.home', member=i.member_id) }}">{% if i.thumb_path %}<img loading="lazy" src="{{ photo_url(i.thumb_path) }}" alt="">{% endif %}
+    {% if i.kind == 'video' %}{{ icon('video','sm') }}{% endif %}<span>{{ i.full_name }} · {{ i.created_at[11:16] }}{% if i.created_at[:10] != today %} · {{ i.created_at[:10]|d }}{% endif %}</span></a>
+{% endfor %}</div>
+{% else %}<div class="note">Hali rasm/video kelmagan. <a href="{{ url_for('kuzatuv.home') }}">Kuzatuv</a> sahifasidan odamlardan so‘rang.</div>{% endif %}

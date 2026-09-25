@@ -1,0 +1,42 @@
+{% extends 'base.html' %}
+{% from 'macros.html' import icon, csrf, empty with context %}
+{% set page_title = 'Kuzatuv · Jadval' %}
+{% set days = [('1','Du'),('2','Se'),('3','Ch'),('4','Pa'),('5','Ju'),('6','Sh'),('7','Ya')] %}
+{% block content %}
+<div class="page-h"><h1>{{ icon('clock','lg') }} Kuzatuv · Jadval</h1><span class="sub">Belgilangan vaqtda tizim o‘zi rasm/video so‘raydi</span></div>
+{% set k_active = 'rules' %}{% include 'partials/k_tabs.html' %}
+
+{% if can('kuzatuv.manage') %}
+{% set r = edit %}
+{% set chosen = json.loads(r.members_json) if r else [] %}
+<details class="card" {{ 'open' if r or not rows }}><summary class="card-h"><h3>{{ icon('plus') }} {{ 'Jadvalni tahrirlash' if r else 'Yangi jadval' }}</h3></summary>
+  <form method="post" class="card-b form" id="k-ask">{{ csrf() }}{% if r %}<input type="hidden" name="rule_id" value="{{ r.id }}">{% endif %}
+    <div class="f h"><label>Nomi</label><input name="title" value="{{ r.title if r else '' }}" placeholder="Ertalabki traktor nazorati"></div>
+    <div class="f h"><label>Vaqtlar <span class="req">*</span></label><input name="times" value="{{ r.times if r else '09:00, 16:00' }}" required placeholder="09:00, 16:00"></div>
+    <div class="f"><label>Nima so‘raladi? <span class="req">*</span></label>
+      <div class="k-tpl">{% for t in templates %}<button type="button" class="chip-btn" data-k-tpl="{{ t }}">{{ t }}</button>{% endfor %}</div>
+      <textarea name="text" rows="2" required>{{ r.text if r else '' }}</textarea></div>
+    <div class="f"><label>Kimlardan? <span class="req">*</span></label>
+      <div class="a-pick k-people">{% for m in members %}<label><input type="checkbox" name="member_ids" value="{{ m.id }}" {{ 'checked' if m.id in chosen }}><span>{{ m.full_name }}{% if m.role_label %}<small> · {{ m.role_label }}</small>{% endif %}</span></label>{% else %}<span class="note">Avval “Odamlar” bo‘limida odam qo‘shing.</span>{% endfor %}</div></div>
+    <div class="f"><label>Kunlar</label><div class="a-pick">{% for d, n in days %}<label><input type="checkbox" name="weekdays" value="{{ d }}" {{ 'checked' if not r or d in r.weekdays }}><span>{{ n }}</span></label>{% endfor %}</div></div>
+    <div class="f h"><label>Turi</label><select name="kind">{% for k, v in kinds.items() %}<option value="{{ k }}" {{ 'selected' if r and r.kind == k }}>{{ v }}</option>{% endfor %}</select></div>
+    <div class="f h"><label>Javob muddati (daqiqa)</label><input name="deadline_min" inputmode="numeric" value="{{ r.deadline_min if r else 120 }}"></div>
+    <div class="f"><button class="btn btn-primary">Saqlash</button>{% if r %} <a class="btn btn-ghost" href="{{ url_for('kuzatuv.rules') }}">Bekor</a>{% endif %}</div>
+  </form></details>
+{% endif %}
+
+{% for x in rows %}
+<div class="m-card"><div class="row"><b>{{ x.title }}</b><span class="spacer"></span><span class="badge {{ 'b-green' if x.active else 'b-gray' }}">{{ 'Yoqilgan' if x.active else 'To‘xtatilgan' }}</span></div>
+  <div class="small">“{{ x.text }}”</div>
+  <div class="tiny muted">{{ icon('clock','xs') }} {{ x.times }} · {% for d, n in days %}{% if d in x.weekdays %}{{ n }} {% endif %}{% endfor %}· muddat {{ x.deadline_min }} daq.<br>
+    {% for mid in json.loads(x.members_json) %}{{ names.get(mid, '#' ~ mid) }}{{ ', ' if not loop.last }}{% endfor %}</div>
+  {% if can('kuzatuv.manage') %}<div class="row" style="margin-top:6px"><a class="btn btn-light btn-sm" href="{{ url_for('kuzatuv.rules', edit=x.id) }}">{{ icon('edit','sm') }} Tahrirlash</a>
+    <form method="post">{{ csrf() }}<input type="hidden" name="action" value="toggle"><input type="hidden" name="rule_id" value="{{ x.id }}"><button class="btn btn-ghost btn-sm">{{ 'To‘xtatish' if x.active else 'Yoqish' }}</button></form></div>{% endif %}
+</div>
+{% else %}{{ empty('Jadval yo‘q. Masalan: har kuni 09:00 va 16:00 da traktorchilardan traktor rasmi.', 'clock') }}{% endfor %}
+{% endblock %}
+{% block scripts %}<script>
+document.querySelectorAll('[data-k-tpl]').forEach(b => b.addEventListener('click', () => {
+  const t = document.querySelector('#k-ask textarea'); t.value = b.dataset.kTpl; t.focus();
+}));
+</script>{% endblock %}

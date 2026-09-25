@@ -17,7 +17,8 @@ Holat belgilari halol ko‘rsatiladi:
 |---|---|---|
 | Nakladnoy PDF (serverda, avtomatik, versiyalar bilan) | ✅ tayyor, testlangan | ✅ ishlaydi (tashqi xizmat kerak emas) |
 | Yopiq Telegram arxiv kanali (PDF + reys rasmlari) | ✅ tayyor, soxta Telegram bilan testlangan | ❌ **ulanmagan** — bot tokeni va kanal ID si yo‘q |
-| Telegram hisobot kanali (kunlik hisobot, ogohlantirishlar) | ✅ tayyor, testlangan | ❌ **ulanmagan** — kanal ID si yo‘q |
+| Telegram hisobot kanali (kunlik hisobot, har bir muhim hodisa, ogohlantirishlar) | ✅ tayyor, testlangan | ❌ **ulanmagan** — kanal ID si yo‘q |
+| Kuzatuv boti (odamlardan rasm/video so‘rash) — `docs/KUZATUV.md` | ✅ tayyor, soxta Telegram bilan testlangan | ❌ **ulanmagan** — bot tokeni yo‘q |
 | Google Sheets nazorat nusxasi | ✅ tayyor, soxta Sheets bilan testlangan | ❌ **ulanmagan** — Google xizmat akkaunti va jadval yo‘q |
 | Mustaqil (serverdan tashqari) zaxira | ✅ tayyor (rclone) | ❌ **ulanmagan** — zaxira joyi (bulut) tanlanmagan |
 | Serverdagi kunlik zaxira | ✅ tayyor, tiklash testlangan | ⏳ server ishga tushgach ishlaydi |
@@ -69,6 +70,12 @@ Bu kanal Azizbek loyihasidan alohida, faqat SURXAN-PAXTA.UZ uchun. Unga odamlar 
 4. Serverdagi `.env` ga yozing: `TELEGRAM_REPORT_CHAT_ID=-100…`. Alohida bot bo‘lsa, `TELEGRAM_REPORT_BOT_TOKEN=…` ham yozing. Keyin `docker compose up -d`.
 5. Integratsiyalar sahifasida “Telegram hisobot kanali” → **Sinov**.
 
-Kanalga keladi: kunlik hisobot (sozlama `report_time`, odatda 21:00, yoki kun yopilganda — kuniga bir marta), katta kg farqi, kassa farqi, tasdiqlanmagan xarajatlar. Xabar yo‘qolsa ham asl ma’lumot serverda qoladi.
+Kanalga keladi:
+- **darhol, har bir hodisa** (sozlama `report_feed=1`): reys tugadi (TL-…, dala, kg, nakladnoy), punktda qabul (dala kg → punkt kg, farq), kassaning har bir kirim/chiqimi (INC-/EXP-/PAY-…, summa, kim, qaysi kassa), kuzatuv javobi kechikdi;
+- **kunlik hisobot** (sozlama `report_time`, odatda 21:00, yoki kun yopilganda — kuniga bir marta), unda kuzatuv qatori ham bor (so‘rov/javob/kechikdi, rasm/video soni);
+- ogohlantirishlar: katta kg farqi, kassa farqi, tasdiqlanmagan xarajatlar.
+
+Kanal “faqat o‘qish”: Telegram kanalida faqat adminlar yozadi — adminlar faqat siz va bot bo‘lsin, qolganlar obunachi. Kanaldagi xabarlar Telegram'da doim saqlanadi; asl ma’lumot baribir serverda.
+Har xabar navbat (outbox) orqali yuboriladi: internet uzilsa kutib turadi, keyin yuboriladi, ikki marta yuborilmaydi.
 
 Google Sheets varaqlari (avtomatik yaratiladi): KASSA KIRIM-CHIQIM, TO‘LOVLAR, AVANSLAR, XARAJATLAR, TERIMCHILAR, PAXTA-PUNKT, DEBITOR-KREDITOR, KUNLIK-YOPILISH, NAYMAN TO‘LOVLARI. Har qator ID bilan yangilanadi — qayta yuborilsa ham takror qator bo‘lmaydi.

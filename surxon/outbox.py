@@ -8,7 +8,8 @@ Channels
 - telegram_archive: private Telegram channel; receives waybill PDFs and trip photos.
 - sheets:           Google Sheets mirror. Rows with an operation id (INC-/EXP-/PAY-…) are upserted on that id,
                     so a retried job never adds a duplicate row. The database stays the source of truth.
-- telegram_report:  read-only Telegram channel: daily report and alerts (nobody writes to it).
+- telegram_report:  read-only Telegram channel: daily report, alerts and the event feed (nobody writes to it).
+                    Kuzatuv photos/videos go to telegram_archive.
 A channel whose settings are missing is reported as NOT CONNECTED; its jobs stay
 pending and are delivered once it is configured — nothing is silently dropped.
 """
@@ -112,6 +113,12 @@ def telegram_upload(method, fields, files, token=None):
 
 def _send_telegram(job, payload):
     cfg = current_app.config['SURXON']
+    if job['kind'] == 'copy':
+        # a kuzatuv video over the 20 MB download limit: Telegram copies it server-side into the archive channel
+        telegram_upload('copyMessage', {'chat_id': cfg.TELEGRAM_ARCHIVE_CHAT_ID, 'from_chat_id': payload['from_chat_id'],
+                                        'message_id': payload['message_id'],
+                                        'caption': payload.get('caption', '')[:1000]}, {})
+        return
     path = cfg.UPLOAD_DIR / payload['path']
     data = path.read_bytes()
     fields = {'chat_id': cfg.TELEGRAM_ARCHIVE_CHAT_ID, 'caption': payload.get('caption', '')[:1000]}
@@ -119,6 +126,8 @@ def _send_telegram(job, payload):
         telegram_upload('sendDocument', fields, {'document': (payload.get('filename', path.name), data, 'application/pdf')})
     elif job['kind'] == 'photo':
         telegram_upload('sendPhoto', fields, {'photo': (path.name, data, 'image/jpeg')})
+    elif job['kind'] == 'video':
+        telegram_upload('sendVideo', fields, {'video': (path.name, data, 'video/mp4')})
     else:
         raise RuntimeError(f'Noma’lum tur: {job["kind"]}')
 
@@ -287,6 +296,11 @@ def run_once(limit=50):
         maybe_refresh_sheet_summary()
     except Exception as exc:
         print(f'sheet summary refresh failed: {exc}', flush=True)
+    try:
+        from .kuzatuv import tick
+        tick()
+    except Exception as exc:  # kuzatuv schedule/delivery problems never block the archive deliveries
+        print(f'kuzatuv tick failed: {exc}', flush=True)
     try:
         from .reporting import maybe_schedule_daily_report
         maybe_schedule_daily_report()

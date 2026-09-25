@@ -1,0 +1,93 @@
+{% extends 'base.html' %}
+{% from 'macros.html' import icon, csrf, empty, void_button, pager with context %}
+{% set page_title = 'Kuzatuv' %}
+{% block content %}
+<div class="page-h"><h1>{{ icon('video','lg') }} Kuzatuv</h1><span class="sub">Tizim odamlardan ish joyidan rasm/video so‘raydi — javoblar shu yerda</span></div>
+{% set k_active = 'home' %}{% include 'partials/k_tabs.html' %}
+{% if not bot_ok %}<div class="notice mb">{{ icon('alert','sm') }} Telegram bot hali ulanmagan — so‘rovlar saqlanadi, bot ulangach o‘zi yuboriladi.</div>{% endif %}
+{% if not groups %}<div class="notice blue mb">{{ icon('telegram','sm') }} Ishchi guruh belgilanmagan. Botni guruhga qo‘shing va “Odamlar” bo‘limida guruhni tasdiqlang (ixtiyoriy).</div>{% endif %}
+
+<div class="a-tiles k-tiles">
+  <div class="m-tile a-tile t-blue"><span>BUGUN SO‘RALDI</span><b class="num">{{ stats.requests }}</b></div>
+  <div class="m-tile a-tile t-green"><span>JAVOB KELDI</span><b class="num">{{ stats.answered }}</b></div>
+  <div class="m-tile a-tile {{ 't-red' if stats.late else '' }}"><span>KECHIKDI</span><b class="num">{{ stats.late }}</b></div>
+  <div class="m-tile a-tile"><span>RASM / VIDEO</span><b class="num">{{ stats.photos }} / {{ stats.videos }}</b></div>
+</div>
+
+{% if can('kuzatuv.request') %}
+<details class="card" {{ 'open' if not open_reqs }}><summary class="card-h"><h3>{{ icon('camera') }} Rasm / video so‘rash</h3></summary>
+  <form method="post" class="card-b form" id="k-ask">{{ csrf() }}
+    <div class="f"><label>Kimdan? <span class="req">*</span></label>
+      {% if members %}<div class="a-pick k-people">{% for m in members %}<label><input type="checkbox" name="member_ids" value="{{ m.id }}"><span>{{ m.full_name }}{% if m.role_label %}<small> · {{ m.role_label }}</small>{% endif %}{% if not m.telegram_id %} <small class="muted">(ulanmagan)</small>{% endif %}</span></label>{% endfor %}</div>
+      {% else %}<div class="note">Hali odam yo‘q. <a href="{{ url_for('kuzatuv.people') }}">Odamlar</a> bo‘limida qo‘shing yoki botni ishchi guruhga qo‘shing.</div>{% endif %}</div>
+    <div class="f"><label>Nima so‘raymiz? <span class="req">*</span></label>
+      <div class="k-tpl">{% for t in templates %}<button type="button" class="chip-btn" data-k-tpl="{{ t }}">{{ t }}</button>{% endfor %}</div>
+      <textarea name="text" rows="2" required placeholder="masalan: traktor ishlayotgan rasm yoki videoni yuboring"></textarea>
+      <div class="tiny muted">Xabar shunday boradi: “📸 Mirjalol, traktor ishlayotgan rasm yoki videoni yuboring”.</div></div>
+    <div class="f h"><label>Turi</label><select name="kind">{% for k, v in kinds.items() %}<option value="{{ k }}">{{ v }}</option>{% endfor %}</select></div>
+    <div class="f h"><label>Javob muddati</label><select name="deadline_min"><option value="30">30 daqiqa</option><option value="60">1 soat</option><option value="120" selected>2 soat</option><option value="240">4 soat</option><option value="480">8 soat</option></select></div>
+    <div class="f"><button class="btn btn-primary btn-lg">{{ icon('telegram','sm') }} YUBORISH</button></div>
+  </form></details>
+{% endif %}
+
+{% if open_reqs %}
+<section class="card"><div class="card-h"><h3>{{ icon('clock') }} Javob kutilmoqda ({{ open_reqs|length }})</h3></div>
+  <div class="card-b k-list">
+  {% for r in open_reqs %}
+    <div class="k-req {{ 'late' if r.status == 'KECHIKDI' }}">
+      <div class="row"><b>{{ r.full_name }}</b>{% if r.role_label %}<span class="muted small">{{ r.role_label }}</span>{% endif %}<span class="spacer"></span>
+        <span class="badge {{ 'b-red' if r.status == 'KECHIKDI' else 'b-orange' }}">{{ statuses[r.status] }}</span></div>
+      <div class="small">“{{ r.text }}”</div>
+      <div class="tiny muted">{{ r.created_at[11:16] }} da so‘ralgan · {{ r.due_at[11:16] }} gacha
+        {% if r.sent_at %} · {{ 'shaxsiy' if r.sent_via == 'dm' else 'guruhda' }} yuborildi{% else %} · <span style="color:var(--red)">yuborilmadi: {{ r.send_error or 'navbatda' }}</span>{% endif %}
+        {% if r.reminded_at %} · eslatildi {{ r.reminded_at[11:16] }}{% endif %}</div>
+      {% if can('kuzatuv.request') %}<div class="row k-act">
+        <form method="post">{{ csrf() }}<input type="hidden" name="action" value="remind"><input type="hidden" name="request_id" value="{{ r.id }}"><button class="btn btn-light btn-sm">{{ icon('bell','sm') }} Eslatish</button></form>
+        <form method="post" data-confirm="So‘rov bekor qilinsinmi?">{{ csrf() }}<input type="hidden" name="action" value="cancel"><input type="hidden" name="request_id" value="{{ r.id }}"><button class="btn btn-ghost btn-sm">Bekor</button></form>
+      </div>{% endif %}
+    </div>
+  {% endfor %}</div></section>
+{% endif %}
+
+<section class="card">
+  <div class="card-h k-filter-h"><h3>{{ icon('image') }} {% if member_id %}Odamning barcha rasm/videolari{% else %}Kelgan rasm va videolar{% endif %}</h3><span class="spacer"></span>
+    <form class="row" method="get">
+      <input class="input" type="date" name="date" value="{{ day }}">
+      <select class="input" name="member"><option value="">Hamma</option>{% for m in members %}<option value="{{ m.id }}" {{ 'selected' if member_id == m.id }}>{{ m.full_name }}</option>{% endfor %}</select>
+      <button class="btn btn-primary btn-sm">Ko‘rish</button></form></div>
+  <div class="card-b"><div class="photo-grid k-grid">
+    {% for i in items %}
+    <div class="pcard k-item">
+      {% if i.kind == 'video' and i.path %}
+        <video controls preload="none" playsinline {% if i.thumb_path %}poster="{{ photo_url(i.thumb_path) }}"{% endif %} src="{{ url_for('main.media', path=i.path) }}"></video>
+      {% elif i.kind == 'video' %}
+        <div class="k-novideo">{% if i.thumb_path %}<img loading="lazy" src="{{ photo_url(i.thumb_path) }}" alt="">{% endif %}<span>{{ icon('video') }} {{ i.note or 'Video serverga yuklanmadi' }}</span></div>
+      {% else %}
+        <img loading="lazy" src="{{ photo_url(i.thumb_path) }}" data-full="{{ photo_url(i.path) }}" data-cap="{{ i.full_name }} · {{ i.created_at[:16] }}{{ ' · ' ~ i.request_text if i.request_text }}" alt="">
+      {% endif %}
+      <div class="cap"><b>{% if i.kind == 'video' %}{{ icon('video','xs') }} {% endif %}{{ i.full_name }}</b>{% if i.role_label %}<span class="muted"> · {{ i.role_label }}</span>{% endif %}
+        <span>{{ i.created_at[:10]|d }} {{ i.created_at[11:16] }}</span>
+        {% if i.request_text %}<br><span class="tiny">“{{ i.request_text }}”</span>{% else %}<br><span class="tiny muted">o‘zi yubordi</span>{% endif %}
+        {% if i.caption %}<br><span class="tiny">{{ i.caption }}</span>{% endif %}
+        {% if i.lat %}<br><a class="tiny" style="color:var(--blue)" target="_blank" rel="noopener" href="https://maps.google.com/?q={{ i.lat }},{{ i.lon }}">{{ icon('pin','xs') }} Joylashuv</a>{% endif %}
+        {% if can('kuzatuv.manage') %}<br>{{ void_button(url_for('kuzatuv.void', item_id=i.id), 'Yashirish', 'Nega yashiriladi?') }}{% endif %}
+      </div>
+    </div>
+    {% else %}{{ empty('Bu kunda rasm/video kelmagan', 'camera') }}{% endfor %}
+  </div>{{ pager(page, has_more) }}</div>
+</section>
+
+{% if requests %}
+<section class="card"><div class="card-h"><h3>{{ icon('history') }} Bugungi so‘rovlar tarixi</h3></div>
+  <div class="card-b"><div class="table-wrap"><table class="t"><thead><tr><th>Vaqt</th><th>Kim</th><th>So‘rov</th><th>Holat</th><th>Fayl</th></tr></thead><tbody>
+  {% for r in requests %}<tr><td>{{ r.created_at[11:16] }}</td><td>{{ r.full_name }}</td><td>{{ r.text }}{% if r.rule_id %} <span class="badge b-blue">jadval</span>{% endif %}</td>
+    <td><span class="badge {{ {'JAVOB':'b-green','KECHIKDI':'b-red','BEKOR':'b-gray'}.get(r.status, 'b-orange') }}">{{ statuses[r.status] }}</span>{% if r.answered_at %} <span class="tiny muted">{{ r.answered_at[11:16] }}</span>{% endif %}</td><td>{{ r.n_items }}</td></tr>{% endfor %}
+  </tbody></table></div></div></section>
+{% endif %}
+{% endblock %}
+{% block scripts %}<script>
+document.querySelectorAll('[data-k-tpl]').forEach(b => b.addEventListener('click', () => {
+  const t = document.querySelector('#k-ask textarea'); t.value = b.dataset.kTpl; t.focus();
+}));
+</script>
+{% endblock %}

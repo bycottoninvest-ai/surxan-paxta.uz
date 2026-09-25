@@ -14,7 +14,7 @@ from .config import BASE_DIR, Config
 from .security import (PERMISSIONS, ROLES, brigadier_scope, can, csrf_token, load_user, wants_json)
 from .utils import UserError, fmt_date, fmt_money, fmt_num, now_str, today_str, weekday_name
 
-VERSION = '2.4.0'
+VERSION = '2.5.0'
 
 
 def create_app(**overrides):
@@ -51,8 +51,9 @@ def create_app(**overrides):
         dbmod.migrate(conn)
         seed(conn, cfg)
 
-    from .views import acct, admin, auth, finance, integrations, main, ops, people, punkt, reports
-    for bp in (auth.bp, main.bp, ops.bp, people.bp, finance.bp, reports.bp, admin.bp, integrations.bp, punkt.bp, acct.bp):
+    from .views import acct, admin, auth, finance, integrations, kuzatuv, main, ops, people, punkt, reports
+    for bp in (auth.bp, main.bp, ops.bp, people.bp, finance.bp, reports.bp, admin.bp, integrations.bp, punkt.bp, acct.bp,
+               kuzatuv.bp):
         app.register_blueprint(bp)
     from .telegram_bot import bp as tg_bp
     app.register_blueprint(tg_bp)
@@ -259,7 +260,7 @@ def register_cli(app):
         if not cfg.TELEGRAM_WEBHOOK_SECRET:
             raise click.ClickException('TELEGRAM_WEBHOOK_SECRET o‘rnatilmagan')
         url = f'https://{cfg.DOMAIN}/telegram/webhook/{cfg.TELEGRAM_WEBHOOK_SECRET}'
-        res = tg_api('setWebhook', {'url': url, 'allowed_updates': ['message', 'callback_query'],
+        res = tg_api('setWebhook', {'url': url, 'allowed_updates': ['message', 'callback_query', 'my_chat_member', 'chat_member'],
                                     'secret_token': cfg.TELEGRAM_WEBHOOK_SECRET, 'drop_pending_updates': False})
         click.echo(json.dumps(res, ensure_ascii=False))
 

@@ -156,6 +156,14 @@
     </div></div>
   </section>
 
+  {% if kuz %}
+  <!-- kuzatuv: photos/videos people sent on request -->
+  <section class="card s6">
+    <div class="card-h"><h3>{{ icon('video') }} Kuzatuv (bugun)</h3><a class="more" href="{{ url_for('kuzatuv.home') }}">Barchasi</a></div>
+    <div class="card-b">{% include 'partials/k_strip.html' %}</div>
+  </section>
+  {% endif %}
+
   <!-- photo archive -->
   <section class="card s6">
     <div class="card-h"><h3>Foto arxiv</h3><a class="more" href="{{ url_for('main.photos') }}">Barchasi</a></div>
