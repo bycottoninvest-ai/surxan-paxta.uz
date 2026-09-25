@@ -28,20 +28,19 @@ flask() { docker compose exec -T app flask --app app "$@"; }
 
 case "${1:-}" in
 telegram)
-  echo "1) @BotFather dagi bot tokeni (ko‘rinmaydi):"; read -rsp "   TOKEN: " T; echo
-  [[ "$T" =~ ^[0-9]+:[A-Za-z0-9_-]{30,}$ ]] || { echo "Token ko‘rinishi noto‘g‘ri"; exit 1; }
-  read -rp "2) Bot username (@ siz): " U
-  read -rp "3) Arxiv kanali ID (-100… , hozircha bo‘sh qoldirsa ham bo‘ladi): " A
-  read -rp "4) Hisobot kanali ID (-100… , hozircha bo‘sh qoldirsa ham bo‘ladi): " R
-  read -rsp "5) Hisobot uchun alohida bot tokeni (bo‘lmasa Enter): " RT; echo
-  setenv TELEGRAM_BOT_TOKEN "$T"; setenv TELEGRAM_BOT_USERNAME "${U#@}"
-  [ -n "$A" ] && setenv TELEGRAM_ARCHIVE_CHAT_ID "$A"
-  [ -n "$R" ] && setenv TELEGRAM_REPORT_CHAT_ID "$R"
-  [ -n "$RT" ] && setenv TELEGRAM_REPORT_BOT_TOKEN "$RT"
+  echo "@BotFather bergan tokenni nusxalab shu yerga qo‘ying (ekranda ko‘rinmaydi), keyin Enter:"
+  read -rsp "   TOKEN: " T; echo
+  T=$(echo "$T" | tr -d '[:space:]')
+  [[ "$T" =~ ^[0-9]+:[A-Za-z0-9_-]{30,}$ ]] || { echo "Token ko‘rinishi noto‘g‘ri — qaytadan nusxalang"; exit 1; }
+  echo "Bot va kanallar avtomatik qidirilmoqda..."
+  OUT=$(TG_TOKEN="$T" python3 tools/tg_topish.py) || exit 1
+  setenv TELEGRAM_BOT_TOKEN "$T"
+  while IFS='=' read -r K V; do [[ "$K" =~ ^TELEGRAM_[A-Z_]+$ ]] && setenv "$K" "$V"; done <<< "$OUT"
   grep -q '^TELEGRAM_WEBHOOK_SECRET=.\+' .env || setenv TELEGRAM_WEBHOOK_SECRET "$(openssl rand -hex 24)"
   restart
   flask set-webhook
   flask smoke-check --send-tests | grep -i 'telegram' || true
+  echo; echo "✅ Tayyor. Telegramda ikkala kanalga “ulandi” degan xabar kelgan bo‘lishi kerak."
   ;;
 sheets)
   read -rp "1) Jadval ID [1eWl21webrxSAV_NDdvv8dX1lWmu5gSEMSD1fvMWh8Mw]: " S
