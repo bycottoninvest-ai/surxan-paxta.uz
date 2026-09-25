@@ -28,10 +28,10 @@
     <div class="card-b">
       <form method="post" action="{{ url_for('ops.load_open') }}" data-offline="Telashka ochish" class="form">
         {{ csrf() }}{{ uuid_field() }}
-        <div class="f"><label>Telashka <span class="req">*</span></label><select name="trailer_id" required>{% for t in trailers if not t.load_id %}<option value="{{ t.trailer_id }}">{{ t.trailer_code }}</option>{% else %}<option value="">Bo‘sh telashka yo‘q</option>{% endfor %}</select></div>
-        <div class="f"><label>Dala <span class="req">*</span></label><select name="field_id" required>{% for f in fields %}<option value="{{ f.id }}">{{ f.code }} · {{ f.name }} ({{ f.brigadier_name or '—' }})</option>{% endfor %}</select></div>
+        <div class="f"><label>1. Brigada <span class="req">*</span></label><select name="brigadier_id" required data-brig-select>{% if not my_brigade %}<option value="">— brigadani tanlang —</option>{% endif %}{% for b in brigadiers %}<option value="{{ b.id }}">{{ b.name }}</option>{% endfor %}</select></div>
+        <div class="f"><label>2. Dala <span class="req">*</span></label><select name="field_id" required data-brig-fields>{% for f in fields %}<option value="{{ f.id }}" data-brig="{{ f.brigadier_id or '' }}">{{ f.code }} · {{ f.name }}</option>{% endfor %}</select></div>
+        <div class="f"><label>3. Telashka <span class="req">*</span></label><select name="trailer_id" required>{% for t in trailers if not t.load_id %}<option value="{{ t.trailer_id }}">{{ t.trailer_code }}</option>{% else %}<option value="">Bo‘sh telashka yo‘q</option>{% endfor %}</select></div>
         <div class="f h"><label>Traktor</label><select name="tractor_id"><option value="">—</option>{% for t in tractors %}<option value="{{ t.id }}">{{ t.code }}</option>{% endfor %}</select></div>
-        <div class="f h"><label>Brigadir</label><select name="brigadier_id">{% if not my_brigade %}<option value="">Daladan olinsin</option>{% endif %}{% for b in brigadiers %}<option value="{{ b.id }}">{{ b.name }}</option>{% endfor %}</select></div>
         <div class="f h"><label>Mashina raqami</label><input name="vehicle_plate" placeholder="01 123 AAA"></div>
         <div class="f h"><label>Haydovchi</label><input name="driver_name"></div>
         <div class="f"><button class="btn btn-primary btn-block">Reysni ochish</button></div>

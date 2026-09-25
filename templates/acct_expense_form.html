@@ -16,6 +16,7 @@
     {% else %}
     <div class="f"><label>Dala (ixtiyoriy)</label><select name="field_id"><option value="">—</option>{% for f in fields %}<option value="{{ f.id }}">{{ f.code }} · {{ f.name }}</option>{% endfor %}</select></div>
     {% endif %}
+    <div class="f"><label>Qaysi brigada uchun</label><select name="brigadier_id"><option value="">— umumiy (brigadasiz) —</option>{% for b in brigadiers %}<option value="{{ b.id }}">{{ b.name }}</option>{% endfor %}</select><div class="tiny muted">Dala tanlansa, o‘sha dalaning brigadasi o‘zi qo‘yiladi.</div></div>
     {% if boxes|length > 1 and current_user['role'] != 'cashier' %}<div class="f"><label>Kassa</label><select name="cashbox_id">{% for b in boxes %}<option value="{{ b.id }}">{{ b.name }}</option>{% endfor %}</select></div>{% endif %}
     <div class="f"><label>Chek rasmi (ixtiyoriy)</label><label class="file-drop" style="padding:10px"><input type="file" name="photo" accept="image/*" capture="environment" data-preview>{{ icon('camera') }} Rasmga olish<div class="previews"></div></label></div>
     <div class="f"><label>Izoh (ixtiyoriy)</label><input name="note" placeholder="Masalan: traktor yoqilg‘isi"></div>

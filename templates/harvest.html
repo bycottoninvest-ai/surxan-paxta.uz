@@ -12,10 +12,10 @@
       <form id="open-form" class="collapse{{ ' open' if not open_loads }}" style="border:1px dashed #c9d7e8;border-radius:10px;margin-bottom:12px;padding:12px" method="post" action="{{ url_for('ops.load_open') }}" data-offline="Telashka ochish">
         {{ csrf() }}{{ uuid_field() }}
         <div class="form">
-          <div class="f h keep"><label>Telashka <span class="req">*</span></label><select name="trailer_id" required>{% for t in trailers %}<option value="{{ t.id }}">{{ t.code }}{{ ' · ' ~ t.plate if t.plate }}</option>{% endfor %}</select></div>
+          <div class="f h keep"><label>1. Brigada <span class="req">*</span></label><select name="brigadier_id" required data-brig-select>{% if not my_brigade %}<option value="">— brigadani tanlang —</option>{% endif %}{% for b in brigadiers %}<option value="{{ b.id }}">{{ b.name }}</option>{% endfor %}</select></div>
+          <div class="f h keep"><label>2. Dala <span class="req">*</span></label><select name="field_id" required data-brig-fields>{% for f in fields %}<option value="{{ f.id }}" data-brig="{{ f.brigadier_id or '' }}">{{ f.code }} · {{ f.name }}</option>{% else %}<option value="">Dala kiritilmagan</option>{% endfor %}</select></div>
+          <div class="f h keep"><label>3. Telashka <span class="req">*</span></label><select name="trailer_id" required>{% for t in trailers %}<option value="{{ t.id }}">{{ t.code }}{{ ' · ' ~ t.plate if t.plate }}</option>{% endfor %}</select></div>
           <div class="f h keep"><label>Traktor</label><select name="tractor_id"><option value="">—</option>{% for t in tractors %}<option value="{{ t.id }}">{{ t.code }}</option>{% endfor %}</select></div>
-          <div class="f h keep"><label>Dala <span class="req">*</span></label><select name="field_id" required>{% for f in fields %}<option value="{{ f.id }}" data-brig="{{ f.brigadier_id or '' }}">{{ f.code }} · {{ f.name }}</option>{% else %}<option value="">Dala kiritilmagan</option>{% endfor %}</select></div>
-          <div class="f h keep"><label>Brigada</label><select name="brigadier_id">{% if not my_brigade %}<option value="">Daladan olinsin</option>{% endif %}{% for b in brigadiers %}<option value="{{ b.id }}">{{ b.name }}</option>{% endfor %}</select></div>
           {% if stations|length > 1 %}<div class="f h keep"><label>Punkt</label><select name="station_id">{% for st in stations %}<option value="{{ st.id }}">{{ st.name }}</option>{% endfor %}</select></div>{% endif %}
           <div class="f tiny muted">Telashka raqami (TL-{{ season }}-…) tizim tomonidan avtomatik beriladi.</div>
           <div class="f"><button class="btn btn-primary btn-block">{{ icon('plus','sm') }} Telashkani ochish</button></div>

@@ -274,3 +274,22 @@
     });
   });
 })();
+
+// ---- open trip: brigade first, then only that brigade's fields (fields without a fixed brigade stay available)
+(function () {
+  document.querySelectorAll('[data-brig-select]').forEach(sel => {
+    const form = sel.closest('form'), fields = form && form.querySelector('[data-brig-fields]');
+    if (!fields) return;
+    const apply = () => {
+      const b = sel.value;
+      let first = null;
+      fields.querySelectorAll('option').forEach(o => {
+        const ok = !b || !o.dataset.brig || o.dataset.brig === b;
+        o.hidden = !ok; o.disabled = !ok;
+        if (ok && !first && o.value) first = o;
+      });
+      if (fields.selectedOptions[0] && fields.selectedOptions[0].disabled) fields.value = first ? first.value : '';
+    };
+    sel.addEventListener('change', apply); apply();
+  });
+})();

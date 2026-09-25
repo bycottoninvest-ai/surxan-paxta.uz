@@ -82,3 +82,38 @@ def test_codex_acceptance_example(app, world):
     assert tally.get('/buxgalteriya').status_code in (302, 403)
     with app.app_context():
         assert scalar("SELECT COUNT(*) FROM payouts") == 2
+
+
+def test_per_brigade_tonnage_and_costs(app, world):
+    """The owner needs, per brigade: how much cotton came out and how much it cost (wages + combine + expenses)."""
+    admin, bux = world['admin'], world['bux']
+    tally = make_user(app, admin, 'sadokat', 'tally')
+    admin.post('/admin/sozlamalar', {'set_worker_rate_hand': '1500'})
+    income(bux, '5 000 000')
+    # the trip form asks for the brigade first, then the field
+    html = tally.get('/terim').get_data(as_text=True)
+    assert html.index('data-brig-select') < html.index('data-brig-fields') < html.index('name="trailer_id"')
+    b = world['b']
+    for field, brig, kgs in (('D-04', 'Juma ota', ('100', '50')), ('D-01', 'Nurim ota', ('70',))):
+        lid = tally.post('/telashkalar/ochish', {'trailer_id': world['eq']['TL-01' if brig == 'Juma ota' else 'TL-02'],
+                                                'field_id': world['f'][field], 'brigadier_id': b[brig],
+                                                'client_uuid': uuid4()}).get_json()['load_id']
+        for i, kg in enumerate(kgs):
+            assert tally.post('/terim', {'load_id': lid, 'method': 'hand', 'worker_name': f'{brig} ishchi {i}', 'kg': kg,
+                                         'client_uuid': uuid4()}).get_json()['ok']
+    # expenses: one chosen for Nurim ota's brigade, one through Juma ota's field, one general
+    assert bux.post('/buxgalteriya/xarajat/yangi', {'category': 'Ovqat', 'amount': '40 000', 'brigadier_id': b['Nurim ota'],
+                                                    'client_uuid': uuid4()}).get_json()['ok']
+    assert bux.post('/buxgalteriya/xarajat/yangi', {'category': 'Yoqilg‘i', 'amount': '25 000', 'field_id': world['f']['D-04'],
+                                                    'client_uuid': uuid4()}).get_json()['ok']
+    assert bux.post('/buxgalteriya/xarajat/yangi', {'category': 'Boshqa', 'amount': '10 000', 'client_uuid': uuid4()}).get_json()['ok']
+    from surxon.reporting import brigade_summary
+    from surxon.utils import today_str
+    with app.app_context():
+        by = {x['name']: x for x in brigade_summary(today_str(), today_str())}
+    assert (by['Juma ota']['kg'], by['Juma ota']['wages'], by['Juma ota']['expenses']) == (150, 225_000, 25_000)
+    assert by['Juma ota']['cost_per_kg'] == 1667                      # (225 000 + 25 000) / 150
+    assert (by['Nurim ota']['kg'], by['Nurim ota']['wages'], by['Nurim ota']['expenses']) == (70, 105_000, 40_000)
+    assert by['Umumiy (brigadasiz)']['expenses'] == 10_000 and by['Bayram ota']['kg'] == 0
+    page = flat(bux.get('/buxgalteriya/hisobot?period=bugun').get_data(as_text=True))
+    assert 'Brigadalarbo‘yicha' in page and 'Jumaota' in page

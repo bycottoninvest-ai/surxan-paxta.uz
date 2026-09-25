@@ -93,6 +93,7 @@ def expense_new():
                           category=category, field_id=parse_int(request.form.get('field_id'), 'Dala', required=False),
                           station_id=parse_int(request.form.get('station_id'), 'Punkt', required=False),
                           equipment_id=parse_int(request.form.get('equipment_id'), 'Texnika', required=False),
+                          brigadier_id=parse_int(request.form.get('brigadier_id'), 'Brigada', required=False),
                           note=request.form.get('note', ''), from_cash=True, client_uuid=form_uuid(),
                           cashbox_id=parse_int(request.form.get('cashbox_id'), 'Kassa', required=False),
                           photo=read_upload(request.files.get('photo')))
@@ -105,6 +106,7 @@ def expense_new():
     return render_template('acct_expense_form.html', category=category, boxes=A.cashboxes(),
                            fields=q('SELECT id, code, name FROM fields WHERE active=1 ORDER BY code'),
                            stations=q('SELECT id, name FROM stations WHERE active=1 ORDER BY name'),
+                           brigadiers=q('SELECT id, name FROM brigadiers WHERE active=1 ORDER BY name'),
                            equipment=q("SELECT id, code, kind FROM equipment WHERE active=1 AND kind<>'telashka' ORDER BY kind, code"))
 
 
@@ -434,6 +436,10 @@ def report():
                 {'k': 'Narxsiz terim, kg (hisoblanmagan)', 'v': s['wages_uncalc_kg']},
                 {'k': 'Kombayn (hisoblangan)', 'v': s['combine_earned']}]
         rows += [{'k': f'Xarajat: {e["category"]}', 'v': e['amount']} for e in s['expenses']]
+        from ..reporting import brigade_summary
+        for x in brigade_summary(a, b):
+            rows += [{'k': f'{x["name"]}: terim, kg', 'v': x['kg']}, {'k': f'{x["name"]}: punkt qabul, kg', 'v': x['accepted_kg']},
+                     {'k': f'{x["name"]}: ish haqi + kombayn + xarajat, so‘m', 'v': x['total_cost']}]
         rows += [{'k': 'JAMI XARAJAT', 'v': s['expenses_total']}, {'k': 'Kassa kirim', 'v': s['cash_in']},
                  {'k': 'Kassa chiqim', 'v': s['cash_out']}, {'k': 'shundan ish haqi', 'v': s['wages_paid']},
                  {'k': 'shundan avans', 'v': s['advances']}, {'k': 'shundan kombayn', 'v': s['combine_paid']},
@@ -445,4 +451,5 @@ def report():
     if fmt == 'pdf':
         pdf = summary_pdf(s, f'{title} ({a} — {b})', get_setting('company_name'))
         return Response(pdf, mimetype='application/pdf', headers={'Content-Disposition': f'inline; filename=moliya_{a}_{b}.pdf'})
-    return render_template('acct_report.html', **_ctx(s=s, title=title))
+    from ..reporting import brigade_summary
+    return render_template('acct_report.html', **_ctx(s=s, title=title, brig=brigade_summary(a, b)))

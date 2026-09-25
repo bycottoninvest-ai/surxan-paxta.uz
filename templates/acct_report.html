@@ -21,6 +21,13 @@
   {% for e in s.expenses %}<div class="row a-line"><span>{{ e.category|upper }}</span><span class="spacer"></span><b class="num">{{ e.amount|num }} so‘m</b></div>{% else %}<div class="small muted">Xarajat yo‘q</div>{% endfor %}
   <div class="row a-line a-strong"><span>JAMI XARAJAT</span><span class="spacer"></span><b class="num">{{ s.expenses_total|num }} so‘m</b></div>
   {% if s.unchecked_expenses %}<div class="small t-down">{{ s.unchecked_expenses }} ta xarajat hali tasdiqlanmagan</div>{% endif %}
+  {% if brig %}<h4>Brigadalar bo‘yicha</h4>
+  <div class="table-wrap"><table class="t small">
+    <thead><tr><th>Brigada</th><th class="num">Terim, kg</th><th class="num">Punkt qabul, kg</th><th class="num">Ish haqi</th><th class="num">Kombayn</th><th class="num">Xarajat</th><th class="num">Jami, so‘m</th><th class="num">1 kg ga</th></tr></thead>
+    <tbody>{% for x in brig %}<tr><td class="b">{{ x.name }}</td><td class="num">{{ x.kg|num }}</td><td class="num">{{ x.accepted_kg|num }}</td>
+      <td class="num">{{ x.wages|num }}{% if x.uncalc_kg %}<div class="tiny t-down">+{{ x.uncalc_kg|num }} kg narxsiz</div>{% endif %}</td><td class="num">{{ x.combine|num }}</td>
+      <td class="num">{{ x.expenses|num }}</td><td class="num b">{{ x.total_cost|num }}</td><td class="num">{{ x.cost_per_kg|num if x.cost_per_kg is not none else 'hisoblanmagan' }}</td></tr>{% endfor %}</tbody>
+  </table></div>{% endif %}
   <h4>Kassa</h4>
   <div class="row a-line"><span>KASSA KIRIM</span><span class="spacer"></span><b class="num">{{ s.cash_in|num }} so‘m</b></div>
   <div class="row a-line"><span>KASSA CHIQIM</span><span class="spacer"></span><b class="num">{{ s.cash_out|num }} so‘m</b></div>

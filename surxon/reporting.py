@@ -71,6 +71,54 @@ def finance_summary(date_from, date_to, cashbox_id=None):
             'day_closes': [dict(r) for r in closes]}
 
 
+def brigade_summary(date_from, date_to):
+    """Per brigade for the period: kg (hand / combine), punkt accepted kg, wages, combine, expenses and cost per kg.
+    Expenses count for a brigade when written with that brigade (or with a field that belongs to it); the rest are
+    shown as “Umumiy (brigadasiz)”. Nothing is estimated: a missing rate stays “hisoblanmagan”."""
+    def blank(bid, name):
+        return {'id': bid, 'name': name, 'hand_kg': 0, 'combine_kg': 0, 'accepted_kg': 0, 'trips': 0,
+                'wages': 0, 'combine': 0, 'uncalc_kg': 0, 'expenses': 0}
+    rows = {b['id']: blank(b['id'], b['name']) for b in q('SELECT id, name FROM brigadiers ORDER BY name')}
+    general = blank(None, 'Umumiy (brigadasiz)')
+
+    def row(bid):
+        return rows.get(bid, general)
+    for r in q("""SELECT brigadier_id, method, SUM(kg) kg, COALESCE(SUM(amount),0) amt,
+                         COALESCE(SUM(CASE WHEN amount IS NULL THEN kg END),0) uncalc
+                  FROM harvests WHERE voided_at IS NULL AND work_date BETWEEN ? AND ? GROUP BY brigadier_id, method""",
+               (date_from, date_to)):
+        x = row(r['brigadier_id'])
+        if r['method'] == 'hand':
+            x['hand_kg'] += r['kg']
+            x['wages'] += r['amt']
+            x['uncalc_kg'] += r['uncalc']
+        else:
+            x['combine_kg'] += r['kg']
+            x['combine'] += r['amt']
+    for r in q("""SELECT f.brigadier_id, SUM(cw.amount) amt FROM combine_work cw LEFT JOIN fields f ON f.id=cw.field_id
+                  WHERE cw.voided_at IS NULL AND cw.work_date BETWEEN ? AND ? GROUP BY f.brigadier_id""", (date_from, date_to)):
+        row(r['brigadier_id'])['combine'] += r['amt']
+    for r in q("""SELECT tl.brigadier_id, SUM(nr.accepted_kg) kg, COUNT(*) n FROM nayman_receipts nr
+                  JOIN waybills wb ON wb.id=nr.waybill_id JOIN trailer_loads tl ON tl.id=wb.load_id
+                  WHERE wb.status <> 'BEKOR' AND nr.received_date BETWEEN ? AND ? GROUP BY tl.brigadier_id""",
+               (date_from, date_to)):
+        x = row(r['brigadier_id'])
+        x['accepted_kg'] += r['kg']
+        x['trips'] += r['n']
+    for r in q("""SELECT COALESCE(e.brigadier_id, f.brigadier_id) bid, SUM(e.amount) amt FROM expenses e
+                  LEFT JOIN fields f ON f.id=e.field_id WHERE e.voided_at IS NULL AND e.expense_date BETWEEN ? AND ?
+                  GROUP BY COALESCE(e.brigadier_id, f.brigadier_id)""", (date_from, date_to)):
+        row(r['bid'])['expenses'] += r['amt']
+    out = list(rows.values())
+    if any(general[k] for k in ('hand_kg', 'combine_kg', 'accepted_kg', 'expenses', 'combine')):
+        out.append(general)
+    for x in out:
+        x['kg'] = x['hand_kg'] + x['combine_kg']
+        x['total_cost'] = x['wages'] + x['combine'] + x['expenses']
+        x['cost_per_kg'] = round(x['total_cost'] / x['kg']) if x['kg'] and not x['uncalc_kg'] else None
+    return out
+
+
 def _n(v):
     return f'{int(round(v)):,}'.replace(',', ' ')
 

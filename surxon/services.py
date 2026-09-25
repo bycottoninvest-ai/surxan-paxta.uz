@@ -878,6 +878,9 @@ def add_expense(actor, *, amount, expense_date, category, field_id=None, brigadi
             raise UserError('Summa 0 dan katta bo‘lishi kerak.')
         box = _cashbox(db, actor, cashbox_id)
         assert_day_open(db, box, expense_date)
+        if field_id and not brigadier_id:   # a field expense belongs to that field's brigade (for per-brigade cost)
+            row = db.execute('SELECT brigadier_id FROM fields WHERE id=?', (field_id,)).fetchone()
+            brigadier_id = row['brigadier_id'] if row else None
         # entered by the accountant (or admin) = checked; by anyone else it waits for the accountant
         status = 'TASDIQLANGAN' if actor.can('expenses.approve') else 'TEKSHIRILMAGAN'
         no = doc_number(db, 'EXP', season)
