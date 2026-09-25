@@ -66,7 +66,7 @@ surxon/
   outbox.py            Telegram arxiv kanali va Google Sheets'ga ishonchli yuborish
   views/               sahifalar, ERP API, TV
 templates/  static/    dizayn
-tests/                 64 ta avtomatik test
+tests/                 69 ta avtomatik test
 tools/                 skrinshot va tezlik o‘lchovi
 ```
 

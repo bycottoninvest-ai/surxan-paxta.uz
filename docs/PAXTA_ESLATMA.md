@@ -1,6 +1,6 @@
 # PAXTA — ish tarixi va joriy holat (keyingi sessiya uchun eslatma)
 
-Oxirgi yangilanish: 2026-09-25. Yozgan: Claude (bulutdagi sessiya “Yangi loya qilash”).
+Oxirgi yangilanish: 2026-09-25 (kechqurun). Yozgan: Claude (bulutdagi sessiya “Yangi loya qilash”).
 
 ## Foydalanuvchi
 
@@ -52,6 +52,18 @@ Rollar: admin, rahbar, brigadir (faqat o‘z brigadasi), tarozi, buxgalter, kass
    - Sheets upsert (ID bo‘yicha, dublikat yo‘q); Telegram hisobot kanali `TELEGRAM_REPORT_CHAT_ID` (+ ixtiyoriy `TELEGRAM_REPORT_BOT_TOKEN`).
    - ERP API: /payouts, /worker-balances, /combines, /debts, /cash-days (+ doc_no, rate, amount).
    - Test rejimi: buxgalter / asadbek (kassir) / Demo2026!.
+9. **Server ulanishlari tayyorlandi (kod, 69 test):** `tools/sozlash.sh telegram|sheets|sheets-sinov|zaxira|narx|holat` (sirlar faqat serverda, ko‘rinmay kiritiladi), `flask backup-verify [--offsite]` (alohida bazaga tiklab solishtiradi), `flask holat` (ISHLAYDI/ULANMAGAN/TEKSHIRILMAGAN/XATO), `flask sheets-inspect` (faqat o‘qish), `flask sheets-sinov` (1 000 so‘m sinov → qayta yuborish → bekor), `SPX UMUMIY` jadvali (dashboard formulalari uchun ID-li jami ko‘rsatkichlar). Tizim faqat `SPX ` varaqlariga yozadi, qo‘lda qilingan varaq/formulalarga tegmaydi. Batafsil: `docs/SERVER_ULASH.md`.
+10. **Narxlar (Azizbek):** qo‘l 1 500 so‘m/kg, kombayn 1 500 000 so‘m/tonna. 250 000 — faqat eski sinov, endi hech qayerda yo‘q.
+11. **Google Sheets:** https://docs.google.com/spreadsheets/d/1eWl21webrxSAV_NDdvv8dX1lWmu5gSEMSD1fvMWh8Mw — “Umumiy hisob”, “Ishchilar” va boshqa varaqlar bor. Talab: ularni SPX ma’lumotlariga formulalar bilan bog‘lash (ustun/ID/sana/birlik tekshiruvi), sinov yozuvida dashboard yangilanishini ko‘rsatish, qayta yuborishda ikki marta hisoblanmasin.
+
+## HOZIR QAYERDA TO‘XTADIK (keyingi qadam — Azizbekda)
+1. **DNS (sayt.uz → Domenlarim → surxan-paxta.uz → DNS):** avval mavjud yozuvlar rasmini olish; faqat `A @ → 88.198.122.72` va `A www → 88.198.122.72`; MX/TXT/NS ga tegmaslik. Domen faollashgan (Azizbek aytdi), DNS tekshiruvi hali qilinmagan.
+2. **Serverga o‘rnatish:** `ssh root@88.198.122.72`, keyin
+   `curl -fsSL https://raw.githubusercontent.com/bycottoninvest-ai/surxan-paxta.uz/main/tools/server_ornatish.sh -o ornatish.sh && bash ornatish.sh`
+   → “5/6 Domen” va “HTTPS tekshiruvi” rasmini kutyapmiz.
+3. Keyin tartib: `sozlash.sh narx` → `telegram` → `sheets` (inspect natijasi bo‘yicha “Umumiy hisob”/“Ishchilar” formulalarini yozib berish) → `sheets-sinov "Umumiy hisob!B4"` → `zaxira` (Hetzner Storage Box BX11 ~3,8–4 €/oy — Azizbek roziligi kerak) → `holat`.
+4. Claude muhitidan server, domen, DNS va docs.google.com ko‘rinmaydi (tarmoq yopiq) — tekshiruvlar serverda bajariladi, natija rasm/matn qilib yuboriladi.
+5. Kutilayotgan biznes ma’lumotlari: boshlang‘ich kassa qoldig‘i, dalalar/gektar, xodimlar loginlari (Asadbek, Mirjalol, Sadokat, Gulbohar — hisobchi; Yunus — punkt; buxgalter va kassir kimligi), punktlar ro‘yxati.
 
 Test loginlari (faqat test bazasi): `admin / Test2026!`; `juma`, `tarozi01`, `buxgalter`, `asadbek`, `rahbar` — `Demo2026!`.
 
