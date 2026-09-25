@@ -118,6 +118,9 @@ def main():
             from surxon.demo import fill_demo
             print(fill_demo())
             get_db().execute('UPDATE users SET must_change_password=0')
+        from surxon.demo import ensure_demo_punkt
+        ensure_demo_punkt()                     # older test databases get the punkt logins too
+        get_db().execute('UPDATE users SET must_change_password=0 WHERE username IN (\'yunus\', \'mirjalol\')')
     with app.test_request_context():
         # PDFs for sample waybills (on the server the 'worker' service does this)
         from surxon.services import ensure_missing_documents
@@ -130,7 +133,7 @@ def main():
     print(f'  SURXON PAXTA v{VERSION} — TEST REJIMI (alohida sinov bazasi: data-test/)')
     print(f'  Kompyuterda:   http://localhost:{PORT}')
     print(f'  Telefonda:     http://{ip}:{PORT}   (telefon shu Wi-Fi da bo‘lsin)')
-    print('  Kirish:        admin / Test2026!    ·  juma, tarozi01, buxgalter, asadbek, rahbar / Demo2026!')
+    print('  Kirish:        admin / Test2026!    ·  mirjalol (hisobchi), yunus (punkt), juma, rahbar / Demo2026!')
     print('  TV ekran:      http://localhost:%d/tv  (admin bilan kirgandan keyin)' % PORT)
     print('  To‘xtatish:    shu oynada Ctrl+C')
     print('=' * 64 + '\n')

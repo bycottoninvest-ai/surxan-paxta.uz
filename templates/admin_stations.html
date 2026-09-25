@@ -1,0 +1,22 @@
+{% extends 'base.html' %}
+{% from 'macros.html' import icon, csrf with context %}
+{% set page_title = 'Punktlar' %}
+{% block content %}
+<div class="page-h"><h1>{{ icon('building','lg') }} Qabul punktlari</h1></div>
+<div class="grid">
+  <section class="card s4"><div class="card-h"><h3>Yangi punkt</h3></div>
+    <div class="card-b"><form method="post" class="form">{{ csrf() }}
+      <div class="f"><label>Nomi <span class="req">*</span></label><input name="name" required placeholder="Nayman-2"></div>
+      <div class="f"><label>Manzil</label><input name="address"></div>
+      <div class="f"><button class="btn btn-primary btn-block">Saqlash</button></div></form></div>
+    <div class="card-b tiny muted">Punkt operatoriga login berish: Foydalanuvchilar → rol “Punkt operatori” → punktni tanlang. U faqat o‘z punktiga yuborilgan telashkalarni ko‘radi.</div></section>
+  <section class="card s8"><div class="card-h"><h3>Ro‘yxat</h3></div>
+    <div class="table-wrap"><table class="t"><thead><tr><th>Nomi</th><th>Manzil</th><th>Operatorlar</th><th class="num">Yo‘lda / keldi</th><th>Holat</th><th></th></tr></thead>
+      <tbody>{% for s in rows %}<tr><form method="post">{{ csrf() }}<input type="hidden" name="id" value="{{ s.id }}">
+        <td><input class="input" name="name" value="{{ s.name }}" style="height:36px"></td>
+        <td><input class="input" name="address" value="{{ s.address or '' }}" style="height:36px"></td>
+        <td class="small">{{ s.operators or '—' }}</td><td class="num"><a class="link" href="{{ url_for('punkt.home', punkt=s.id) }}">{{ s.open_trips }}</a></td>
+        <td><label class="check"><input type="checkbox" name="active" value="1" {{ 'checked' if s.active }}> faol</label></td>
+        <td><button class="btn btn-light btn-sm">Saqlash</button></td></form></tr>{% endfor %}</tbody></table></div></section>
+</div>
+{% endblock %}

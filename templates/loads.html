@@ -48,7 +48,7 @@
     <div class="table-wrap"><table class="t">
       <thead><tr><th>№</th><th>Sana</th><th>Telashka</th><th>Traktor</th><th>Dala</th><th>Brigadir</th><th class="num">Ichki kg</th><th class="num">Netto</th><th>Nakladnoy</th><th>Holat</th></tr></thead>
       <tbody>{% for r in rows %}<tr class="{{ 'void' if r.status == 'BEKOR' }}">
-        <td><a class="link" href="{{ url_for('ops.load_detail', load_id=r.id) }}">{{ r.id }}</a></td><td>{{ r.load_date|d }}</td><td class="b">{{ r.trailer_code }}</td><td>{{ r.tractor_code or '—' }}</td>
+        <td><a class="link" href="{{ url_for('ops.load_detail', load_id=r.id) }}">{{ r.id }}</a></td><td>{{ r.load_date|d }}</td><td class="b">{{ r.trip_no or r.trailer_code }}<div class="tiny muted">{{ r.trailer_code }}</div></td><td>{{ r.tractor_code or '—' }}</td>
         <td>{{ r.field_name }}</td><td>{{ r.brigadier_name }}</td><td class="num">{{ (r.internal_kg if r.status != 'OCHIQ' else r.live_kg)|num }}</td>
         <td class="num b">{{ r.net_kg|num if r.net_kg else '—' }}</td>
         <td>{% if r.waybill_id %}<a class="link" href="{{ url_for('ops.waybill_detail', waybill_id=r.waybill_id) }}">{{ r.waybill_number }}</a>{% else %}—{% endif %}</td>

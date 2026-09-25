@@ -54,8 +54,9 @@ def send(chat_id, text, buttons=None):
         current_app.logger.warning('Telegram send failed: %s', exc)
 
 
-def notify_async(text, roles=('admin', 'manager')):
-    """Best-effort alert to linked managers. Runs after commit, off the request thread."""
+def notify_async(text, roles=('admin', 'manager'), station_id=None):
+    """Best-effort alert to linked managers (and, with station_id, that punkt's operators).
+    Runs after commit, off the request thread."""
     try:
         from .settings import get_bool
         cfg = current_app.config['SURXON']
@@ -64,6 +65,9 @@ def notify_async(text, roles=('admin', 'manager')):
         chats = [r['telegram_id'] for r in q(
             'SELECT telegram_id FROM users WHERE active=1 AND telegram_id IS NOT NULL AND role IN (%s)' % ','.join('?' * len(roles)),
             tuple(roles))]
+        if station_id:
+            chats += [r['telegram_id'] for r in q("SELECT telegram_id FROM users WHERE active=1 AND telegram_id IS NOT NULL "
+                                                  "AND role='station' AND station_id=?", (station_id,))]
     except Exception:
         return
     if not chats:

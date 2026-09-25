@@ -16,7 +16,9 @@
     <dl class="kv">
       <dt>Sana</dt><dd>{{ wb.document_date|d }}</dd><dt>Jo‘natuvchi</dt><dd>{{ company }}</dd><dt>Qabul qiluvchi</dt><dd>{{ wb.destination }}</dd>
       <dt>Brigadir</dt><dd>{{ wb.brigadier_name }}</dd><dt>Dala</dt><dd>{{ wb.field_code }} · {{ wb.field_name }}</dd>
-      <dt>Traktor</dt><dd>{{ wb.tractor_code or '—' }}</dd><dt>Telashka</dt><dd>{{ wb.trailer_code }}</dd>
+      <dt>Telashka raqami</dt><dd class="b">{{ wb.trip_no or '—' }}</dd>
+      <dt>Punkt</dt><dd>{{ wb.station_name or wb.destination }}{% if wb.status == 'YARATILDI' %} · {{ '📥 keldi' if wb.arrived_at else '🚜 yo‘lda' }}{% endif %}</dd>
+      <dt>Traktor</dt><dd>{{ wb.tractor_code or '—' }}</dd><dt>Telashka (arava)</dt><dd>{{ wb.trailer_code }}</dd>
       <dt>Mashina / haydovchi</dt><dd>{{ wb.vehicle_plate or '—' }} · {{ wb.driver_name or '—' }}</dd>
       <dt>Ishchilar</dt><dd>{{ workers|length }} ta</dd>
       {% if wb.basis == 'dala' %}<dt class="hl">Og‘irlik manbai</dt><dd class="hl">Dala tarozisi yig‘indisi (qo‘l terimi, {{ workers|length }} ishchi)</dd>

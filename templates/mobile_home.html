@@ -21,7 +21,7 @@
   <h3 class="m-h">Mening telashkalarim</h3>
   {% for l in open_loads %}
   <div class="m-card">
-    <div class="row"><b style="font-size:18px">{{ l.trailer_code }}</b>{{ status(l.status) }}<span class="spacer"></span><b class="num" style="font-size:20px">{{ l.live_kg|num }} kg</b></div>
+    <div class="row"><b style="font-size:18px">{{ l.trip_no or l.trailer_code }}</b>{{ status(l.status) }}<span class="spacer"></span><b class="num" style="font-size:20px">{{ l.live_kg|num }} kg</b></div>
     <div class="small muted">{{ l.field_name }} · {{ l.brigadier_name }} · {{ l.tractor_code or 'traktorsiz' }}</div>
     <div class="row mt-s">
       <a class="btn btn-green" style="flex:1" href="{{ url_for('ops.harvest', load=l.id) }}">{{ icon('plus','sm') }} Terim</a>

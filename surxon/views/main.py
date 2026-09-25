@@ -1,6 +1,6 @@
 import json
 
-from flask import (Blueprint, abort, current_app, g, jsonify, make_response, render_template, request,
+from flask import (Blueprint, abort, current_app, g, jsonify, make_response, redirect, render_template, request,
                    send_from_directory, url_for)
 
 from .. import queries
@@ -29,6 +29,8 @@ def health():
 @bp.get('/')
 @login_required
 def dashboard():
+    if g.user['role'] == 'station':
+        return redirect(url_for('punkt.home'))
     year = season_arg()
     day = request.args.get('date') or today_str()
     try:

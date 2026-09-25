@@ -1,10 +1,10 @@
 {% extends 'base.html' %}
 {% from 'macros.html' import icon, csrf, status, photo_card, empty, void_button, file_input with context %}
-{% set page_title = 'Telashka ' ~ ld.trailer_code %}
+{% set page_title = 'Telashka ' ~ (ld.trip_no or ld.trailer_code) %}
 {% block content %}
 <div class="page-h">
   <a href="{{ url_for('ops.loads') }}" class="icon-btn">{{ icon('chev-left') }}</a>
-  <h1>Telashka {{ ld.trailer_code }} — reys №{{ ld.id }}</h1>{{ status(ld.status) }}
+  <h1>Telashka {{ ld.trip_no or ld.id }}</h1>{% if ld.waybill_id and ld.waybill_status != 'BEKOR' %}{% if ld.waybill_status == 'QABUL' %}<span class="badge b-green">✅ Qabul qilindi</span>{% elif ld.arrived_at %}<span class="badge b-orange">📥 Punktga keldi</span>{% else %}<span class="badge b-blue">🚜 Punktga yo‘lda</span>{% endif %}{% else %}{{ status(ld.status) }}{% endif %}
   <span class="spacer"></span>
   {% if ld.status == 'OCHIQ' and can('harvest.write') %}<a class="btn btn-light" href="{{ url_for('ops.harvest', load=ld.id) }}">{{ icon('plus','sm') }} Terim qo‘shish</a>{% endif %}
   {% if ld.status == 'TOLDI' and can('weigh.write') %}<a class="btn btn-primary" href="{{ url_for('ops.weigh', load_id=ld.id) }}">{{ icon('scale','sm') }} Taroziga</a>{% endif %}
@@ -27,7 +27,10 @@
       <dt>Brigadir</dt><dd>{{ ld.brigadier_name }}</dd>
       <dt>Dala</dt><dd>{{ ld.field_code }} · {{ ld.field_name }}</dd>
       <dt>Traktor</dt><dd>{{ ld.tractor_code or '—' }}</dd>
-      <dt>Telashka</dt><dd>{{ ld.trailer_code }}</dd>
+      <dt>Telashka raqami</dt><dd class="b">{{ ld.trip_no or '—' }}</dd>
+      <dt>Telashka (arava)</dt><dd>{{ ld.trailer_code }}</dd>
+      <dt>Punkt</dt><dd>{{ ld.station_name or '—' }}</dd>
+      {% if ld.station_kg is not none %}<dt>Punkt tarozisi</dt><dd class="num b">{{ ld.station_kg|num }} kg · farq {{ '%+.0f'|format(ld.station_diff_kg) }} kg{% if ld.station_diff_reason %}<div class="small muted">{{ ld.station_diff_reason }}</div>{% endif %}</dd>{% endif %}
       <dt>Mashina / haydovchi</dt><dd>{{ ld.vehicle_plate or '—' }} · {{ ld.driver_name or '—' }}</dd>
       <dt>Ochdi</dt><dd>{{ ld.opened_name }} · {{ ld.opened_at|d }}</dd>
       {% if ld.full_at %}<dt>TOLDI</dt><dd>{{ ld.full_name_by }} · {{ ld.full_at|d }}</dd>{% endif %}
@@ -62,7 +65,7 @@
     <div class="card-h"><h3>{{ icon('check-circle') }} Tugatish {{ '(nakladnoy chiqadi)' if auto_waybill else '(katta tarozi / Nayman punkti)' }}</h3></div>
     <div class="card-b">
       <div class="mini-stats mb"><div class="mini"><span>Jami terim (dala tarozisi)</span><b class="num">{{ ld.live_kg|num(1) }} kg</b></div><div class="mini"><span>Rasmlar</span><b>{{ ld.photo_count }} / kamida {{ min_photos }}</b></div></div>
-      <form method="post" action="{{ url_for('ops.load_full', load_id=ld.id) }}" enctype="multipart/form-data" data-offline="TOLDI {{ ld.trailer_code }}" class="form" data-confirm="{{ ld.trailer_code }} tugatilsinmi? Bundan keyin bu reysga terim qo‘shib bo‘lmaydi.{{ ' Nakladnoy ' ~ (ld.live_kg|num) ~ ' kg bilan chiqadi.' if auto_waybill }}">
+      <form method="post" action="{{ url_for('ops.load_full', load_id=ld.id) }}" enctype="multipart/form-data" data-offline="Tugatish {{ ld.trip_no }}" class="form" data-confirm="{{ ld.trip_no }} tugatilsinmi? Bundan keyin bu reysga terim qo‘shib bo‘lmaydi.{{ ' Nakladnoy ' ~ (ld.live_kg|num) ~ ' kg bilan chiqadi.' if auto_waybill }}">
         {{ csrf() }}
         <div class="f">{{ file_input('photos', 'Telashka / paxta / tarozi rasmlari', multiple=True) }}</div>
         <div class="f"><label>Izoh (ixtiyoriy)</label><input name="note" placeholder="Masalan: TL-02 to‘ldi. T-01 traktor."></div>

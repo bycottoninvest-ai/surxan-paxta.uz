@@ -26,6 +26,11 @@
       <div class="sub">PAXTA HISOB TIZIMI</div><div class="sub2">TAXIATOSH</div>
     </div>
     <nav class="nav">
+      {% if current_user['role'] == 'station' %}
+      {{ nav('punkt.home', 'Punkt', 'factory', None, ['punkt.home', 'punkt.trip']) }}
+      {{ nav('punkt.scanner', 'QR skaner', 'camera') }}
+      {{ nav('punkt.history', 'Bugungi tarix', 'history') }}
+      {% else %}
       {{ nav('main.dashboard', 'Bosh sahifa', 'home') }}
       {{ nav('ops.harvest', 'Terim (Qo‘l terimi)', 'sprout', 'harvest.write') }}
       {{ nav('ops.harvest', 'Kombayn', 'combine', 'harvest.write', match=['__none'], args={'method': 'combine'}) }}
@@ -33,6 +38,7 @@
       {{ nav('ops.scale_queue', 'Tarozi', 'scale', 'weigh.write', ['ops.scale_queue', 'ops.weigh']) }}
       {{ nav('ops.waybills', 'Nakladnoy', 'doc', 'waybill.view', ['ops.waybills', 'ops.waybill_detail']) }}
       {{ nav('ops.nayman_list', 'Nayman', 'factory', 'waybill.view', ['ops.nayman_list', 'ops.nayman']) }}
+      {{ nav('punkt.home', 'Punkt qabuli', 'building', 'station.view', ['punkt.home', 'punkt.trip', 'punkt.history', 'punkt.scanner']) }}
       {{ nav('people.settlements', 'Buxgalteriya', 'calc', 'settlement.view') }}
       {{ nav('finance.payments', 'To‘lovlar', 'card', 'payments.view') }}
       {{ nav('finance.expenses', 'Xarajatlar', 'receipt', 'reports.finance') }}
@@ -46,10 +52,12 @@
       <div class="section">Boshqaruv</div>
       {{ nav('admin.users', 'Foydalanuvchilar', 'user', 'users.manage') }}
       {{ nav('admin.brigadiers', 'Brigadirlar', 'users', 'masterdata.write') }}
+      {{ nav('admin.stations', 'Punktlar', 'building', 'masterdata.write') }}
       {{ nav('admin.seasons', 'Mavsumlar', 'calendar', 'seasons.manage') }}
       {{ nav('reports.audit_log', 'Audit tarixi', 'shield', 'audit.view') }}
       {{ nav('admin.backups', 'Zaxira nusxa', 'database', 'backup.manage') }}
       {{ nav('admin.settings', 'Sozlamalar', 'settings', 'settings.manage') }}
+      {% endif %}
       {% endif %}
       <a href="{{ url_for('auth.logout') }}" class="only-mobile">{{ icon('logout') }}<span>Chiqish</span></a>
     </nav>
@@ -65,11 +73,11 @@
       <div class="chip hide-md">{{ icon('clock','sm') }} <span data-clock>{{ now_time }}</span></div>
       {% block topbar_extra %}{% endblock %}
       <span class="sync" id="sync-state"></span>
-      <div class="search" data-search>
+      {% if current_user['role'] != 'station' %}<div class="search" data-search>
         {{ icon('search','sm') }}
         <input type="search" placeholder="Qidirish (dala, nakladnoy, telashka, odam...)" autocomplete="off" aria-label="Qidirish">
         <div class="search-results"></div>
-      </div>
+      </div>{% endif %}
       <div style="position:relative" class="bell-wrap">
         <button class="icon-btn" data-toggle="#notes" aria-label="Xabarlar">{{ icon('bell') }}{% if notifications %}<span class="dot">{{ notifications|length }}</span>{% endif %}</button>
         <div class="dropdown" id="notes">
@@ -98,12 +106,20 @@
   </div>
 </div>
 <nav class="bottom-nav">
+  {% if current_user['role'] == 'station' %}
+  <a href="{{ url_for('punkt.home') }}" class="{{ 'active' if ep == 'punkt.home' }}">{{ icon('factory') }}Punkt</a>
+  <a href="{{ url_for('punkt.history') }}" class="{{ 'active' if ep == 'punkt.history' }}">{{ icon('history') }}Tarix</a>
+  <a href="{{ url_for('punkt.scanner') }}" class="primary">{{ icon('camera') }}QR</a>
+  <a href="{{ url_for('auth.change_password') }}">{{ icon('shield') }}Parol</a>
+  <a href="#" data-open-nav>{{ icon('menu') }}Boshqa</a>
+  {% else %}
   <a href="{{ url_for('main.dashboard') }}" class="{{ 'active' if ep == 'main.dashboard' }}">{{ icon('home') }}Bosh</a>
   {% if can('harvest.write') %}<a href="{{ url_for('ops.harvest') }}" class="{{ 'active' if ep == 'ops.harvest' }}">{{ icon('sprout') }}Terim</a>{% else %}<a href="{{ url_for('ops.waybills') }}">{{ icon('doc') }}Hujjat</a>{% endif %}
   {% if can('weigh.write') and not can('harvest.write') %}<a href="{{ url_for('ops.scale_queue') }}" class="primary">{{ icon('scale') }}Tarozi</a>
   {% else %}<a href="{{ url_for('ops.loads') }}" class="primary">{{ icon('trailer') }}Telashka</a>{% endif %}
   <a href="{{ url_for('main.photos') }}" class="{{ 'active' if ep == 'main.photos' }}">{{ icon('camera') }}Foto</a>
   <a href="#" data-open-nav>{{ icon('menu') }}Boshqa</a>
+  {% endif %}
 </nav>
 <dialog class="modal" id="reason-dialog">
   <div class="card-h"><h3 data-title>Sabab</h3></div>

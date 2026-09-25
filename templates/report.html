@@ -17,6 +17,7 @@
   <a class="btn btn-light no-print" href="{{ season_url(format='xlsx') }}">{{ icon('download','sm') }} Excel</a>
   <button class="btn btn-primary no-print" onclick="window.print()">{{ icon('printer','sm') }} Chop etish / PDF</button>
 </div>
+{% if spec.note %}<div class="flash">{{ icon('alert','sm') }}<div>{{ spec.note }}</div></div>{% endif %}
 <section class="card">
   <div class="table-wrap"><table class="t">
     <thead><tr>{% for c in spec.columns %}<th class="{{ 'num' if c[2] in ('kg','money','num') }}">{{ c[1] }}{% if c[2] == 'kg' %} (kg){% elif c[2] == 'money' %} (so‘m){% endif %}</th>{% endfor %}</tr></thead>

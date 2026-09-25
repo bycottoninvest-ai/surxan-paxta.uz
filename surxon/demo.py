@@ -112,13 +112,6 @@ def fill_demo(days=8, seed=7):
                                       receiver_name, price_per_kg, amount, created_by, created_at) VALUES (?,?,?,?,?,?,?,?,?,?)''',
                                (wcur.lastrowid, acc, acc - net, 'Namlik / tabiiy kamayish' if acc != net else None, d,
                                 'Nayman mas’uli', 7800, int(acc * 7800), admin, wt))
-        # load waiting at the scale today
-        d = today.isoformat()
-        fid, bid = fids['D-03']
-        cur = db.execute('''INSERT INTO trailer_loads(season_year, load_date, trailer_id, tractor_id, field_id, brigadier_id, status,
-                                hand_kg, internal_kg, opened_by, opened_at, full_by, full_at)
-                            VALUES (?,?,?,?,?,?,'TOLDI',?,?,?,?,?,?)''',
-                         (year, d, eq['TL-04'], eq['T-03'], fid, bid, 0, 0, admin, f'{d} 13:10:00', admin, f'{d} 14:20:00'))
         db.execute("INSERT INTO cash_entries(season_year, entry_date, direction, category, amount, note, created_by, created_at) "
                    "VALUES (?,?,?,?,?,?,?,?)", (year, (today - timedelta(days=days)).isoformat(), 'IN', 'opening', 25_000_000,
                                                 'DEMO boshlang‘ich qoldiq', admin, now_str()))
@@ -137,4 +130,21 @@ def fill_demo(days=8, seed=7):
         for key, val in (('price_per_kg', '7800'), ('worker_rate_hand', '1500'), ('combine_rate', '1500')):
             db.execute("INSERT INTO settings(key, value, updated_at) VALUES (?,?,?) ON CONFLICT(key) DO NOTHING",
                        (key, val, now_str()))
+    ensure_demo_punkt()
     return 'Demo ma’lumotlar yozildi. Demo loginlar paroli: Demo2026!'
+
+
+def ensure_demo_punkt():
+    """Test mode: a punkt operator (yunus → Nayman-1), a tally clerk, trip numbers and punkt on demo trips."""
+    from .db import _backfill_trip_numbers
+    db = get_db()
+    st = db.execute('SELECT id, name FROM stations WHERE active=1 ORDER BY id LIMIT 1').fetchone()
+    if not st:
+        db.execute("INSERT INTO stations(name, created_at) VALUES ('Nayman-1', ?)", (now_str(),))
+        st = db.execute('SELECT id, name FROM stations ORDER BY id LIMIT 1').fetchone()
+    for code, name, role, sid in (('yunus', 'Yunus', 'station', st['id']), ('mirjalol', 'Mirjalol', 'tally', None)):
+        db.execute('INSERT OR IGNORE INTO users(username, password_hash, full_name, role, station_id, created_at) '
+                   'VALUES (?,?,?,?,?,?)', (code, generate_password_hash('Demo2026!'), name, role, sid, now_str()))
+    db.execute('UPDATE trailer_loads SET station_id=? WHERE station_id IS NULL', (st['id'],))
+    db.execute("UPDATE waybills SET destination=? WHERE destination='Nayman paxta qabul punkti'", (st['name'],))
+    _backfill_trip_numbers(db)

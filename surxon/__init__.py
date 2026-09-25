@@ -14,7 +14,7 @@ from .config import BASE_DIR, Config
 from .security import (PERMISSIONS, ROLES, brigadier_scope, can, csrf_token, load_user, wants_json)
 from .utils import UserError, fmt_date, fmt_money, fmt_num, now_str, today_str, weekday_name
 
-VERSION = '2.2.0'
+VERSION = '2.3.0'
 
 
 def create_app(**overrides):
@@ -41,11 +41,18 @@ def create_app(**overrides):
 
     with app.app_context():
         conn = dbmod.get_db()
+        try:
+            saved = dbmod.backup_before_upgrade(conn)
+        except Exception as e:      # e.g. another service (worker/backup) made the same copy this second
+            saved = None
+            app.logger.warning('Yangilashdan oldingi nusxa olinmadi (%s) — boshqa xizmat olgan bo‘lishi mumkin.', e)
+        if saved:
+            app.logger.warning('Baza yangi versiyaga o‘tishdan oldin saqlandi: %s', saved)
         dbmod.migrate(conn)
         seed(conn, cfg)
 
-    from .views import admin, auth, finance, integrations, main, ops, people, reports
-    for bp in (auth.bp, main.bp, ops.bp, people.bp, finance.bp, reports.bp, admin.bp, integrations.bp):
+    from .views import admin, auth, finance, integrations, main, ops, people, punkt, reports
+    for bp in (auth.bp, main.bp, ops.bp, people.bp, finance.bp, reports.bp, admin.bp, integrations.bp, punkt.bp):
         app.register_blueprint(bp)
     from .telegram_bot import bp as tg_bp
     app.register_blueprint(tg_bp)
@@ -116,6 +123,10 @@ def seed(conn, cfg):
         if not conn.execute('SELECT 1 FROM brigadiers LIMIT 1').fetchone():
             for name in ('Juma ota', 'Nurim ota', 'Bayram ota'):
                 conn.execute('INSERT INTO brigadiers(name, created_at) VALUES (?,?)', (name, now_str_safe()))
+        if not conn.execute('SELECT 1 FROM stations LIMIT 1').fetchone():
+            conn.execute("INSERT INTO stations(name, created_at) VALUES ('Nayman-1', ?)", (now_str_safe(),))
+        conn.execute('UPDATE trailer_loads SET station_id=(SELECT MIN(id) FROM stations WHERE active=1) '
+                     'WHERE station_id IS NULL')
         if not conn.execute('SELECT 1 FROM equipment LIMIT 1').fetchone():
             for kind, codes in (('traktor', ['T-01', 'T-02', 'T-03']), ('telashka', ['TL-01', 'TL-02', 'TL-03', 'TL-04']),
                                 ('kombayn', ['K-01', 'K-02'])):

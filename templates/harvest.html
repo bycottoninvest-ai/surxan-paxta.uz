@@ -15,7 +15,9 @@
           <div class="f h keep"><label>Telashka <span class="req">*</span></label><select name="trailer_id" required>{% for t in trailers %}<option value="{{ t.id }}">{{ t.code }}{{ ' · ' ~ t.plate if t.plate }}</option>{% endfor %}</select></div>
           <div class="f h keep"><label>Traktor</label><select name="tractor_id"><option value="">—</option>{% for t in tractors %}<option value="{{ t.id }}">{{ t.code }}</option>{% endfor %}</select></div>
           <div class="f h keep"><label>Dala <span class="req">*</span></label><select name="field_id" required>{% for f in fields %}<option value="{{ f.id }}" data-brig="{{ f.brigadier_id or '' }}">{{ f.code }} · {{ f.name }}</option>{% else %}<option value="">Dala kiritilmagan</option>{% endfor %}</select></div>
-          <div class="f h keep"><label>Brigadir</label><select name="brigadier_id">{% if not my_brigade %}<option value="">Daladan olinsin</option>{% endif %}{% for b in brigadiers %}<option value="{{ b.id }}">{{ b.name }}</option>{% endfor %}</select></div>
+          <div class="f h keep"><label>Brigada</label><select name="brigadier_id">{% if not my_brigade %}<option value="">Daladan olinsin</option>{% endif %}{% for b in brigadiers %}<option value="{{ b.id }}">{{ b.name }}</option>{% endfor %}</select></div>
+          {% if stations|length > 1 %}<div class="f h keep"><label>Punkt</label><select name="station_id">{% for st in stations %}<option value="{{ st.id }}">{{ st.name }}</option>{% endfor %}</select></div>{% endif %}
+          <div class="f tiny muted">Telashka raqami (TL-{{ season }}-…) tizim tomonidan avtomatik beriladi.</div>
           <div class="f"><button class="btn btn-primary btn-block">{{ icon('plus','sm') }} Telashkani ochish</button></div>
         </div>
       </form>
@@ -23,8 +25,8 @@
       {% for l in open_loads %}
       <a href="{{ url_for('ops.harvest', load=l.id) }}" class="brig" style="{{ 'background:var(--blue-50);border-radius:10px;padding:10px' if current and current.id == l.id else 'padding:10px' }}">
         <div class="avatar" style="border-radius:10px;background:url('{{ url_for('static', filename='img/trailer.jpg') }}') center/cover"></div>
-        <div class="mid"><b>{{ l.trailer_code }}</b> · {{ l.field_name }}<div class="small muted">{{ l.brigadier_name }} · {{ l.tractor_code or 'traktorsiz' }} · ochildi {{ l.opened_at[11:16] }}</div></div>
-        <div class="rt"><b class="num">{{ l.live_kg|num }} kg</b><div class="small muted">yuk №{{ l.id }}</div></div>
+        <div class="mid"><b>{{ l.trip_no or l.trailer_code }}</b> · {{ l.field_name }}<div class="small muted">{{ l.trailer_code }} · {{ l.brigadier_name }} · {{ l.tractor_code or 'traktorsiz' }} · ochildi {{ l.opened_at[11:16] }}</div></div>
+        <div class="rt"><b class="num">{{ l.live_kg|num }} kg</b></div>
       </a>
       {% else %}{{ empty('Ochiq telashka yo‘q. Yuqoridan yangi telashka oching.', 'trailer') }}{% endfor %}
     </div>
@@ -32,7 +34,7 @@
 
   {% if current or open_loads %}<section class="card s7">
     {% if current %}
-    <div class="card-h"><h3>2. Tortish: {{ current.trailer_code }} · {{ current.field_name }}</h3><span style="margin-left:auto">{{ status(current.status) }}</span></div>
+    <div class="card-h"><h3>2. Tortish: {{ current.trip_no or current.trailer_code }} · {{ current.field_name }}</h3><span style="margin-left:auto">{{ status(current.status) }}</span></div>
     <div class="card-b">
       {% if current.status == 'OCHIQ' and can('harvest.write') %}
       <form method="post" action="{{ url_for('ops.harvest') }}" enctype="multipart/form-data" data-offline="Terim {{ current.trailer_code }}" id="harvest-form">

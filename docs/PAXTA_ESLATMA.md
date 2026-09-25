@@ -36,6 +36,15 @@ Rollar: admin, rahbar, brigadir (faqat o‘z brigadasi), tarozi, buxgalter, kass
    - **Kombayn bor telashka:** katta tarozida yoki Nayman punktida tortiladi (brutto/tara) → nakladnoy.
    - Katta tarozi va pulni (kassa) kim yozishi hali so‘ralmagan — hozircha admin.
    - Server: Hetzner `surxan-paxta`, IP 88.198.122.72, o‘rnatish: `tools/server_ornatish.sh` (hali ishga tushirilmagan).
+7. **v2.3.0 — daladan punktgacha (Azizbek topshirig‘i, 2026-09-25)**, batafsil: `docs/PUNKT.md`:
+   - Telashka raqami avtomatik: `TL-YYYY-NNNNNN` (`trailer_loads.trip_no`, `counters` → `trip-YYYY`), o‘zgarmaydi.
+   - TUGATISH: lock, “Punkt uchun nakladnoy” (QR bilan, ism/narx yo‘q) va “Ichki terim hisoboti” (har odam kg) PDF, status PUNKTGA YO‘LDA.
+   - Punktlar (`stations`), rol `station` (“Punkt operatori”, masalan Yunus → Nayman-1), faqat `/punkt` ekranlari (server tomonida `station_gate`).
+   - Punkt: QR / raqam / ro‘yxat orqali topish, KELDI, punkt tarozisi, farq (≤1% normal, ≤3% diqqat, >3% katta), sabab tugmalari, QABUL QILINDI (takrorlanmaydi).
+   - Hisobotlar: “Punktlar: dala va punkt farqi”, “Farq sabablari”. Elektron tarozi uchun `surxon/scale.py` (hozir manual).
+   - Baza v4. Yangilanishdan oldin avtomatik nusxa olinadi: `*.oldin-vN-*.bak`. Checkpoint commit: `1eb2ecc`.
+   - Test rejimi loginlari: `mirjalol` (hisobchi), `yunus` (punkt) / `Demo2026!`.
+   - Rasmlardagi “BYCOTTON” brendi ishlatilmagan, logotip SURXON TAXIATOSH.
 
 Test loginlari (faqat test bazasi): `admin / Test2026!`; `juma`, `tarozi01`, `buxgalter`, `asadbek`, `rahbar` — `Demo2026!`.
 

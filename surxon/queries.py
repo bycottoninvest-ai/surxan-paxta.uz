@@ -188,15 +188,20 @@ def top_workers(year, day, limit=10, brig=None):
                  GROUP BY w.id ORDER BY kg DESC LIMIT ?''', (year, day) + ((brig,) if brig else ()) + (limit,))
 
 
-WAYBILL_SELECT = '''SELECT wb.*, tl.load_date, tl.vehicle_plate, tl.driver_name, tl.internal_kg, tl.hand_kg,
+WAYBILL_SELECT = '''SELECT wb.*, tl.trip_no, tl.station_id, st.name station_name, tl.full_at sent_at,
+                           tl.load_date, tl.vehicle_plate, tl.driver_name, tl.internal_kg, tl.hand_kg,
                            tl.combine_kg, tl.field_id, tl.brigadier_id, t.code trailer_code, tr.code tractor_code,
                            f.code field_code, f.name field_name, b.name brigadier_name,
                            w.gross_kg, w.tare_kg, w.gross_at, w.tare_at, w.basis, w.diff_kg weigh_diff_kg, w.diff_reason weigh_diff_reason,
                            w.scale_no, nr.id receipt_id, nr.accepted_kg, nr.diff_kg nayman_diff_kg, nr.diff_reason nayman_diff_reason,
                            nr.received_date, nr.amount receipt_amount,
                            (SELECT COALESCE(SUM(amount),0) FROM payments p WHERE p.waybill_id=wb.id AND p.voided_at IS NULL) paid,
+                           nr.created_at received_at, nr.receiver_name,
+                           (SELECT COUNT(DISTINCT h.worker_id) FROM harvests h WHERE h.load_id=tl.id AND h.voided_at IS NULL
+                                   AND h.method='hand') workers_count,
                            u.full_name created_name
                     FROM waybills wb JOIN trailer_loads tl ON tl.id=wb.load_id
+                    LEFT JOIN stations st ON st.id=tl.station_id
                     JOIN equipment t ON t.id=tl.trailer_id
                     LEFT JOIN equipment tr ON tr.id=tl.tractor_id
                     LEFT JOIN fields f ON f.id=tl.field_id
@@ -219,8 +224,9 @@ def waybills(year, *, day=None, since=None, search='', status='', brig=None, lim
     if brig:
         where.append('tl.brigadier_id=?'); params.append(brig)
     if search:
-        where.append('(wb.number LIKE ? OR t.code LIKE ? OR tr.code LIKE ? OR f.name LIKE ? OR b.name LIKE ? OR tl.vehicle_plate LIKE ?)')
-        params += [f'%{search}%'] * 6
+        where.append('(wb.number LIKE ? OR t.code LIKE ? OR tr.code LIKE ? OR f.name LIKE ? OR b.name LIKE ? '
+                     'OR tl.vehicle_plate LIKE ? OR tl.trip_no LIKE ?)')
+        params += [f'%{search}%'] * 7
     return q(WAYBILL_SELECT + ' WHERE ' + ' AND '.join(where) + ' ORDER BY wb.seq DESC LIMIT ? OFFSET ?', params + [limit, offset])
 
 
@@ -228,10 +234,73 @@ def waybill(wid):
     return q(WAYBILL_SELECT + ' WHERE wb.id=?', (wid,), one=True)
 
 
+def trip_state(wb):
+    """Display status of a sent trip: YOLDA → KELDI → QABUL (or BEKOR)."""
+    if wb['status'] == 'BEKOR':
+        return 'BEKOR'
+    if wb['status'] == 'QABUL':
+        return 'QABUL'
+    return 'KELDI' if wb['arrived_at'] else 'YOLDA'
+
+
+def station_trips(station_id=None, *, state='open', day=None, search='', limit=200):
+    """Trips for the punkt screen. state: open (on the way + arrived), received (QABUL), all."""
+    where, params = ["wb.status<>'BEKOR'"], []
+    if station_id:
+        where.append('tl.station_id=?'); params.append(station_id)
+    if state == 'open':
+        where.append("wb.status='YARATILDI'")
+    elif state == 'received':
+        where.append("wb.status='QABUL'")
+    if day:
+        where.append('substr(nr.created_at,1,10)=?'); params.append(day)
+    if search:
+        where.append('(tl.trip_no LIKE ? OR wb.number LIKE ?)'); params += [f'%{search}%'] * 2
+    order = 'nr.created_at DESC' if state == 'received' else 'COALESCE(wb.arrived_at, tl.full_at) DESC'
+    return q(WAYBILL_SELECT + ' WHERE ' + ' AND '.join(where) + f' ORDER BY {order} LIMIT ?', params + [limit])
+
+
+def station_counts(station_id, day):
+    sf, params = ('AND tl.station_id=?', [station_id]) if station_id else ('', [])
+    row = q(f'''SELECT SUM(CASE WHEN wb.status='YARATILDI' AND wb.arrived_at IS NULL THEN 1 ELSE 0 END) yolda,
+                       SUM(CASE WHEN wb.status='YARATILDI' AND wb.arrived_at IS NOT NULL THEN 1 ELSE 0 END) keldi,
+                       SUM(CASE WHEN wb.status='QABUL' AND substr(nr.created_at,1,10)=? THEN 1 ELSE 0 END) qabul,
+                       COALESCE(SUM(CASE WHEN wb.status='QABUL' AND substr(nr.created_at,1,10)=? THEN nr.accepted_kg END),0) qabul_kg,
+                       COALESCE(SUM(CASE WHEN wb.status='QABUL' AND substr(nr.created_at,1,10)=? THEN wb.net_kg END),0) dala_kg
+                FROM waybills wb JOIN trailer_loads tl ON tl.id=wb.load_id
+                LEFT JOIN nayman_receipts nr ON nr.waybill_id=wb.id
+                WHERE wb.status<>'BEKOR' {sf}''', [day, day, day] + params, one=True)
+    return {k: (row[k] or 0) for k in row.keys()}
+
+
+def find_trip(text, station_id=None, year=None):
+    """QR payload / full trip number / just the digits → waybill id (the latest match)."""
+    import re
+    text = (text or '').strip().upper()
+    m = re.search(r'TL-(\d{4})-(\d{1,6})', text)
+    if m:
+        trip = f'TL-{m.group(1)}-{int(m.group(2)):06d}'
+    elif text.isdigit() and year:
+        trip = f'TL-{year}-{int(text):06d}'
+    else:
+        m = re.search(r'PA-\d{6}', text)
+        if not m:
+            return None
+        row = q("SELECT wb.id FROM waybills wb JOIN trailer_loads tl ON tl.id=wb.load_id WHERE wb.number=?"
+                + (' AND tl.station_id=?' if station_id else ''), [m.group(0)] + ([station_id] if station_id else []), one=True)
+        return row['id'] if row else None
+    row = q("SELECT wb.id FROM waybills wb JOIN trailer_loads tl ON tl.id=wb.load_id WHERE tl.trip_no=? AND wb.status<>'BEKOR'"
+            + (' AND tl.station_id=?' if station_id else '') + ' ORDER BY wb.id DESC',
+            [trip] + ([station_id] if station_id else []), one=True)
+    return row['id'] if row else None
+
+
 LOAD_SELECT = '''SELECT tl.*, t.code trailer_code, tr.code tractor_code, f.code field_code, f.name field_name,
                         b.name brigadier_name, w.gross_kg, w.tare_kg, w.net_kg, w.basis, w.status weigh_status, w.gross_at, w.tare_at,
                         w.diff_kg, w.diff_reason, wb.id waybill_id, wb.number waybill_number, wb.status waybill_status,
-                        uo.full_name opened_name, uf.full_name full_name_by,
+                        uo.full_name opened_name, uf.full_name full_name_by, st.name station_name,
+                        wb.arrived_at, nr.accepted_kg station_kg, nr.diff_kg station_diff_kg, nr.diff_reason station_diff_reason,
+                        nr.created_at received_at,
                         (SELECT COALESCE(SUM(kg),0) FROM harvests h WHERE h.load_id=tl.id AND h.voided_at IS NULL) live_kg,
                         (SELECT COUNT(*) FROM photos p WHERE p.load_id=tl.id AND p.voided_at IS NULL) photo_count
                  FROM trailer_loads tl JOIN equipment t ON t.id=tl.trailer_id
@@ -240,6 +309,8 @@ LOAD_SELECT = '''SELECT tl.*, t.code trailer_code, tr.code tractor_code, f.code 
                  LEFT JOIN brigadiers b ON b.id=tl.brigadier_id
                  LEFT JOIN weighings w ON w.load_id=tl.id
                  LEFT JOIN waybills wb ON wb.load_id=tl.id
+                 LEFT JOIN nayman_receipts nr ON nr.waybill_id=wb.id
+                 LEFT JOIN stations st ON st.id=tl.station_id
                  LEFT JOIN users uo ON uo.id=tl.opened_by
                  LEFT JOIN users uf ON uf.id=tl.full_by'''
 
@@ -301,6 +372,9 @@ EVENT_TEXT = {
     ('TARE', 'weighing'): 'tara tortildi',
     ('CREATE', 'waybill'): 'nakladnoy yaratildi',
     ('CREATE', 'nayman_receipt'): 'Nayman qabul qildi',
+    ('FIELD_SUM', 'weighing'): 'tugatildi — punktga yo‘lda',
+    ('ARRIVED', 'waybill'): 'punktga keldi',
+    ('RECEIVE', 'waybill'): 'punktda qabul qilindi',
     ('CREATE', 'payment'): 'to‘lov kiritildi',
     ('CREATE', 'expense'): 'xarajat kiritildi',
 }
@@ -383,6 +457,12 @@ def notifications(user, year):
         n = scalar("SELECT COUNT(*) FROM weighings WHERE status='BRUTTO'")
         if n:
             items.append({'text': f'{n} ta tortishda tara kiritilmagan', 'endpoint': 'ops.scale_queue'})
+    if user['role'] == 'station':
+        n = scalar("SELECT COUNT(*) FROM waybills wb JOIN trailer_loads tl ON tl.id=wb.load_id "
+                   "WHERE wb.status='YARATILDI' AND tl.station_id=?", (user['station_id'],))
+        if n:
+            items.append({'text': f'{n} ta yuk punktga yo‘lda / keldi', 'endpoint': 'punkt.home'})
+        return items
     if has_perm(user, 'nayman.write'):
         n = scalar("SELECT COUNT(*) FROM waybills WHERE status='YARATILDI' AND season_year=?", (year,))
         if n:

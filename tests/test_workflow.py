@@ -414,8 +414,9 @@ def test_hand_only_trip_finish_issues_waybill_from_field_sum(app, world):
     assert add(tally, lid, 'Kechikkan', '40')['ok'] is False   # closed trip takes no more entries
 
 
-def test_trip_with_combine_still_goes_to_weighbridge(app, world):
-    admin, scale = world['admin'], world['tarozi']
+def test_trip_with_combine_goes_to_punkt_with_field_kg(app, world):
+    """Combine cotton can't be weighed per person: the trip is sent with the entered kg and weighed at the punkt."""
+    admin = world['admin']
     _auto_on(admin)
     juma = world['juma']
     lid = open_load(juma, world)
@@ -424,12 +425,9 @@ def test_trip_with_combine_still_goes_to_weighbridge(app, world):
                                 'client_uuid': uuid4()}).get_json()['ok']
     assert toldi(juma, lid)['ok']
     with app.app_context():
-        assert q('SELECT status FROM trailer_loads WHERE id=?', (lid,), one=True)['status'] == 'TOLDI'
-        assert scalar('SELECT COUNT(*) FROM waybills') == 0
-    assert weigh(scale, lid, '4700', '2650')['ok']       # weighbridge or the Nayman point ticket
-    with app.app_context():
-        wb = q('SELECT w.basis, wb.number, wb.net_kg FROM waybills wb JOIN weighings w ON w.load_id=wb.load_id', one=True)
-        assert (wb['basis'], wb['number'], wb['net_kg']) == ('tarozi', 'PA-000001', 2050)
+        wb = q('SELECT w.basis, wb.number, wb.net_kg, wb.status FROM waybills wb JOIN weighings w ON w.load_id=wb.load_id',
+               one=True)
+        assert (wb['basis'], wb['number'], wb['net_kg'], wb['status']) == ('dala', 'PA-000001', 2060, 'YARATILDI')
 
 
 def test_field_sum_waybill_can_be_corrected_with_real_scale(app, world):

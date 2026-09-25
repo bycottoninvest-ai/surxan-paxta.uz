@@ -124,6 +124,48 @@ def _nayman(year, args):
             'rows': rows, 'sum': ['net_kg', 'accepted_kg', 'nayman_diff_kg']}
 
 
+def _stations(year, args):
+    """Field weight vs punkt scale per receiving point (received trips only)."""
+    warn = get_float('punkt_warn_pct', 1) or 0
+    alert = get_float('punkt_alert_pct', 3) or 0
+    rows = []
+    for r in q('''SELECT COALESCE(st.name, '—') station, COUNT(*) trips, SUM(wb.net_kg) field_kg, SUM(nr.accepted_kg) station_kg,
+                         SUM(nr.accepted_kg - wb.net_kg) diff_kg,
+                         SUM(CASE WHEN ABS(nr.accepted_kg - wb.net_kg) * 100.0 / wb.net_kg > ? THEN 1 ELSE 0 END) warn_n,
+                         SUM(CASE WHEN ABS(nr.accepted_kg - wb.net_kg) * 100.0 / wb.net_kg > ? THEN 1 ELSE 0 END) alert_n
+                  FROM waybills wb JOIN trailer_loads tl ON tl.id=wb.load_id JOIN nayman_receipts nr ON nr.waybill_id=wb.id
+                  LEFT JOIN stations st ON st.id=tl.station_id
+                  WHERE wb.season_year=? AND wb.status='QABUL' GROUP BY tl.station_id ORDER BY station''', (warn, alert, year)):
+        d = dict(r)
+        d['diff_pct'] = round(d['diff_kg'] / d['field_kg'] * 100, 2) if d['field_kg'] else None
+        rows.append(d)
+    open_n = q("""SELECT COUNT(*) n, COALESCE(SUM(net_kg),0) kg FROM waybills WHERE season_year=? AND status='YARATILDI'""",
+               (year,), one=True)
+    return {'title': f'Punktlar: daladan va punktda — {year}',
+            'note': f'Yo‘lda / qabulni kutmoqda: {open_n["n"]} ta, {open_n["kg"]:,.0f} kg (bu jadvalga kirmaydi). '
+                    f'Normal ≤ {warn:g}%, diqqat ≤ {alert:g}%, undan katta — katta farq.'.replace(',', ' '),
+            'columns': [('station', 'Punkt', T), ('trips', 'Telashkalar', N), ('field_kg', 'Daladan (kg)', K),
+                        ('station_kg', 'Punktda (kg)', K), ('diff_kg', 'Farq (kg)', K), ('diff_pct', 'Farq %', N),
+                        ('warn_n', 'Diqqat + katta (ta)', N), ('alert_n', 'Katta farq (ta)', N)],
+            'rows': rows, 'sum': ['trips', 'field_kg', 'station_kg', 'diff_kg', 'warn_n', 'alert_n']}
+
+
+def _diff_reasons(year, args):
+    rows = q('''SELECT COALESCE(CASE WHEN instr(nr.diff_reason, ':') > 0 THEN substr(nr.diff_reason, 1, instr(nr.diff_reason, ':') - 1)
+                                     ELSE nr.diff_reason END, 'Sababsiz (normal farq)') reason,
+                       COUNT(*) trips, SUM(nr.accepted_kg - wb.net_kg) diff_kg, SUM(wb.net_kg) field_kg
+                FROM waybills wb JOIN nayman_receipts nr ON nr.waybill_id=wb.id
+                WHERE wb.season_year=? AND wb.status='QABUL' GROUP BY reason ORDER BY diff_kg''', (year,))
+    out = [dict(r) for r in rows]
+    total = sum(r['diff_kg'] for r in out) or 0
+    for r in out:
+        r['share'] = round(r['diff_kg'] / total * 100, 1) if total else None
+    return {'title': f'Farq sabablari — {year}',
+            'columns': [('reason', 'Sabab', T), ('trips', 'Telashkalar', N), ('field_kg', 'Daladan (kg)', K),
+                        ('diff_kg', 'Farq (kg)', K), ('share', 'Umumiy farqdagi ulushi %', N)],
+            'rows': out, 'sum': ['trips', 'field_kg', 'diff_kg']}
+
+
 def _payments(year, args):
     rows = q('''SELECT p.payment_date, p.amount, p.method, p.payer, wb.number, p.note,
                        CASE WHEN p.voided_at IS NOT NULL THEN 'BEKOR: '||p.void_reason ELSE '' END status
@@ -206,6 +248,8 @@ REPORTS = {
     'dalalar': ('Dala va hosildorlik', 'map', _fields, 'reports.view'),
     'telashkalar': ('Telashkalar bo‘yicha', 'trailer', _trailers, 'reports.view'),
     'nayman': ('Nayman sverka', 'factory', _nayman, 'reports.view'),
+    'punktlar': ('Punktlar: dala va punkt farqi', 'building', _stations, 'reports.view'),
+    'farq-sabablari': ('Farq sabablari', 'alert', _diff_reasons, 'reports.view'),
     'tolovlar': ('To‘lovlar hisoboti', 'wallet', _payments, 'reports.finance'),
     'xarajatlar': ('Xarajatlar hisoboti', 'receipt', _expenses, 'reports.finance'),
     'kassa': ('Kassa hisoboti', 'cash', _cash, 'reports.finance'),

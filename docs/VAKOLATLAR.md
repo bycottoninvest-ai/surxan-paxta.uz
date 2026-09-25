@@ -2,39 +2,43 @@
 
 Jadval koddagi `surxon/security.py` dan avtomatik yaratilgan. Tekshiruv server tomonida, xizmat qatlamida bajariladi: web, telefon va Telegram bot uchun bir xil. Menyuni yashirish himoya hisoblanmaydi — ruxsatsiz so‘rov 403 yoki xato bilan qaytadi.
 
+**Punkt operatori cheklovi:** punkt operatori (masalan Yunus) bitta punktga bog‘lanadi. U faqat o‘z punktiga jo‘natilgan telashkalarni ko‘radi va qabul qiladi; boshqa barcha sahifalar (terim, kassa, admin, hisobotlar, qidiruv) server tomonida yopiq — so‘rov punkt ekraniga qaytariladi yoki 403 bo‘ladi.
+
 **Brigadir cheklovi:** brigadir foydalanuvchisi bitta brigadaga bog‘lanadi. U faqat o‘z brigadasiga biriktirilgan dalalarda reys ochadi, terim yozadi, TOLDI qiladi, rasm va hisobotlarni ko‘radi. Boshqa brigadaning reysi va rasmi unga 403 qaytaradi.
 
-| Vakolat | Admin | Rahbar | Brigadir | Tarozi xodimi | Buxgalter | Kassa | Hisobchi (terim) | Haydovchi |
-|---|---|---|---|---|---|---|---|---|
-| Bosh sahifa va umumiy ko‘rsatkichlar (`dashboard`) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Terim (kg) kiritish, o‘z yozuvini bekor qilish (`harvest.write`) | ✅ | ✅ | ✅ | — | — | — | ✅ | — |
-| Telashka reysini ochish (`load.open`) | ✅ | ✅ | ✅ | — | — | — | ✅ | — |
-| TOLDI (rasm bilan) qilish (`load.full`) | ✅ | ✅ | ✅ | — | — | — | ✅ | ✅ |
-| Xato TOLDI ni qayta ochish (sabab bilan) (`load.reopen`) | ✅ | ✅ | — | — | — | — | — | — |
-| Ishchi qo‘shish/tahrirlash (`workers.write`) | ✅ | ✅ | ✅ | ✅ | — | — | ✅ | — |
-| Tarozi: brutto va tara kiritish (`weigh.write`) | ✅ | ✅ | — | ✅ | — | — | — | — |
-| Tortishni tuzatish (sabab, audit) (`weigh.correct`) | ✅ | ✅ | — | — | — | — | — | — |
-| Nakladnoylarni ko‘rish (`waybill.view`) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | — | ✅ |
-| Nakladnoyni bekor qilish (`waybill.void`) | ✅ | ✅ | — | — | — | — | — | — |
-| Nayman qabulini kiritish (`nayman.write`) | ✅ | ✅ | — | — | ✅ | — | — | — |
-| To‘lovlarni ko‘rish (`payments.view`) | ✅ | ✅ | — | — | ✅ | ✅ | — | — |
-| To‘lov kiritish/bekor qilish (`payments.write`) | ✅ | ✅ | — | — | ✅ | ✅ | — | — |
-| Kassani ko‘rish (`cash.view`) | ✅ | ✅ | — | — | ✅ | ✅ | — | — |
-| Kassa kirim/chiqim (`cash.write`) | ✅ | — | — | — | ✅ | ✅ | — | — |
-| Xarajat kiritish (`expenses.write`) | ✅ | ✅ | — | — | ✅ | ✅ | — | — |
-| Ishchilar hisob-kitobi (`settlement.view`) | ✅ | ✅ | — | — | ✅ | ✅ | ✅ | — |
-| Ishlab chiqarish hisobotlari (`reports.view`) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | — |
-| Moliyaviy hisobotlar (`reports.finance`) | ✅ | ✅ | — | — | ✅ | ✅ | — | — |
-| Foto arxivni ko‘rish (`photos.view`) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Rasm yuklash (`photos.upload`) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Rasmni yashirish (`photos.void`) | ✅ | ✅ | — | — | — | — | — | — |
-| Reysni bekor qilish (`records.void`) | ✅ | ✅ | — | — | — | — | — | — |
-| Dala, texnika, brigada (`masterdata.write`) | ✅ | ✅ | — | — | — | — | — | — |
-| Audit tarixi (`audit.view`) | ✅ | ✅ | — | — | ✅ | — | — | — |
-| Loginlar (`users.manage`) | ✅ | — | — | — | — | — | — | — |
-| Sozlamalar va integratsiyalar (ERP, TV) (`settings.manage`) | ✅ | — | — | — | — | — | — | — |
-| Mavsumni yopish/ochish (`seasons.manage`) | ✅ | — | — | — | — | — | — | — |
-| Zaxira nusxalar (`backup.manage`) | ✅ | — | — | — | — | — | — | — |
+| Vakolat | Admin | Rahbar | Brigadir | Tarozi xodimi | Buxgalter | Kassa | Hisobchi (terim) | Haydovchi | Punkt operatori |
+|---|---|---|---|---|---|---|---|---|---|
+| Bosh sahifa va umumiy ko‘rsatkichlar (`dashboard`) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | — |
+| Punkt ekrani: yo‘ldagi va kelgan yuklarni ko‘rish (`station.view`) | ✅ | ✅ | — | — | ✅ | — | — | — | ✅ |
+| Punktda KELDI, punkt tarozisi va QABUL QILINDI (`station.receive`) | ✅ | ✅ | — | — | — | — | — | — | ✅ |
+| Terim (kg) kiritish, o‘z yozuvini bekor qilish (`harvest.write`) | ✅ | ✅ | ✅ | — | — | — | ✅ | — | — |
+| Telashka reysini ochish (`load.open`) | ✅ | ✅ | ✅ | — | — | — | ✅ | — | — |
+| TOLDI (rasm bilan) qilish (`load.full`) | ✅ | ✅ | ✅ | — | — | — | ✅ | ✅ | — |
+| Xato TOLDI ni qayta ochish (sabab bilan) (`load.reopen`) | ✅ | ✅ | — | — | — | — | — | — | — |
+| Ishchi qo‘shish/tahrirlash (`workers.write`) | ✅ | ✅ | ✅ | ✅ | — | — | ✅ | — | — |
+| Tarozi: brutto va tara kiritish (`weigh.write`) | ✅ | ✅ | — | ✅ | — | — | — | — | — |
+| Tortishni tuzatish (sabab, audit) (`weigh.correct`) | ✅ | ✅ | — | — | — | — | — | — | — |
+| Nakladnoylarni ko‘rish (`waybill.view`) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | — | ✅ | — |
+| Nakladnoyni bekor qilish (`waybill.void`) | ✅ | ✅ | — | — | — | — | — | — | — |
+| Nayman qabulini kiritish (`nayman.write`) | ✅ | ✅ | — | — | ✅ | — | — | — | — |
+| To‘lovlarni ko‘rish (`payments.view`) | ✅ | ✅ | — | — | ✅ | ✅ | — | — | — |
+| To‘lov kiritish/bekor qilish (`payments.write`) | ✅ | ✅ | — | — | ✅ | ✅ | — | — | — |
+| Kassani ko‘rish (`cash.view`) | ✅ | ✅ | — | — | ✅ | ✅ | — | — | — |
+| Kassa kirim/chiqim (`cash.write`) | ✅ | — | — | — | ✅ | ✅ | — | — | — |
+| Xarajat kiritish (`expenses.write`) | ✅ | ✅ | — | — | ✅ | ✅ | — | — | — |
+| Ishchilar hisob-kitobi (`settlement.view`) | ✅ | ✅ | — | — | ✅ | ✅ | ✅ | — | — |
+| Ishlab chiqarish hisobotlari (`reports.view`) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | — | — |
+| Moliyaviy hisobotlar (`reports.finance`) | ✅ | ✅ | — | — | ✅ | ✅ | — | — | — |
+| Foto arxivni ko‘rish (`photos.view`) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | — |
+| Rasm yuklash (`photos.upload`) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | — |
+| Rasmni yashirish (`photos.void`) | ✅ | ✅ | — | — | — | — | — | — | — |
+| Reysni bekor qilish (`records.void`) | ✅ | ✅ | — | — | — | — | — | — | — |
+| Dala, texnika, brigada (`masterdata.write`) | ✅ | ✅ | — | — | — | — | — | — | — |
+| Audit tarixi (`audit.view`) | ✅ | ✅ | — | — | ✅ | — | — | — | — |
+| Loginlar (`users.manage`) | ✅ | — | — | — | — | — | — | — | — |
+| Sozlamalar va integratsiyalar (ERP, TV) (`settings.manage`) | ✅ | — | — | — | — | — | — | — | — |
+| Mavsumni yopish/ochish (`seasons.manage`) | ✅ | — | — | — | — | — | — | — | — |
+| Zaxira nusxalar (`backup.manage`) | ✅ | — | — | — | — | — | — | — | — |
 
 ## Rollar bo‘yicha birinchi ekran (telefon)
 
@@ -44,6 +48,7 @@ Jadval koddagi `surxon/security.py` dan avtomatik yaratilgan. Tekshiruv server t
 | Haydovchi | Ochiq telashkalar | TOLDI + rasm · Rasm |
 | Tarozi xodimi | Navbatdagi telashkalar, bugungi netto | Tarozi navbati · Bugungi nakladnoylar · Rasm |
 | Buxgalter | Qabul kutayotgan yuk, Naymandan qarz, tushum, xarajat | Nayman qabuli · To‘lov · Xarajat · Hisobotlar |
+| Punkt operatori | Yo‘lda / Keldi / Bugun qabul, QR skaner, raqam orqali topish | Punkt · Tarix · QR · Parol |
 | Kassa (Asadbek) | Kassa qoldig‘i, bugungi kirim/chiqim | Kassa · Ishchilar hisobi · Xarajat · To‘lovlar |
 | Rahbar / Admin | Terim, netto, jo‘natilgan, qabul, qarz, kassa, telashkalar | To‘liq dashboard · Telashkalar · Nakladnoylar · Hisobotlar |
 

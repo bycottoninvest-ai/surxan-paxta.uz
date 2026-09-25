@@ -1,0 +1,113 @@
+{% extends 'base.html' %}
+{% from 'macros.html' import icon, empty with context %}
+{% set page_title = wb.trip_no %}
+{% block content %}
+<div class="row mb"><a class="btn btn-ghost btn-sm" href="{{ url_for('punkt.home') }}">{{ icon('chev-left','sm') }} Punkt</a><span class="spacer"></span>
+  {% if state == 'YOLDA' %}<span class="badge b-blue p-state">🚜 YO‘LDA</span>{% elif state == 'KELDI' %}<span class="badge b-orange p-state">📥 KELDI</span>{% else %}<span class="badge b-green p-state">✅ QABUL QILINDI</span>{% endif %}</div>
+
+<section class="card p-head">
+  <div class="card-b">
+    <div class="tiny muted">Telashka</div>
+    <div class="p-trip-no">{{ wb.trip_no }}</div>
+    <dl class="kv p-kv">
+      <dt>Dala</dt><dd>{{ wb.field_code }} · {{ wb.field_name }}</dd>
+      <dt>Brigada</dt><dd>{{ wb.brigadier_name }}</dd>
+      <dt>Transport</dt><dd>{{ wb.tractor_code or '—' }}{{ ' · ' ~ wb.vehicle_plate if wb.vehicle_plate }}{{ ' · ' ~ wb.driver_name if wb.driver_name }}</dd>
+      <dt>Jo‘nadi</dt><dd>{{ wb.sent_at|d }}</dd>
+      <dt>Punkt</dt><dd>{{ wb.station_name or wb.destination }}</dd>
+      <dt>Nakladnoy</dt><dd>{{ wb.number }} · {{ wb.workers_count }} ishchi</dd>
+      {% if wb.arrived_at %}<dt>Keldi</dt><dd>{{ wb.arrived_at|d }}</dd>{% endif %}
+    </dl>
+    <div class="p-field-kg"><span>Daladagi vazn</span><b class="num">{{ wb.net_kg|num }} kg</b></div>
+  </div>
+</section>
+
+{% if state == 'QABUL' %}
+  {% set lv = level[2] %}
+  <section class="card p-done">
+    <div class="card-b center">
+      <div class="p-ok">{{ icon('check-circle','xl') }}</div>
+      <h2 style="margin:6px 0 12px">Qabul qilindi!</h2>
+      <div class="p-cmp">
+        <div><span>Daladan</span><b class="num">{{ wb.net_kg|num }} kg</b></div>
+        <div><span>Punktda</span><b class="num">{{ wb.accepted_kg|num }} kg</b></div>
+        <div class="lv-{{ lv }}"><span>Farq</span><b class="num">{{ '%+.0f'|format(level[0]) }} kg ({{ '%+.2f'|format(level[1]) }}%)</b></div>
+      </div>
+      {% if wb.nayman_diff_reason %}<div class="mt-s">Sabab: <b>{{ wb.nayman_diff_reason }}</b></div>{% endif %}
+      <div class="small muted mt-s">{{ wb.receiver_name or '' }} · {{ wb.received_at|d }}</div>
+    </div>
+  </section>
+{% elif can('station.receive') %}
+  {% if state == 'YOLDA' %}
+  <form method="post" action="{{ url_for('punkt.arrived', waybill_id=wb.id) }}" class="mb">
+    <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+    <button class="btn btn-light btn-block btn-xl">📥 KELDI <small>(yuk punktga yetib keldi)</small></button>
+  </form>
+  {% endif %}
+  <section class="card">
+    <div class="card-h"><h3>{{ icon('scale') }} Punkt tarozisi</h3></div>
+    <form class="card-b form" method="post" action="{{ url_for('punkt.receive', waybill_id=wb.id) }}" enctype="multipart/form-data"
+          data-offline="Qabul {{ wb.trip_no }}" id="recv" data-confirm="{{ wb.trip_no }} qabul qilinsinmi?">
+      <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+      <div class="f">
+        <label>Punkt tarozisidagi vazn (kg) <span class="req">*</span></label>
+        <div class="row"><input name="station_kg" id="st-kg" class="big p-kg-input" inputmode="decimal" autocomplete="off" required placeholder="0">
+        {% if scale.connected %}<button type="button" class="btn btn-light" id="scale-read">{{ icon('download','sm') }} Tarozidan</button>{% endif %}</div>
+      </div>
+      <div class="p-cmp" id="cmp" hidden>
+        <div><span>Daladan</span><b class="num">{{ wb.net_kg|num }} kg</b></div>
+        <div><span>Punktda</span><b class="num" data-st>—</b></div>
+        <div data-box><span>Farq</span><b class="num" data-diff>—</b><em data-lv></em></div>
+      </div>
+      <div class="f" id="reasons" hidden>
+        <label>Farq sababi <span class="req">*</span></label>
+        <div class="p-reasons">{% for r in reasons %}<label><input type="radio" name="reason" value="{{ r }}"><span>{{ r }}</span></label>{% endfor %}</div>
+      </div>
+      <div class="f" id="note-box" hidden><label>Izoh</label><input name="note" placeholder="Qisqa izoh"></div>
+      <div class="f"><label>Tarozi rasmi (ixtiyoriy)</label><label class="file-drop" style="padding:10px"><input type="file" name="photo" accept="image/*" capture="environment" data-preview>{{ icon('camera') }} Rasmga olish<div class="previews"></div></label></div>
+      <div class="f"><button class="btn btn-green btn-block btn-xl">✅ QABUL QILINDI</button></div>
+    </form>
+  </section>
+{% endif %}
+
+<section class="card">
+  <div class="card-h"><h3>{{ icon('history') }} Telashka tarixi</h3></div>
+  <div class="card-b"><ul class="timeline">
+    {% for a in timeline %}<li><span class="dot">{{ icon('check') }}</span><b>{{ event_text.get((a.action, a.entity_type), a.action) }}</b><span>{{ a.created_at|d }} · {{ a.full_name or 'tizim' }}{% if a.reason %} · {{ a.reason }}{% endif %}</span></li>
+    {% else %}<li>{{ empty('Tarix yo‘q') }}</li>{% endfor %}
+  </ul></div>
+</section>
+{% endblock %}
+{% block scripts %}
+{% if state != 'QABUL' %}
+<script>
+(() => {
+  const field = {{ wb.net_kg|tojson }}, warn = {{ warn|tojson }}, alert = {{ alert|tojson }};
+  const inp = document.getElementById('st-kg'), cmp = document.getElementById('cmp'), box = cmp.querySelector('[data-box]');
+  const reasons = document.getElementById('reasons'), noteBox = document.getElementById('note-box');
+  const fmt = n => Math.round(n).toLocaleString('ru-RU');
+  function calc() {
+    const v = parseFloat((inp.value || '').replace(/\s/g, '').replace(',', '.'));
+    if (!(v > 0)) { cmp.hidden = true; reasons.hidden = true; return; }
+    const diff = Math.round((v - field) * 10) / 10, pct = field ? diff / field * 100 : 0;
+    const lv = Math.abs(pct) <= warn ? 'ok' : (Math.abs(pct) <= alert ? 'warn' : 'alert');
+    cmp.hidden = false;
+    cmp.querySelector('[data-st]').textContent = fmt(v) + ' kg';
+    cmp.querySelector('[data-diff]').textContent = (diff > 0 ? '+' : '') + fmt(diff) + ' kg (' + (pct > 0 ? '+' : '') + pct.toFixed(2) + '%)';
+    cmp.querySelector('[data-lv]').textContent = {ok: 'Normal', warn: 'Diqqat', alert: 'Katta farq!'}[lv];
+    box.className = 'lv-' + lv;
+    reasons.hidden = lv === 'ok';
+    reasons.querySelectorAll('input').forEach(r => r.required = lv !== 'ok');
+  }
+  inp.addEventListener('input', calc);
+  reasons.addEventListener('change', e => { noteBox.hidden = e.target.value !== 'Boshqa'; noteBox.querySelector('input').required = e.target.value === 'Boshqa'; });
+  const sb = document.getElementById('scale-read');
+  if (sb) sb.addEventListener('click', async () => {
+    const r = await fetch({{ url_for('punkt.scale_read')|tojson }}, {headers: {'X-Requested-With': 'fetch'}});
+    const d = await r.json();
+    if (d.ok && d.kg) { inp.value = d.kg; calc(); } else { alert(d.error || 'Tarozidan o‘qib bo‘lmadi'); }
+  });
+})();
+</script>
+{% endif %}
+{% endblock %}

@@ -28,6 +28,7 @@ def _choices():
         'tractors': q("SELECT * FROM equipment WHERE kind='traktor' AND active=1 ORDER BY code"),
         'trailers': q("SELECT * FROM equipment WHERE kind='telashka' AND active=1 ORDER BY code"),
         'combines': q("SELECT * FROM equipment WHERE kind='kombayn' AND active=1 ORDER BY code"),
+        'stations': q('SELECT * FROM stations WHERE active=1 ORDER BY id'),
     }
 
 
@@ -121,8 +122,11 @@ def load_open():
                     brigadier_id=parse_int(request.form.get('brigadier_id'), 'Brigadir', required=False) or scope(),
                     tractor_id=parse_int(request.form.get('tractor_id'), 'Traktor', required=False),
                     vehicle_plate=request.form.get('vehicle_plate', ''), driver_name=request.form.get('driver_name', ''),
-                    note=request.form.get('note', ''), client_uuid=form_uuid())
-    return done('Telashka ochildi. Endi terim kiritishingiz mumkin.', url_for('ops.harvest', load=lid), load_id=lid)
+                    note=request.form.get('note', ''), client_uuid=form_uuid(),
+                    station_id=parse_int(request.form.get('station_id'), 'Punkt', required=False))
+    trip = q('SELECT trip_no FROM trailer_loads WHERE id=?', (lid,), one=True)['trip_no']
+    return done(f'Telashka ochildi: {trip}. Endi odamlarni torting.', url_for('ops.harvest', load=lid), load_id=lid,
+                trip_no=trip)
 
 
 @bp.get('/yuk/<int:load_id>')
@@ -155,11 +159,14 @@ def load_full(load_id):
     ld = queries.load(load_id)
     if res.get('waybill_id'):
         after_waybill_change(actor, res['waybill_id'], 'yaratildi')
-        notify_async(f'📄 {res["number"]} · {ld["trailer_code"]} tugatildi · {ld["field_name"]} · {ld["brigadier_name"]}\n'
-                     f'Qo‘l terimi (dala tarozisi): {res["net_kg"]:,.0f} kg'.replace(',', ' '),
-                     roles=('admin', 'manager', 'accountant'))
-        return done(f'Tugatildi. Nakladnoy {res["number"]} chiqdi: {res["net_kg"]:g} kg (dala tarozisi yig‘indisi).',
-                    url_for('ops.waybill_detail', waybill_id=res['waybill_id']))
+        notify_async(f'🚜 Yangi yuk yo‘lda\n{ld["trip_no"]} · {ld["field_name"]} · {ld["brigadier_name"]}\n'
+                     f'{res["net_kg"]:,.0f} kg · {ld["tractor_code"] or ld["trailer_code"]} · jo‘nadi {(ld["full_at"] or "")[11:16]}\n'
+                     f'📄 {res["number"]} → {ld["station_name"] or "punkt"}'.replace(',', ' '),
+                     roles=('admin', 'manager'), station_id=ld['station_id'])
+        target = (url_for('ops.waybill_detail', waybill_id=res['waybill_id']) if can('waybill.view')
+                  else url_for('ops.load_detail', load_id=load_id))
+        return done(f'Tugatildi: {ld["trip_no"]} · {res["net_kg"]:g} kg. PUNKTGA YO‘LDA. Nakladnoy {res["number"]} tayyor.',
+                    target, trip_no=ld['trip_no'], waybill_id=res['waybill_id'])
     notify_async(f'🚛 {ld["trailer_code"]} TOLDI · {ld["field_name"]} · {ld["brigadier_name"]}\n'
                  f'Ichki hisob: {res["internal_kg"]:,.0f} kg'.replace(',', ' '), roles=('admin', 'manager', 'scale'))
     return done(f'Tugatildi. Ichki hisob: {res["internal_kg"]:g} kg. Kombayn paxtasi bor — katta tarozi yoki '

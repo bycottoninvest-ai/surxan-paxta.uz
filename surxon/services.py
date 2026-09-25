@@ -10,7 +10,7 @@ from datetime import date, timedelta
 
 from werkzeug.security import generate_password_hash
 
-from .db import next_counter, tx
+from .db import next_counter, trip_number, tx
 from .outbox import enqueue
 from .photos import store_photo
 from .security import ROLES, audit
@@ -85,6 +85,16 @@ def _field(db, fid):
     if not row:
         raise UserError('Dala topilmadi yoki faol emas.')
     return row
+
+
+def _station(db, sid):
+    """The chosen receiving point, or the first active one (None only if no punkt exists yet)."""
+    if sid:
+        row = db.execute('SELECT * FROM stations WHERE id=? AND active=1', (sid,)).fetchone()
+        if not row:
+            raise UserError('Punkt topilmadi yoki faol emas.')
+        return row
+    return db.execute('SELECT * FROM stations WHERE active=1 ORDER BY id LIMIT 1').fetchone()
 
 
 def _brigadier(db, bid):
@@ -176,7 +186,7 @@ def update_worker(actor, worker_id, full_name, phone, active, photo=None):
 # ------------------------------------------------------------------ trailer loads
 
 def open_load(actor, *, trailer_id, field_id, brigadier_id, tractor_id=None, vehicle_plate='', driver_name='',
-              note='', client_uuid=None, load_date=None):
+              note='', client_uuid=None, load_date=None, station_id=None):
     _need(actor, 'load.open')
     with tx() as db:
         if client_uuid:
@@ -200,15 +210,18 @@ def open_load(actor, *, trailer_id, field_id, brigadier_id, tractor_id=None, veh
         if busy:
             raise UserError(f'{trailer["code"]} telashkada tugallanmagan yuk bor (№{busy["id"]}, {busy["status"]}). '
                             'Avval u tortilishi kerak.')
+        station = _station(db, station_id)
+        trip_no = trip_number(db, season)          # server-side, inside this transaction: never duplicated
         cur = db.execute(
             '''INSERT INTO trailer_loads(season_year, load_date, trailer_id, tractor_id, field_id, brigadier_id,
-                   vehicle_plate, driver_name, status, note, client_uuid, opened_by, opened_at)
-               VALUES (?,?,?,?,?,?,?,?, 'OCHIQ', ?,?,?,?)''',
+                   vehicle_plate, driver_name, status, note, client_uuid, opened_by, opened_at, trip_no, station_id)
+               VALUES (?,?,?,?,?,?,?,?, 'OCHIQ', ?,?,?,?,?,?)''',
             (season, load_date or today_str(), trailer_id, tractor_id or None, field_id, brigadier_id,
              clean_text(vehicle_plate, 30), clean_text(driver_name, 80), clean_text(note), client_uuid,
-             actor.user_id, now_str()))
+             actor.user_id, now_str(), trip_no, station['id'] if station else None))
         audit(db, actor, 'OPEN', 'trailer_load', cur.lastrowid,
-              new={'trailer': trailer['code'], 'field_id': field_id, 'brigadier_id': brigadier_id, 'tractor_id': tractor_id})
+              new={'trip_no': trip_no, 'trailer': trailer['code'], 'field_id': field_id, 'brigadier_id': brigadier_id,
+                   'tractor_id': tractor_id, 'station': station['name'] if station else None})
         return cur.lastrowid
 
 
@@ -334,7 +347,8 @@ def mark_full(actor, load_id, note='', photos=None, source='web'):
             wb = db.execute("SELECT wb.id, wb.number FROM waybills wb JOIN weighings w ON w.load_id=wb.load_id "
                             "WHERE wb.load_id=? AND w.basis='dala'", (load_id,)).fetchone()
             if wb:
-                return {'already': True, 'internal_kg': load['internal_kg'], 'waybill_id': wb['id'], 'number': wb['number']}
+                return {'already': True, 'internal_kg': load['internal_kg'], 'waybill_id': wb['id'], 'number': wb['number'],
+                        'trip_no': load['trip_no']}
         if load['status'] != 'OCHIQ':
             raise UserError('Bu yuk allaqachon tortilgan yoki bekor qilingan.')
         _check_scope(actor, load['brigadier_id'])
@@ -349,25 +363,31 @@ def mark_full(actor, load_id, note='', photos=None, source='web'):
                           (load_id,)).fetchone()[0]
         if have < need:
             raise UserError(f'TOLDI uchun kamida {need} ta rasm kerak (telashka/paxta). Hozir: {have} ta.')
+        live = db.execute('SELECT COUNT(*) FROM harvests WHERE load_id=? AND voided_at IS NULL', (load_id,)).fetchone()[0]
+        if not live:
+            raise UserError('Bu telashkada hali birorta terim yozilmagan — bo‘sh telashkani tugatib bo‘lmaydi.')
         hand, comb = _snapshot_load(db, load_id)
         db.execute("UPDATE trailer_loads SET status='TOLDI', full_by=?, full_at=?, note=COALESCE(NULLIF(?,''), note) WHERE id=?",
                    (actor.user_id, now_str(), clean_text(note), load_id))
         audit(db, actor, 'TOLDI', 'trailer_load', load_id, old={'status': 'OCHIQ'},
               new={'status': 'TOLDI', 'hand_kg': hand, 'combine_kg': comb, 'internal_kg': hand + comb})
         res = {'already': False, 'internal_kg': hand + comb, 'hand_kg': hand, 'combine_kg': comb, 'waybill_id': None}
-        if hand > 0 and not comb and get_bool('auto_waybill_hand', db):
-            # Hand-only trip: every kg was already weighed on the field scale, so the trip closes here and the
-            # waybill carries that sum. Trips with combine cotton still go to the weighbridge / Nayman point.
+        field_kg = round(hand + comb, 1)
+        if field_kg > 0 and get_bool('auto_waybill_hand', db):
+            # "TUGATISH": the trip is locked, the waybill carries the field weight (every hand kg weighed per person;
+            # combine kg as entered) and the trip is on its way to the receiving point, where it is weighed again.
             ts = now_str()
             cur = db.execute('''INSERT INTO weighings(load_id, gross_kg, gross_at, gross_by, tare_kg, tare_at, tare_by, net_kg,
                                     internal_kg, diff_kg, status, created_at, basis)
                                 VALUES (?,?,?,?,0,?,?,?,?,0,'YAKUNLANDI',?,'dala')''',
-                             (load_id, hand, ts, actor.user_id, ts, actor.user_id, hand, hand, ts))
+                             (load_id, field_kg, ts, actor.user_id, ts, actor.user_id, field_kg, field_kg, ts))
             db.execute("UPDATE trailer_loads SET status='TORTILDI', weighed_at=? WHERE id=?", (ts, load_id))
             audit(db, actor, 'FIELD_SUM', 'weighing', cur.lastrowid,
-                  new={'load_id': load_id, 'net_kg': hand, 'basis': 'dala'})
-            res['waybill_id'], res['number'] = _issue_waybill(db, actor, load_row(db, load_id), hand)
-            res['net_kg'] = hand
+                  new={'load_id': load_id, 'trip_no': load['trip_no'], 'net_kg': field_kg, 'basis': 'dala',
+                       'status': 'PUNKTGA YO‘LDA'})
+            res['waybill_id'], res['number'] = _issue_waybill(db, actor, load_row(db, load_id), field_kg)
+            res['net_kg'] = field_kg
+        res['trip_no'] = load['trip_no']
         return res
 
 
@@ -484,11 +504,13 @@ def _issue_waybill(db, actor, load, net):
     seq = next_counter(db, 'waybill')
     number = f'{WAYBILL_PREFIX}{seq:06d}'
     price = get_float('price_per_kg', None, db)
+    station = db.execute('SELECT name FROM stations WHERE id=?', (load['station_id'],)).fetchone() if load['station_id'] else None
     cur = db.execute('''INSERT INTO waybills(seq, number, season_year, load_id, net_kg, document_date, destination,
                             price_per_kg, status, created_by, created_at)
                         VALUES (?,?,?,?,?,?,?,?, 'YARATILDI', ?,?)''',
                      (seq, number, load['season_year'], load['id'], net, today_str(),
-                      get_setting('destination_name', db), int(price) if price else None, actor.user_id, now_str()))
+                      station['name'] if station else get_setting('destination_name', db),
+                      int(price) if price else None, actor.user_id, now_str()))
     db.execute('UPDATE photos SET waybill_id=? WHERE load_id=?', (cur.lastrowid, load['id']))
     audit(db, actor, 'CREATE', 'waybill', cur.lastrowid, new={'number': number, 'load_id': load['id'], 'net_kg': net})
     _sheet_waybill(db, cur.lastrowid, 'yaratildi')
@@ -603,6 +625,113 @@ def record_nayman(actor, waybill_id, *, accepted_kg, received_date, receiver_nam
                         links={'season_year': wb['season_year'], 'load_id': wb['load_id'], 'waybill_id': waybill_id,
                                'field_id': load['field_id'], 'brigadier_id': load['brigadier_id']})
         return rid, diff
+
+
+# ------------------------------------------------------------------ receiving point (punkt)
+
+STATION_DIFF_REASONS = ['Namlik kamaygan', 'Musur / begona aralashma', 'Yo‘lda to‘kilgan / yo‘qotish', 'Tarozi farqi',
+                        'Qayta tortildi', 'Kombayn (dalada taxminiy kg)', 'Boshqa']
+
+
+def _station_trip(db, actor, waybill_id):
+    wb = db.execute('''SELECT wb.*, tl.station_id, tl.trip_no, tl.field_id, tl.brigadier_id FROM waybills wb
+                       JOIN trailer_loads tl ON tl.id=wb.load_id WHERE wb.id=?''', (waybill_id,)).fetchone()
+    if not wb or wb['status'] == 'BEKOR':
+        raise UserError('Yuk topilmadi yoki nakladnoy bekor qilingan.')
+    if actor.role == 'station' and (not actor.station_id or wb['station_id'] != actor.station_id):
+        raise UserError('Bu yuk sizning punktingizga jo‘natilmagan.')
+    return wb
+
+
+def diff_level(field_kg, station_kg, db=None):
+    """(diff_kg, diff_pct, level): level is ok / warn / alert by the punkt thresholds."""
+    diff = round(station_kg - field_kg, 1)
+    pct = round(diff / field_kg * 100, 2) if field_kg else 0.0
+    warn = get_float('punkt_warn_pct', 1, db) or 0
+    alert = get_float('punkt_alert_pct', 3, db) or 0
+    level = 'ok' if abs(pct) <= warn else ('warn' if abs(pct) <= alert else 'alert')
+    return diff, pct, level
+
+
+def mark_arrived(actor, waybill_id):
+    """KELDI: the trailer reached the punkt (idempotent)."""
+    _need(actor, 'station.receive')
+    with tx() as db:
+        wb = _station_trip(db, actor, waybill_id)
+        if wb['arrived_at']:
+            return False
+        db.execute('UPDATE waybills SET arrived_at=?, arrived_by=? WHERE id=?', (now_str(), actor.user_id, waybill_id))
+        audit(db, actor, 'ARRIVED', 'waybill', waybill_id, new={'trip_no': wb['trip_no'], 'status': 'KELDI'})
+        return True
+
+
+def receive_at_station(actor, waybill_id, *, station_kg, reason='', note='', photo=None):
+    """Punkt scale weight → difference → QABUL QILINDI. A second tap never makes a second receipt."""
+    _need(actor, 'station.receive')
+    with tx() as db:
+        wb = _station_trip(db, actor, waybill_id)
+        existing = db.execute('SELECT * FROM nayman_receipts WHERE waybill_id=?', (waybill_id,)).fetchone()
+        if existing:
+            return {'already': True, 'receipt_id': existing['id'], 'diff_kg': existing['diff_kg'],
+                    'station_kg': existing['accepted_kg']}
+        assert_season_open(db, wb['season_year'])
+        max_g = get_float('max_gross_kg', 40000, db)
+        if station_kg is None or station_kg <= 0 or station_kg > max_g:
+            raise UserError(f'Punkt tarozisi kg 0 va {max_g:g} oralig‘ida bo‘lishi kerak.')
+        if station_kg > wb['net_kg'] * 1.5:
+            raise UserError(f'Punkt vazni ({station_kg:g} kg) daladagidan ({wb["net_kg"]:g} kg) juda katta. Tekshiring.')
+        diff, pct, level = diff_level(wb['net_kg'], station_kg, db)
+        reason = clean_text(reason, 60)
+        note = clean_text(note, 300)
+        if level != 'ok':
+            if reason not in STATION_DIFF_REASONS:
+                raise UserError(f'Farq {diff:+g} kg ({pct:+.2f}%). Farq sababini tanlang.')
+            if reason == 'Boshqa' and len(note) < 3:
+                raise UserError('“Boshqa” tanlansa, sababni qisqa yozing.')
+        full_reason = (f'{reason}: {note}' if reason and note else reason or note) or None
+        ts = now_str()
+        if not wb['arrived_at']:
+            db.execute('UPDATE waybills SET arrived_at=?, arrived_by=? WHERE id=?', (ts, actor.user_id, waybill_id))
+        station = db.execute('SELECT name FROM stations WHERE id=?', (wb['station_id'],)).fetchone()
+        cur = db.execute('''INSERT INTO nayman_receipts(accepted_kg, diff_kg, diff_reason, received_date, receiver_name,
+                                note, waybill_id, created_by, created_at) VALUES (?,?,?,?,?,?,?,?,?)''',
+                         (station_kg, diff, full_reason, today_str(),
+                          clean_text(f'{actor.name} ({station["name"]})' if station else actor.name, 80),
+                          note or None, waybill_id, actor.user_id, ts))
+        db.execute("UPDATE waybills SET status='QABUL', updated_at=? WHERE id=?", (ts, waybill_id))
+        audit(db, actor, 'RECEIVE', 'waybill', waybill_id,
+              new={'trip_no': wb['trip_no'], 'field_kg': wb['net_kg'], 'station_kg': station_kg, 'diff_kg': diff,
+                   'diff_pct': pct, 'level': level, 'reason': full_reason, 'status': 'QABUL QILINDI'})
+        if photo:
+            store_photo(db, actor, photo, category='nayman', entity_type='nayman_receipt', entity_id=cur.lastrowid,
+                        caption=f'Punkt tarozisi {wb["trip_no"]}: {station_kg:g} kg',
+                        links={'season_year': wb['season_year'], 'load_id': wb['load_id'], 'waybill_id': waybill_id,
+                               'field_id': wb['field_id'], 'brigadier_id': wb['brigadier_id']})
+        _sheet_waybill(db, waybill_id, 'punktda qabul qilindi')
+        return {'already': False, 'receipt_id': cur.lastrowid, 'diff_kg': diff, 'diff_pct': pct, 'level': level,
+                'station_kg': station_kg}
+
+
+def save_station(actor, sid, *, name, address='', active=True):
+    _need(actor, 'masterdata.write')
+    import sqlite3
+    name = clean_text(name, 60)
+    if len(name) < 2:
+        raise UserError('Punkt nomi kiritilishi shart.')
+    with tx() as db:
+        try:
+            if sid:
+                old = db.execute('SELECT * FROM stations WHERE id=?', (sid,)).fetchone()
+                db.execute('UPDATE stations SET name=?, address=?, active=? WHERE id=?',
+                           (name, clean_text(address, 200), 1 if active else 0, sid))
+                audit(db, actor, 'UPDATE', 'station', sid, old=row_dict(old), new={'name': name, 'active': bool(active)})
+                return sid
+            cur = db.execute('INSERT INTO stations(name, address, created_at) VALUES (?,?,?)',
+                             (name, clean_text(address, 200), now_str()))
+            audit(db, actor, 'CREATE', 'station', cur.lastrowid, new={'name': name})
+            return cur.lastrowid
+        except sqlite3.IntegrityError as e:
+            _unique_error(e, 'Bu punkt')
 
 
 # ------------------------------------------------------------------ money
@@ -906,7 +1035,8 @@ def validate_password(pw):
         raise UserError('Parolda harf va raqam aralash bo‘lsin.')
 
 
-def save_user(actor, uid, *, username, full_name, role, password='', brigadier_id=None, phone='', active=True):
+def save_user(actor, uid, *, username, full_name, role, password='', brigadier_id=None, phone='', active=True,
+              station_id=None):
     _need(actor, 'users.manage')
     import sqlite3
     username = clean_text(username, 40).lower()
@@ -916,6 +1046,9 @@ def save_user(actor, uid, *, username, full_name, role, password='', brigadier_i
         raise UserError('Rol noto‘g‘ri.')
     if role == 'brigadier' and not brigadier_id:
         raise UserError('Brigadir roli uchun qaysi brigada ekanini tanlang.')
+    if role == 'station' and not station_id:
+        raise UserError('Punkt operatori uchun qaysi punkt ekanini tanlang.')
+    station_id = station_id if role == 'station' else None
     with tx() as db:
         try:
             if uid:
@@ -929,17 +1062,19 @@ def save_user(actor, uid, *, username, full_name, role, password='', brigadier_i
                     validate_password(password)
                     db.execute('UPDATE users SET password_hash=?, must_change_password=1 WHERE id=?',
                                (generate_password_hash(password), uid))
+                db.execute('UPDATE users SET station_id=? WHERE id=?', (station_id, uid))
                 audit(db, actor, 'UPDATE', 'user', uid,
-                      old={k: old[k] for k in ('username', 'full_name', 'role', 'brigadier_id', 'active')},
+                      old={k: old[k] for k in ('username', 'full_name', 'role', 'brigadier_id', 'active', 'station_id')},
                       new={'username': username, 'full_name': full_name, 'role': role, 'brigadier_id': brigadier_id,
-                           'active': bool(active), 'password_reset': bool(password)})
+                           'station_id': station_id, 'active': bool(active), 'password_reset': bool(password)})
                 return uid
             validate_password(password)
             cur = db.execute('''INSERT INTO users(username, password_hash, full_name, role, brigadier_id, phone,
-                                    must_change_password, created_at) VALUES (?,?,?,?,?,?,1,?)''',
+                                    must_change_password, created_at, station_id) VALUES (?,?,?,?,?,?,1,?,?)''',
                              (username, generate_password_hash(password), clean_text(full_name, 120), role,
-                              brigadier_id if role == 'brigadier' else None, clean_text(phone, 30), now_str()))
-            audit(db, actor, 'CREATE', 'user', cur.lastrowid, new={'username': username, 'role': role})
+                              brigadier_id if role == 'brigadier' else None, clean_text(phone, 30), now_str(), station_id))
+            audit(db, actor, 'CREATE', 'user', cur.lastrowid, new={'username': username, 'role': role,
+                                                                   'station_id': station_id})
             return cur.lastrowid
         except sqlite3.IntegrityError as e:
             _unique_error(e, 'Bu login')
@@ -1041,6 +1176,11 @@ def create_waybill_documents(actor, waybill_id, reason='yaratildi'):
     with tx() as db:
         workers = db.execute('SELECT COUNT(DISTINCT worker_id) FROM harvests WHERE load_id=? AND voided_at IS NULL AND worker_id IS NOT NULL',
                              (wb['load_id'],)).fetchone()[0]
+        lines = [(r[0], r[1]) for r in db.execute(
+            '''SELECT COALESCE(w.full_name, 'Kombayn ' || e.code), SUM(h.kg) FROM harvests h
+               LEFT JOIN workers w ON w.id=h.worker_id LEFT JOIN equipment e ON e.id=h.combine_id
+               WHERE h.load_id=? AND h.voided_at IS NULL
+               GROUP BY h.method, h.worker_id, h.combine_id ORDER BY MIN(h.id)''', (wb['load_id'],))]
         version = (db.execute('SELECT MAX(version) FROM documents WHERE waybill_id=?', (waybill_id,)).fetchone()[0] or 0) + 1
         company = get_setting('company_name', db)
         folder = cfg.UPLOAD_DIR / 'hujjatlar' / str(wb['season_year'])
@@ -1049,7 +1189,8 @@ def create_waybill_documents(actor, waybill_id, reason='yaratildi'):
         ids = []
         for kind in ('nayman', 'ichki'):
             pdf = build_waybill_pdf(wb, copy=kind, company=company, version=version, generated_at=now_str()[:16],
-                                    generated_by=actor.name or 'tizim', workers_count=workers)
+                                    generated_by=actor.name or 'tizim', workers_count=workers,
+                                    lines=lines if kind == 'ichki' else None, domain=cfg.DOMAIN)
             name = f'{wb["number"]}_v{version}_{kind}.pdf'
             (folder / name).write_bytes(pdf)
             rel = f'hujjatlar/{wb["season_year"]}/{name}'
@@ -1059,9 +1200,9 @@ def create_waybill_documents(actor, waybill_id, reason='yaratildi'):
             ids.append(cur.lastrowid)
             enqueue(db, 'telegram_archive', 'document', f'doc:{cur.lastrowid}',
                     {'path': rel, 'filename': name,
-                     'caption': f'📄 {wb["number"]} · {version}-versiya ({reason}) · '
-                                f'{"Nayman nusxasi" if kind == "nayman" else "Ichki nusxa"}\n'
-                                f'{wb["trailer_code"]} · {wb["field_name"]} · {wb["brigadier_name"]} · netto {wb["net_kg"]:g} kg'})
+                     'caption': f'📄 {wb["trip_no"] or ""} · {wb["number"]} · {version}-versiya ({reason}) · '
+                                f'{"Punkt nakladnoyi" if kind == "nayman" else "Ichki terim hisoboti"}\n'
+                                f'{wb["trailer_code"]} · {wb["field_name"]} · {wb["brigadier_name"]} · {wb["net_kg"]:g} kg'})
         audit(db, actor, 'PDF', 'waybill', waybill_id, new={'version': version, 'reason': reason, 'document_ids': ids})
         return version
 

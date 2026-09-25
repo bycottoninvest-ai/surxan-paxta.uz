@@ -20,11 +20,18 @@ ROLES = {
     'cashier': 'Kassa',
     'tally': 'Hisobchi (terim)',
     'driver': 'Haydovchi',
+    'station': 'Punkt operatori',
 }
+
+# Punkt operators get a closed, minimal app: only these endpoints (checked on every request).
+STATION_ENDPOINTS = {'static', 'auth.login', 'auth.logout', 'auth.change_password', 'main.health', 'main.manifest',
+                     'main.service_worker', 'main.offline', 'main.dashboard'}
 
 # permission -> roles that hold it. Admin implicitly holds every permission.
 PERMISSIONS = {
-    'dashboard': set(ROLES),
+    'dashboard': set(ROLES) - {'station'},
+    'station.view': {'manager', 'station', 'accountant'},
+    'station.receive': {'manager', 'station'},
     'harvest.write': {'manager', 'brigadier', 'tally'},
     'load.open': {'manager', 'brigadier', 'tally'},
     'load.full': {'manager', 'brigadier', 'tally', 'driver'},
@@ -43,7 +50,7 @@ PERMISSIONS = {
     'settlement.view': {'manager', 'accountant', 'cashier', 'tally'},
     'reports.view': {'manager', 'accountant', 'cashier', 'brigadier', 'scale', 'tally'},
     'reports.finance': {'manager', 'accountant', 'cashier'},
-    'photos.view': set(ROLES),
+    'photos.view': set(ROLES) - {'station'},
     'photos.upload': {'manager', 'brigadier', 'scale', 'accountant', 'cashier', 'tally', 'driver'},
     'photos.void': {'manager'},
     'records.void': {'manager'},
@@ -84,12 +91,15 @@ class Actor:
     source: str = 'web'
     ip: str | None = None
     name: str = ''
+    station_id: int | None = None       # punkt operator: the only receiving point they may act on
 
     @classmethod
     def from_user(cls, user, source='web', ip=None):
+        keys = user.keys() if hasattr(user, 'keys') else user
         return cls(user['id'], user['role'],
                    user['brigadier_id'] if user['role'] == 'brigadier' else None,
-                   source, ip, user['full_name'])
+                   source, ip, user['full_name'],
+                   user['station_id'] if user['role'] == 'station' and 'station_id' in keys else None)
 
     def can(self, perm):
         return has_perm({'role': self.role}, perm)
@@ -167,6 +177,18 @@ def load_user():
             g.user = user
         else:
             session.clear()
+    return station_gate()
+
+
+def station_gate():
+    """A punkt operator's login opens only the punkt screens — enforced here for every request, not just hidden menus."""
+    user = g.get('user')
+    ep = request.endpoint or ''
+    if not user or user['role'] != 'station' or ep in STATION_ENDPOINTS or ep.startswith('punkt.'):
+        return None
+    if wants_json():
+        return jsonify(ok=False, error='Bu amal uchun huquqingiz yo‘q.'), 403
+    return redirect(url_for('punkt.home'))
 
 
 def login_required(fn):

@@ -1,0 +1,23 @@
+{% extends 'base.html' %}
+{% from 'macros.html' import icon, empty with context %}
+{% set page_title = 'Bugungi tarix' %}
+{% block content %}
+<div class="row mb"><a class="btn btn-ghost btn-sm" href="{{ url_for('punkt.home') }}">{{ icon('chev-left','sm') }} Punkt</a><span class="spacer"></span>
+  <form method="get" class="row"><input type="hidden" name="punkt" value="{{ sid or '' }}"><input type="date" name="date" value="{{ day }}" onchange="this.form.submit()"></form></div>
+<div class="m-tiles">
+  <div class="m-tile"><span>Qabul qilindi</span><b class="num">{{ rows|length }} <small>ta</small></b></div>
+  <div class="m-tile"><span>Punkt vazni</span><b class="num">{{ total_station|num }} <small>kg</small></b></div>
+  <div class="m-tile"><span>Daladan</span><b class="num">{{ total_field|num }} <small>kg</small></b></div>
+  <div class="m-tile"><span>Farq</span><b class="num {{ 't-down' if total_station < total_field }}">{{ '%+.0f'|format(total_station - total_field) }} <small>kg</small></b></div>
+</div>
+<section class="card">
+  <div class="table-wrap"><table class="t">
+    <thead><tr><th>Telashka</th><th>Vaqt</th><th class="hide-m">Dala</th><th class="num">Daladan</th><th class="num">Punkt</th><th class="num">Farq</th><th class="hide-m">Sabab</th></tr></thead>
+    <tbody>{% for r in rows %}<tr>
+      <td class="keep"><a class="link" href="{{ url_for('punkt.trip', waybill_id=r.id) }}">{{ r.trip_no }}</a></td><td>{{ (r.received_at or '')[11:16] }}</td>
+      <td class="hide-m">{{ r.field_name }}</td><td class="num">{{ r.net_kg|num }}</td><td class="num b">{{ r.accepted_kg|num }}</td>
+      <td class="num b {{ 't-down' if r.nayman_diff_kg < 0 }}">{{ '%+.0f'|format(r.nayman_diff_kg) }}</td><td class="hide-m small">{{ r.nayman_diff_reason or '—' }}</td></tr>
+    {% else %}<tr><td colspan="7">{{ empty('Bu kunda qabul yo‘q', 'history') }}</td></tr>{% endfor %}</tbody>
+  </table></div>
+</section>
+{% endblock %}

@@ -10,7 +10,7 @@ from contextlib import contextmanager
 
 from flask import current_app, g
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 SCHEMA = r'''
 CREATE TABLE IF NOT EXISTS brigadiers (
@@ -36,7 +36,17 @@ CREATE TABLE IF NOT EXISTS users (
   tg_link_expires TEXT,
   must_change_password INTEGER NOT NULL DEFAULT 0,
   created_at TEXT NOT NULL,
-  last_login_at TEXT
+  last_login_at TEXT,
+  station_id INTEGER REFERENCES stations(id)      -- punkt operator: the one receiving point they work at
+);
+
+-- Receiving points (qabul punktlari), e.g. Nayman-1.
+CREATE TABLE IF NOT EXISTS stations (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL UNIQUE COLLATE NOCASE,
+  address TEXT,
+  active INTEGER NOT NULL DEFAULT 1,
+  created_at TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS fields (
@@ -121,7 +131,9 @@ CREATE TABLE IF NOT EXISTS trailer_loads (
   weighed_at TEXT,
   void_reason TEXT,
   voided_by INTEGER REFERENCES users(id),
-  voided_at TEXT
+  voided_at TEXT,
+  trip_no TEXT,                                   -- TL-2026-000026, issued by the server, never edited
+  station_id INTEGER REFERENCES stations(id)      -- receiving point the trip goes to
 );
 -- A trailer can carry only one unfinished load at a time.
 CREATE UNIQUE INDEX IF NOT EXISTS uq_trailer_active_load
@@ -194,7 +206,9 @@ CREATE TABLE IF NOT EXISTS waybills (
   updated_at TEXT,
   void_reason TEXT,
   voided_by INTEGER REFERENCES users(id),
-  voided_at TEXT
+  voided_at TEXT,
+  arrived_at TEXT,                                -- punkt operator marked "KELDI"
+  arrived_by INTEGER REFERENCES users(id)
 );
 
 CREATE TABLE IF NOT EXISTS nayman_receipts (
@@ -493,8 +507,59 @@ def migrate(db):
     if 'basis' not in cols:
         db.execute("ALTER TABLE weighings ADD COLUMN basis TEXT NOT NULL DEFAULT 'tarozi' "
                    "CHECK (basis IN ('tarozi','dala'))")
+    # v3 -> v4: receiving points, trip numbers, "KELDI" mark
+    _add_column(db, 'users', 'station_id', 'INTEGER REFERENCES stations(id)')
+    _add_column(db, 'trailer_loads', 'trip_no', 'TEXT')
+    _add_column(db, 'trailer_loads', 'station_id', 'INTEGER REFERENCES stations(id)')
+    _add_column(db, 'waybills', 'arrived_at', 'TEXT')
+    _add_column(db, 'waybills', 'arrived_by', 'INTEGER REFERENCES users(id)')
+    db.execute('CREATE UNIQUE INDEX IF NOT EXISTS uq_loads_trip_no ON trailer_loads(trip_no)')
+    db.execute('CREATE INDEX IF NOT EXISTS idx_loads_station ON trailer_loads(station_id)')
+    _backfill_trip_numbers(db)
     # Future column changes go here as: if version < N: ALTER TABLE ...
     db.execute('UPDATE schema_version SET version=? WHERE version < ?', (SCHEMA_VERSION, SCHEMA_VERSION))
+
+
+def _add_column(db, table, column, decl):
+    if column not in {r[1] for r in db.execute(f'PRAGMA table_info({table})')}:
+        db.execute(f'ALTER TABLE {table} ADD COLUMN {column} {decl}')
+
+
+def trip_number(db, season_year):
+    """TL-2026-000026: per-season sequence from the counters table (call inside tx())."""
+    return f'TL-{season_year}-{next_counter(db, f"trip-{season_year}"):06d}'
+
+
+def _backfill_trip_numbers(db):
+    """Trips created before v4 get numbers in the order they were opened (idempotent)."""
+    rows = db.execute('SELECT id, season_year FROM trailer_loads WHERE trip_no IS NULL ORDER BY id').fetchall()
+    if not rows:
+        return
+    db.execute('BEGIN IMMEDIATE')
+    try:
+        for r in db.execute('SELECT id, season_year FROM trailer_loads WHERE trip_no IS NULL ORDER BY id').fetchall():
+            db.execute('UPDATE trailer_loads SET trip_no=? WHERE id=?', (trip_number(db, r[1]), r[0]))
+        db.execute('COMMIT')
+    except Exception:
+        db.execute('ROLLBACK')
+        raise
+
+
+def backup_before_upgrade(db):
+    """Consistent copy of the database file before a schema upgrade (kept next to the database)."""
+    try:
+        row = db.execute('SELECT version FROM schema_version').fetchone()
+    except sqlite3.OperationalError:
+        return None
+    if not row or row[0] >= SCHEMA_VERSION:
+        return None
+    path = next((r[2] for r in db.execute('PRAGMA database_list') if r[1] == 'main'), '')
+    if not path:
+        return None
+    from datetime import datetime
+    target = f'{path}.oldin-v{row[0]}-{datetime.now():%Y%m%d-%H%M%S}.bak'
+    db.execute('VACUUM INTO ?', (target,))
+    return target
 
 
 

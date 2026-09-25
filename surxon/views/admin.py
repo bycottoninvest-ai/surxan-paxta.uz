@@ -4,7 +4,7 @@ from flask import Blueprint, abort, current_app, render_template, request, send_
 from .. import queries
 from ..db import q, scalar
 from ..security import PERMISSIONS, ROLES, perm_required
-from ..services import (close_season, reopen_season, save_brigadier, save_equipment, save_field, save_settings,
+from ..services import (close_season, reopen_season, save_brigadier, save_equipment, save_field, save_settings, save_station,
                         save_user, telegram_link_code, unlink_telegram)
 from ..settings import all_settings, get_setting
 from ..utils import UserError, parse_int, parse_number
@@ -24,15 +24,19 @@ def users():
         save_user(actor, uid, username=request.form.get('username'), full_name=request.form.get('full_name'),
                   role=request.form.get('role'), password=request.form.get('password', ''),
                   brigadier_id=parse_int(request.form.get('brigadier_id'), 'Brigada', required=False),
-                  phone=request.form.get('phone', ''), active=checkbox('active') if uid else True)
+                  phone=request.form.get('phone', ''), active=checkbox('active') if uid else True,
+                  station_id=parse_int(request.form.get('station_id'), 'Punkt', required=False))
         return done('Foydalanuvchi saqlandi.' + ('' if uid else ' Birinchi kirishda parolni almashtirish so‘raladi.'),
                     url_for('admin.users'))
     edit = None
     if request.args.get('edit', '').isdigit():
         edit = q('SELECT * FROM users WHERE id=?', (int(request.args['edit']),), one=True)
-    return render_template('admin_users.html', rows=q('''SELECT u.*, b.name brigadier_name FROM users u
-                                                         LEFT JOIN brigadiers b ON b.id=u.brigadier_id ORDER BY u.active DESC, u.role, u.full_name'''),
+    return render_template('admin_users.html', rows=q('''SELECT u.*, b.name brigadier_name, st.name station_name FROM users u
+                                                         LEFT JOIN brigadiers b ON b.id=u.brigadier_id
+                                                         LEFT JOIN stations st ON st.id=u.station_id
+                                                         ORDER BY u.active DESC, u.role, u.full_name'''),
                            brigadiers=q('SELECT * FROM brigadiers WHERE active=1 ORDER BY name'), roles=ROLES, edit=edit,
+                           stations=q('SELECT * FROM stations WHERE active=1 ORDER BY name'),
                            permissions=PERMISSIONS)
 
 
@@ -63,6 +67,21 @@ def brigadiers():
     year = season_arg()
     return render_template('admin_brigadiers.html', rows=queries.brigadier_results(year), year=year,
                            all_rows=q('SELECT * FROM brigadiers ORDER BY active DESC, name'))
+
+
+@bp.route('/punktlar', methods=['GET', 'POST'])
+@perm_required('masterdata.write')
+def stations():
+    if request.method == 'POST':
+        sid = parse_int(request.form.get('id'), 'ID', required=False)
+        save_station(post_actor(), sid, name=request.form.get('name'), address=request.form.get('address', ''),
+                     active=checkbox('active') if sid else True)
+        return done('Punkt saqlandi.', url_for('admin.stations'))
+    rows = q('''SELECT st.*, (SELECT GROUP_CONCAT(u.full_name, ', ') FROM users u WHERE u.station_id=st.id AND u.active=1) operators,
+                       (SELECT COUNT(*) FROM trailer_loads tl JOIN waybills wb ON wb.load_id=tl.id
+                         WHERE tl.station_id=st.id AND wb.status='YARATILDI') open_trips
+                FROM stations st ORDER BY st.active DESC, st.name''')
+    return render_template('admin_stations.html', rows=rows)
 
 
 @bp.route('/dalalar', methods=['GET', 'POST'])

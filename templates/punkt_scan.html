@@ -1,0 +1,69 @@
+{% extends 'base.html' %}
+{% from 'macros.html' import icon with context %}
+{% set page_title = 'QR skaner' %}
+{% block content %}
+<div class="row mb"><a class="btn btn-ghost btn-sm" href="{{ url_for('punkt.home') }}">{{ icon('chev-left','sm') }} Punkt</a></div>
+<section class="card">
+  <div class="card-h"><h3>{{ icon('camera') }} Nakladnoydagi QR kodni skaner qiling</h3></div>
+  <div class="card-b">
+    <div class="p-cam"><video id="cam" playsinline muted></video><div class="p-frame"></div></div>
+    <div class="small muted mt-s" id="cam-msg">Kamera ochilmoqda…</div>
+    <form class="p-find mt" method="get" action="{{ url_for('punkt.find') }}">
+      <label for="p-q">Yoki raqamni yozing</label>
+      <div class="row"><input id="p-q" name="q" inputmode="numeric" autocomplete="off" placeholder="Raqam, masalan 26" required>
+      <button class="btn btn-primary">{{ icon('search','sm') }}</button></div>
+    </form>
+    <div class="tiny muted mt-s">Qog‘oz nakladnoy yo‘qolsa ham bo‘ladi: raqam orqali yoki “Yo‘lda” ro‘yxatidan toping. Telefonning oddiy kamerasi ham QR ni ochadi.</div>
+  </div>
+</section>
+{% endblock %}
+{% block scripts %}
+<script>
+(() => {
+  const video = document.getElementById('cam'), msg = document.getElementById('cam-msg');
+  const findUrl = {{ url_for('punkt.find')|tojson }};
+  let done = false;
+  function go(text) {
+    if (done || !text) return;
+    const m = String(text).toUpperCase().match(/TL-\d{4}-\d{1,6}|PA-\d{6}/);
+    if (!m) { msg.textContent = 'Bu QR tizimga tegishli emas: ' + String(text).slice(0, 40); return; }
+    done = true;
+    if (navigator.vibrate) navigator.vibrate(120);
+    msg.textContent = m[0] + ' topildi, ochilmoqda…';
+    location.href = findUrl + '?q=' + encodeURIComponent(m[0]);
+  }
+  async function start() {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      msg.textContent = 'Kamera faqat https manzilda ishlaydi. Raqamni yozing yoki telefon kamerasida QR ni oching.'; return;
+    }
+    let stream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({video: {facingMode: 'environment'}, audio: false});
+    } catch (e) { msg.textContent = 'Kameraga ruxsat berilmadi. Raqamni yozing.'; return; }
+    video.srcObject = stream; await video.play();
+    msg.textContent = 'QR kodni ramka ichiga keltiring.';
+    let detect;
+    if ('BarcodeDetector' in window) {
+      const bd = new BarcodeDetector({formats: ['qr_code']});
+      detect = async () => { const r = await bd.detect(video); return r[0] && r[0].rawValue; };
+    } else {
+      // iPhone / older browsers: small decoder loaded only here
+      await new Promise((ok, bad) => { const s = document.createElement('script');
+        s.src = {{ url_for('static', filename='vendor/jsqr/jsQR.min.js')|tojson }}; s.onload = ok; s.onerror = bad; document.head.appendChild(s); });
+      const c = document.createElement('canvas'), ctx = c.getContext('2d', {willReadFrequently: true});
+      detect = async () => {
+        const w = video.videoWidth, h = video.videoHeight; if (!w) return null;
+        const k = Math.min(1, 640 / w); c.width = w * k; c.height = h * k;
+        ctx.drawImage(video, 0, 0, c.width, c.height);
+        const r = jsQR(ctx.getImageData(0, 0, c.width, c.height).data, c.width, c.height);
+        return r && r.data;
+      };
+    }
+    const loop = async () => { if (done) return; try { go(await detect()); } catch (e) {} setTimeout(loop, 250); };
+    loop();
+    window.addEventListener('pagehide', () => stream.getTracks().forEach(t => t.stop()));
+  }
+  start();
+})();
+</script>
+{% endblock %}

@@ -1,0 +1,76 @@
+{% extends 'base.html' %}
+{% from 'macros.html' import icon, empty with context %}
+{% set page_title = 'Punkt' %}
+{% macro tile(label, value, unit='', note='', cls='') -%}<div class="m-tile {{ cls }}"><span>{{ label }}</span><b class="num{{ ' long' if value|string|length > 9 }}">{{ value }}{% if unit %}<small> {{ unit }}</small>{% endif %}</b>{% if note %}<em>{{ note }}</em>{% endif %}</div>{%- endmacro %}
+{% macro trip_card(t) -%}
+<a class="m-card p-trip" href="{{ url_for('punkt.trip', waybill_id=t.id) }}">
+  <div class="row"><b class="p-no">{{ t.trip_no }}</b><span class="spacer"></span>
+    {% if t.arrived_at %}<span class="badge b-orange">{{ icon('download','xs') }} KELDI</span>{% else %}<span class="badge b-blue">{{ icon('truck','xs') }} YO‘LDA</span>{% endif %}</div>
+  <div class="row mt-s"><span class="muted">{{ t.field_name }} · {{ t.brigadier_name }}</span><span class="spacer"></span><b class="num p-kg">{{ t.net_kg|num }} kg</b></div>
+  <div class="small muted">{{ t.tractor_code or 'transport —' }}{{ ' · ' ~ t.vehicle_plate if t.vehicle_plate }} · jo‘nadi {{ (t.sent_at or '')[11:16] }}{% if not sid and t.station_name %} · {{ t.station_name }}{% endif %}</div>
+</a>
+{%- endmacro %}
+{% block content %}
+<div class="m-hello"><b>{{ station.name if station else 'Barcha punktlar' }}</b><span>{{ role_labels.get(current_user['role']) }} · {{ current_user['full_name'] }} · {{ today|d }}</span></div>
+{% if current_user['role'] != 'station' and stations|length > 1 %}
+<form class="row mb" method="get"><select name="punkt" onchange="this.form.submit()"><option value="">Barcha punktlar</option>{% for s in stations %}<option value="{{ s.id }}" {{ 'selected' if sid == s.id }}>{{ s.name }}</option>{% endfor %}</select></form>
+{% endif %}
+
+<div class="p-banner" id="p-banner" hidden><b>🚜 Yangi yuk yo‘lda</b><span data-text></span><a class="btn btn-light btn-sm" data-link href="#">Ko‘rish</a></div>
+
+<div class="m-tiles p-tiles">
+  {{ tile('🚜 Yo‘lda', counts.yolda, 'ta', '', 't-blue') }}
+  {{ tile('📥 Keldi', counts.keldi, 'ta', 'tarozini kutmoqda' if counts.keldi else '', 't-orange') }}
+  {{ tile('✅ Bugun qabul', counts.qabul, 'ta') }}
+  {{ tile('Bugun jami', counts.qabul_kg|num, 'kg', ('dalada ' ~ (counts.dala_kg|num) ~ ' kg') if counts.qabul else '') }}
+</div>
+
+<div class="p-actions">
+  <a class="m-act green" href="{{ url_for('punkt.scanner') }}">{{ icon('camera','lg') }}<span>QR skaner</span></a>
+  <form class="p-find" method="get" action="{{ url_for('punkt.find') }}">
+    <label for="p-q">Telashka raqami</label>
+    <div class="row"><input id="p-q" name="q" inputmode="numeric" autocomplete="off" placeholder="Raqam, masalan 26" required>
+    <button class="btn btn-primary">{{ icon('search','sm') }}</button></div>
+  </form>
+</div>
+
+<h3 class="m-h">📥 Keldi — tarozini kutmoqda ({{ arrived|length }})</h3>
+{% for t in arrived %}{{ trip_card(t) }}{% else %}<div class="small muted mb">Hozircha yo‘q.</div>{% endfor %}
+
+<h3 class="m-h">🚜 Yo‘lda kelayotgan yuklar ({{ on_way|length }})</h3>
+{% for t in on_way %}{{ trip_card(t) }}{% else %}{{ empty('Yo‘lda yuk yo‘q', 'trailer') }}{% endfor %}
+
+<h3 class="m-h row">✅ Bugun qabul qilindi ({{ received|length }})<span class="spacer"></span><a class="btn btn-ghost btn-sm" href="{{ url_for('punkt.history', punkt=sid) }}">{{ icon('history','sm') }} Tarix</a></h3>
+{% for t in received %}
+<a class="m-card row" href="{{ url_for('punkt.trip', waybill_id=t.id) }}"><b>{{ t.trip_no }}</b><span class="small muted">{{ (t.received_at or '')[11:16] }}</span><span class="spacer"></span>
+  <span class="num">{{ t.accepted_kg|num }} kg</span>&nbsp;<b class="num {{ 't-down' if t.nayman_diff_kg < 0 else '' }}">{{ '%+.0f'|format(t.nayman_diff_kg) }}</b></a>
+{% else %}<div class="small muted">Bugun hali qabul yo‘q.</div>{% endfor %}
+{% endblock %}
+{% block scripts %}
+<script>
+(() => {
+  // new trips appear without anyone refreshing: poll every 20 s, show a banner + vibrate on a new one
+  const known = new Set({{ (on_way + arrived)|map(attribute='id')|list|tojson }});
+  const banner = document.getElementById('p-banner');
+  const url = {{ url_for('punkt.status_json', punkt=sid)|tojson }};
+  async function tick() {
+    try {
+      const r = await fetch(url, {headers: {'X-Requested-With': 'fetch'}, cache: 'no-store'});
+      if (!r.ok) return;
+      const d = await r.json();
+      const fresh = d.open_ids.filter(id => !known.has(id));
+      if (fresh.length && d.newest) {
+        fresh.forEach(id => known.add(id));
+        banner.querySelector('[data-text]').textContent =
+          ` ${d.newest.trip_no} · ${d.newest.field || ''} · ${Math.round(d.newest.kg).toLocaleString('ru-RU')} kg · ${d.newest.tractor || ''} · ${d.newest.sent_at}`;
+        banner.querySelector('[data-link]').href = d.newest.url;
+        banner.hidden = false;
+        if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
+        setTimeout(() => location.reload(), 8000);
+      }
+    } catch (e) { /* offline: try again next time */ }
+  }
+  setInterval(tick, 20000);
+})();
+</script>
+{% endblock %}
