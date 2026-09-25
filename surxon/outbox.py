@@ -150,11 +150,19 @@ def _values_url(sheet, rng):
             f'{urllib.request.quote(f"{chr(39)}{sheet}{chr(39)}!{rng}")}')
 
 
+def tab_name(sheet):
+    """System tabs carry a prefix so the sync never writes into a tab people built by hand (with their formulas)."""
+    from .settings import get_setting
+    prefix = get_setting('sheets_prefix')
+    return f'{prefix}{sheet}' if prefix is not None else sheet
+
+
 def _ensure_tab(sheet, header):
-    """Create the tab (with its header row) the first time it is used."""
+    """Create the tab (with its header row) the first time it is used. If the tab already exists with a different
+    header, nothing is written — it belongs to someone else and may hold formulas."""
     cfg = current_app.config['SURXON']
     sess = _session()
-    r = sess.get(_values_url(sheet, 'A1:A1'), timeout=30)
+    r = sess.get(_values_url(sheet, '1:1'), timeout=30)
     if r.status_code == 400 and 'Unable to parse range' in r.text:
         rr = sess.post(f'https://sheets.googleapis.com/v4/spreadsheets/{cfg.GOOGLE_SHEETS_ID}:batchUpdate',
                        json={'requests': [{'addSheet': {'properties': {'title': sheet}}}]}, timeout=30)
@@ -163,14 +171,20 @@ def _ensure_tab(sheet, header):
         r = sess.get(_values_url(sheet, 'A1:A1'), timeout=30)
     if r.status_code >= 300:
         raise RuntimeError(f'Sheets {r.status_code}: {r.text[:300]}')
-    if header and not r.json().get('values'):
+    existing = (r.json().get('values') or [[]])[0]
+    if header and existing and [str(x).strip() for x in existing[:len(header)]] != [str(x) for x in header]:
+        raise RuntimeError(f'“{sheet}” varag‘ida boshqa sarlavhalar bor — formulalar buzilmasligi uchun yozilmadi. '
+                           f'Sozlamada sheets_prefix ni o‘zgartiring yoki varaqni qayta nomlang.')
+    if header and not existing:
         w = sess.put(_values_url(sheet, 'A1') + '?valueInputOption=RAW', json={'values': [header]}, timeout=30)
         if w.status_code >= 300:
             raise RuntimeError(f'Sheets {w.status_code}: {w.text[:300]}')
 
 
 def sheets_upsert(sheet, row, header=None):
-    """Row whose first cell is a unique id: update that row if the id is already there, else append it."""
+    """Row whose first cell is a unique id: update that row if the id is already there, else append it.
+    Only the columns of `row` are written; cells to the right (e.g. people's own formulas) are never touched."""
+    sheet = tab_name(sheet)
     _ensure_tab(sheet, header)
     sess = _session()
     r = sess.get(_values_url(sheet, 'A:A'), timeout=30)
@@ -187,6 +201,29 @@ def sheets_upsert(sheet, row, header=None):
     return 'appended'
 
 
+def sheets_inspect():
+    """Read-only look at the spreadsheet: every tab, its header row, size and how many cells hold formulas."""
+    cfg = current_app.config['SURXON']
+    sess = _session()
+    r = sess.get(f'https://sheets.googleapis.com/v4/spreadsheets/{cfg.GOOGLE_SHEETS_ID}'
+                 '?fields=properties.title,sheets.properties(title,gridProperties)', timeout=30)
+    if r.status_code >= 300:
+        raise RuntimeError(f'Sheets {r.status_code}: {r.text[:300]}')
+    meta = r.json()
+    out = {'title': meta['properties']['title'], 'tabs': []}
+    for sh in meta.get('sheets', []):
+        t = sh['properties']['title']
+        g = sh['properties'].get('gridProperties', {})
+        v = sess.get(_values_url(t, 'A1:ZZ300') + '?valueRenderOption=FORMULA', timeout=30)
+        vals = v.json().get('values', []) if v.status_code < 300 else []
+        formulas = [(ri + 1, ci + 1, c) for ri, row in enumerate(vals) for ci, c in enumerate(row)
+                    if isinstance(c, str) and c.startswith('=')]
+        out['tabs'].append({'title': t, 'rows': g.get('rowCount'), 'cols': g.get('columnCount'),
+                            'header': vals[0] if vals else [], 'filled_rows': len(vals), 'formula_cells': len(formulas),
+                            'formula_samples': formulas[:5]})
+    return out
+
+
 def sheets_append(sheet, rows):
     """Append rows to a Google Sheet tab using a service account (scope: spreadsheets)."""
     url = _values_url(sheet, 'A1') + ':append?valueInputOption=RAW&insertDataOption=INSERT_ROWS'
@@ -199,7 +236,7 @@ def _send_sheets(job, payload):
     if payload.get('id'):
         sheets_upsert(payload['sheet'], payload['row'], payload.get('header'))
     else:
-        sheets_append(payload['sheet'], [payload['row']])
+        sheets_append(tab_name(payload['sheet']), [payload['row']])
 
 
 SENDERS = {'telegram_archive': _send_telegram, 'sheets': _send_sheets, 'telegram_report': _send_report}

@@ -321,6 +321,135 @@ def register_cli(app):
         for name, state, note in rows:
             click.echo(f'{name:40} {state:12} {note}')
 
+    @app.cli.command('backup-verify')
+    @click.option('--offsite', is_flag=True, help='Tashqi joydan yuklab olib ham tekshirish')
+    def backup_verify(offsite):
+        """Make a fresh backup, restore it into a separate database and compare it with the live one."""
+        from .backup import offsite_copy, run_backup, verify_restore
+        from .outbox import record_result
+        cfg = app.config['SURXON']
+        click.echo(run_backup(cfg))
+        for off in ([False, True] if offsite else [False]):
+            name = 'restore_offsite' if off else 'restore_local'
+            try:
+                if off:
+                    offsite_copy(cfg)
+                res = verify_restore(cfg, offsite=off)
+            except Exception as exc:
+                with dbmod.tx() as db:
+                    record_result(name, False, exc, db)
+                click.echo(f'{"TASHQI" if off else "SERVER"} zaxiradan tiklash: XATO — {exc}')
+                continue
+            click.echo(f'\n{"TASHQI JOYDAN" if off else "SERVERDAGI"} zaxiradan alohida bazaga tiklandi: {res["source"]}')
+            for label, got, live, same in res['rows']:
+                click.echo(f'  {label:32} tiklangan={got!s:>14}  ishchi={live!s:>14}  {"OK" if same else "FARQ"}')
+            for p in res['problems']:
+                click.echo(f'  MUAMMO: {p}')
+            ok = res['all_equal']
+            with dbmod.tx() as db:
+                record_result(name, ok, None if ok else 'farq: ' + '; '.join(res['problems'] or ['sonlar mos emas']), db)
+            click.echo('  NATIJA: ' + ('ISHLAYDI — tiklangan baza ishchi baza bilan bir xil.' if ok else 'XATO — yuqoridagi farqlarni ko‘ring.'))
+
+    @app.cli.command('sheets-inspect')
+    def sheets_inspect_cmd():
+        """Read-only: list the spreadsheet's tabs, header rows and formula cells before syncing anything."""
+        from .outbox import configured, sheets_inspect, tab_name
+        if not configured('sheets'):
+            raise click.ClickException('Google Sheets ulanmagan (GOOGLE_SHEETS_ID yoki xizmat akkaunti fayli yo‘q).')
+        info = sheets_inspect()
+        click.echo(f'Jadval: {info["title"]}')
+        for t in info['tabs']:
+            mine = t['title'].startswith(tab_name(''))
+            click.echo(f'\n[{t["title"]}] {"(tizim varag‘i)" if mine else "(qo‘lda — tizim YOZMAYDI)"} '
+                       f'{t["filled_rows"]} qator, formulali katak: {t["formula_cells"]}')
+            click.echo('  sarlavha: ' + ' | '.join(str(x) for x in t['header'][:20]))
+            for r, c, f in t['formula_samples']:
+                click.echo(f'  formula {r}-qator {c}-ustun: {f[:80]}')
+
+    @app.cli.command('holat')
+    def holat():
+        """Every part of the system: ISHLAYDI / ULANMAGAN / TEKSHIRILMAGAN / XATO — honest, from real checks only."""
+        import urllib.request
+        from .outbox import CHANNELS, status
+        cfg = app.config['SURXON']
+        rows = []
+
+        def add(name, state, note=''):
+            rows.append((name, state, note))
+        try:
+            n = dbmod.scalar('SELECT COUNT(*) FROM users')
+            add('Server va baza', 'ISHLAYDI', f'{cfg.DB_PATH} · v{VERSION} · {cfg.APP_MODE}')
+        except Exception as exc:
+            add('Server va baza', 'XATO', str(exc))
+        try:
+            with urllib.request.urlopen(f'https://{cfg.DOMAIN}/health', timeout=15) as r:
+                add('HTTPS', 'ISHLAYDI' if r.status == 200 else 'XATO', f'https://{cfg.DOMAIN}')
+        except urllib.error.HTTPError as e:
+            # the temporary address is behind a password (401) — HTTPS itself works
+            add('HTTPS', 'ISHLAYDI' if e.code in (401, 200) else 'XATO', f'https://{cfg.DOMAIN} (javob {e.code})')
+        except Exception as exc:
+            add('HTTPS', 'XATO', f'https://{cfg.DOMAIN}: {exc}')
+        if cfg.TELEGRAM_BOT_TOKEN:
+            try:
+                from .telegram_bot import tg_api
+                me = tg_api('getMe')['result']
+                info = tg_api('getWebhookInfo')['result']
+                ok = info.get('url', '').startswith(f'https://{cfg.DOMAIN}/telegram/webhook/')
+                add('Telegram bot', 'ISHLAYDI' if ok and not info.get('last_error_message') else 'XATO',
+                    f'@{me.get("username")} · webhook {"to‘g‘ri" if ok else "sozlanmagan"}'
+                    + (f' · oxirgi xato: {info["last_error_message"]}' if info.get('last_error_message') else ''))
+            except Exception as exc:
+                add('Telegram bot', 'XATO', str(exc)[:200])
+        else:
+            add('Telegram bot', 'ULANMAGAN', 'TELEGRAM_BOT_TOKEN yo‘q')
+        word = {'working': 'ISHLAYDI', 'not_connected': 'ULANMAGAN', 'configured_untested': 'TEKSHIRILMAGAN', 'error': 'XATO'}
+        for st in status():
+            add(st['label'], word[st['state']], (f'oxirgi muvaffaqiyat {st["last_ok_at"]}' if st['last_ok_at'] else '')
+                + (f' · navbatda {st["pending"]}' if st['pending'] else '') + (f' · xato: {st["last_error"][:120]}' if st['state'] == 'error' else ''))
+        backups = sorted(cfg.BACKUP_DIR.glob('surxon_db_*.sqlite3'))
+        if backups:
+            import time as _t
+            age = (_t.time() - backups[-1].stat().st_mtime) / 3600
+            add('Serverdagi kunlik zaxira', 'ISHLAYDI' if age < 26 else 'XATO', f'{backups[-1].name} · {age:.1f} soat oldin')
+        else:
+            add('Serverdagi kunlik zaxira', 'TEKSHIRILMAGAN', 'hali zaxira yo‘q — flask backup-verify')
+        for key, label in (('restore_local', 'Zaxiradan tiklash (server nusxasi)'), ('restore_offsite', 'Zaxiradan tiklash (tashqi nusxa)')):
+            r = dbmod.q('SELECT * FROM channel_status WHERE channel=?', (key,), one=True)
+            if not r:
+                add(label, 'TEKSHIRILMAGAN', 'flask backup-verify' + (' --offsite' if 'tashqi' in label else ''))
+            elif r['last_ok_at'] and (not r['last_error_at'] or r['last_ok_at'] >= r['last_error_at']):
+                add(label, 'ISHLAYDI', f'oxirgi tekshiruv {r["last_ok_at"]}')
+            else:
+                add(label, 'XATO', (r['last_error'] or '')[:150])
+        erp = dbmod.scalar("SELECT COUNT(*) FROM integration_clients WHERE kind='erp' AND revoked_at IS NULL")
+        erp_on = dbmod.q("SELECT value FROM settings WHERE key='erp_enabled'", one=True)
+        erp_used = dbmod.scalar("SELECT COUNT(*) FROM integration_log WHERE status < 300")
+        add('Azizbek ERP API', 'ISHLAYDI' if erp and erp_on and erp_on['value'] == '1' and erp_used else
+            ('TEKSHIRILMAGAN' if erp else 'ULANMAGAN'), f'faol kalit: {erp}, muvaffaqiyatli so‘rov: {erp_used}')
+        tv = dbmod.scalar("SELECT COUNT(*) FROM integration_clients WHERE kind='tv' AND revoked_at IS NULL")
+        add('TV ekran', 'TEKSHIRILMAGAN' if tv else 'ULANMAGAN', f'faol TV kaliti: {tv}')
+        add('Elektron tarozi', 'ULANMAGAN', 'kg qo‘lda kiritiladi (tarozi modeli/porti berilmagan)')
+        for name, state, note in rows:
+            click.echo(f'{name:42} {state:15} {note}')
+
+    @app.cli.command('narx')
+    @click.option('--qol', type=int, help='Qo‘l terimi narxi, so‘m/kg')
+    @click.option('--kombayn-tonna', type=int, help='Barcha kombaynlar uchun narx, so‘m/tonna')
+    def narx(qol, kombayn_tonna):
+        """Set the current pay rates (from now on; earlier weighings keep their own rate). Audited."""
+        from .accounting import set_combine_tariff
+        from .security import Actor
+        from .services import save_settings
+        actor = Actor(None, 'admin', source='cli', name='sozlash (server)')
+        with app.test_request_context():
+            if qol:
+                save_settings(actor, {'worker_rate_hand': str(qol)})
+                click.echo(f'Qo‘l terimi: {qol:,} so‘m/kg (shu paytdan boshlab)'.replace(',', ' '))
+            if kombayn_tonna:
+                for c in dbmod.q("SELECT id, code FROM equipment WHERE kind='kombayn' AND active=1"):
+                    set_combine_tariff(actor, c['id'], tariff_type='tonna', tariff_rate=kombayn_tonna)
+                    click.echo(f'{c["code"]}: {kombayn_tonna:,} so‘m/tonna'.replace(',', ' '))
+
     @app.cli.command('permissions')
     def permissions():
         for perm, roles in PERMISSIONS.items():

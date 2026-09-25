@@ -69,4 +69,10 @@ if [ -f data/BIRINCHI_ADMIN_PAROLI.txt ]; then
   echo "  Ko‘rish uchun:  cat $DIR/data/BIRINCHI_ADMIN_PAROLI.txt"
   echo "  (bu parolni rasmga olib hech kimga yubormang)"
 fi
+echo "  Keyingi ulanishlar (bittadan, sirlar faqat shu serverda kiritiladi):"
+echo "    cd $DIR && bash tools/sozlash.sh narx       # 1 500 so‘m/kg, 1 500 000 so‘m/t"
+echo "    cd $DIR && bash tools/sozlash.sh telegram"
+echo "    cd $DIR && bash tools/sozlash.sh sheets"
+echo "    cd $DIR && bash tools/sozlash.sh zaxira"
+echo "    cd $DIR && bash tools/sozlash.sh holat      # hammasining holati"
 echo "================================================================"

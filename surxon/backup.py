@@ -87,6 +87,88 @@ def export_csv(db_file, out_zip):
     return out_zip
 
 
+CHECKS = [
+    ('Terim yozuvlari', 'SELECT COUNT(*) FROM harvests'),
+    ('Terim kg (bekor qilinmagan)', 'SELECT ROUND(COALESCE(SUM(kg),0),1) FROM harvests WHERE voided_at IS NULL'),
+    ('Telashka reyslari', 'SELECT COUNT(*) FROM trailer_loads'),
+    ('Nakladnoylar', 'SELECT COUNT(*) FROM waybills'),
+    ('Punkt qabullari', 'SELECT COUNT(*) FROM nayman_receipts'),
+    ('Kassa yozuvlari', 'SELECT COUNT(*) FROM cash_entries'),
+    ('Kassa qoldig‘i (so‘m)', "SELECT COALESCE(SUM(CASE WHEN direction='IN' THEN amount ELSE -amount END),0) "
+                             "FROM cash_entries WHERE voided_at IS NULL"),
+    ('To‘lov buyruqlari', 'SELECT COUNT(*) FROM payouts'),
+    ('Xarajatlar', 'SELECT COUNT(*) FROM expenses'),
+    ('Audit yozuvlari', 'SELECT COUNT(*) FROM audit_logs'),
+]
+
+
+def _figures(path):
+    con = sqlite3.connect(f'file:{path}?mode=ro', uri=True)
+    try:
+        out = {}
+        for label, sql in CHECKS:
+            try:
+                out[label] = con.execute(sql).fetchone()[0]
+            except sqlite3.OperationalError:
+                out[label] = None
+        out['_integrity'] = con.execute('PRAGMA integrity_check').fetchone()[0]
+        out['_version'] = con.execute('SELECT version FROM schema_version').fetchone()[0]
+        return out
+    finally:
+        con.close()
+
+
+def verify_restore(cfg, offsite=False):
+    """Restore the newest backup into a SEPARATE database file and compare it with the live one.
+    offsite=True downloads the newest copy from the independent storage first (proves it is really there)."""
+    import subprocess
+    import tempfile
+    work = Path(tempfile.mkdtemp(prefix='tiklash_', dir=str(cfg.BACKUP_DIR)))
+    try:
+        if offsite:
+            if not cfg.OFFSITE_RCLONE_REMOTE:
+                raise RuntimeError('Tashqi zaxira ulanmagan (OFFSITE_RCLONE_REMOTE yo‘q).')
+            ls = subprocess.run(['rclone', 'lsf', cfg.OFFSITE_RCLONE_REMOTE, '--include', 'surxon_db_*.sqlite3'],
+                                capture_output=True, text=True, timeout=600)
+            if ls.returncode != 0:
+                raise RuntimeError((ls.stderr or 'rclone lsf xatosi')[-300:])
+            names = sorted(n.strip() for n in ls.stdout.splitlines() if n.strip())
+            if not names:
+                raise RuntimeError('Tashqi joyda baza nusxasi topilmadi.')
+            src = work / names[-1]
+            dl = subprocess.run(['rclone', 'copyto', f'{cfg.OFFSITE_RCLONE_REMOTE}/{names[-1]}', str(src)],
+                                capture_output=True, text=True, timeout=3600)
+            if dl.returncode != 0:
+                raise RuntimeError((dl.stderr or 'rclone copyto xatosi')[-300:])
+        else:
+            files = sorted(cfg.BACKUP_DIR.glob('surxon_db_*.sqlite3'))
+            if not files:
+                raise RuntimeError('Serverda baza zaxirasi hali yo‘q.')
+            src = files[-1]
+        restored = work / 'tiklangan_sinov.sqlite3'
+        a, b = sqlite3.connect(str(src)), sqlite3.connect(str(restored))
+        try:
+            a.backup(b)                      # the same operation a real restore uses
+        finally:
+            b.close()
+            a.close()
+        got, live = _figures(restored), _figures(cfg.DB_PATH)
+        problems = []
+        if got['_integrity'] != 'ok':
+            problems.append(f'integrity_check: {got["_integrity"]}')
+        if got['_version'] != live['_version']:
+            problems.append(f'sxema versiyasi {got["_version"]} ≠ {live["_version"]}')
+        rows = []
+        for label, _ in CHECKS:
+            same = got[label] == live[label]
+            rows.append((label, got[label], live[label], same))
+        return {'source': src.name, 'offsite': offsite, 'rows': rows, 'problems': problems,
+                'all_equal': all(r[3] for r in rows) and not problems}
+    finally:
+        import shutil
+        shutil.rmtree(work, ignore_errors=True)
+
+
 def offsite_copy(cfg, test=False):
     """Copy new backup files to an independent location with rclone (S3, Google Drive, Backblaze, SFTP...).
 

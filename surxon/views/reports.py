@@ -166,6 +166,27 @@ def _diff_reasons(year, args):
             'rows': out, 'sum': ['trips', 'field_kg', 'diff_kg']}
 
 
+def _rates(year, args):
+    """Which rate was used on which day (per kg by hand, per tonne by combine) — straight from the frozen rows."""
+    rows = q('''SELECT h.work_date,
+                       GROUP_CONCAT(DISTINCT CASE WHEN h.method='hand' THEN h.rate END) hand_rates,
+                       SUM(CASE WHEN h.method='hand' THEN h.kg END) hand_kg,
+                       SUM(CASE WHEN h.method='hand' AND h.amount IS NULL THEN h.kg END) hand_uncalc,
+                       SUM(CASE WHEN h.method='hand' THEN h.amount END) hand_amount,
+                       GROUP_CONCAT(DISTINCT CASE WHEN h.method='combine' THEN e.code || ': ' || h.rate END) combine_rates,
+                       SUM(CASE WHEN h.method='combine' THEN h.kg END) combine_kg,
+                       SUM(CASE WHEN h.method='combine' THEN h.amount END) combine_amount
+                FROM harvests h LEFT JOIN equipment e ON e.id=h.combine_id
+                WHERE h.season_year=? AND h.voided_at IS NULL GROUP BY h.work_date ORDER BY h.work_date DESC''', (year,))
+    return {'title': f'Narxlar tarixi (kunlar bo‘yicha) — {year}', 'finance': True,
+            'note': 'Har tortish yozilgan paytdagi narx bilan saqlanadi. Narx keyin o‘zgarsa ham eski kunlar qayta hisoblanmaydi. '
+                    'Kombayn narxi so‘m/tonna.',
+            'columns': [('work_date', 'Kun', D), ('hand_rates', 'Qo‘l terimi, so‘m/kg', T), ('hand_kg', 'Qo‘l kg', K),
+                        ('hand_amount', 'Qo‘l summa', M), ('hand_uncalc', 'Narxsiz kg', K),
+                        ('combine_rates', 'Kombayn, so‘m/t', T), ('combine_kg', 'Kombayn kg', K), ('combine_amount', 'Kombayn summa', M)],
+            'rows': [dict(r) for r in rows], 'sum': ['hand_kg', 'hand_amount', 'hand_uncalc', 'combine_kg', 'combine_amount']}
+
+
 def _payments(year, args):
     rows = q('''SELECT p.payment_date, p.amount, p.method, p.payer, wb.number, p.note,
                        CASE WHEN p.voided_at IS NOT NULL THEN 'BEKOR: '||p.void_reason ELSE '' END status
@@ -250,6 +271,7 @@ REPORTS = {
     'nayman': ('Nayman sverka', 'factory', _nayman, 'reports.view'),
     'punktlar': ('Punktlar: dala va punkt farqi', 'building', _stations, 'reports.view'),
     'farq-sabablari': ('Farq sabablari', 'alert', _diff_reasons, 'reports.view'),
+    'narxlar': ('Narxlar tarixi (kunlar bo‘yicha)', 'calc', _rates, 'reports.finance'),
     'tolovlar': ('To‘lovlar hisoboti', 'wallet', _payments, 'reports.finance'),
     'xarajatlar': ('Xarajatlar hisoboti', 'receipt', _expenses, 'reports.finance'),
     'kassa': ('Kassa hisoboti', 'cash', _cash, 'reports.finance'),

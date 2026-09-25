@@ -173,6 +173,8 @@ def test_sheets_upsert_never_duplicates_rows(app, monkeypatch):
             name, rng = tab_of(url)
             if name not in tabs:
                 return Resp(400, text='Unable to parse range')
+            if rng == '1:1':
+                return Resp(200, {'values': tabs[name][:1]})
             col = [[r[0]] for r in tabs[name]]
             return Resp(200, {'values': col[:1] if rng == 'A1:A1' else col})
 
@@ -198,4 +200,10 @@ def test_sheets_upsert_never_duplicates_rows(app, monkeypatch):
         ob.sheets_upsert('KASSA', ['INC-2026-000001', 100], ['ID', 'Summa'])     # retry
         ob.sheets_upsert('KASSA', ['INC-2026-000002', 50], ['ID', 'Summa'])
         ob.sheets_upsert('KASSA', ['INC-2026-000001', 'BEKOR'], ['ID', 'Summa'])  # later change of the same operation
-    assert tabs['KASSA'] == [['ID', 'Summa'], ['INC-2026-000001', 'BEKOR'], ['INC-2026-000002', 50]]
+    # system tabs carry the "SPX " prefix; the hand-made tab of the same name is never touched
+    assert tabs['SPX KASSA'] == [['ID', 'Summa'], ['INC-2026-000001', 'BEKOR'], ['INC-2026-000002', 50]]
+    tabs['SPX XARAJATLAR'] = [['Sana', 'Summa', 'Jami'], ['2026-09-25', 100, '=SUM(B2:B99)']]
+    import pytest
+    with app.test_request_context(), pytest.raises(RuntimeError):
+        ob.sheets_upsert('XARAJATLAR', ['EXP-2026-000001', 5], ['ID', 'Summa'])
+    assert tabs['SPX XARAJATLAR'] == [['Sana', 'Summa', 'Jami'], ['2026-09-25', 100, '=SUM(B2:B99)']]

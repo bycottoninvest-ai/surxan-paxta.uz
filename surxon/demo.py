@@ -161,8 +161,8 @@ def ensure_demo_accounting(db):
         db.execute(f'UPDATE {t} SET cashbox_id=? WHERE cashbox_id IS NULL', (box,))
     db.execute("UPDATE harvests SET rate=1500, rate_unit='kg', amount=CAST(ROUND(kg*1500) AS INTEGER) "
                "WHERE method='hand' AND rate IS NULL AND source='demo'")
-    db.execute("UPDATE equipment SET tariff_type='tonna', tariff_rate=250000 WHERE kind='kombayn' AND tariff_type IS NULL")
-    db.execute("UPDATE harvests SET rate=250000, rate_unit='tonna', amount=CAST(ROUND(kg*250) AS INTEGER) "
+    db.execute("UPDATE equipment SET tariff_type='tonna', tariff_rate=1500000 WHERE kind='kombayn' AND tariff_type IS NULL")
+    db.execute("UPDATE harvests SET rate=1500000, rate_unit='tonna', amount=CAST(ROUND(kg*1500) AS INTEGER) "
                "WHERE method='combine' AND rate IS NULL AND source='demo'")
     db.execute("UPDATE users SET cashbox_id=? WHERE role='cashier' AND cashbox_id IS NULL", (box,))
     _backfill_doc_numbers(db)
