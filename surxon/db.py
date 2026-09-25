@@ -10,7 +10,7 @@ from contextlib import contextmanager
 
 from flask import current_app, g
 
-SCHEMA_VERSION = 6
+SCHEMA_VERSION = 7
 
 SCHEMA = r'''
 CREATE TABLE IF NOT EXISTS brigadiers (
@@ -645,6 +645,32 @@ CREATE TABLE IF NOT EXISTS media_items (
 );
 CREATE INDEX IF NOT EXISTS idx_media_items_created ON media_items(created_at);
 CREATE INDEX IF NOT EXISTS idx_media_items_path ON media_items(path);
+
+-- v7: a mistake in a saved cash operation is fixed by a correction record: the original row is voided (kept, never
+-- deleted or overwritten), a replacement row is written when needed, and who/when/why/old/new stays here.
+-- A person without the approve right only requests it; the accountant approves or rejects.
+CREATE TABLE IF NOT EXISTS cash_corrections (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  cash_entry_id INTEGER NOT NULL REFERENCES cash_entries(id),
+  reason TEXT NOT NULL,
+  note TEXT,
+  new_amount INTEGER CHECK (new_amount IS NULL OR new_amount > 0),
+  new_worker_id INTEGER REFERENCES workers(id),
+  new_category TEXT,
+  new_party TEXT,
+  cancel INTEGER NOT NULL DEFAULT 0,
+  old_json TEXT,
+  new_json TEXT,
+  status TEXT NOT NULL DEFAULT 'KUTILMOQDA' CHECK (status IN ('KUTILMOQDA','BAJARILDI','RAD')),
+  client_uuid TEXT UNIQUE,
+  requested_by INTEGER REFERENCES users(id),
+  requested_at TEXT NOT NULL,
+  decided_by INTEGER REFERENCES users(id),
+  decided_at TEXT,
+  decision_note TEXT,
+  new_cash_entry_id INTEGER REFERENCES cash_entries(id)
+);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_correction_open ON cash_corrections(cash_entry_id) WHERE status IN ('KUTILMOQDA','BAJARILDI');
 CREATE INDEX IF NOT EXISTS idx_media_items_thumb ON media_items(thumb_path);
 
 CREATE TABLE IF NOT EXISTS schema_version (version INTEGER NOT NULL);

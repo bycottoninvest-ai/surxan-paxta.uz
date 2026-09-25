@@ -1,0 +1,13 @@
+<div class="hm-review">
+  <div class="hm-rv-h">Tekshiring</div>
+  {% if p.kind == 'expense' %}
+  <div class="hm-rv-row"><span>Xarajat turi</span><b>{{ p.category }}</b></div>
+  <div class="hm-rv-row"><span>Kimga berildi</span><b>{{ p.payer }}</b></div>
+  <div class="hm-rv-big"><span>Chiqim</span><b class="num">{{ p.amount|num }} so‘m</b></div>
+  {% else %}
+  <div class="hm-rv-row"><span>Qayerdan / kimdan</span><b>{{ p.source }}</b></div>
+  <div class="hm-rv-big hm-in"><span>Kirim</span><b class="num">+{{ p.amount|num }} so‘m</b></div>
+  {% endif %}
+  <div class="hm-rv-row"><span>{{ p.box_name }} qoldig‘i</span><b class="num">{{ p.box_before|num }} → {{ p.box_after|num }} so‘m</b></div>
+  {% if p.needs_check %}<div class="tiny muted">Saqlangach buxgalter tekshirib tasdiqlaydi.</div>{% endif %}
+</div>

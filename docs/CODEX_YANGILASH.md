@@ -1,20 +1,26 @@
-# Serverni yangilash (Codex uchun) — v2.8.0
+# Serverni yangilash (Codex uchun) — v2.9.0
 
 Serverni qayta qurmang, `.env`, `data/` va Caddy sozlamasiga tegmang. Vaqtinchalik sslip override'ni qayta yoqmang.
 
 ```bash
 cd /opt/surxan-paxta.uz
 docker compose exec -T app flask --app app backup          # yangilashdan oldin izchil zaxira
-git pull --ff-only                                          # kutilgan: v2.8.0 commiti
+git pull --ff-only                                          # kutilgan: v2.9.0 commiti
 docker compose up -d --build
-for i in $(seq 1 40); do curl -fsS https://surxan-paxta.uz/health && break; sleep 3; done   # "version":"2.8.0"
+for i in $(seq 1 40); do curl -fsS https://surxan-paxta.uz/health && break; sleep 3; done   # "version":"2.9.0"
 docker compose exec -T app flask --app app set-webhook      # channel_post yangilanishini qo'shadi (kanallarni tanish uchun)
 docker compose exec -T app flask --app app smoke-check
 ```
 
-Baza avtomatik yangilanadi: yangi ustunlar `nayman_receipts.station_gross_kg/station_tare_kg` (v2.8.0 — punkt brutto/tara),
+Baza avtomatik yangilanadi (sxema v7): yangi jadval `cash_corrections` (v2.9.0 — kassa tuzatishlari); yangi ustunlar `nayman_receipts.station_gross_kg/station_tare_kg` (v2.8.0 — punkt brutto/tara),
 `trailer_loads.method/rate/rate_unit`, `workers.note`, `tg_chats.bot_status` (v2.7.0) qo'shiladi.
 Eski yozuvlar o'zgarmaydi. Ilova ishga tushganda migratsiyadan oldin `data/` ichida `*.oldin-v*` zaxira nusxa oladi.
+
+## v2.9.0 da nima o'zgardi
+Buxgalter va kassir telefonda “Mening kassam” (/hamyon): ishchiga pul berish, xarajat, kassaga kirim, bugungi amallar,
+tuzatish (asl yozuv saqlanadi, kassir so'rovini buxgalter tasdiqlaydi). Har amal: Tekshirish → Tasdiqlash.
+Buxgalter va kassir kirganda /hamyon ochiladi. Eski buxgalteriya sahifalari, hisobotlar, rahbar paneli o'zgarmagan.
+Sxema v6 → v7 bo'lgani uchun ilova ishga tushganda `data/` ichida `*.oldin-v6-*.bak` nusxa o'zi olinadi.
 
 ## v2.8.0 da nima o'zgardi
 Punkt operatori ekrani: kelgan telashkalar ro'yxati (rasm bilan) → brutto/tara (netto o'zi) → farq sababi (8 ta, “Boshqa sabab”da matn)

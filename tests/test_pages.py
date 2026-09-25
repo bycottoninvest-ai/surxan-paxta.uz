@@ -61,7 +61,7 @@ def test_phone_gets_light_home_and_desktop_gets_dashboard(app, world):
 
 
 def test_role_home_screens(app, world):
-    for user, text in (('tarozi01', 'Tarozi navbati'), ('buxgalter', 'Bugun sizni kutayotgan ishlar'),
-                       ('asadbek', 'BUGUN PUL OLADIGANLAR'), ('rahbar', 'To‘liq dashboard')):
+    for user, text in (('tarozi01', 'Tarozi navbati'), ('buxgalter', 'Mening kassam'),
+                       ('asadbek', 'Ishchiga pul berish'), ('rahbar', 'To‘liq dashboard')):
         html = Client(app, user, 'Worker2026x', ua=PHONE).get('/', follow_redirects=True).get_data(as_text=True)
         assert text in html, user

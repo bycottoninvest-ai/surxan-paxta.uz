@@ -1,0 +1,25 @@
+{% extends 'base.html' %}
+{% from 'macros.html' import icon, csrf, uuid_field with context %}
+{% set page_title = 'To‘lov berish' %}
+{% block content %}
+<div class="d-wrap hm">
+  <div class="d-top"><a class="icon-btn" href="{{ url_for('hamyon.pay') }}">{{ icon('chev-left') }}</a><h1 class="d-h1">To‘lov berish</h1></div>
+  {% if paid_url %}
+  <div class="d-ok">{{ icon('check-circle','lg') }}<b>{{ p.doc_no }} allaqachon berilgan</b><a class="btn btn-light" href="{{ paid_url }}">Hujjatni ko‘rish</a></div>
+  {% elif not prev %}
+  <div class="notice">{{ icon('alert','sm') }} Bu to‘lov bekor qilingan.</div>
+  {% else %}
+  <div class="hm-fig">
+    <div><span>Ishlagan haqi</span><b class="num hm-green">{{ prev.worker.earned|num }} so‘m</b></div>
+    <div><span>Oldin berilgan</span><b class="num">{{ prev.worker.given|num }} so‘m</b></div>
+    <div><span>Qolgan qarz</span><b class="num hm-red">{{ prev.worker.debt|num }} so‘m</b></div>
+  </div>
+  <form class="d-form" data-hm data-confirm-url="{{ url_for('hamyon.order_confirm', payout_id=p.id) }}">
+    {{ csrf() }}{{ uuid_field() }}<input type="hidden" name="expect" value="{{ prev.expect }}">
+    {% set review_html %}{% with p=prev %}{% include 'partials/hm_review_pay.html' %}{% endwith %}{% endset %}
+    {% with ok_label='✅ ' ~ (p.amount|num) ~ ' so‘m berildi — tasdiqlash', review_open=True, no_edit=True %}{% include 'partials/hm_actions.html' %}{% endwith %}
+  </form>
+  {% endif %}
+</div>
+{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='js/hamyon.js') }}?v={{ version }}"></script>{% endblock %}

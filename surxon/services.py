@@ -882,8 +882,11 @@ def void_payment(actor, payment_id, reason):
         audit(db, actor, 'VOID', 'payment', payment_id, old=row_dict(p), reason=reason)
 
 
-EXPENSE_CATEGORIES = ['Yoqilg‘i', 'Ovqat', 'Transport', 'Remont', 'Punkt xarajati', 'O‘g‘it / kimyo', 'Suv', 'Ijara',
+EXPENSE_CATEGORIES = ['Yoqilg‘i', 'Ovqat', 'Transport', 'Ta‘mirlash', 'Ehtiyot qism', 'Punkt xarajati', 'O‘g‘it / kimyo', 'Suv', 'Ijara',
                       'Boshqa']
+# wages, advances and combine pay have their own flows (payment orders); written again as an expense they would be
+# counted twice, so they are refused as expense categories
+NOT_EXPENSES = {'ish haqi', 'avans', 'kombayn', 'kombayn to‘lovi', 'ishchiga to‘lov', 'ish haqqi'}
 
 CASH_CATEGORIES = {
     'opening': ('IN', 'Boshlang‘ich qoldiq'),
@@ -909,7 +912,8 @@ SYSTEM_CASH_CATEGORIES = {'combine_pay', 'adjust_in', 'adjust_out', 'debt_in', '
 
 
 def add_expense(actor, *, amount, expense_date, category, field_id=None, brigadier_id=None, equipment_id=None, payer='',
-                note='', from_cash=False, client_uuid=None, photo=None, station_id=None, cashbox_id=None):
+                note='', from_cash=False, client_uuid=None, photo=None, station_id=None, cashbox_id=None, check=None):
+    """check(db, cashbox_id): optional guard run inside the write transaction (the phone's “figures still as shown”)."""
     _need(actor, 'expenses.write')
     from .accounting import _cashbox, assert_day_open, book_cash, mirror_expense
     from .db import doc_number
@@ -923,10 +927,15 @@ def add_expense(actor, *, amount, expense_date, category, field_id=None, brigadi
         category = clean_text(category, 60)
         if not category:
             raise UserError('Xarajat turi tanlanishi shart.')
+        if category.lower().replace("'", '‘') in NOT_EXPENSES:
+            raise UserError('Ish haqi, avans va kombayn puli xarajat sifatida yozilmaydi — ular “Ishchiga pul berish” / '
+                            'kombayn to‘lovi orqali bir marta hisobga tushadi.')
         if not amount or amount <= 0:
             raise UserError('Summa 0 dan katta bo‘lishi kerak.')
         box = _cashbox(db, actor, cashbox_id)
         assert_day_open(db, box, expense_date)
+        if check:
+            check(db, box)
         if field_id and not brigadier_id:   # a field expense belongs to that field's brigade (for per-brigade cost)
             row = db.execute('SELECT brigadier_id FROM fields WHERE id=?', (field_id,)).fetchone()
             brigadier_id = row['brigadier_id'] if row else None

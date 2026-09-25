@@ -1,0 +1,23 @@
+{% extends 'base.html' %}
+{% from 'macros.html' import icon, empty with context %}
+{% set page_title = 'Bugungi amallar' %}
+{% block content %}
+<div class="d-wrap hm">
+  <div class="d-top"><a class="icon-btn" href="{{ url_for('hamyon.home') }}">{{ icon('chev-left') }}</a><h1 class="d-h1">Bugungi amallar</h1></div>
+  {% for b in boxes %}<div class="hm-bal hm-bal-s"><span class="hm-bal-ico">{{ icon('wallet') }}</span><div><span>{{ b.name }} qoldig‘i</span><b class="num">{{ b.balance|num }} so‘m</b></div></div>{% endfor %}
+  <div class="d-tot"><div><span>Bugun kirim</span><b class="num hm-green">+{{ inflow|num }}</b></div><div><span>Bugun chiqim</span><b class="num hm-red">−{{ outflow|num }}</b></div></div>
+  <div class="hm-ops">
+  {% for r in rows %}
+    <a class="hm-op {{ 'hm-void' if r.voided_at }}" href="{{ url_for('hamyon.entry', cash_id=r.id) }}">
+      <span class="hm-op-ico {{ 'in' if r.direction == 'IN' }}">{{ icon({'pay': 'user', 'expense': 'receipt', 'income': 'plus'}.get(r.kind, 'cash')) }}</span>
+      <span class="hm-op-b"><b>{{ r.who or r.what }}</b><small>{{ r.what }} · {{ r.created_at[11:16] }}</small></span>
+      <span class="hm-op-s"><b class="num {{ 'hm-green' if r.direction == 'IN' else 'hm-red' }}">{{ '+' if r.direction == 'IN' else '−' }}{{ r.amount|num }}</b>
+        <span class="badge {{ r.badge }}">{{ r.status_label }}</span></span>
+    </a>
+  {% else %}{{ empty('Bugun hali amal yo‘q', 'list') }}{% endfor %}
+  </div>
+  <div class="hm-note">{{ icon('info','sm') }} Hujjatni ochish uchun amalni bosing.</div>
+  {% if can('acct.view') %}<a class="hm-more" href="{{ url_for('acct.report') }}">Kunlik / haftalik batafsil hisobot →</a>{% endif %}
+  <a class="btn btn-light btn-block d-big" href="{{ url_for('hamyon.home') }}">{{ icon('home','sm') }} Bosh sahifaga</a>
+</div>
+{% endblock %}

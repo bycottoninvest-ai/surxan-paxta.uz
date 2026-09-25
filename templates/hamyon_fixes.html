@@ -1,0 +1,19 @@
+{% extends 'base.html' %}
+{% from 'macros.html' import icon, empty with context %}
+{% set page_title = 'Tuzatishlar' %}
+{% block content %}
+<div class="page-h"><h1>{{ icon('edit','lg') }} Tuzatishlar</h1><span class="sub">Kassa yozuvlaridagi har bir tuzatish: kim, qachon, nima sababdan, eski → yangi. Asl yozuvlar o‘chirilmaydi.</span></div>
+<section class="card"><div class="card-b">
+{% if rows %}<div class="table-wrap"><table class="t"><thead><tr><th>Vaqt</th><th>Yozuv</th><th>Sabab</th><th>Eski → yangi</th><th>So‘radi</th><th>Holat</th></tr></thead><tbody>
+{% for c in rows %}{% set o = c.old_json|fromjson if c.old_json else {} %}{% set n = c.new_json|fromjson if c.new_json else None %}
+<tr><td>{{ c.requested_at[:16] }}</td><td><a href="{{ url_for('hamyon.entry', cash_id=c.cash_entry_id) }}">{{ c.doc_no }}</a></td>
+  <td>{{ c.reason }}{% if c.note %}<div class="tiny muted">{{ c.note }}</div>{% endif %}</td>
+  <td class="small">{{ (o.amount or 0)|num }} · {{ o.who }}{{ ' · ' ~ o.category if o.category }} → {% if n %}<b>{{ n.amount|num }} · {{ n.who }}{{ ' · ' ~ n.category if n.category }}</b>{% else %}<b>bekor</b>{% endif %}
+    {% if c.new_doc_no %}<div class="tiny"><a href="{{ url_for('hamyon.entry', cash_id=c.new_cash_entry_id) }}">{{ c.new_doc_no }}</a></div>{% endif %}</td>
+  <td>{{ c.requested_name }}</td>
+  <td><span class="badge {{ {'KUTILMOQDA':'b-orange','BAJARILDI':'b-green','RAD':'b-gray'}[c.status] }}">{{ {'KUTILMOQDA':'Kutilmoqda','BAJARILDI':'Bajarildi','RAD':'Rad etildi'}[c.status] }}</span>
+    {% if c.decided_name %}<div class="tiny muted">{{ c.decided_name }} {{ c.decided_at[:16] }}</div>{% endif %}</td></tr>
+{% endfor %}</tbody></table></div>
+{% else %}{{ empty('Hali tuzatish yo‘q', 'edit') }}{% endif %}
+</div></section>
+{% endblock %}

@@ -31,10 +31,8 @@ def health():
 def dashboard():
     if g.user['role'] == 'station':
         return redirect(url_for('punkt.home'))
-    if g.user['role'] == 'accountant' and not request.args.get('view'):
-        return redirect(url_for('acct.home'))
-    if g.user['role'] == 'cashier':
-        return redirect(url_for('acct.cashier'))
+    if g.user['role'] in ('accountant', 'cashier') and not request.args.get('view'):
+        return redirect(url_for('hamyon.home'))
     if g.user['role'] == 'tally':
         return redirect(url_for('dala.home'))
     year = season_arg()

@@ -1,0 +1,7 @@
+{# confirm / edit buttons and the status line of a two-step money form; needs ok_label #}
+<div data-hm-review {{ 'hidden' if not review_open }}>{% if review_html %}{{ review_html }}{% endif %}</div>
+<div class="hm-acts" data-hm-actions {{ 'hidden' if not review_open }}>
+  <button type="button" class="btn btn-green btn-block d-big" data-hm-confirm>{{ ok_label }}</button>
+  {% if not no_edit %}<button type="button" class="btn btn-ghost btn-block" data-hm-edit>‹ O‘zgartirish</button>{% endif %}
+</div>
+<div class="hm-msg" data-hm-msg hidden></div>

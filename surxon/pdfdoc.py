@@ -350,3 +350,65 @@ def build_receipt_pdf(wb, *, company):
     c.drawString(x0, y, 'Qabul qildi: ____________________        Topshirdi (haydovchi): ____________________')
     c.save()
     return buf.getvalue()
+
+
+def build_cash_pdf(e, corrections, *, company, printed_by, printed_at):
+    """KASSA HUJJATI: one cash operation (payment / expense / income) with its corrections, for sharing from the phone."""
+    _fonts()
+    buf = io.BytesIO()
+    c = canvas.Canvas(buf, pagesize=A4)
+    W, H = A4
+    x0, x1 = 18 * mm, W - 18 * mm
+    c.setTitle(f'Kassa {e["doc_no"]}')
+    y = H - 20 * mm
+    c.setFont('DejaVu-Bold', 15)
+    c.drawString(x0, y, company)
+    y -= 10 * mm
+    title = {'pay': 'CHIQIM ORDERI — ISHCHIGA TO‘LOV', 'expense': 'CHIQIM ORDERI — XARAJAT',
+             'income': 'KIRIM ORDERI'}.get(e['kind'], 'KASSA HUJJATI')
+    c.setFont('DejaVu-Bold', 16)
+    c.drawCentredString(W / 2, y, title)
+    y -= 6 * mm
+    c.setFont('DejaVu', 10)
+    c.drawCentredString(W / 2, y, f'{e["doc_no"]} · {_date(e["entry_date"])} {e["created_at"][11:16]} · {e["box_name"] or ""}')
+    y -= 10 * mm
+    rows = [('Amal', e['what']), ('Kimga / kimdan', e['who'] or '—'),
+            ('Summa', f'{_num(e["amount"])} so‘m')]
+    if e['kind'] == 'expense':
+        if e['field_name']:
+            rows.append(('Dala', e['field_name']))
+        if e['equipment_code']:
+            rows.append(('Texnika', e['equipment_code']))
+    if e['note']:
+        rows.append(('Izoh', e['note']))
+    rows += [('Kiritdi', f'{e["by_name"] or "—"} · {e["created_at"][:16]}'), ('Holat', e['status_label'])]
+    if e['voided_at']:
+        rows.append(('Bekor/tuzatildi', f'{e["voided_name"] or ""} · {e["voided_at"][:16]}'))
+    for k, v in rows:
+        c.rect(x0, y - 9 * mm, 55 * mm, 9 * mm)
+        c.rect(x0 + 55 * mm, y - 9 * mm, x1 - x0 - 55 * mm, 9 * mm)
+        c.setFont('DejaVu', 10)
+        c.drawString(x0 + 2.5 * mm, y - 6 * mm, k)
+        c.setFont('DejaVu-Bold', 11)
+        c.drawString(x0 + 57.5 * mm, y - 6 * mm, str(v)[:62])
+        y -= 9 * mm
+    if corrections:
+        y -= 8 * mm
+        c.setFont('DejaVu-Bold', 11)
+        c.drawString(x0, y, 'Tuzatishlar tarixi')
+        c.setFont('DejaVu', 9)
+        for t in corrections:
+            y -= 6 * mm
+            status = {'KUTILMOQDA': 'kutilmoqda', 'BAJARILDI': 'bajarildi', 'RAD': 'rad etildi'}[t['status']]
+            c.drawString(x0, y, (f'#{t["id"]} {t["reason"]}' + (f' — {t["note"]}' if t['note'] else '') +
+                                 f' · {t["requested_name"] or ""} {t["requested_at"][:16]} · {status}'
+                                 + (f' ({t["decided_name"]})' if t['decided_name'] else '')
+                                 + (f' · yangi: {t["new_doc_no"]}' if t['new_doc_no'] else ''))[:110])
+    y -= 16 * mm
+    c.setFont('DejaVu', 9)
+    c.drawString(x0, y, 'Berdi: ____________________        Oldi: ____________________')
+    y -= 8 * mm
+    c.setFont('DejaVu', 8)
+    c.drawString(x0, y, f'Chop etildi: {printed_at[:16]} · {printed_by}')
+    c.save()
+    return buf.getvalue()

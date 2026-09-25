@@ -1,0 +1,55 @@
+{% extends 'base.html' %}
+{% from 'macros.html' import icon, csrf, uuid_field with context %}
+{% set page_title = 'Tuzatish' %}
+{% block content %}
+<div class="d-wrap hm">
+  <div class="d-top"><a class="icon-btn" href="{{ url_for('hamyon.entry', cash_id=e.id) }}">{{ icon('chev-left') }}</a><h1 class="d-h1">Tuzatish</h1></div>
+  <div class="hm-card"><div class="hm-rv-row"><span>{{ e.what }} · {{ e.doc_no }}</span><b class="num">{{ e.amount|num }} so‘m</b></div>
+    <div class="small muted">{{ e.who }} · {{ e.entry_date|d }} {{ e.created_at[11:16] }}</div></div>
+  <form class="d-form" data-hm data-check-url="{{ url_for('hamyon.fix_check', cash_id=e.id) }}" data-confirm-url="{{ url_for('hamyon.fix_confirm', cash_id=e.id) }}">
+    {{ csrf() }}{{ uuid_field() }}<input type="hidden" name="expect">
+    <div data-hm-step1 class="hm-step">
+      <label class="d-l">Nima xato?</label>
+      <div class="pk-rs">{% for r in reasons %}<label><input type="radio" name="reason" value="{{ r }}"><span>{{ r }}</span></label>{% endfor %}</div>
+      <div data-for="Noto‘g‘ri summa|Boshqa sabab" hidden><label class="d-l">To‘g‘ri summa (so‘m) <span class="muted" data-for="Boshqa sabab" hidden>— bo‘sh qolsa, yozuv bekor qilinadi</span></label>
+        <input name="new_amount" class="d-num" inputmode="numeric" data-money placeholder="0" autocomplete="off"></div>
+      {% if e.kind == 'pay' %}
+      <div data-for="Noto‘g‘ri odam" hidden><label class="d-l">Pul aslida kimga berildi?</label>
+        <input type="hidden" name="new_worker_id" id="hm-nw">
+        <input id="hm-nw-q" placeholder="Ismni yozing" autocomplete="off"><div class="d-sugg" id="hm-nw-list"></div></div>
+      {% else %}
+      <div data-for="Noto‘g‘ri odam" hidden><label class="d-l">{{ 'Aslida kimga berildi?' if e.kind == 'expense' else 'Aslida kimdan olindi?' }}</label>
+        <input name="new_party" maxlength="80" autocomplete="off"></div>
+      {% endif %}
+      {% if e.kind == 'expense' %}
+      <div data-for="Noto‘g‘ri xarajat turi" hidden><label class="d-l">To‘g‘ri tur</label>
+        <select name="new_category"><option value="">— tanlang —</option>{% for c in categories %}{% if c != e.exp_category %}<option>{{ c }}</option>{% endif %}{% endfor %}</select></div>
+      {% endif %}
+      <div data-for="Takroriy to‘lov" hidden class="hm-msg warn">Bu yozuv ikkinchi marta kiritilgan bo‘lsa — u bekor qilinadi, birinchisi qoladi.</div>
+      <div data-for="Boshqa sabab" hidden><label class="d-l">Sababni qisqa yozing</label><textarea name="note" rows="2" maxlength="300"></textarea></div>
+      <button type="button" class="btn btn-primary btn-block d-big" data-hm-check>Tekshirish</button>
+    </div>
+    {% with ok_label=('✅ Tuzatishni tasdiqlash' if applies_now else '📨 So‘rov yuborish (buxgalter tasdiqlaydi)') %}{% include 'partials/hm_actions.html' %}{% endwith %}
+  </form>
+  <div class="tiny muted">Bu faqat yozuvdagi xatoni tuzatadi. Berilgan pul haqiqatan qaytgan bo‘lsa — amal sahifasidagi “Pul kassaga qaytdi”.</div>
+</div>
+{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='js/hamyon.js') }}?v={{ version }}"></script>
+<script>
+(function(){
+  const sync = () => { const c = document.querySelector('input[name=reason]:checked'); const v = c ? c.value : '';
+    document.querySelectorAll('[data-for]').forEach(b => b.hidden = !b.dataset.for.split('|').includes(v)); };
+  document.querySelectorAll('input[name=reason]').forEach(r => r.addEventListener('change', sync));
+  document.addEventListener('hm:restored', sync); sync();
+  const q = document.getElementById('hm-nw-q'); if (!q) return;
+  const list = document.getElementById('hm-nw-list'), hid = document.getElementById('hm-nw');
+  const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  let t;
+  q.addEventListener('input', () => { hid.value = ''; clearTimeout(t); t = setTimeout(async () => {
+    if (q.value.trim().length < 2) { list.innerHTML = ''; return; }
+    try { const d = await (await fetch({{ url_for('hamyon.workers_json')|tojson }} + '?q=' + encodeURIComponent(q.value), {headers: {'X-Requested-With': 'fetch'}})).json();
+      list.innerHTML = (d.workers || []).filter(w => w.id !== {{ e.worker_id or 0 }}).map(w => `<button type="button" class="d-pick" data-id="${w.id}" data-name="${esc(w.name)}">${esc(w.name)} <small>№${w.id}${w.note ? ' · ' + esc(w.note) : ''}${w.last_brigade ? ' · ' + esc(w.last_brigade) : ''}</small></button>`).join('') || '<div class="small muted">Topilmadi.</div>';
+    } catch (_) { list.innerHTML = '<div class="small muted">Internet yo‘q.</div>'; } }, 250); });
+  list.addEventListener('click', e => { const b = e.target.closest('[data-id]'); if (!b) return; hid.value = b.dataset.id; q.value = b.dataset.name + ' №' + b.dataset.id; list.innerHTML = ''; });
+})();
+</script>{% endblock %}

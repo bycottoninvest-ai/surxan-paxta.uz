@@ -1,0 +1,33 @@
+{% extends 'base.html' %}
+{% from 'macros.html' import icon, csrf, uuid_field with context %}
+{% set page_title = 'Kassaga kirim' %}
+{% block content %}
+<div class="d-wrap hm">
+  <div class="d-top"><a class="icon-btn" href="{{ url_for('hamyon.home') }}">{{ icon('chev-left') }}</a><h1 class="d-h1">Kassaga kirim</h1></div>
+  <form class="d-form" data-hm data-check-url="{{ url_for('hamyon.income_check') }}" data-confirm-url="{{ url_for('hamyon.income_confirm') }}" enctype="multipart/form-data">
+    {{ csrf() }}{{ uuid_field() }}<input type="hidden" name="expect"><input type="hidden" name="source" id="hm-src">
+    <div data-hm-step1 class="hm-step">
+      <label class="d-l">Qayerdan yoki kimdan olindi?</label>
+      <div class="pk-rs">{% for s in sources %}<label><input type="radio" name="src_pick" value="{{ s }}"><span>{{ s }}</span></label>{% endfor %}</div>
+      <input id="hm-src-other" placeholder="Kimdan? (ism yoki tashkilot)" maxlength="80" autocomplete="off" hidden>
+      <label class="d-l">Summa (so‘m)</label>
+      <input name="amount" class="d-num" inputmode="numeric" data-money placeholder="0" autocomplete="off">
+      <details class="d-more"><summary>Izoh (ixtiyoriy)</summary><input name="note" maxlength="300" autocomplete="off"></details>
+      {% if boxes|length > 1 %}<label class="d-l">Qaysi kassaga</label><select name="cashbox_id">{% for b in boxes %}<option value="{{ b.id }}">{{ b.name }} · {{ b.balance|num }}</option>{% endfor %}</select>{% endif %}
+      <label class="hm-photo"><input type="file" name="photo" accept="image/*" capture="environment" data-preview>{{ icon('camera','sm') }} Hujjat / rasm qo‘shish (ixtiyoriy)<div class="previews"></div></label>
+      <button type="button" class="btn btn-primary btn-block d-big" data-hm-check>Tekshirish</button>
+    </div>
+    {% with ok_label='✅ Kirimni tasdiqlash' %}{% include 'partials/hm_actions.html' %}{% endwith %}
+  </form>
+</div>
+{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='js/hamyon.js') }}?v={{ version }}"></script>
+<script>
+(function(){
+  const src = document.getElementById('hm-src'), other = document.getElementById('hm-src-other');
+  const sync = () => { const c = document.querySelector('input[name=src_pick]:checked'); const isOther = c && c.value === 'Boshqa';
+    other.hidden = !isOther; src.value = !c ? '' : (isOther ? (other.value.trim() ? other.value.trim() : '') : c.value); };
+  document.querySelectorAll('input[name=src_pick]').forEach(r => r.addEventListener('change', sync));
+  other.addEventListener('input', sync); document.addEventListener('hm:restored', sync); document.addEventListener('hm:before', sync);
+})();
+</script>{% endblock %}

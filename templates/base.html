@@ -35,11 +35,16 @@
       {{ nav('dala.new_trip', 'Yangi telashka', 'plus') }}
       {{ nav('auth.change_password', 'Parolni almashtirish', 'shield') }}
       {% elif current_user['role'] == 'cashier' %}
+      {{ nav('hamyon.home', 'Mening kassam', 'wallet', None, ['hamyon.home', 'hamyon.pay', 'hamyon.order', 'hamyon.expense', 'hamyon.entry', 'hamyon.fix']) }}
+      {{ nav('hamyon.today', 'Bugungi amallar', 'list') }}
       {{ nav('acct.cashier', 'Pul beriladiganlar', 'cash') }}
       {{ nav('acct.payouts', 'To‘lovlar tarixi', 'history') }}
       {{ nav('acct.expense_pick', 'Xarajat yozish', 'receipt', None, ['acct.expense_pick', 'acct.expense_new']) }}
       {% else %}
       {{ nav('main.dashboard', 'Bosh sahifa', 'home') }}
+      {% if current_user['role'] == 'accountant' %}{{ nav('hamyon.home', 'Mening kassam', 'wallet', None, ['hamyon.home', 'hamyon.pay', 'hamyon.pay_worker', 'hamyon.expense', 'hamyon.income', 'hamyon.entry', 'hamyon.fix']) }}
+      {{ nav('hamyon.today', 'Bugungi amallar', 'list') }}{% endif %}
+      {{ nav('hamyon.fixes', 'Tuzatishlar', 'edit', 'cash.view') }}
       {{ nav('ops.harvest', 'Terim (Qo‘l terimi)', 'sprout', 'harvest.write') }}
       {{ nav('ops.harvest', 'Kombayn', 'combine', 'harvest.write', match=['__none'], args={'method': 'combine'}) }}
       {{ nav('ops.loads', 'Telashkalar', 'trailer', None, ['ops.loads', 'ops.load_detail']) }}
@@ -121,13 +126,10 @@
 </div>
 <nav class="bottom-nav">
       {% if current_user['role'] in ('accountant', 'cashier') %}
-  <a href="{{ url_for('main.dashboard') }}" class="{{ 'active' if ep in ('acct.home', 'acct.cashier') }}">{{ icon('home') }}Bosh</a>
-  {% if current_user['role'] == 'accountant' %}<a href="{{ url_for('acct.workers') }}" class="{{ 'active' if ep == 'acct.workers' }}">{{ icon('users') }}To‘lovlar</a>
-  <a href="{{ url_for('acct.expense_pick') }}" class="primary">{{ icon('plus') }}Xarajat</a>
-  <a href="{{ url_for('acct.cash') }}" class="{{ 'active' if ep == 'acct.cash' }}">{{ icon('cash') }}Kassa</a>
-  {% else %}<a href="{{ url_for('acct.payouts', status='BERILDI', period='bugun') }}">{{ icon('history') }}Berilgan</a>
-  <a href="{{ url_for('acct.cashier') }}" class="primary">{{ icon('cash') }}To‘lash</a>
-  <a href="{{ url_for('acct.expense_pick') }}">{{ icon('receipt') }}Xarajat</a>{% endif %}
+  <a href="{{ url_for('hamyon.home') }}" class="{{ 'active' if ep == 'hamyon.home' }}">{{ icon('home') }}Kassam</a>
+  <a href="{{ url_for('hamyon.today') }}" class="{{ 'active' if ep == 'hamyon.today' }}">{{ icon('list') }}Bugun</a>
+  <a href="{{ url_for('hamyon.pay') }}" class="primary">{{ icon('user') }}Pul berish</a>
+  <a href="{{ url_for('hamyon.expense') }}" class="{{ 'active' if ep == 'hamyon.expense' }}">{{ icon('receipt') }}Xarajat</a>
   <a href="#" data-open-nav>{{ icon('menu') }}Boshqa</a>
   {% elif current_user['role'] == 'tally' %}
   <a href="{{ url_for('dala.home') }}" class="{{ 'active' if ep == 'dala.home' }}">{{ icon('home') }}Bosh</a>

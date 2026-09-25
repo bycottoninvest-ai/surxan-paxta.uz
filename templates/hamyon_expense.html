@@ -1,0 +1,38 @@
+{% extends 'base.html' %}
+{% from 'macros.html' import icon, csrf, uuid_field with context %}
+{% set page_title = 'Xarajat yozish' %}
+{% block content %}
+<div class="d-wrap hm">
+  <div class="d-top"><a class="icon-btn" href="{{ url_for('hamyon.home') }}">{{ icon('chev-left') }}</a><h1 class="d-h1">Xarajat yozish</h1></div>
+  <form class="d-form" data-hm data-check-url="{{ url_for('hamyon.expense_check') }}" data-confirm-url="{{ url_for('hamyon.expense_confirm') }}" enctype="multipart/form-data">
+    {{ csrf() }}{{ uuid_field() }}<input type="hidden" name="expect">
+    <div data-hm-step1 class="hm-step">
+      <label class="d-l">Turini tanlang</label>
+      <div class="hm-tiles">{% for name, ico, link in types %}<label><input type="radio" name="category" value="{{ name }}" data-link="{{ link or '' }}"><span>{{ icon(ico,'lg') }}{{ name }}</span></label>{% endfor %}</div>
+      <div data-link-box="equipment" hidden><label class="d-l">Qaysi texnika <span class="muted">(ixtiyoriy)</span></label>
+        <select name="equipment_id"><option value="">—</option>{% for e in equipment %}<option value="{{ e.id }}">{{ e.code }} · {{ e.kind }}</option>{% endfor %}</select></div>
+      <div data-link-box="field" hidden><label class="d-l">Qaysi dala <span class="muted">(ixtiyoriy — brigada hisobiga tushadi)</span></label>
+        <select name="field_id"><option value="">—</option>{% for f in fields %}<option value="{{ f.id }}">{{ f.code }} · {{ f.name }}</option>{% endfor %}</select></div>
+      <label class="d-l">Summa (so‘m)</label>
+      <input name="amount" class="d-num" inputmode="numeric" data-money placeholder="0" autocomplete="off">
+      <label class="d-l">Kimga berildi?</label>
+      <input name="payer" placeholder="masalan: Yoqilg‘i shoxobchasi" autocomplete="off" maxlength="80">
+      <details class="d-more"><summary>Izoh (ixtiyoriy)</summary><input name="note" maxlength="300" autocomplete="off"></details>
+      {% if boxes|length > 1 %}<label class="d-l">Qaysi kassadan</label><select name="cashbox_id">{% for b in boxes %}<option value="{{ b.id }}">{{ b.name }} · {{ b.balance|num }}</option>{% endfor %}</select>{% endif %}
+      <label class="hm-photo"><input type="file" name="photo" accept="image/*" capture="environment" data-preview>{{ icon('camera','sm') }} Chek yoki rasm qo‘shish<div class="previews"></div></label>
+      <button type="button" class="btn btn-primary btn-block d-big" data-hm-check>Tekshirish</button>
+    </div>
+    {% with ok_label='✅ Xarajatni tasdiqlash' %}{% include 'partials/hm_actions.html' %}{% endwith %}
+  </form>
+  <div class="tiny muted">Ish haqi, avans va kombayn puli bu yerda yozilmaydi — “Ishchiga pul berish” orqali (hisobga bir marta tushadi).</div>
+</div>
+{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='js/hamyon.js') }}?v={{ version }}"></script>
+<script>
+(function(){
+  const sync = () => { const c = document.querySelector('input[name=category]:checked'); const link = c ? c.dataset.link : '';
+    document.querySelectorAll('[data-link-box]').forEach(b => b.hidden = b.dataset.linkBox !== link); };
+  document.querySelectorAll('input[name=category]').forEach(r => r.addEventListener('change', sync));
+  document.addEventListener('hm:restored', sync); sync();
+})();
+</script>{% endblock %}

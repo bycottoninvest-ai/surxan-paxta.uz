@@ -1,0 +1,14 @@
+<div class="hm-review">
+  <div class="hm-rv-h">Tuzatishni tekshiring · {{ p.reason }}</div>
+  <table class="hm-cmp"><thead><tr><th></th><th>Eski</th><th>Yangi</th></tr></thead><tbody>
+    <tr><td>Summa</td><td class="num">{{ p.old.amount|num }}</td><td class="num"><b>{{ '—' if p.cancel else p.new.amount|num }}</b></td></tr>
+    <tr><td>{{ 'Kimga' if p.kind != 'income' else 'Kimdan' }}</td><td>{{ p.old.who }}</td><td><b>{{ '—' if p.cancel else p.new.who }}</b></td></tr>
+    {% if p.kind == 'expense' %}<tr><td>Turi</td><td>{{ p.old.category }}</td><td><b>{{ '—' if p.cancel else p.new.category }}</b></td></tr>{% endif %}
+  </tbody></table>
+  {% if p.cancel %}<div class="hm-msg warn">Yozuv butunlay bekor qilinadi (hisobga kirmaydi).</div>{% endif %}
+  <div class="hm-rv-row"><span>{{ p.box_name }} qoldig‘i</span><b class="num">{{ p.box_before|num }} → {{ p.box_after|num }} so‘m</b></div>
+  {% for x in p.people %}<div class="hm-rv-row"><span>{{ x.name }} qarzi</span><b class="num">{{ x.before|num }} → {{ x.after|num }} so‘m</b></div>{% endfor %}
+  {% if p.note %}<div class="small">Izoh: {{ p.note }}</div>{% endif %}
+  <div class="tiny muted">Asl yozuv o‘chirilmaydi: “tuzatilgan” deb tarixda qoladi, o‘rniga yangi yozuv bog‘lanadi. Kim, qachon, nima sababdan — direktor ko‘radi.
+    {% if not p.applies_now %}<b>Buxgalter tasdiqlagandan keyin kuchga kiradi.</b>{% endif %}</div>
+</div>

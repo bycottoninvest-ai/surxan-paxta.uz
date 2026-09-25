@@ -1,0 +1,60 @@
+{% extends 'base.html' %}
+{% from 'macros.html' import icon, csrf with context %}
+{% set page_title = e.doc_no %}
+{% block content %}
+<div class="d-wrap hm">
+  <div class="d-top"><a class="icon-btn" href="{{ url_for('hamyon.today') }}">{{ icon('chev-left') }}</a><h1 class="d-h1">{{ e.what }}</h1></div>
+  {% if fresh and not e.voided_at %}<div class="d-ok">{{ icon('check-circle','lg') }}<b>Saqlandi</b><span class="small">Server tasdiqladi · {{ e.doc_no }}</span></div>{% endif %}
+  {% if e.voided_at %}<div class="notice">{{ icon('alert','sm') }} <div><b>Bu yozuv {{ 'tuzatilgan' if e.corr_status == 'BAJARILDI' else 'bekor qilingan' }} — hisobga kirmaydi.</b><br><span class="small">{{ e.void_reason }}</span></div></div>{% endif %}
+  <div class="hm-card">
+    <div class="hm-rv-big {{ 'hm-in' if e.direction == 'IN' }}"><span>{{ e.who or '—' }}</span><b class="num">{{ '+' if e.direction == 'IN' else '−' }}{{ e.amount|num }} so‘m</b></div>
+    <div class="hm-rv-row"><span>Hujjat</span><b>{{ e.doc_no }}</b></div>
+    <div class="hm-rv-row"><span>Vaqt</span><b>{{ e.entry_date|d }} {{ e.created_at[11:16] }}</b></div>
+    <div class="hm-rv-row"><span>Kassa</span><b>{{ e.box_name }}</b></div>
+    {% if e.field_name %}<div class="hm-rv-row"><span>Dala</span><b>{{ e.field_name }}</b></div>{% endif %}
+    {% if e.equipment_code %}<div class="hm-rv-row"><span>Texnika</span><b>{{ e.equipment_code }}</b></div>{% endif %}
+    {% if e.note %}<div class="hm-rv-row"><span>Izoh</span><b>{{ e.note }}</b></div>{% endif %}
+    <div class="hm-rv-row"><span>Kiritdi</span><b>{{ e.by_name }}</b></div>
+    <div class="hm-rv-row"><span>Holat</span><span class="badge {{ e.badge }}">{{ e.status_label }}</span></div>
+  </div>
+  {% if photos %}<div class="hm-photos">{% for p in photos %}<img src="{{ photo_url(p.thumb_path or p.path) }}" data-full="{{ photo_url(p.path) }}" alt="">{% endfor %}</div>{% endif %}
+  {% set doc_url = url_for('hamyon.entry_pdf', cash_id=e.id) %}{% set doc_file = e.doc_no ~ '.pdf' %}
+  {% set doc_title = 'Kassa hujjati' %}{% set doc_sub = e.doc_no ~ ' · ' ~ e.what %}
+  {% include 'partials/doc_card.html' %}
+
+  {% if pending %}
+  <div class="hm-card hm-pend">
+    <b>Tuzatish so‘rovi · {{ pending.reason }}</b>
+    <span class="small">{{ pending.requested_name }} · {{ pending.requested_at[:16] }}{{ ' · ' ~ pending.note if pending.note }}</span>
+    {% if plan and plan.error %}<div class="hm-msg err">{{ plan.error }}</div>
+    {% elif plan %}{% with p=plan %}{% include 'partials/hm_review_fix.html' %}{% endwith %}{% endif %}
+    {% if can('expenses.approve') %}
+    <div class="hm-acts">
+      {% if plan and not plan.error %}<form method="post" action="{{ url_for('hamyon.fix_approve', corr_id=pending.id) }}">{{ csrf() }}<button class="btn btn-green btn-block d-big">✅ Tuzatishni tasdiqlash</button></form>{% endif %}
+      <form method="post" action="{{ url_for('hamyon.fix_reject', corr_id=pending.id) }}" data-confirm="So‘rov rad etilsinmi? Asl yozuv o‘zgarmaydi.">{{ csrf() }}<button class="btn btn-ghost btn-block">Rad etish</button></form>
+    </div>
+    {% else %}<div class="tiny muted">Buxgalter tasdiqlagandan keyin kuchga kiradi.</div>{% endif %}
+  </div>
+  {% endif %}
+
+  {% if corrs %}
+  <div class="hm-card"><b>Tuzatishlar tarixi</b>
+    {% for c in corrs %}<div class="hm-hist">
+      <span>{{ c.requested_at[:16] }} · {{ c.requested_name }} — <b>{{ c.reason }}</b>{{ ': ' ~ c.note if c.note }}</span>
+      <span class="small muted">{{ {'KUTILMOQDA': 'kutilmoqda', 'BAJARILDI': 'bajarildi', 'RAD': 'rad etildi'}[c.status] }}{{ ' · ' ~ c.decided_name ~ ' ' ~ c.decided_at[:16] if c.decided_name }}
+        {% if c.cash_entry_id != e.id %} · <a href="{{ url_for('hamyon.entry', cash_id=c.cash_entry_id) }}">asl yozuv</a>{% elif c.new_cash_entry_id %} · <a href="{{ url_for('hamyon.entry', cash_id=c.new_cash_entry_id) }}">yangi yozuv {{ c.new_doc_no }}</a>{% endif %}</span>
+    </div>{% endfor %}
+  </div>
+  {% endif %}
+
+  {% if may_fix %}<a class="btn btn-light btn-block d-big" href="{{ url_for('hamyon.fix', cash_id=e.id) }}">{{ icon('edit','sm') }} Tuzatish</a>{% endif %}
+  {% if may_refund %}
+  <details class="d-more"><summary>Pul amalda qaytib keldimi?</summary>
+    <form method="post" action="{{ url_for('hamyon.refund', cash_id=e.id) }}" class="d-form" data-confirm="Pul haqiqatan kassaga qaytdimi? Bu yozuv xatosi emas — alohida qaytish amali.">{{ csrf() }}
+      <div class="tiny muted">Faqat pul qo‘lingizga qaytgan bo‘lsa. Yozuvdagi xato uchun “Tuzatish”ni bosing.</div>
+      <input name="reason" placeholder="Nega qaytdi?" required minlength="3" maxlength="300">
+      <button class="btn btn-light btn-block">Pul kassaga qaytdi</button></form></details>
+  {% endif %}
+  <a class="btn btn-primary btn-block d-big" href="{{ url_for('hamyon.home') }}">{{ icon('home','sm') }} Bosh sahifaga</a>
+</div>
+{% endblock %}

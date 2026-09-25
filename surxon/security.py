@@ -196,7 +196,7 @@ def load_user():
 
 # Cashier: only prepared payments, their own cash box shift and quick expenses.
 CASHIER_ENDPOINTS = STATION_ENDPOINTS | {'acct.cashier', 'acct.payout_pay', 'acct.payouts', 'acct.expense_pick',
-                                         'acct.expense_new'}
+                                         'acct.expense_new', 'main.media'}
 
 
 # Field clerk: only the four-step field screens (and the few trip endpoints they use) — no reports, money, staff,
@@ -216,11 +216,11 @@ def station_gate():
         return None
     if user['role'] == 'station' and (ep in STATION_ENDPOINTS or ep in STATION_EXTRA or ep.startswith('punkt.')):
         return None
-    if user['role'] == 'cashier' and ep in CASHIER_ENDPOINTS:
+    if user['role'] == 'cashier' and (ep in CASHIER_ENDPOINTS or ep.startswith('hamyon.')):
         return None
     if wants_json():
         return jsonify(ok=False, error='Bu amal uchun huquqingiz yo‘q.'), 403
-    return redirect(url_for({'station': 'punkt.home', 'cashier': 'acct.cashier', 'tally': 'dala.home'}[user['role']]))
+    return redirect(url_for({'station': 'punkt.home', 'cashier': 'hamyon.home', 'tally': 'dala.home'}[user['role']]))
 
 
 def login_required(fn):

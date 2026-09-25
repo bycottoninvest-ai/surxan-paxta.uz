@@ -1,0 +1,8 @@
+<div class="hm-review">
+  <div class="hm-rv-h">Tekshiring</div>
+  <div class="hm-rv-row"><span>Kimga</span><b>{{ p.worker.name }} <small class="muted">№{{ p.worker.id }}</small></b></div>
+  {% if p.doc_no %}<div class="hm-rv-row"><span>To‘lov</span><b>{{ p.doc_no }}{{ ' · avans' if p.purpose == 'advance' }}</b></div>{% endif %}
+  <div class="hm-rv-big"><span>Beriladi</span><b class="num">{{ p.amount|num }} so‘m</b></div>
+  <div class="hm-rv-row"><span>To‘lovdan keyin qarz</span><b class="num {{ 'hm-green' if p.debt_after <= 0 else 'hm-red' }}">{{ p.debt_after|num }} so‘m</b></div>
+  <div class="hm-rv-row"><span>{{ p.box_name }} qoldig‘i</span><b class="num">{{ p.box_before|num }} → {{ p.box_after|num }} so‘m</b></div>
+</div>

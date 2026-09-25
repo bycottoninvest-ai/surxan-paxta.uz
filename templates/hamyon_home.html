@@ -1,0 +1,19 @@
+{% extends 'base.html' %}
+{% from 'macros.html' import icon with context %}
+{% set page_title = 'Mening kassam' %}
+{% block content %}
+<div class="d-wrap hm">
+  <h1 class="d-h1">Mening kassam</h1>
+  {% for b in boxes %}
+  <div class="hm-bal"><span class="hm-bal-ico">{{ icon('wallet','lg') }}</span>
+    <div><span>{{ 'Qoldiq' if boxes|length == 1 else b.name ~ ' qoldig‘i' }}</span><b class="num">{{ b.balance|num }} so‘m</b></div></div>
+  {% else %}<div class="notice">{{ icon('alert','sm') }} Kassa yaratilmagan — administrator “Kassalar” bo‘limida qo‘shadi.</div>{% endfor %}
+  {% if pending %}<a class="hm-alert" href="{{ url_for('hamyon.fixes') }}">{{ icon('edit','sm') }} Tuzatish so‘rovi: <b>{{ pending }} ta</b> — ko‘rib tasdiqlang</a>{% endif %}
+  {% if can('payouts.pay') %}<a class="hm-btn" href="{{ url_for('hamyon.pay') }}">{{ icon('user') }}<span>Ishchiga pul berish{% if ready %}<small>{{ ready }} ta tayyor to‘lov</small>{% endif %}</span>{{ icon('chev-right') }}</a>{% endif %}
+  {% if can('expenses.write') %}<a class="hm-btn" href="{{ url_for('hamyon.expense') }}">{{ icon('receipt') }}<span>Xarajat yozish</span>{{ icon('chev-right') }}</a>{% endif %}
+  {% if can('cash.write') %}<a class="hm-btn" href="{{ url_for('hamyon.income') }}">{{ icon('plus') }}<span>Kassaga kirim</span>{{ icon('chev-right') }}</a>{% endif %}
+  <a class="hm-btn" href="{{ url_for('hamyon.today') }}">{{ icon('list') }}<span>Bugungi amallar</span>{{ icon('chev-right') }}</a>
+  <div class="hm-note">{{ icon('info','sm') }} {{ 'Faqat sizga biriktirilgan kassa' if own_box else ('Kassa: ' ~ boxes[0].name if boxes|length == 1 else 'Hamma kassalar') }}</div>
+  {% if can('acct.view') %}<a class="hm-more" href="{{ url_for('acct.home') }}">To‘liq buxgalteriya: hisobotlar, qarzlar, kun yopish →</a>{% endif %}
+</div>
+{% endblock %}

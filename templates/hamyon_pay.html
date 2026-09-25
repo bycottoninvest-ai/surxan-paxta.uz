@@ -1,0 +1,45 @@
+{% extends 'base.html' %}
+{% from 'macros.html' import icon, csrf, uuid_field with context %}
+{% set page_title = 'Ishchiga pul berish' %}
+{% block content %}
+<div class="d-wrap hm">
+  <div class="d-top"><a class="icon-btn" href="{{ url_for('hamyon.pay') }}">{{ icon('chev-left') }}</a><h1 class="d-h1">Ishchiga pul berish</h1></div>
+  <div class="hm-person hm-static"><span class="hm-ava">{{ icon('user') }}</span>
+    <span class="hm-person-b"><b>{{ w.name }}</b><small>№{{ w.id }}{{ ' · ' ~ w.note if w.note }}{{ ' · ' ~ w.phone if w.phone }}</small>
+      {% if w.brigades %}<small>{{ w.brigades|join(', ') }} {{ 'brigadalari' if w.brigades|length > 1 else 'brigadasi' }}</small>{% endif %}</span></div>
+  <div class="hm-fig">
+    <div><span>Ishlagan haqi</span><b class="num hm-green">{{ w.earned|num }} so‘m</b></div>
+    <div><span>Oldin berilgan</span><b class="num">{{ w.given|num }} so‘m</b></div>
+    <div><span>Qolgan qarz</span><b class="num hm-red">{{ w.debt|num }} so‘m</b></div>
+    {% if w.pending %}<div class="tiny"><span>Kassirda tayyor to‘lov bor</span><b class="num">{{ w.pending|num }} so‘m</b></div>{% endif %}
+  </div>
+  {% if w.uncalc_kg %}<div class="notice">{{ icon('alert','sm') }} {{ w.uncalc_kg|num }} kg narxsiz yozilgan — u hali haqiga qo‘shilmagan.</div>{% endif %}
+  {% if w.payable <= 0 %}
+  <div class="notice blue">{{ icon('info','sm') }} Bu ishchida berilmagan qarz yo‘q.</div>
+  {% else %}
+  <form class="d-form" data-hm data-check-url="{{ url_for('hamyon.pay_check', worker_id=w.id) }}" data-confirm-url="{{ url_for('hamyon.pay_confirm', worker_id=w.id) }}">
+    {{ csrf() }}{{ uuid_field() }}<input type="hidden" name="expect">
+    <div data-hm-step1 class="hm-step">
+      <button type="button" class="btn btn-light btn-block hm-full" data-fill="{{ w.payable }}">To‘liq berish · {{ w.payable|num }} so‘m</button>
+      <label class="d-l">Beriladigan summa (so‘m)</label>
+      <input name="amount" id="hm-amount" class="d-num" inputmode="numeric" data-money placeholder="0" autocomplete="off">
+      {% if boxes|length > 1 %}<label class="d-l">Qaysi kassadan</label><select name="cashbox_id">{% for b in boxes %}<option value="{{ b.id }}">{{ b.name }} · {{ b.balance|num }}</option>{% endfor %}</select>{% endif %}
+      <div class="hm-after" id="hm-after" data-debt="{{ w.debt }}">To‘lovdan keyin qarz: <b>{{ w.debt|num }} so‘m</b></div>
+      <button type="button" class="btn btn-primary btn-block d-big" data-hm-check>Tekshirish</button>
+    </div>
+    {% with ok_label='✅ To‘lovni tasdiqlash' %}{% include 'partials/hm_actions.html' %}{% endwith %}
+  </form>
+  {% endif %}
+</div>
+{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='js/hamyon.js') }}?v={{ version }}"></script>
+<script>
+(function(){
+  const a = document.getElementById('hm-amount'), out = document.getElementById('hm-after'); if (!a) return;
+  const debt = parseFloat(out.dataset.debt), num = v => parseFloat(String(v).replace(/\s/g, '')) || 0;
+  const show = () => { out.querySelector('b').textContent = Math.round(debt - num(a.value)).toLocaleString('ru-RU') + ' so‘m'; };
+  a.addEventListener('input', show);
+  document.querySelector('[data-fill]').addEventListener('click', e => { a.value = Number(e.currentTarget.dataset.fill).toLocaleString('ru-RU'); show(); a.dispatchEvent(new Event('input', {bubbles: true})); });
+  document.addEventListener('hm:restored', show);
+})();
+</script>{% endblock %}

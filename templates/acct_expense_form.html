@@ -10,7 +10,7 @@
     <div class="f"><label>Summa (so‘m) <span class="req">*</span></label><input name="amount" class="big a-money" inputmode="numeric" required placeholder="0" autocomplete="off" data-money autofocus></div>
     {% if category in ('Punkt xarajati',) %}
     <div class="f"><label>Qaysi punkt</label><select name="station_id"><option value="">—</option>{% for s in stations %}<option value="{{ s.id }}">{{ s.name }}</option>{% endfor %}</select></div>
-    {% elif category in ('Yoqilg‘i', 'Remont', 'Transport') %}
+    {% elif category in ('Yoqilg‘i', 'Ta‘mirlash', 'Ehtiyot qism', 'Remont', 'Transport') %}
     <div class="f h"><label>Texnika (ixtiyoriy)</label><select name="equipment_id"><option value="">—</option>{% for e in equipment %}<option value="{{ e.id }}">{{ e.code }} · {{ e.kind }}</option>{% endfor %}</select></div>
     <div class="f h"><label>Dala (ixtiyoriy)</label><select name="field_id"><option value="">—</option>{% for f in fields %}<option value="{{ f.id }}">{{ f.code }} · {{ f.name }}</option>{% endfor %}</select></div>
     {% else %}

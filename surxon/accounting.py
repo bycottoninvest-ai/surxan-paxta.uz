@@ -169,8 +169,8 @@ def _feed_cash(db, cid):
          + (f'\n{e["note"]}' if e['note'] else ''))
 
 
-def add_income(actor, *, amount, source, cashbox_id=None, note='', photo=None, client_uuid=None, entry_date=None):
-    """PUL KIRIMI: a new entry every time (earlier income is never edited)."""
+def add_income(actor, *, amount, source, cashbox_id=None, note='', photo=None, client_uuid=None, entry_date=None, check=None):
+    """PUL KIRIMI: a new entry every time (earlier income is never edited). check(db, box): optional in-transaction guard."""
     _need(actor, 'cash.write')
     if not amount or amount <= 0:
         raise UserError('Summa 0 dan katta bo‘lishi kerak.')
@@ -183,6 +183,8 @@ def add_income(actor, *, amount, source, cashbox_id=None, note='', photo=None, c
             if dup:
                 return dup['id'], dup['doc_no']
         box = _cashbox(db, actor, cashbox_id)
+        if check:
+            check(db, box)
         cid, no = book_cash(db, actor, direction='IN', category='income', amount=amount, entry_date=entry_date,
                             cashbox_id=box, source=source, counterparty=source, note=note, client_uuid=client_uuid)
         if photo:
@@ -410,8 +412,9 @@ def prepare_payout(actor, *, kind, target_id, amount=None, purpose='pay', note='
         return pid, no
 
 
-def pay_payout(actor, payout_id):
-    """Cashier: "339 000 SO‘M BERILDI". The status flips in one guarded UPDATE, so a double tap pays once."""
+def pay_payout(actor, payout_id, check=None):
+    """Cashier: "339 000 SO‘M BERILDI". The status flips in one guarded UPDATE, so a double tap pays once.
+    check(db, payout, cashbox_id): optional guard run inside the transaction before the money moves."""
     _need(actor, 'payouts.pay')
     with tx() as db:
         p = db.execute('SELECT * FROM payouts WHERE id=?', (payout_id,)).fetchone()
@@ -424,6 +427,8 @@ def pay_payout(actor, payout_id):
         box = _cashbox(db, actor, p['cashbox_id'])
         if actor.role == 'cashier' and box != p['cashbox_id'] and p['cashbox_id']:
             raise UserError('Bu to‘lov boshqa kassadan beriladi.')
+        if check:
+            check(db, p, box)
         category = 'combine_pay' if p['kind'] == 'combine' else ('advance' if p['purpose'] == 'advance' else 'worker_pay')
         who = (db.execute('SELECT full_name FROM workers WHERE id=?', (p['worker_id'],)).fetchone()['full_name']
                if p['kind'] == 'worker' else db.execute('SELECT code FROM equipment WHERE id=?', (p['combine_id'],)).fetchone()['code'])
@@ -482,7 +487,7 @@ def refund_payout(actor, payout_id, reason):
 # ------------------------------------------------------------------ expenses
 
 EXPENSE_BUTTONS = [
-    ('Yoqilg‘i', 'truck'), ('Ovqat', 'cotton'), ('Transport', 'trailer'), ('Remont', 'settings'),
+    ('Yoqilg‘i', 'truck'), ('Ovqat', 'cotton'), ('Transport', 'trailer'), ('Ta‘mirlash', 'wrench'), ('Ehtiyot qism', 'gear'),
     ('Punkt xarajati', 'factory'), ('Boshqa', 'receipt'),
 ]
 # these three are not ordinary expenses — they open their own flows (money owed to a person or combine)

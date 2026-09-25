@@ -1,0 +1,22 @@
+{% extends 'base.html' %}
+{% from 'macros.html' import icon, empty with context %}
+{% set page_title = 'Ishchiga pul berish' %}
+{% block content %}
+<div class="d-wrap hm">
+  <div class="d-top"><a class="icon-btn" href="{{ url_for('hamyon.home') }}">{{ icon('chev-left') }}</a><h1 class="d-h1">Ishchiga pul berish</h1></div>
+  <div class="small muted">Buxgalter tayyorlagan to‘lovlar. Odamni bosing — tekshirib, pulni bering.</div>
+  <label class="hm-search">{{ icon('search','sm') }}<input id="hm-q" type="search" placeholder="Ismni qidiring" autocomplete="off"></label>
+  <div class="hm-people" id="hm-list">
+  {% for p in orders %}
+    <a class="hm-person" href="{{ url_for('hamyon.order', payout_id=p.id) }}" data-name="{{ (p.worker_name or p.combine_code or '')|lower }}">
+      <span class="hm-ava">{{ icon('user') }}</span>
+      <span class="hm-person-b"><b>{{ p.worker_name or ('Kombayn ' ~ p.combine_code) }}</b><small>{{ p.doc_no }}{{ ' · avans' if p.purpose == 'advance' }}{{ ' · №' ~ p.worker_id if p.worker_id }}{{ ' · ' ~ p.worker_note if p.worker_note }}</small></span>
+      <span class="hm-person-s"><small>Beriladi</small><b>{{ p.amount|num }}</b></span></a>
+  {% else %}{{ empty('Tayyor to‘lov yo‘q — buxgalter tayyorlaganda shu yerda chiqadi', 'card') }}{% endfor %}
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}<script>
+document.getElementById('hm-q').addEventListener('input', e => { const v = e.target.value.toLowerCase().trim();
+  document.querySelectorAll('#hm-list [data-name]').forEach(a => a.hidden = v && !a.dataset.name.includes(v)); });
+</script>{% endblock %}
