@@ -40,6 +40,18 @@
   </section>
 
   <section class="card s12">
+    <div class="card-h"><h3>{{ icon('map') }} Google sun’iy yo‘ldosh xaritasi</h3>
+      <span class="badge {{ 'b-green' if gmaps_tail or gmaps_env else 'b-gray' }}" style="margin-left:auto">{{ ('Ulangan ' ~ gmaps_tail) if gmaps_tail else ('Ulangan (server .env)' if gmaps_env else 'Ulanmagan — Esri foni') }}</span></div>
+    <div class="card-b">
+      <p class="small">Google Cloud → Map Tiles API kaliti (“AIza…”). Kalitni Google Cloud’da <b>faqat https://surxan-paxta.uz/*</b> sayti va <b>faqat Map Tiles API</b> bilan cheklang. Kalit xarita ochilgan brauzerga baribir yuboriladi — shuning uchun cheklov muhim. Ishlamasa, bepul Esri foni avtomatik qoladi.</p>
+      <form method="post" class="row">{{ csrf() }}<input type="hidden" name="action" value="gmaps_save">
+        <input class="input" type="password" name="gmaps_key" placeholder="AIza… kalitni shu yerga qo‘ying" autocomplete="off" style="flex:1;min-width:260px">
+        <button class="btn btn-primary">Saqlash</button></form>
+      {% if gmaps_tail %}<form method="post" class="mt-s" data-confirm="Google kaliti o‘chirilsinmi?">{{ csrf() }}<input type="hidden" name="action" value="gmaps_clear"><button class="btn btn-ghost btn-sm">Kalitni o‘chirish</button></form>{% endif %}
+    </div>
+  </section>
+
+  <section class="card s12">
     <div class="card-h"><h3>{{ icon('telegram') }} Telegram kanallari (arxiv va hisobot)</h3></div>
     <div class="card-b">
       <p class="small">Botni{% if bot_user %} (<b>@{{ bot_user }}</b>){% endif %} kanalga <b>administrator</b> qiling, keyin o‘sha kanalga istalgan bitta xabar yozing (masalan “salom”) — kanal shu ro‘yxatda paydo bo‘ladi (sahifani yangilang). Keyin uning vazifasini tanlang. Bot kanal xabarlarining matnini saqlamaydi.</p>

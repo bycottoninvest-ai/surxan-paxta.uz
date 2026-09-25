@@ -14,7 +14,7 @@ from .config import BASE_DIR, Config
 from .security import (PERMISSIONS, ROLES, brigadier_scope, can, csrf_token, load_user, wants_json)
 from .utils import UserError, fmt_date, fmt_money, fmt_num, now_str, today_str, weekday_name
 
-VERSION = '2.11.1'
+VERSION = '2.11.2'
 
 
 def create_app(**overrides):
@@ -182,8 +182,15 @@ def register_template_helpers(app):
             'photo_categories': CATEGORIES, 'my_brigade': brigadier_scope(),
             'bot_username': app.config['SURXON'].TELEGRAM_BOT_USERNAME,
             'test_mode': app.config['SURXON'].APP_MODE == 'test',
-            'gmaps_key': app.config['SURXON'].GOOGLE_MAPS_KEY if user else '',
+            'gmaps_key': _gmaps_key() if user else '',
         }
+
+    def _gmaps_key():
+        # server .env wins; otherwise the key the admin saved on the Integrations page
+        if app.config['SURXON'].GOOGLE_MAPS_KEY:
+            return app.config['SURXON'].GOOGLE_MAPS_KEY
+        row = dbmod.q("SELECT value FROM settings WHERE key='google_maps_key'", one=True)
+        return (row['value'] or '').strip() if row else ''
 
     @app.template_global()
     def photo_url(path):

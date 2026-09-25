@@ -148,3 +148,19 @@ def test_draw_a_new_field_on_the_map(app, world):
     assert not admin.post('/admin/dalalar/chizish', {'code': 'D-59', 'name': 'x', 'polygon_json': json.dumps(bow)}).get_json()['ok']
     assert not admin.post('/admin/dalalar/chizish', {'code': 'D-58', 'name': 'x', 'polygon_json': json.dumps(ring)}).get_json()['ok']
     assert world['bux'].get('/admin/dalalar/chizish').status_code == 302
+
+
+def test_google_key_saved_on_integrations_page(app, world):
+    admin = world['admin']
+    assert 'Google sun’iy yo‘ldosh' in admin.get('/admin/integratsiyalar').get_data(as_text=True)
+    assert not admin.post('/admin/integratsiyalar', {'action': 'gmaps_save', 'gmaps_key': 'salom'}).get_json()['ok']
+    key = 'AIza' + 'x' * 35
+    assert admin.post('/admin/integratsiyalar', {'action': 'gmaps_save', 'gmaps_key': key}).get_json()['ok']
+    page = admin.get('/admin/integratsiyalar').get_data(as_text=True)
+    assert 'Ulangan …xxxx' in page                                       # shown masked
+    assert f'data-gmaps="{key}"' in admin.get('/admin/dalalar').get_data(as_text=True)
+    with app.app_context():
+        assert scalar("SELECT COUNT(*) FROM audit_logs WHERE entity_id='google_maps_key' AND new_json LIKE '%xxxxxxxxxx%'") == 0
+    assert world['bux'].post('/admin/integratsiyalar', {'action': 'gmaps_save', 'gmaps_key': key}).status_code in (302, 403)
+    assert admin.post('/admin/integratsiyalar', {'action': 'gmaps_clear'}).get_json()['ok']
+    assert 'data-gmaps' not in admin.get('/admin/dalalar').get_data(as_text=True)

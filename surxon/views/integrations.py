@@ -91,6 +91,21 @@ def index():
             elif action in ('test_telegram_archive', 'test_telegram_report', 'test_sheets', 'test_offsite', 'outbox_run',
                             'outbox_retry'):
                 msg = None
+            elif action in ('gmaps_save', 'gmaps_clear'):
+                # Google Map Tiles key: a browser key (sent to every map page anyway), restricted in Google Cloud to this
+                # site and to the Map Tiles API — so it may be kept in settings. Shown masked, never in full.
+                val = ''
+                if action == 'gmaps_save':
+                    import re as _re
+                    val = (request.form.get('gmaps_key') or '').strip()
+                    if not _re.fullmatch(r'AIza[0-9A-Za-z_-]{30,}', val):
+                        raise UserError('Kalit ko‘rinishi noto‘g‘ri — Google Cloud’dan “AIza…” bilan boshlanadigan kalitni nusxalang.')
+                db.execute('INSERT INTO settings(key, value, updated_at, updated_by) VALUES (?,?,?,?) ON CONFLICT(key) '
+                           'DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at, updated_by=excluded.updated_by',
+                           ('google_maps_key', val, now_str(), actor.user_id))
+                audit(db, actor, 'UPDATE', 'integration', 'google_maps_key', new={'google_maps_key': ('…' + val[-4:]) if val else ''})
+                msg = 'Google kaliti saqlandi. Xaritani yangilang (Ctrl+Shift+R) → qatlamlar → “Google sun’iy yo‘ldosh”.' if val \
+                    else 'Google kaliti o‘chirildi — bepul Esri foni ishlatiladi.'
             elif action == 'tg_channel':
                 # the admin picks which channel (one the bot is admin of) is the archive / the report channel
                 role = request.form.get('role')
@@ -172,6 +187,8 @@ def render(new_key=None, message=None):
                            message=message, erp_on=get_bool('erp_enabled'), tv_on=get_bool('tv_enabled'),
                            base=request.host_url.rstrip('/'), loads=json.loads,
                            channels=q("SELECT * FROM tg_chats WHERE type='channel' ORDER BY last_seen_at DESC"),
+                           gmaps_tail=(lambda k: ('…' + k[-4:]) if k else '')(get_setting('google_maps_key') or ''),
+                           gmaps_env=bool(current_app.config['SURXON'].GOOGLE_MAPS_KEY),
                            chosen={'archive': get_setting('tg_archive_chat_id'), 'report': get_setting('tg_report_chat_id')},
                            bot_user=current_app.config['SURXON'].TELEGRAM_BOT_USERNAME)
 
