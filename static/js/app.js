@@ -96,9 +96,17 @@
     const btn = f.querySelector('button:not([type=button])');
     if (f.dataset.busy) { e.preventDefault(); return; }
     f.dataset.busy = '1';
+    // the clicked button's name=value (e.g. role=archive, action=test_…) must still be sent after it is disabled:
+    // disabled controls are left out of the submitted form, so carry it in a hidden field
+    const sub = e.submitter;
+    if (sub && sub.name) {
+      const h = document.createElement('input');
+      h.type = 'hidden'; h.name = sub.name; h.value = sub.value; h.dataset.submitter = '1';
+      f.appendChild(h);
+    }
     if (btn) { btn.disabled = true; btn.dataset.label = btn.innerHTML; btn.innerHTML = 'Saqlanmoqda…'; }
   });
-  window.addEventListener('pageshow', () => $$('form[data-busy]').forEach(f => { delete f.dataset.busy; const b = f.querySelector('button[disabled]'); if (b) { b.disabled = false; if (b.dataset.label) b.innerHTML = b.dataset.label; } }));
+  window.addEventListener('pageshow', () => $$('form[data-busy]').forEach(f => { delete f.dataset.busy; $$('input[data-submitter]', f).forEach(i => i.remove()); const b = f.querySelector('button[disabled]'); if (b) { b.disabled = false; if (b.dataset.label) b.innerHTML = b.dataset.label; } }));
 
   // =================================================================== offline queue
   // Field forms marked data-offline are sent with fetch. If the network is down the

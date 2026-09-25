@@ -1,4 +1,4 @@
-# Serverni yangilash (Codex uchun) — v2.6.0
+# Serverni yangilash (Codex uchun) — v2.6.1
 
 Serverni qayta qurmang, `.env`, `data/` va Caddy sozlamasiga tegmang. Vaqtinchalik sslip override'ni qayta yoqmang.
 
@@ -7,7 +7,7 @@ cd /opt/surxan-paxta.uz
 docker compose exec -T app flask --app app backup          # yangilashdan oldin izchil zaxira
 git pull --ff-only                                          # kutilgan: 2.6.0 commiti yoki keyingisi
 docker compose up -d --build
-for i in $(seq 1 40); do curl -fsS https://surxan-paxta.uz/health && break; sleep 3; done   # "version":"2.6.0"
+for i in $(seq 1 40); do curl -fsS https://surxan-paxta.uz/health && break; sleep 3; done   # "version":"2.6.1"
 docker compose exec -T app flask --app app set-webhook      # channel_post yangilanishini qo'shadi (kanallarni tanish uchun)
 docker compose exec -T app flask --app app smoke-check
 ```
