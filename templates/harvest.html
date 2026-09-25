@@ -69,7 +69,7 @@
 
       <div class="row mt" style="justify-content:space-between">
         <div><b style="font-size:18px">Jami: <span class="num">{{ entries|sum(attribute='kg')|num(1) }}</span> kg</b> <span class="muted">({{ entries|selectattr('worker_id')|map(attribute='worker_id')|unique|list|length }} kishi, {{ entries|length }} yozuv)</span></div>
-        {% if current.status == 'OCHIQ' and can('load.full') %}<a class="btn btn-green" href="{{ url_for('ops.load_detail', load_id=current.id) }}#toldi">{{ icon('check-circle','sm') }} TOLDI (taroziga yuborish)</a>{% endif %}
+        {% if current.status == 'OCHIQ' and can('load.full') %}<a class="btn btn-green" href="{{ url_for('ops.load_detail', load_id=current.id) }}#toldi">{{ icon('check-circle','sm') }} Tugatish (telashka to‘ldi)</a>{% endif %}
       </div>
     </div>
     <div class="table-wrap" data-refresh-on-sync><table class="t">

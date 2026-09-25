@@ -8,6 +8,9 @@ DEFAULTS = {
     'price_per_kg': ('', 'Paxta narxi, so‘m/kg (bo‘sh = hali kelishilmagan)'),
     'worker_rate_hand': ('', 'Qo‘l terimi ish haqi, so‘m/kg (bo‘sh = hisoblanmaydi)'),
     'combine_rate': ('', 'Kombayn terimi haqi, so‘m/kg (bo‘sh = hisoblanmaydi)'),
+    'auto_waybill_hand': ('1', 'Faqat qo‘l terimi bo‘lgan telashka: “Tugatish” bosilganda nakladnoy dala tarozisi '
+                                'yig‘indisi bilan avtomatik chiqadi (1/0). Kombayn bor telashka katta tarozi yoki '
+                                'Nayman punktida tortiladi.'),
     'diff_threshold_pct': ('2', 'Ichki hisob va tarozi farqi shu % dan oshsa sabab majburiy'),
     'nayman_diff_reason_required': ('1', 'Nayman qabulida farq bo‘lsa sabab majburiy (1/0)'),
     'toldi_min_photos': ('1', 'TOLDI uchun kamida nechta rasm majburiy'),

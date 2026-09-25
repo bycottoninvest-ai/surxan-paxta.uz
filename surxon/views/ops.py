@@ -10,7 +10,7 @@ from ..security import can, perm_required, require
 from ..services import (NAYMAN_DIFF_REASONS, add_harvest, after_waybill_change, attach_load_photos, correct_weighing, diff_needs_reason,
                         expected_payment, mark_full, open_load, record_gross, record_nayman, record_tare, reopen_load,
                         void_harvest, void_load, void_waybill)
-from ..settings import get_float, get_setting
+from ..settings import get_bool, get_float, get_setting
 from ..utils import UserError, parse_date, parse_int, parse_number, today_str
 from . import PER_PAGE, checkbox, done, form_uuid, page_arg, paginate, post_actor, scope, season_arg
 
@@ -134,9 +134,13 @@ def load_detail(load_id):
                    WHERE h.load_id=? AND h.voided_at IS NULL AND h.method='hand' GROUP BY w.id ORDER BY kg DESC''', (load_id,))
     # Worker kg stays exactly as weighed in the field; no automatic re-allocation of the weighbridge net.
     hand_total = sum(w['kg'] for w in workers) or 0
+    has_combine = bool(q("SELECT 1 FROM harvests WHERE load_id=? AND method='combine' AND voided_at IS NULL LIMIT 1",
+                         (load_id,), one=True))
+    auto_waybill = get_bool('auto_waybill_hand') and not has_combine
     return render_template('load_detail.html', ld=ld, entries=queries.load_harvests(load_id, include_void=True),
                            workers=workers, hand_total=hand_total, photos=queries.photos_for(load_id=load_id),
-                           timeline=queries.load_timeline(load_id), min_photos=int(get_float('toldi_min_photos', 1) or 0))
+                           timeline=queries.load_timeline(load_id), min_photos=int(get_float('toldi_min_photos', 1) or 0),
+                           auto_waybill=auto_waybill)
 
 
 @bp.post('/yuk/<int:load_id>/toldi')
@@ -145,14 +149,21 @@ def load_full(load_id):
     _load_or_404(load_id)
     actor = post_actor()
     res = mark_full(actor, load_id, note=request.form.get('note', ''), photos=uploads_from_request(request, 'photos'))
-    msg = ('Bu telashka allaqachon TOLDI.' if res['already'] else
-           f'TOLDI saqlandi. Ichki hisob: {res["internal_kg"]:g} kg. Endi umumiy taroziga olib boring.')
     from ..telegram_bot import notify_async
-    if not res['already']:
-        ld = queries.load(load_id)
-        notify_async(f'🚛 {ld["trailer_code"]} TOLDI · {ld["field_name"]} · {ld["brigadier_name"]}\n'
-                     f'Ichki hisob: {res["internal_kg"]:,.0f} kg'.replace(',', ' '), roles=('admin', 'manager', 'scale'))
-    return done(msg, url_for('ops.load_detail', load_id=load_id))
+    if res['already']:
+        return done('Bu telashka allaqachon yopilgan.', url_for('ops.load_detail', load_id=load_id))
+    ld = queries.load(load_id)
+    if res.get('waybill_id'):
+        after_waybill_change(actor, res['waybill_id'], 'yaratildi')
+        notify_async(f'📄 {res["number"]} · {ld["trailer_code"]} tugatildi · {ld["field_name"]} · {ld["brigadier_name"]}\n'
+                     f'Qo‘l terimi (dala tarozisi): {res["net_kg"]:,.0f} kg'.replace(',', ' '),
+                     roles=('admin', 'manager', 'accountant'))
+        return done(f'Tugatildi. Nakladnoy {res["number"]} chiqdi: {res["net_kg"]:g} kg (dala tarozisi yig‘indisi).',
+                    url_for('ops.waybill_detail', waybill_id=res['waybill_id']))
+    notify_async(f'🚛 {ld["trailer_code"]} TOLDI · {ld["field_name"]} · {ld["brigadier_name"]}\n'
+                 f'Ichki hisob: {res["internal_kg"]:,.0f} kg'.replace(',', ' '), roles=('admin', 'manager', 'scale'))
+    return done(f'Tugatildi. Ichki hisob: {res["internal_kg"]:g} kg. Kombayn paxtasi bor — katta tarozi yoki '
+                'Nayman punktida tortiladi.', url_for('ops.load_detail', load_id=load_id))
 
 
 @bp.post('/yuk/<int:load_id>/rasm')

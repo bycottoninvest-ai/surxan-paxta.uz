@@ -191,7 +191,7 @@ def top_workers(year, day, limit=10, brig=None):
 WAYBILL_SELECT = '''SELECT wb.*, tl.load_date, tl.vehicle_plate, tl.driver_name, tl.internal_kg, tl.hand_kg,
                            tl.combine_kg, tl.field_id, tl.brigadier_id, t.code trailer_code, tr.code tractor_code,
                            f.code field_code, f.name field_name, b.name brigadier_name,
-                           w.gross_kg, w.tare_kg, w.gross_at, w.tare_at, w.diff_kg weigh_diff_kg, w.diff_reason weigh_diff_reason,
+                           w.gross_kg, w.tare_kg, w.gross_at, w.tare_at, w.basis, w.diff_kg weigh_diff_kg, w.diff_reason weigh_diff_reason,
                            w.scale_no, nr.id receipt_id, nr.accepted_kg, nr.diff_kg nayman_diff_kg, nr.diff_reason nayman_diff_reason,
                            nr.received_date, nr.amount receipt_amount,
                            (SELECT COALESCE(SUM(amount),0) FROM payments p WHERE p.waybill_id=wb.id AND p.voided_at IS NULL) paid,
@@ -229,7 +229,7 @@ def waybill(wid):
 
 
 LOAD_SELECT = '''SELECT tl.*, t.code trailer_code, tr.code tractor_code, f.code field_code, f.name field_name,
-                        b.name brigadier_name, w.gross_kg, w.tare_kg, w.net_kg, w.status weigh_status, w.gross_at, w.tare_at,
+                        b.name brigadier_name, w.gross_kg, w.tare_kg, w.net_kg, w.basis, w.status weigh_status, w.gross_at, w.tare_at,
                         w.diff_kg, w.diff_reason, wb.id waybill_id, wb.number waybill_number, wb.status waybill_status,
                         uo.full_name opened_name, uf.full_name full_name_by,
                         (SELECT COALESCE(SUM(kg),0) FROM harvests h WHERE h.load_id=tl.id AND h.voided_at IS NULL) live_kg,

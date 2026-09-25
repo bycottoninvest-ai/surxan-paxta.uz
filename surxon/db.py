@@ -10,7 +10,7 @@ from contextlib import contextmanager
 
 from flask import current_app, g
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 SCHEMA = r'''
 CREATE TABLE IF NOT EXISTS brigadiers (
@@ -173,6 +173,8 @@ CREATE TABLE IF NOT EXISTS weighings (
   status TEXT NOT NULL DEFAULT 'BRUTTO' CHECK (status IN ('BRUTTO','YAKUNLANDI')),
   created_at TEXT NOT NULL,
   updated_at TEXT,
+  -- 'tarozi' = weighbridge / Nayman point (gross - tare); 'dala' = hand-only trip closed with the sum of field-scale kg
+  basis TEXT NOT NULL DEFAULT 'tarozi' CHECK (basis IN ('tarozi','dala')),
   CHECK (tare_kg IS NULL OR (tare_kg >= 0 AND tare_kg < gross_kg))
 );
 
@@ -486,6 +488,11 @@ def migrate(db):
     db.execute('INSERT INTO schema_version(version) SELECT ? WHERE NOT EXISTS (SELECT 1 FROM schema_version)',
                (SCHEMA_VERSION,))
     # v1 -> v2 only added tables (documents, outbox, channel_status), created above with IF NOT EXISTS.
+    # v2 -> v3: weighings.basis (hand-only trips closed from the field-scale sum)
+    cols = {r[1] for r in db.execute('PRAGMA table_info(weighings)')}
+    if 'basis' not in cols:
+        db.execute("ALTER TABLE weighings ADD COLUMN basis TEXT NOT NULL DEFAULT 'tarozi' "
+                   "CHECK (basis IN ('tarozi','dala'))")
     # Future column changes go here as: if version < N: ALTER TABLE ...
     db.execute('UPDATE schema_version SET version=? WHERE version < ?', (SCHEMA_VERSION, SCHEMA_VERSION))
 

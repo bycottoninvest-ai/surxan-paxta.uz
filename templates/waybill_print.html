@@ -41,11 +41,13 @@
     <tr><td>Tarozi №</td><td class="v">{{ wb.scale_no or '—' }}</td></tr>
   </table>
   <table class="w">
-    <tr><td>Brutto</td><td>{{ wb.gross_kg|num }} kg</td></tr>
-    <tr><td>Tara</td><td>{{ wb.tare_kg|num }} kg</td></tr>
+    {% if wb.basis == 'dala' %}<tr><td>Og‘irlik manbai</td><td>Dala tarozisi yig‘indisi</td></tr>
+    {% else %}<tr><td>Brutto</td><td>{{ wb.gross_kg|num }} kg</td></tr>
+    <tr><td>Tara</td><td>{{ wb.tare_kg|num }} kg</td></tr>{% endif %}
     <tr class="net"><td>Netto</td><td>{{ wb.net_kg|num }} kg</td></tr>
   </table>
-  <div>Brutto: {{ wb.gross_at|d }} · Tara: {{ wb.tare_at|d }}</div>
+  {% if wb.basis == 'dala' %}<div>Dala tarozisida bittalab tortilgan kg yig‘indisi · {{ wb.tare_at|d }}</div>
+  {% else %}<div>Brutto: {{ wb.gross_at|d }} · Tara: {{ wb.tare_at|d }}</div>{% endif %}
   <div class="sign"><div>Jo‘natuvchi</div><div>Qabul qiluvchi</div></div>
   <div class="foot">Hujjat SURXON PAXTA HISOB TIZIMIda avtomatik yaratilgan ({{ wb.created_at|d }}, {{ wb.created_name }}). Raqam takrorlanmaydi.</div>
 </div>

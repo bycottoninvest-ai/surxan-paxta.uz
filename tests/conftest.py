@@ -21,6 +21,8 @@ def app(tmp_path):
                      TELEGRAM_WEBHOOK_SECRET='hooksecret', TELEGRAM_BOT_TOKEN='TEST', APP_MODE='production')
     with app.app_context():
         get_db().execute('UPDATE users SET must_change_password=0')
+        # most tests exercise the weighbridge path; the field-sum auto waybill has its own tests
+        get_db().execute("INSERT INTO settings(key, value, updated_at) VALUES ('auto_waybill_hand','0','x')")
     yield app
 
 

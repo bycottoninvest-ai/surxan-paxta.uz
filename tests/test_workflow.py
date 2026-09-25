@@ -375,3 +375,73 @@ def test_tally_clerk_enters_all_brigades_and_combine_pay(app, world):
     assert 'Kombayn haqi (1500 so‘m/kg)' in html and '1500000' in flat
     html = admin.get('/hisobot/terimchilar').get_data(as_text=True)
     assert 'Ish haqi (1500 so‘m/kg)' in html
+
+
+# ------------------------------------------------------------------ hand-only trip: "Tugatish" issues the waybill
+
+def _auto_on(admin):
+    assert admin.post('/admin/sozlamalar', {'set_auto_waybill_hand': '1'}).get_json()['ok']
+
+
+def test_hand_only_trip_finish_issues_waybill_from_field_sum(app, world):
+    admin = world['admin']
+    _auto_on(admin)
+    admin.post('/admin/sozlamalar', {'set_price_per_kg': '7800'})
+    from conftest import make_user
+    tally = make_user(app, admin, 'mirjalol', 'tally')
+    lid = open_load(tally, world)
+    for i in range(50):                                   # 50 people, ~50 kg each
+        assert add(tally, lid, f'Ishchi {i:02d}', str(45 + i % 10))['ok']
+    total = sum(45 + i % 10 for i in range(50))
+    r = toldi(tally, lid)
+    assert r['ok'], r
+    with app.app_context():
+        ld = q('SELECT * FROM trailer_loads WHERE id=?', (lid,), one=True)
+        w = q('SELECT * FROM weighings WHERE load_id=?', (lid,), one=True)
+        wb = q('SELECT * FROM waybills WHERE load_id=?', (lid,), one=True)
+        docs = q('SELECT kind FROM documents WHERE waybill_id=? ORDER BY kind', (wb['id'],))
+    assert ld['status'] == 'TORTILDI'                     # trip is closed
+    assert (w['basis'], w['net_kg'], w['status']) == ('dala', total, 'YAKUNLANDI')
+    assert (wb['number'], wb['net_kg']) == ('PA-000001', total)
+    assert [d['kind'] for d in docs] == ['ichki', 'nayman']   # PDFs made right away
+    # repeat tap: nothing new
+    assert toldi(tally, lid)['ok']
+    with app.app_context():
+        assert scalar('SELECT COUNT(*) FROM waybills') == 1
+    # season total counts it once; the waybill says where the weight came from
+    html = admin.get(f'/nakladnoy/{wb["id"]}').get_data(as_text=True)
+    assert 'Dala tarozisi yig‘indisi' in html and 'Brutto' not in html
+    assert add(tally, lid, 'Kechikkan', '40')['ok'] is False   # closed trip takes no more entries
+
+
+def test_trip_with_combine_still_goes_to_weighbridge(app, world):
+    admin, scale = world['admin'], world['tarozi']
+    _auto_on(admin)
+    juma = world['juma']
+    lid = open_load(juma, world)
+    assert add(juma, lid, 'Gulbahor opa', '60')['ok']
+    assert juma.post('/terim', {'load_id': lid, 'method': 'combine', 'combine_id': world['eq']['K-01'], 'kg': '2000',
+                                'client_uuid': uuid4()}).get_json()['ok']
+    assert toldi(juma, lid)['ok']
+    with app.app_context():
+        assert q('SELECT status FROM trailer_loads WHERE id=?', (lid,), one=True)['status'] == 'TOLDI'
+        assert scalar('SELECT COUNT(*) FROM waybills') == 0
+    assert weigh(scale, lid, '4700', '2650')['ok']       # weighbridge or the Nayman point ticket
+    with app.app_context():
+        wb = q('SELECT w.basis, wb.number, wb.net_kg FROM waybills wb JOIN weighings w ON w.load_id=wb.load_id', one=True)
+        assert (wb['basis'], wb['number'], wb['net_kg']) == ('tarozi', 'PA-000001', 2050)
+
+
+def test_field_sum_waybill_can_be_corrected_with_real_scale(app, world):
+    admin, rahbar = world['admin'], world['rahbar']
+    _auto_on(admin)
+    juma = world['juma']
+    lid = open_load(juma, world)
+    assert add(juma, lid, 'Gulbahor opa', '100')['ok']
+    assert toldi(juma, lid)['ok']
+    r = rahbar.post(f'/tarozi/{lid}/tuzatish', {'gross_kg': '2700', 'tare_kg': '2602', 'reason': 'Naymanda tortildi'}).get_json()
+    assert r['ok'], r
+    with app.app_context():
+        w = q('SELECT * FROM weighings WHERE load_id=?', (lid,), one=True)
+        assert (w['basis'], w['net_kg']) == ('tarozi', 98)
+        assert q('SELECT net_kg FROM waybills WHERE load_id=?', (lid,), one=True)['net_kg'] == 98

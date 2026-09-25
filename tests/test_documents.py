@@ -139,6 +139,7 @@ def test_schema_upgrade_from_v1(tmp_path):
     db.commit(); db.close()
     app = create_app(TESTING=True, DATA_DIR=tmp_path, DB_PATH=tmp_path / 'old.sqlite3', UPLOAD_DIR=tmp_path / 'u', BACKUP_DIR=tmp_path / 'b')
     with app.app_context():
-        assert scalar('SELECT version FROM schema_version') == 2
+        assert scalar('SELECT version FROM schema_version') == 3
+        assert 'basis' in {r[1] for r in get_db().execute('PRAGMA table_info(weighings)')}
         assert scalar("SELECT COUNT(*) FROM brigadiers WHERE name='Eski brigada'") == 1
         assert scalar("SELECT COUNT(*) FROM sqlite_master WHERE name IN ('documents','outbox','channel_status')") == 3

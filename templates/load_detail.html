@@ -34,10 +34,11 @@
       <dt>Qo‘l terimi (dala tarozisi)</dt><dd class="num">{{ ld.hand_kg|num(1) if ld.status != 'OCHIQ' else '—' }} kg</dd>
       <dt>Kombayn</dt><dd class="num">{{ ld.combine_kg|num(1) if ld.status != 'OCHIQ' else '—' }} kg</dd>
       <dt class="hl">Ichki jami (dalada)</dt><dd class="hl num">{{ (ld.internal_kg if ld.status != 'OCHIQ' else ld.live_kg)|num(1) }} kg</dd>
-      {% if ld.gross_kg %}<dt>Brutto</dt><dd class="num">{{ ld.gross_kg|num }} kg <span class="small muted">{{ ld.gross_at|d }}</span></dd>{% endif %}
+      {% if ld.basis == 'dala' %}<dt class="hl-g">Nakladnoy og‘irligi (dala tarozisi yig‘indisi)</dt><dd class="hl-g num" style="font-size:17px">{{ ld.net_kg|num }} kg</dd>
+      {% else %}{% if ld.gross_kg %}<dt>Brutto</dt><dd class="num">{{ ld.gross_kg|num }} kg <span class="small muted">{{ ld.gross_at|d }}</span></dd>{% endif %}
       {% if ld.tare_kg is not none %}<dt>Tara</dt><dd class="num">{{ ld.tare_kg|num }} kg <span class="small muted">{{ ld.tare_at|d }}</span></dd>
       <dt class="hl-g">Tarozi netto (yakuniy)</dt><dd class="hl-g num" style="font-size:17px">{{ ld.net_kg|num }} kg</dd>
-      <dt>Farq (netto − ichki)</dt><dd class="num {{ 't-down' if ld.diff_kg and ld.diff_kg < 0 else '' }}">{{ ('%+.1f'|format(ld.diff_kg)) if ld.diff_kg is not none else '—' }} kg{% if ld.diff_reason %}<div class="small muted">{{ ld.diff_reason }}</div>{% endif %}</dd>{% endif %}
+      <dt>Farq (netto − ichki)</dt><dd class="num {{ 't-down' if ld.diff_kg and ld.diff_kg < 0 else '' }}">{{ ('%+.1f'|format(ld.diff_kg)) if ld.diff_kg is not none else '—' }} kg{% if ld.diff_reason %}<div class="small muted">{{ ld.diff_reason }}</div>{% endif %}</dd>{% endif %}{% endif %}
       {% if ld.status == 'BEKOR' %}<dt>Bekor sababi</dt><dd>{{ ld.void_reason }}</dd>{% endif %}
     </dl>
     <div class="card-b row">
@@ -58,14 +59,14 @@
 
   <section class="card s7" id="toldi">
     {% if ld.status == 'OCHIQ' and can('load.full') %}
-    <div class="card-h"><h3>{{ icon('check-circle') }} TOLDI qilish (taroziga yuborish)</h3></div>
+    <div class="card-h"><h3>{{ icon('check-circle') }} Tugatish {{ '(nakladnoy chiqadi)' if auto_waybill else '(katta tarozi / Nayman punkti)' }}</h3></div>
     <div class="card-b">
       <div class="mini-stats mb"><div class="mini"><span>Jami terim (dala tarozisi)</span><b class="num">{{ ld.live_kg|num(1) }} kg</b></div><div class="mini"><span>Rasmlar</span><b>{{ ld.photo_count }} / kamida {{ min_photos }}</b></div></div>
-      <form method="post" action="{{ url_for('ops.load_full', load_id=ld.id) }}" enctype="multipart/form-data" data-offline="TOLDI {{ ld.trailer_code }}" class="form" data-confirm="{{ ld.trailer_code }} to‘ldimi? Bundan keyin bu reysga terim qo‘shib bo‘lmaydi.">
+      <form method="post" action="{{ url_for('ops.load_full', load_id=ld.id) }}" enctype="multipart/form-data" data-offline="TOLDI {{ ld.trailer_code }}" class="form" data-confirm="{{ ld.trailer_code }} tugatilsinmi? Bundan keyin bu reysga terim qo‘shib bo‘lmaydi.{{ ' Nakladnoy ' ~ (ld.live_kg|num) ~ ' kg bilan chiqadi.' if auto_waybill }}">
         {{ csrf() }}
         <div class="f">{{ file_input('photos', 'Telashka / paxta / tarozi rasmlari', multiple=True) }}</div>
         <div class="f"><label>Izoh (ixtiyoriy)</label><input name="note" placeholder="Masalan: TL-02 to‘ldi. T-01 traktor."></div>
-        <div class="f"><button class="btn btn-green btn-block btn-xl">{{ icon('check-circle','lg') }} TOLDI<small>(Taroziga jo‘natish)</small></button></div>
+        <div class="f"><button class="btn btn-green btn-block btn-xl">{{ icon('check-circle','lg') }} TUGATISH<small>{{ '(Nakladnoy avtomatik chiqadi)' if auto_waybill else '(Kombayn bor — taroziga)' }}</small></button></div>
       </form>
     </div>
     {% else %}

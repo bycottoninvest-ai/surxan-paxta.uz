@@ -269,6 +269,14 @@ def _on_callback(chat, user, data, update_id):
         res = mark_full(actor_for(user), st['load_id'], source='telegram')
         ld = queries.load(st['load_id'])
         clear_state(tid)
+        if not res['already'] and res.get('waybill_id'):
+            from .services import after_waybill_change
+            after_waybill_change(actor_for(user), res['waybill_id'], 'yaratildi')
+            notify_async(f'📄 {res["number"]} · {ld["trailer_code"]} tugatildi (Telegram, {user["full_name"]})\n'
+                         f'Qo‘l terimi: {fmt_num(res["net_kg"])} kg', roles=('admin', 'manager', 'accountant'))
+            return send(chat, f'✅ Tugatildi.\n🚛 {ld["trailer_code"]} · {ld["field_name"]} · {ld["brigadier_name"]}\n'
+                              f'⚖️ Dala tarozisi yig‘indisi: {fmt_num(res["net_kg"])} kg\n📄 Nakladnoy: {res["number"]}',
+                        menu_buttons(user))
         if not res['already']:
             notify_async(f'🚛 {ld["trailer_code"]} TOLDI (Telegram, {user["full_name"]}) · {ld["field_name"]}\n'
                          f'Ichki hisob: {fmt_num(res["internal_kg"])} kg', roles=('admin', 'manager', 'scale'))

@@ -329,6 +329,12 @@ def mark_full(actor, load_id, note='', photos=None, source='web'):
         load = load_row(db, load_id)
         if load['status'] == 'TOLDI':
             return {'already': True, 'internal_kg': load['internal_kg']}
+        if load['status'] == 'TORTILDI':
+            # repeat tap / offline replay of "Tugatish" on a trip that closed with the field sum
+            wb = db.execute("SELECT wb.id, wb.number FROM waybills wb JOIN weighings w ON w.load_id=wb.load_id "
+                            "WHERE wb.load_id=? AND w.basis='dala'", (load_id,)).fetchone()
+            if wb:
+                return {'already': True, 'internal_kg': load['internal_kg'], 'waybill_id': wb['id'], 'number': wb['number']}
         if load['status'] != 'OCHIQ':
             raise UserError('Bu yuk allaqachon tortilgan yoki bekor qilingan.')
         _check_scope(actor, load['brigadier_id'])
@@ -348,7 +354,21 @@ def mark_full(actor, load_id, note='', photos=None, source='web'):
                    (actor.user_id, now_str(), clean_text(note), load_id))
         audit(db, actor, 'TOLDI', 'trailer_load', load_id, old={'status': 'OCHIQ'},
               new={'status': 'TOLDI', 'hand_kg': hand, 'combine_kg': comb, 'internal_kg': hand + comb})
-        return {'already': False, 'internal_kg': hand + comb, 'hand_kg': hand, 'combine_kg': comb}
+        res = {'already': False, 'internal_kg': hand + comb, 'hand_kg': hand, 'combine_kg': comb, 'waybill_id': None}
+        if hand > 0 and not comb and get_bool('auto_waybill_hand', db):
+            # Hand-only trip: every kg was already weighed on the field scale, so the trip closes here and the
+            # waybill carries that sum. Trips with combine cotton still go to the weighbridge / Nayman point.
+            ts = now_str()
+            cur = db.execute('''INSERT INTO weighings(load_id, gross_kg, gross_at, gross_by, tare_kg, tare_at, tare_by, net_kg,
+                                    internal_kg, diff_kg, status, created_at, basis)
+                                VALUES (?,?,?,?,0,?,?,?,?,0,'YAKUNLANDI',?,'dala')''',
+                             (load_id, hand, ts, actor.user_id, ts, actor.user_id, hand, hand, ts))
+            db.execute("UPDATE trailer_loads SET status='TORTILDI', weighed_at=? WHERE id=?", (ts, load_id))
+            audit(db, actor, 'FIELD_SUM', 'weighing', cur.lastrowid,
+                  new={'load_id': load_id, 'net_kg': hand, 'basis': 'dala'})
+            res['waybill_id'], res['number'] = _issue_waybill(db, actor, load_row(db, load_id), hand)
+            res['net_kg'] = hand
+        return res
 
 
 def reopen_load(actor, load_id, reason):
@@ -454,19 +474,25 @@ def record_tare(actor, load_id, tare_kg, *, diff_reason='', photo=None, source='
                                'field_id': load['field_id'], 'brigadier_id': load['brigadier_id']})
         audit(db, actor, 'TARE', 'weighing', w['id'],
               new={'tare_kg': tare_kg, 'net_kg': net, 'internal_kg': internal, 'diff_kg': diff, 'diff_reason': diff_reason})
-        seq = next_counter(db, 'waybill')
-        number = f'{WAYBILL_PREFIX}{seq:06d}'
-        price = get_float('price_per_kg', None, db)
-        cur = db.execute('''INSERT INTO waybills(seq, number, season_year, load_id, net_kg, document_date, destination,
-                                price_per_kg, status, created_by, created_at)
-                            VALUES (?,?,?,?,?,?,?,?, 'YARATILDI', ?,?)''',
-                         (seq, number, load['season_year'], load_id, net, today_str(),
-                          get_setting('destination_name', db), int(price) if price else None, actor.user_id, now_str()))
-        db.execute('UPDATE photos SET waybill_id=? WHERE load_id=?', (cur.lastrowid, load_id))
-        audit(db, actor, 'CREATE', 'waybill', cur.lastrowid, new={'number': number, 'load_id': load_id, 'net_kg': net})
-        _sheet_waybill(db, cur.lastrowid, 'yaratildi')
-        return {'already': False, 'waybill_id': cur.lastrowid, 'number': number, 'net_kg': net,
+        wid, number = _issue_waybill(db, actor, load, net)
+        return {'already': False, 'waybill_id': wid, 'number': number, 'net_kg': net,
                 'internal_kg': internal, 'diff_kg': diff}
+
+
+def _issue_waybill(db, actor, load, net):
+    """Next PA-number inside the caller's transaction (never reused, never skipped on rollback)."""
+    seq = next_counter(db, 'waybill')
+    number = f'{WAYBILL_PREFIX}{seq:06d}'
+    price = get_float('price_per_kg', None, db)
+    cur = db.execute('''INSERT INTO waybills(seq, number, season_year, load_id, net_kg, document_date, destination,
+                            price_per_kg, status, created_by, created_at)
+                        VALUES (?,?,?,?,?,?,?,?, 'YARATILDI', ?,?)''',
+                     (seq, number, load['season_year'], load['id'], net, today_str(),
+                      get_setting('destination_name', db), int(price) if price else None, actor.user_id, now_str()))
+    db.execute('UPDATE photos SET waybill_id=? WHERE load_id=?', (cur.lastrowid, load['id']))
+    audit(db, actor, 'CREATE', 'waybill', cur.lastrowid, new={'number': number, 'load_id': load['id'], 'net_kg': net})
+    _sheet_waybill(db, cur.lastrowid, 'yaratildi')
+    return cur.lastrowid, number
 
 
 def correct_weighing(actor, load_id, gross_kg, tare_kg, reason):
@@ -487,7 +513,8 @@ def correct_weighing(actor, load_id, gross_kg, tare_kg, reason):
             net = round(gross_kg - tare_kg, 1)
             internal = w['internal_kg'] or 0
             diff = round(net - internal, 1) if internal else None
-            db.execute('UPDATE weighings SET gross_kg=?, tare_kg=?, net_kg=?, diff_kg=?, updated_at=? WHERE id=?',
+            # a correction is always a real weighbridge / Nayman figure, even for a trip closed from the field sum
+            db.execute("UPDATE weighings SET gross_kg=?, tare_kg=?, net_kg=?, diff_kg=?, updated_at=?, basis='tarozi' WHERE id=?",
                        (gross_kg, tare_kg, net, diff, now_str(), w['id']))
             wb = db.execute('SELECT * FROM waybills WHERE load_id=?', (load_id,)).fetchone()
             if wb:
@@ -496,7 +523,7 @@ def correct_weighing(actor, load_id, gross_kg, tare_kg, reason):
                 if rec:
                     db.execute('UPDATE nayman_receipts SET diff_kg=?, updated_at=? WHERE id=?',
                                (round(rec['accepted_kg'] - net, 1), now_str(), rec['id']))
-            new = {'gross_kg': gross_kg, 'tare_kg': tare_kg, 'net_kg': net}
+            new = {'gross_kg': gross_kg, 'tare_kg': tare_kg, 'net_kg': net, 'basis': 'tarozi'}
         else:
             db.execute('UPDATE weighings SET gross_kg=?, updated_at=? WHERE id=?', (gross_kg, now_str(), w['id']))
             new = {'gross_kg': gross_kg}

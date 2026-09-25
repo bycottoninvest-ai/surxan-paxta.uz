@@ -19,7 +19,8 @@
       <dt>Traktor</dt><dd>{{ wb.tractor_code or '—' }}</dd><dt>Telashka</dt><dd>{{ wb.trailer_code }}</dd>
       <dt>Mashina / haydovchi</dt><dd>{{ wb.vehicle_plate or '—' }} · {{ wb.driver_name or '—' }}</dd>
       <dt>Ishchilar</dt><dd>{{ workers|length }} ta</dd>
-      <dt class="hl">Brutto</dt><dd class="hl num">{{ wb.gross_kg|num }} kg</dd><dt class="hl">Tara</dt><dd class="hl num">{{ wb.tare_kg|num }} kg</dd>
+      {% if wb.basis == 'dala' %}<dt class="hl">Og‘irlik manbai</dt><dd class="hl">Dala tarozisi yig‘indisi (qo‘l terimi, {{ workers|length }} ishchi)</dd>
+      {% else %}<dt class="hl">Brutto</dt><dd class="hl num">{{ wb.gross_kg|num }} kg</dd><dt class="hl">Tara</dt><dd class="hl num">{{ wb.tare_kg|num }} kg</dd>{% endif %}
       <dt class="hl-g">Netto (hujjat)</dt><dd class="hl-g num" style="font-size:18px">{{ wb.net_kg|num }} kg</dd>
       <dt>Ichki hisob (dala)</dt><dd class="num">{{ wb.internal_kg|num(1) }} kg</dd>
       {% if wb.price_per_kg %}<dt>Narx (hujjat vaqtidagi sozlama)</dt><dd class="num">{{ wb.price_per_kg|num }} so‘m/kg</dd>{% endif %}

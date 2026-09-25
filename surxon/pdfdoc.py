@@ -110,8 +110,12 @@ def build_waybill_pdf(wb, *, copy, company, version, generated_at, generated_by,
         ('Ishchilar soni', str(workers_count)),
     ], y)
     y -= 6 * mm
-    weights = [('Brutto', f'{_num(wb["gross_kg"])} kg'), ('Tara', f'{_num(wb["tare_kg"])} kg'),
-               ('Netto', f'{_num(wb["net_kg"])} kg')]
+    field_sum = wb['basis'] == 'dala'
+    if field_sum:
+        weights = [('Og‘irlik manbai', 'Dala tarozisi yig‘indisi'), ('Netto', f'{_num(wb["net_kg"])} kg')]
+    else:
+        weights = [('Brutto', f'{_num(wb["gross_kg"])} kg'), ('Tara', f'{_num(wb["tare_kg"])} kg'),
+                   ('Netto', f'{_num(wb["net_kg"])} kg')]
     y = table(weights, y, bold_last=True, big=True)
     if copy == 'ichki' and wb['price_per_kg']:
         y -= 4 * mm
@@ -124,7 +128,8 @@ def build_waybill_pdf(wb, *, copy, company, version, generated_at, generated_by,
         y -= 6 * mm
     y -= 6 * mm
     c.setFont('DejaVu', 9)
-    c.drawString(x0, y, f'Brutto: {_date(wb["gross_at"])}   ·   Tara: {_date(wb["tare_at"])}')
+    c.drawString(x0, y, f'Dala tarozisida bittalab tortilgan kg yig‘indisi · {_date(wb["tare_at"])}' if field_sum else
+                 f'Brutto: {_date(wb["gross_at"])}   ·   Tara: {_date(wb["tare_at"])}')
     y -= 22 * mm
     c.setLineWidth(0.8)
     c.line(x0, y, x0 + 70 * mm, y)
