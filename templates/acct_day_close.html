@@ -1,0 +1,39 @@
+{% extends 'base.html' %}
+{% from 'macros.html' import icon, csrf with context %}
+{% set page_title = 'Kunni yopish' %}
+{% block content %}
+<div class="page-h"><a class="icon-btn no-print" href="{{ url_for('acct.home') }}">{{ icon('chev-left') }}</a><h1>Kunni yopish</h1></div>
+<form class="row mb" method="get"><input type="date" name="day" value="{{ day }}" max="{{ today }}">{% if boxes|length > 1 %}<select name="kassa">{% for b in boxes %}<option value="{{ b.id }}" {{ 'selected' if b.id == box }}>{{ b.name }}</option>{% endfor %}</select>{% endif %}<button class="btn btn-light">Ko‘rsatish</button></form>
+<section class="card"><div class="card-b">
+  <div class="a-summary">
+    <div><span>Boshlang‘ich kassa</span><b class="num">{{ fig.opening|num }}</b></div>
+    <div><span>+ Bugungi kirim</span><b class="num">{{ fig.inflow|num }}</b></div>
+    <div><span>− Bugungi chiqim</span><b class="num">{{ fig.outflow|num }}</b></div>
+    <div class="a-total"><span>Tizim bo‘yicha qoldiq</span><b class="num" id="sys" data-v="{{ fig.system }}">{{ fig.system|num }} so‘m</b></div>
+  </div>
+  {% if closed %}
+  <div class="flash success mt">{{ icon('check-circle','sm') }}<div>Bu kun yopilgan: real {{ closed.counted|num }} so‘m, farq {{ closed.diff|num }} so‘m{{ ' (' ~ closed.reason ~ ')' if closed.reason }}. Bu sanaga endi yozib bo‘lmaydi; tuzatish bugungi sana bilan alohida yoziladi.</div></div>
+  {% elif can('dayclose') %}
+  <form method="post" class="form mt" data-confirm="Kun yopilsinmi? Keyin bu sanaga yozib bo‘lmaydi.">{{ csrf() }}
+    <input type="hidden" name="day" value="{{ day }}"><input type="hidden" name="cashbox_id" value="{{ box }}">
+    <div class="f"><label>Kassadagi real pul (sanab kiriting) <span class="req">*</span></label><input name="counted" id="counted" class="big a-money" inputmode="numeric" required data-money></div>
+    <div class="a-diff" id="diffbox" hidden><span>FARQ</span><b id="diff"></b></div>
+    <div class="f" id="reason-box" hidden><label>Farq sababi <span class="req">*</span></label>
+      <div class="a-pick">{% for r in reasons %}<label><input type="radio" name="reason" value="{{ r }}"><span>{{ r }}</span></label>{% endfor %}</div></div>
+    <div class="f"><label>Izoh</label><input name="note"></div>
+    <div class="f"><button class="btn btn-primary btn-block btn-xl">KUNNI YOPISH</button></div>
+    <div class="f tiny muted">Farq bo‘lsa, u “Kassa farqi” (ADJ-raqam) bo‘lib kassa kitobiga yoziladi va ertangi boshlang‘ich qoldiq real pulga teng bo‘ladi.</div>
+  </form>{% endif %}
+</div></section>
+<section class="card"><div class="card-h"><h3>Yopilgan kunlar tarixi</h3></div><div class="table-wrap"><table class="t">
+  <thead><tr><th>Sana</th><th class="hide-m">Kassa</th><th class="num">Tizim</th><th class="num">Real</th><th class="num">Farq</th><th class="hide-m">Sabab · kim</th></tr></thead>
+  <tbody>{% for h in history %}<tr><td>{{ h.day|d }}</td><td class="hide-m">{{ h.box }}</td><td class="num">{{ h.system_balance|num }}</td><td class="num">{{ h.counted|num }}</td><td class="num b {{ 't-down' if h.diff < 0 }}">{{ h.diff|num }}</td><td class="hide-m small">{{ h.reason or '' }} · {{ h.closed_name }}</td></tr>
+  {% else %}<tr><td colspan="6" class="small muted">Hali yopilgan kun yo‘q.</td></tr>{% endfor %}</tbody></table></div></section>
+{% endblock %}
+{% block scripts %}<script>
+(() => { const c = document.getElementById('counted'); if (!c) return; const sys = +document.getElementById('sys').dataset.v;
+  const box = document.getElementById('diffbox'), out = document.getElementById('diff'), rb = document.getElementById('reason-box');
+  c.addEventListener('input', () => { const v = parseInt((c.value || '').replace(/\D/g, ''), 10); if (isNaN(v)) { box.hidden = true; rb.hidden = true; return; }
+    const d = v - sys; box.hidden = false; out.textContent = (d > 0 ? '+' : '') + d.toLocaleString('ru-RU') + ' so‘m'; box.className = 'a-diff ' + (d === 0 ? 'ok' : 'bad');
+    rb.hidden = d === 0; rb.querySelectorAll('input').forEach(i => i.required = d !== 0); }); })();
+</script>{% endblock %}

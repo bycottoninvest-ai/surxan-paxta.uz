@@ -1,0 +1,26 @@
+{% extends 'base.html' %}
+{% from 'macros.html' import icon, csrf, uuid_field with context %}
+{% set page_title = 'Xarajat: ' ~ category %}
+{% block content %}
+<div class="row mb"><a class="btn btn-ghost btn-sm" href="{{ url_for('acct.expense_pick') }}">{{ icon('chev-left','sm') }} Turlar</a></div>
+<section class="card">
+  <div class="card-h"><h3>{{ icon('receipt') }} {{ category|upper }}</h3></div>
+  <form class="card-b form" method="post" enctype="multipart/form-data" data-offline="Xarajat {{ category }}" data-confirm="Xarajat saqlansinmi?">
+    {{ csrf() }}{{ uuid_field() }}<input type="hidden" name="category" value="{{ category }}">
+    <div class="f"><label>Summa (so‘m) <span class="req">*</span></label><input name="amount" class="big a-money" inputmode="numeric" required placeholder="0" autocomplete="off" data-money autofocus></div>
+    {% if category in ('Punkt xarajati',) %}
+    <div class="f"><label>Qaysi punkt</label><select name="station_id"><option value="">—</option>{% for s in stations %}<option value="{{ s.id }}">{{ s.name }}</option>{% endfor %}</select></div>
+    {% elif category in ('Yoqilg‘i', 'Remont', 'Transport') %}
+    <div class="f h"><label>Texnika (ixtiyoriy)</label><select name="equipment_id"><option value="">—</option>{% for e in equipment %}<option value="{{ e.id }}">{{ e.code }} · {{ e.kind }}</option>{% endfor %}</select></div>
+    <div class="f h"><label>Dala (ixtiyoriy)</label><select name="field_id"><option value="">—</option>{% for f in fields %}<option value="{{ f.id }}">{{ f.code }} · {{ f.name }}</option>{% endfor %}</select></div>
+    {% else %}
+    <div class="f"><label>Dala (ixtiyoriy)</label><select name="field_id"><option value="">—</option>{% for f in fields %}<option value="{{ f.id }}">{{ f.code }} · {{ f.name }}</option>{% endfor %}</select></div>
+    {% endif %}
+    {% if boxes|length > 1 and current_user['role'] != 'cashier' %}<div class="f"><label>Kassa</label><select name="cashbox_id">{% for b in boxes %}<option value="{{ b.id }}">{{ b.name }}</option>{% endfor %}</select></div>{% endif %}
+    <div class="f"><label>Chek rasmi (ixtiyoriy)</label><label class="file-drop" style="padding:10px"><input type="file" name="photo" accept="image/*" capture="environment" data-preview>{{ icon('camera') }} Rasmga olish<div class="previews"></div></label></div>
+    <div class="f"><label>Izoh (ixtiyoriy)</label><input name="note" placeholder="Masalan: traktor yoqilg‘isi"></div>
+    <div class="f"><button class="btn btn-green btn-block btn-xl">XARAJATNI SAQLASH</button></div>
+    <div class="f tiny muted">Sana avtomatik (bugun). Pul kassadan chiqim bo‘lib yoziladi.{% if not can('expenses.approve') %} Buxgalter tasdiqlaguncha “tekshirilmagan” bo‘lib turadi.{% endif %}</div>
+  </form>
+</section>
+{% endblock %}

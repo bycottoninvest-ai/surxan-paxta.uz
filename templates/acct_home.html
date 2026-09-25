@@ -1,0 +1,49 @@
+{% extends 'base.html' %}
+{% from 'macros.html' import icon with context %}
+{% from 'acct_macros.html' import tile, som with context %}
+{% set page_title = 'Buxgalteriya' %}
+{% macro act(url, ico, label, cls='') -%}<a class="m-act {{ cls }}" href="{{ url }}">{{ icon(ico, 'lg') }}<span>{{ label }}</span></a>{%- endmacro %}
+{% block content %}
+<div class="m-hello"><b>Buxgalteriya</b><span>{{ current_user['full_name'] }} · {{ today|d }}, {{ today|weekday }}</span></div>
+
+<div class="a-tiles">
+  {{ tile('Kassa qoldig‘i', balance|num, 'so‘m', '', 't-green', url_for('acct.cash')) }}
+  {{ tile('Bugun terildi', cot.field_kg|num, 'kg', '', '', url_for('acct.cotton')) }}
+  {{ tile('Punkt qabul (bugun)', cot.punkt_kg|num, 'kg', ('farq ' ~ ('%+.0f'|format(cot.diff_kg)) ~ ' kg' ~ ((' (' ~ ('%+.2f'|format(cot.diff_pct)) ~ '%)') if cot.diff_pct is not none else '')) if cot.received else 'hali qabul yo‘q', 't-blue', url_for('acct.cotton')) }}
+  {{ tile('To‘lanadigan ishchilar', owed_n, 'kishi', som(owed_sum), 't-purple', url_for('acct.workers')) }}
+  {{ tile('Bugun terim puli', s.wages_earned|num, 'so‘m', ((s.wages_uncalc_kg|num) ~ ' kg narxsiz — hisoblanmagan') if s.wages_uncalc_kg else 'hisoblangan', '', url_for('acct.workers')) }}
+  {{ tile('Kombayn qoldig‘i', combine_balance|num, 'so‘m', (combine_worked|length) ~ ' ta ishladi', '', url_for('acct.combines')) }}
+  {{ tile('Bugungi xarajat', s.expenses_total|num, 'so‘m', '', 't-orange', url_for('acct.expenses')) }}
+  {{ tile('Muammolar', problems, 'ta', 'pastdagi ro‘yxat', 't-red' if problems else '', '#todo') }}
+</div>
+
+<div class="m-actions a-actions">
+  {{ act(url_for('acct.income'), 'plus', 'KIRIM', 'green') }}
+  {{ act(url_for('acct.workers'), 'users', 'ISHCHILARGA TO‘LOV') }}
+  {{ act(url_for('acct.expense_pick'), 'receipt', 'XARAJAT') }}
+  {{ act(url_for('acct.combines'), 'combine', 'KOMBAYNLAR') }}
+  {{ act(url_for('acct.cotton'), 'cotton', 'PAXTA') }}
+  {{ act(url_for('acct.cash'), 'cash', 'KASSA') }}
+  {{ act(url_for('acct.report'), 'bars', 'HISOBOT') }}
+  {{ act(url_for('acct.day_close'), 'check-circle', 'KUNNI YOPISH') }}
+</div>
+
+<h3 class="m-h" id="todo">Bugun sizni kutayotgan ishlar</h3>
+<div class="a-todo">
+  {% for color, text, ep, args in items %}
+  <a class="a-todo-row t-{{ color }}" href="{{ url_for(ep, **args) }}"><span class="dot"></span><span>{{ text }}</span>{{ icon('chev-right','sm') }}</a>
+  {% else %}<div class="a-todo-row t-green"><span class="dot"></span><span>Hammasi joyida — kutayotgan ish yo‘q.</span></div>{% endfor %}
+  <a class="a-todo-row t-money" href="{{ url_for('acct.cash') }}"><span>💰</span><span>Kassa: <b>{{ balance|num }} so‘m</b></span>{{ icon('chev-right','sm') }}</a>
+</div>
+
+<div class="a-links">
+  <a href="{{ url_for('acct.payouts') }}">{{ icon('card','sm') }} To‘lovlar</a>
+  <a href="{{ url_for('acct.debts') }}">{{ icon('wallet','sm') }} Debitor / kreditor</a>
+  <a href="{{ url_for('acct.expenses', status='TEKSHIRILMAGAN') }}">{{ icon('alert','sm') }} Tekshirilmagan xarajatlar</a>
+  <a href="{{ url_for('finance.payments') }}">{{ icon('factory','sm') }} Nayman to‘lovlari</a>
+  <a href="{{ url_for('finance.cash') }}">{{ icon('cash','sm') }} Kassa kitobi (to‘liq)</a>
+  <a href="{{ url_for('reports.index') }}">{{ icon('bars','sm') }} Barcha hisobotlar</a>
+  <a href="{{ url_for('reports.audit_log') }}">{{ icon('shield','sm') }} Audit</a>
+  <a href="{{ url_for('main.dashboard', view='full') }}">{{ icon('home','sm') }} Umumiy dashboard</a>
+</div>
+{% endblock %}

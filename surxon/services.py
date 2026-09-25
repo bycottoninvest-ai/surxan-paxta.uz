@@ -272,19 +272,25 @@ def add_harvest(actor, *, load_id, method, kg, worker_id=None, worker_name=None,
             if recent:
                 raise UserError('Bu odamga xuddi shu kg hozirgina yozilgan (takror bo‘lishi mumkin). '
                                 'Rostdan ikkinchi tortish bo‘lsa, “Ha, bu ikkinchi tortish” belgisini qo‘yib qayta saqlang.')
+        from .accounting import after_combine_harvest, price_harvest
+        rate, rate_unit, amount = price_harvest(db, method, kg, combine_id)     # frozen: never recalculated later
         cur = db.execute(
             '''INSERT INTO harvests(season_year, work_date, load_id, worker_id, field_id, brigadier_id, trailer_id,
-                   tractor_id, combine_id, method, kg, note, source, client_uuid, entered_by, created_at)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
+                   tractor_id, combine_id, method, kg, note, source, client_uuid, entered_by, created_at, rate, rate_unit, amount)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
             (load['season_year'], today_str(), load_id, worker_id, load['field_id'], load['brigadier_id'],
              load['trailer_id'], load['tractor_id'], combine_id, method, kg, clean_text(note), source, client_uuid,
-             actor.user_id, now_str()))
+             actor.user_id, now_str(), rate, rate_unit, amount))
         hid = cur.lastrowid
+        if method == 'combine':
+            after_combine_harvest(db, actor, load['season_year'], combine_id, today_str(), load['field_id'])
         audit(db, actor, 'CREATE', 'harvest', hid,
-              new={'load_id': load_id, 'method': method, 'kg': kg, 'worker_id': worker_id, 'combine_id': combine_id})
+              new={'load_id': load_id, 'method': method, 'kg': kg, 'worker_id': worker_id, 'combine_id': combine_id,
+                   'rate': rate, 'rate_unit': rate_unit, 'amount': amount})
         total = db.execute('SELECT COALESCE(SUM(kg),0) FROM harvests WHERE load_id=? AND voided_at IS NULL',
                            (load_id,)).fetchone()[0]
-        return hid, {'created_worker': created_worker, 'load_total': total, 'worker_id': worker_id}
+        return hid, {'created_worker': created_worker, 'load_total': total, 'worker_id': worker_id,
+                     'rate': rate, 'amount': amount}
 
 
 def void_harvest(actor, harvest_id, reason):
@@ -662,6 +668,7 @@ def mark_arrived(actor, waybill_id):
             return False
         db.execute('UPDATE waybills SET arrived_at=?, arrived_by=? WHERE id=?', (now_str(), actor.user_id, waybill_id))
         audit(db, actor, 'ARRIVED', 'waybill', waybill_id, new={'trip_no': wb['trip_no'], 'status': 'KELDI'})
+        _sheet_waybill(db, waybill_id, 'punktga keldi')
         return True
 
 
@@ -708,8 +715,32 @@ def receive_at_station(actor, waybill_id, *, station_kg, reason='', note='', pho
                         links={'season_year': wb['season_year'], 'load_id': wb['load_id'], 'waybill_id': waybill_id,
                                'field_id': wb['field_id'], 'brigadier_id': wb['brigadier_id']})
         _sheet_waybill(db, waybill_id, 'punktda qabul qilindi')
+        if level == 'alert':
+            from .reporting import enqueue_alert
+            enqueue_alert(db, f'kg:{waybill_id}', f'🔴 Katta kg farqi: {wb["trip_no"]} · dala {wb["net_kg"]:g} kg, '
+                                                 f'punkt {station_kg:g} kg, farq {diff:+g} kg ({pct:+.2f}%) · {full_reason}')
         return {'already': False, 'receipt_id': cur.lastrowid, 'diff_kg': diff, 'diff_pct': pct, 'level': level,
                 'station_kg': station_kg}
+
+
+def save_cashbox(actor, cid, *, name, active=True):
+    _need(actor, 'users.manage')
+    import sqlite3
+    name = clean_text(name, 60)
+    if len(name) < 2:
+        raise UserError('Kassa nomi kiritilishi shart.')
+    with tx() as db:
+        try:
+            if cid:
+                old = db.execute('SELECT * FROM cashboxes WHERE id=?', (cid,)).fetchone()
+                db.execute('UPDATE cashboxes SET name=?, active=? WHERE id=?', (name, 1 if active else 0, cid))
+                audit(db, actor, 'UPDATE', 'cashbox', cid, old=row_dict(old), new={'name': name, 'active': bool(active)})
+                return cid
+            cur = db.execute('INSERT INTO cashboxes(name, created_at) VALUES (?,?)', (name, now_str()))
+            audit(db, actor, 'CREATE', 'cashbox', cur.lastrowid, new={'name': name})
+            return cur.lastrowid
+        except sqlite3.IntegrityError as e:
+            _unique_error(e, 'Bu kassa')
 
 
 def save_station(actor, sid, *, name, address='', active=True):
@@ -757,9 +788,11 @@ def add_payment(actor, *, amount, payment_date, waybill_id=None, method='', paye
                           clean_text(note), client_uuid, actor.user_id, now_str()))
         pid = cur.lastrowid
         if to_cash:
-            db.execute('''INSERT INTO cash_entries(season_year, entry_date, direction, category, amount, payment_id,
-                              counterparty, note, created_by, created_at) VALUES (?,?,?,?,?,?,?,?,?,?)''',
-                       (season, payment_date, 'IN', 'nayman', amount, pid, payer, f'To‘lov #{pid}', actor.user_id, now_str()))
+            from .accounting import _cashbox, book_cash
+            cid, _no = book_cash(db, actor, direction='IN', category='nayman', amount=amount, entry_date=payment_date,
+                                 cashbox_id=_cashbox(db, actor, None), counterparty=payer, source=payer or 'Nayman',
+                                 note=f'To‘lov #{pid}')
+            db.execute('UPDATE cash_entries SET payment_id=? WHERE id=?', (pid, cid))
         if photo:
             store_photo(db, actor, photo, category='payment', entity_type='payment', entity_id=pid,
                         caption=f'To‘lov {amount:,} so‘m', links={'season_year': season, 'waybill_id': waybill_id})
@@ -777,6 +810,11 @@ def void_payment(actor, payment_id, reason):
         if not p or p['voided_at']:
             raise UserError('To‘lov topilmadi yoki bekor qilingan.')
         assert_season_open(db, p['season_year'])
+        from .accounting import assert_day_open
+        for c in db.execute('SELECT cashbox_id, entry_date FROM cash_entries WHERE payment_id=? AND voided_at IS NULL',
+                            (payment_id,)).fetchall():
+            if c['cashbox_id']:
+                assert_day_open(db, c['cashbox_id'], c['entry_date'])
         db.execute('UPDATE payments SET voided_at=?, voided_by=?, void_reason=? WHERE id=?',
                    (now_str(), actor.user_id, reason, payment_id))
         db.execute('UPDATE cash_entries SET voided_at=?, voided_by=?, void_reason=? WHERE payment_id=? AND voided_at IS NULL',
@@ -785,8 +823,8 @@ def void_payment(actor, payment_id, reason):
         audit(db, actor, 'VOID', 'payment', payment_id, old=row_dict(p), reason=reason)
 
 
-EXPENSE_CATEGORIES = ['Yoqilg‘i', 'Ta’mirlash', 'Ish haqi', 'Kombayn xizmati', 'Transport', 'Oziq-ovqat',
-                      'O‘g‘it / kimyo', 'Suv', 'Ijaraga', 'Boshqa']
+EXPENSE_CATEGORIES = ['Yoqilg‘i', 'Ovqat', 'Transport', 'Remont', 'Punkt xarajati', 'O‘g‘it / kimyo', 'Suv', 'Ijara',
+                      'Boshqa']
 
 CASH_CATEGORIES = {
     'opening': ('IN', 'Boshlang‘ich qoldiq'),
@@ -796,12 +834,26 @@ CASH_CATEGORIES = {
     'advance': ('OUT', 'Avans'),
     'expense': ('OUT', 'Xarajat'),
     'other_out': ('OUT', 'Boshqa chiqim'),
+    'income': ('IN', 'Kirim'),
+    'combine_pay': ('OUT', 'Kombayn to‘lovi'),
+    'adjust_in': ('IN', 'Kassa farqi (ortiqcha)'),
+    'adjust_out': ('OUT', 'Kassa farqi (kam)'),
+    'debt_in': ('IN', 'Qarz qaytdi'),
+    'debt_out': ('OUT', 'Qarz to‘landi'),
+    'refund_worker_pay': ('IN', 'To‘lov qaytarildi'),
+    'refund_advance': ('IN', 'Avans qaytarildi'),
+    'refund_combine_pay': ('IN', 'Kombayn to‘lovi qaytarildi'),
 }
+# categories only created by their own flows (payment orders, day close, debts), never typed on the kassa form
+SYSTEM_CASH_CATEGORIES = {'combine_pay', 'adjust_in', 'adjust_out', 'debt_in', 'debt_out', 'refund_worker_pay',
+                          'refund_advance', 'refund_combine_pay'}
 
 
 def add_expense(actor, *, amount, expense_date, category, field_id=None, brigadier_id=None, equipment_id=None, payer='',
-                note='', from_cash=False, client_uuid=None, photo=None):
+                note='', from_cash=False, client_uuid=None, photo=None, station_id=None, cashbox_id=None):
     _need(actor, 'expenses.write')
+    from .accounting import _cashbox, assert_day_open, book_cash, mirror_expense
+    from .db import doc_number
     with tx() as db:
         if client_uuid:
             dup = db.execute('SELECT id FROM expenses WHERE client_uuid=?', (client_uuid,)).fetchone()
@@ -812,39 +864,54 @@ def add_expense(actor, *, amount, expense_date, category, field_id=None, brigadi
         category = clean_text(category, 60)
         if not category:
             raise UserError('Xarajat turi tanlanishi shart.')
+        if not amount or amount <= 0:
+            raise UserError('Summa 0 dan katta bo‘lishi kerak.')
+        box = _cashbox(db, actor, cashbox_id)
+        assert_day_open(db, box, expense_date)
+        # entered by the accountant (or admin) = checked; by anyone else it waits for the accountant
+        status = 'TASDIQLANGAN' if actor.can('expenses.approve') else 'TEKSHIRILMAGAN'
+        no = doc_number(db, 'EXP', season)
         cur = db.execute('''INSERT INTO expenses(season_year, expense_date, category, amount, field_id, brigadier_id,
-                                equipment_id, payer, note, client_uuid, created_by, created_at)
-                            VALUES (?,?,?,?,?,?,?,?,?,?,?,?)''',
+                                equipment_id, payer, note, client_uuid, created_by, created_at, doc_no, cashbox_id,
+                                station_id, status, checked_by, checked_at)
+                            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
                          (season, expense_date, category, amount, field_id, brigadier_id, equipment_id,
-                          clean_text(payer, 80), clean_text(note), client_uuid, actor.user_id, now_str()))
+                          clean_text(payer, 80), clean_text(note), client_uuid, actor.user_id, now_str(), no, box,
+                          station_id, status, actor.user_id if status == 'TASDIQLANGAN' else None,
+                          now_str() if status == 'TASDIQLANGAN' else None))
         eid = cur.lastrowid
         if from_cash:
-            _assert_cash_available(db, season, amount)
-            c = db.execute('''INSERT INTO cash_entries(season_year, entry_date, direction, category, amount, expense_id,
-                                  counterparty, note, created_by, created_at) VALUES (?,?,?,?,?,?,?,?,?,?)''',
-                           (season, expense_date, 'OUT', 'expense', amount, eid, payer, f'{category}: {note}'[:200],
-                            actor.user_id, now_str()))
-            db.execute('UPDATE expenses SET cash_entry_id=? WHERE id=?', (c.lastrowid, eid))
+            cid, _ = book_cash(db, actor, direction='OUT', category='expense', amount=amount, entry_date=expense_date,
+                               cashbox_id=box, expense_id=eid, counterparty=payer, note=f'{category}: {note}'[:200], doc_no=no)
+            db.execute('UPDATE expenses SET cash_entry_id=? WHERE id=?', (cid, eid))
+        mirror_expense(db, eid)
         if photo:
             store_photo(db, actor, photo, category='expense', entity_type='expense', entity_id=eid,
                         caption=f'{category} {amount:,} so‘m', links={'season_year': season, 'field_id': field_id})
-        audit(db, actor, 'CREATE', 'expense', eid, new={'amount': amount, 'category': category, 'from_cash': bool(from_cash)})
+        audit(db, actor, 'CREATE', 'expense', eid, new={'doc_no': no, 'amount': amount, 'category': category,
+                                                         'from_cash': bool(from_cash), 'status': status, 'cashbox_id': box})
         return eid
 
 
 def void_expense(actor, expense_id, reason):
-    _need(actor, 'expenses.write')
+    _need(actor, 'expenses.approve')
     reason = _require_reason(reason, 'Xarajatni bekor qilish')
     with tx() as db:
         e = db.execute('SELECT * FROM expenses WHERE id=?', (expense_id,)).fetchone()
         if not e or e['voided_at']:
             raise UserError('Xarajat topilmadi yoki bekor qilingan.')
         assert_season_open(db, e['season_year'])
+        from .accounting import assert_day_open, mirror_cash, mirror_expense
+        if e['cashbox_id']:
+            assert_day_open(db, e['cashbox_id'], e['expense_date'])
         db.execute('UPDATE expenses SET voided_at=?, voided_by=?, void_reason=? WHERE id=?',
                    (now_str(), actor.user_id, reason, expense_id))
         db.execute('UPDATE cash_entries SET voided_at=?, voided_by=?, void_reason=? WHERE expense_id=? AND voided_at IS NULL',
                    (now_str(), actor.user_id, f'Xarajat #{expense_id} bekor qilindi: {reason}', expense_id))
         audit(db, actor, 'VOID', 'expense', expense_id, old=row_dict(e), reason=reason)
+        mirror_expense(db, expense_id)
+        if e['cash_entry_id']:
+            mirror_cash(db, e['cash_entry_id'])
 
 
 def cash_balance(db, season):
@@ -861,10 +928,12 @@ def _assert_cash_available(db, season, amount):
 
 
 def add_cash_entry(actor, *, category, amount, entry_date, worker_id=None, counterparty='', note='', client_uuid=None,
-                   photo=None):
+                   photo=None, cashbox_id=None, source=''):
     _need(actor, 'cash.write')
-    if category not in CASH_CATEGORIES:
+    if category not in CASH_CATEGORIES or category in SYSTEM_CASH_CATEGORIES:
         raise UserError('Kassa operatsiyasi turi noto‘g‘ri.')
+    if not amount or amount <= 0:
+        raise UserError('Summa 0 dan katta bo‘lishi kerak.')
     direction = CASH_CATEGORIES[category][0]
     with tx() as db:
         if client_uuid:
@@ -881,18 +950,13 @@ def add_cash_entry(actor, *, category, amount, entry_date, worker_id=None, count
         if category == 'opening' and db.execute(
                 "SELECT 1 FROM cash_entries WHERE season_year=? AND category='opening' AND voided_at IS NULL", (season,)).fetchone():
             raise UserError('Bu mavsum uchun boshlang‘ich qoldiq allaqachon kiritilgan.')
-        if direction == 'OUT':
-            _assert_cash_available(db, season, amount)
-        cur = db.execute('''INSERT INTO cash_entries(season_year, entry_date, direction, category, amount, worker_id,
-                                counterparty, note, client_uuid, created_by, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)''',
-                         (season, entry_date, direction, category, amount, worker_id, clean_text(counterparty, 80),
-                          clean_text(note), client_uuid, actor.user_id, now_str()))
-        cid = cur.lastrowid
+        from .accounting import _cashbox, book_cash
+        cid, _no = book_cash(db, actor, direction=direction, category=category, amount=amount, entry_date=entry_date,
+                             cashbox_id=_cashbox(db, actor, cashbox_id), worker_id=worker_id, counterparty=counterparty,
+                             source=source or counterparty, note=note, client_uuid=client_uuid)
         if photo:
             store_photo(db, actor, photo, category='cash', entity_type='cash_entry', entity_id=cid,
                         caption=f'{CASH_CATEGORIES[category][1]} {amount:,}', links={'season_year': season})
-        audit(db, actor, 'CREATE', 'cash_entry', cid,
-              new={'category': category, 'direction': direction, 'amount': amount, 'worker_id': worker_id})
         return cid
 
 
@@ -903,16 +967,19 @@ def void_cash_entry(actor, entry_id, reason):
         c = db.execute('SELECT * FROM cash_entries WHERE id=?', (entry_id,)).fetchone()
         if not c or c['voided_at']:
             raise UserError('Yozuv topilmadi yoki bekor qilingan.')
-        if c['expense_id'] or c['payment_id']:
-            raise UserError('Bu yozuv xarajat/to‘lovga bog‘langan — o‘sha yozuvni bekor qiling.')
+        if c['expense_id'] or c['payment_id'] or c['payout_id'] or c['debt_id'] or c['category'] in SYSTEM_CASH_CATEGORIES:
+            raise UserError('Bu yozuv xarajat / to‘lov / qarz / kun yopishga bog‘langan — o‘sha joydan tuzatiladi.')
         assert_season_open(db, c['season_year'])
-        if c['direction'] == 'IN':
-            bal = cash_balance(db, c['season_year'])
-            if bal - c['amount'] < 0:
+        from .accounting import assert_day_open, box_balance, mirror_cash
+        if c['cashbox_id']:
+            assert_day_open(db, c['cashbox_id'], c['entry_date'])
+        if c['direction'] == 'IN' and c['cashbox_id']:
+            if box_balance(db, c['cashbox_id']) - c['amount'] < 0:
                 raise UserError('Bu kirimni bekor qilsangiz kassa qoldig‘i manfiy bo‘ladi.')
         db.execute('UPDATE cash_entries SET voided_at=?, voided_by=?, void_reason=? WHERE id=?',
                    (now_str(), actor.user_id, reason, entry_id))
         audit(db, actor, 'VOID', 'cash_entry', entry_id, old=row_dict(c), reason=reason)
+        mirror_cash(db, entry_id)
 
 
 def payment_rule():
@@ -1036,7 +1103,7 @@ def validate_password(pw):
 
 
 def save_user(actor, uid, *, username, full_name, role, password='', brigadier_id=None, phone='', active=True,
-              station_id=None):
+              station_id=None, cashbox_id=None):
     _need(actor, 'users.manage')
     import sqlite3
     username = clean_text(username, 40).lower()
@@ -1049,6 +1116,7 @@ def save_user(actor, uid, *, username, full_name, role, password='', brigadier_i
     if role == 'station' and not station_id:
         raise UserError('Punkt operatori uchun qaysi punkt ekanini tanlang.')
     station_id = station_id if role == 'station' else None
+    cashbox_id = cashbox_id if role == 'cashier' else None
     with tx() as db:
         try:
             if uid:
@@ -1062,7 +1130,7 @@ def save_user(actor, uid, *, username, full_name, role, password='', brigadier_i
                     validate_password(password)
                     db.execute('UPDATE users SET password_hash=?, must_change_password=1 WHERE id=?',
                                (generate_password_hash(password), uid))
-                db.execute('UPDATE users SET station_id=? WHERE id=?', (station_id, uid))
+                db.execute('UPDATE users SET station_id=?, cashbox_id=? WHERE id=?', (station_id, cashbox_id, uid))
                 audit(db, actor, 'UPDATE', 'user', uid,
                       old={k: old[k] for k in ('username', 'full_name', 'role', 'brigadier_id', 'active', 'station_id')},
                       new={'username': username, 'full_name': full_name, 'role': role, 'brigadier_id': brigadier_id,
@@ -1073,8 +1141,9 @@ def save_user(actor, uid, *, username, full_name, role, password='', brigadier_i
                                     must_change_password, created_at, station_id) VALUES (?,?,?,?,?,?,1,?,?)''',
                              (username, generate_password_hash(password), clean_text(full_name, 120), role,
                               brigadier_id if role == 'brigadier' else None, clean_text(phone, 30), now_str(), station_id))
+            db.execute('UPDATE users SET cashbox_id=? WHERE id=?', (cashbox_id, cur.lastrowid))
             audit(db, actor, 'CREATE', 'user', cur.lastrowid, new={'username': username, 'role': role,
-                                                                   'station_id': station_id})
+                                                                   'station_id': station_id, 'cashbox_id': cashbox_id})
             return cur.lastrowid
         except sqlite3.IntegrityError as e:
             _unique_error(e, 'Bu login')
@@ -1232,24 +1301,32 @@ def after_waybill_change(actor, waybill_id, reason):
 
 
 def _sheet_waybill(db, waybill_id, event):
-    """Queue one control row for the Google Sheets copy (inside the caller's transaction)."""
-    r = db.execute('''SELECT wb.number, wb.document_date, wb.status, wb.net_kg, t.code trailer, f.name field, b.name brigadier,
-                             w.gross_kg, w.tare_kg, tl.internal_kg, nr.accepted_kg, nr.diff_kg
+    """Current state of one trip/waybill in the PAXTA-PUNKT sheet (upsert on the waybill number)."""
+    r = db.execute('''SELECT wb.number, wb.document_date, wb.status, wb.net_kg, wb.arrived_at, tl.trip_no, t.code trailer,
+                             f.name field, b.name brigadier, st.name station, w.basis, w.gross_kg, w.tare_kg, tl.internal_kg,
+                             nr.accepted_kg, nr.diff_kg, nr.diff_reason, nr.created_at received_at
                       FROM waybills wb JOIN trailer_loads tl ON tl.id=wb.load_id JOIN equipment t ON t.id=tl.trailer_id
                       LEFT JOIN fields f ON f.id=tl.field_id LEFT JOIN brigadiers b ON b.id=tl.brigadier_id
+                      LEFT JOIN stations st ON st.id=tl.station_id
                       LEFT JOIN weighings w ON w.load_id=tl.id LEFT JOIN nayman_receipts nr ON nr.waybill_id=wb.id
                       WHERE wb.id=?''', (waybill_id,)).fetchone()
-    event_id = secrets.token_hex(6)
-    enqueue(db, 'sheets', 'row', f'wb:{waybill_id}:{event_id}',
-            {'sheet': 'Nakladnoylar', 'row': [now_str(), event, r['number'], r['document_date'], r['status'], r['trailer'],
-                                              r['field'], r['brigadier'], r['gross_kg'], r['tare_kg'], r['net_kg'],
-                                              r['internal_kg'], r['accepted_kg'], r['diff_kg'], event_id]})
+    state = {'YARATILDI': 'KELDI' if r['arrived_at'] else 'YO‘LDA', 'QABUL': 'QABUL QILINDI', 'BEKOR': 'BEKOR'}[r['status']]
+    pct = round(r['diff_kg'] / r['net_kg'] * 100, 2) if r['diff_kg'] is not None and r['net_kg'] else ''
+    enqueue(db, 'sheets', 'upsert', f'wb:{waybill_id}:{secrets.token_hex(6)}',
+            {'sheet': 'PAXTA-PUNKT', 'id': r['number'],
+             'header': ['Nakladnoy', 'Telashka', 'Sana', 'Dala', 'Brigada', 'Punkt', 'Dala kg', 'Punkt kg', 'Farq kg',
+                        'Farq %', 'Sabab', 'Holat', 'Oxirgi o‘zgarish'],
+             'row': [r['number'], r['trip_no'] or r['trailer'], r['document_date'], r['field'], r['brigadier'],
+                     r['station'] or '', r['net_kg'], r['accepted_kg'] if r['accepted_kg'] is not None else '',
+                     r['diff_kg'] if r['diff_kg'] is not None else '', pct, r['diff_reason'] or '', state,
+                     f'{now_str()} {event}']})
 
 
 def _sheet_payment(db, payment_id, event):
     p = db.execute('''SELECT p.*, wb.number FROM payments p LEFT JOIN waybills wb ON wb.id=p.waybill_id WHERE p.id=?''',
                    (payment_id,)).fetchone()
-    event_id = secrets.token_hex(6)
-    enqueue(db, 'sheets', 'row', f'pay:{payment_id}:{event_id}',
-            {'sheet': 'Tolovlar', 'row': [now_str(), event, p['id'], p['payment_date'], p['amount'], p['method'], p['payer'],
-                                          p['number'], p['void_reason'] or '', event_id]})
+    enqueue(db, 'sheets', 'upsert', f'pay:{payment_id}:{secrets.token_hex(6)}',
+            {'sheet': 'NAYMAN TO‘LOVLARI', 'id': f'NAY-{p["season_year"]}-{p["id"]:06d}',
+             'header': ['ID', 'Sana', 'Summa', 'Usul', 'To‘lovchi', 'Nakladnoy', 'Holat'],
+             'row': [f'NAY-{p["season_year"]}-{p["id"]:06d}', p['payment_date'], p['amount'], p['method'] or '', p['payer'],
+                     p['number'] or '', 'BEKOR: ' + p['void_reason'] if p['voided_at'] else 'OK']})

@@ -6,7 +6,9 @@ in docker-compose, or ``flask outbox-run``) sends pending jobs with retries.
 
 Channels
 - telegram_archive: private Telegram channel; receives waybill PDFs and trip photos.
-- sheets:           Google Sheets control copy (append-only rows).
+- sheets:           Google Sheets mirror. Rows with an operation id (INC-/EXP-/PAY-…) are upserted on that id,
+                    so a retried job never adds a duplicate row. The database stays the source of truth.
+- telegram_report:  read-only Telegram channel: daily report and alerts (nobody writes to it).
 A channel whose settings are missing is reported as NOT CONNECTED; its jobs stay
 pending and are delivered once it is configured — nothing is silently dropped.
 """
@@ -23,6 +25,7 @@ from .utils import now_str
 CHANNELS = {
     'telegram_archive': 'Telegram arxiv kanali',
     'sheets': 'Google Sheets nazorat nusxasi',
+    'telegram_report': 'Telegram hisobot kanali (faqat o‘qish)',
     'offsite': 'Mustaqil (serverdan tashqari) zaxira',
 }
 MAX_ATTEMPTS = 12
@@ -40,6 +43,8 @@ def configured(channel, cfg=None):
         return bool(cfg.TELEGRAM_BOT_TOKEN and cfg.TELEGRAM_ARCHIVE_CHAT_ID)
     if channel == 'sheets':
         return bool(cfg.GOOGLE_SHEETS_ID and cfg.GOOGLE_SERVICE_ACCOUNT_FILE)
+    if channel == 'telegram_report':
+        return bool((cfg.TELEGRAM_REPORT_BOT_TOKEN or cfg.TELEGRAM_BOT_TOKEN) and cfg.TELEGRAM_REPORT_CHAT_ID)
     if channel == 'offsite':
         return bool(cfg.OFFSITE_RCLONE_REMOTE)
     return False
@@ -93,10 +98,10 @@ def _multipart(fields, files):
     return b''.join(parts), f'multipart/form-data; boundary={boundary}'
 
 
-def telegram_upload(method, fields, files):
+def telegram_upload(method, fields, files, token=None):
     cfg = current_app.config['SURXON']
     body, ctype = _multipart(fields, files)
-    req = urllib.request.Request(f'https://api.telegram.org/bot{cfg.TELEGRAM_BOT_TOKEN}/{method}', data=body,
+    req = urllib.request.Request(f'https://api.telegram.org/bot{token or cfg.TELEGRAM_BOT_TOKEN}/{method}', data=body,
                                  headers={'Content-Type': ctype})
     with urllib.request.urlopen(req, timeout=60) as resp:
         res = json.loads(resp.read().decode())
@@ -118,11 +123,16 @@ def _send_telegram(job, payload):
         raise RuntimeError(f'Noma’lum tur: {job["kind"]}')
 
 
+def _send_report(job, payload):
+    cfg = current_app.config['SURXON']
+    telegram_upload('sendMessage', {'chat_id': cfg.TELEGRAM_REPORT_CHAT_ID, 'text': payload['text'][:4000]}, {},
+                    token=cfg.TELEGRAM_REPORT_BOT_TOKEN or cfg.TELEGRAM_BOT_TOKEN)
+
+
 _sheets_session = None
 
 
-def sheets_append(sheet, rows):
-    """Append rows to a Google Sheet tab using a service account (scope: spreadsheets)."""
+def _session():
     global _sheets_session
     cfg = current_app.config['SURXON']
     if _sheets_session is None:
@@ -131,24 +141,79 @@ def sheets_append(sheet, rows):
         creds = service_account.Credentials.from_service_account_file(
             cfg.GOOGLE_SERVICE_ACCOUNT_FILE, scopes=['https://www.googleapis.com/auth/spreadsheets'])
         _sheets_session = AuthorizedSession(creds)
-    url = (f'https://sheets.googleapis.com/v4/spreadsheets/{cfg.GOOGLE_SHEETS_ID}/values/'
-           f'{urllib.request.quote(sheet)}!A1:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS')
-    r = _sheets_session.post(url, json={'values': rows}, timeout=30)
+    return _sheets_session
+
+
+def _values_url(sheet, rng):
+    cfg = current_app.config['SURXON']
+    return (f'https://sheets.googleapis.com/v4/spreadsheets/{cfg.GOOGLE_SHEETS_ID}/values/'
+            f'{urllib.request.quote(f"{chr(39)}{sheet}{chr(39)}!{rng}")}')
+
+
+def _ensure_tab(sheet, header):
+    """Create the tab (with its header row) the first time it is used."""
+    cfg = current_app.config['SURXON']
+    sess = _session()
+    r = sess.get(_values_url(sheet, 'A1:A1'), timeout=30)
+    if r.status_code == 400 and 'Unable to parse range' in r.text:
+        rr = sess.post(f'https://sheets.googleapis.com/v4/spreadsheets/{cfg.GOOGLE_SHEETS_ID}:batchUpdate',
+                       json={'requests': [{'addSheet': {'properties': {'title': sheet}}}]}, timeout=30)
+        if rr.status_code >= 300:
+            raise RuntimeError(f'Sheets {rr.status_code}: {rr.text[:300]}')
+        r = sess.get(_values_url(sheet, 'A1:A1'), timeout=30)
+    if r.status_code >= 300:
+        raise RuntimeError(f'Sheets {r.status_code}: {r.text[:300]}')
+    if header and not r.json().get('values'):
+        w = sess.put(_values_url(sheet, 'A1') + '?valueInputOption=RAW', json={'values': [header]}, timeout=30)
+        if w.status_code >= 300:
+            raise RuntimeError(f'Sheets {w.status_code}: {w.text[:300]}')
+
+
+def sheets_upsert(sheet, row, header=None):
+    """Row whose first cell is a unique id: update that row if the id is already there, else append it."""
+    _ensure_tab(sheet, header)
+    sess = _session()
+    r = sess.get(_values_url(sheet, 'A:A'), timeout=30)
+    if r.status_code >= 300:
+        raise RuntimeError(f'Sheets {r.status_code}: {r.text[:300]}')
+    ids = [v[0] if v else '' for v in r.json().get('values', [])]
+    if row[0] in ids:
+        n = ids.index(row[0]) + 1
+        w = sess.put(_values_url(sheet, f'A{n}') + '?valueInputOption=RAW', json={'values': [row]}, timeout=30)
+        if w.status_code >= 300:
+            raise RuntimeError(f'Sheets {w.status_code}: {w.text[:300]}')
+        return 'updated'
+    sheets_append(sheet, [row])
+    return 'appended'
+
+
+def sheets_append(sheet, rows):
+    """Append rows to a Google Sheet tab using a service account (scope: spreadsheets)."""
+    url = _values_url(sheet, 'A1') + ':append?valueInputOption=RAW&insertDataOption=INSERT_ROWS'
+    r = _session().post(url, json={'values': rows}, timeout=30)
     if r.status_code >= 300:
         raise RuntimeError(f'Sheets {r.status_code}: {r.text[:300]}')
 
 
 def _send_sheets(job, payload):
-    sheets_append(payload['sheet'], [payload['row']])
+    if payload.get('id'):
+        sheets_upsert(payload['sheet'], payload['row'], payload.get('header'))
+    else:
+        sheets_append(payload['sheet'], [payload['row']])
 
 
-SENDERS = {'telegram_archive': _send_telegram, 'sheets': _send_sheets}
+SENDERS = {'telegram_archive': _send_telegram, 'sheets': _send_sheets, 'telegram_report': _send_report}
 
 
 def run_once(limit=50):
     """Send due jobs for configured channels. Returns {'sent': n, 'errors': n, 'skipped_channels': [...]}."""
     from .services import ensure_missing_documents
     ensure_missing_documents()
+    try:
+        from .reporting import maybe_schedule_daily_report
+        maybe_schedule_daily_report()
+    except Exception as exc:  # never block deliveries because of the report scheduler
+        print(f'daily report scheduling failed: {exc}', flush=True)
     db = get_db()
     sent = errors = 0
     skipped = [ch for ch in SENDERS if not configured(ch)]
@@ -193,7 +258,11 @@ def send_test(channel):
             telegram_upload('sendMessage', {'chat_id': cfg.TELEGRAM_ARCHIVE_CHAT_ID,
                                             'text': f'✅ SURXON PAXTA: arxiv kanali sinovi · {now_str()}'}, {})
         elif channel == 'sheets':
-            sheets_append('Sinov', [[now_str(), 'SURXON PAXTA ulanish sinovi']])
+            sheets_upsert('Sinov', ['TEST-1', now_str(), 'SURXAN-PAXTA.UZ ulanish sinovi'], ['ID', 'Vaqt', 'Matn'])
+        elif channel == 'telegram_report':
+            telegram_upload('sendMessage', {'chat_id': cfg.TELEGRAM_REPORT_CHAT_ID,
+                                            'text': f'✅ SURXAN-PAXTA.UZ hisobot kanali sinovi · {now_str()}'}, {},
+                            token=cfg.TELEGRAM_REPORT_BOT_TOKEN or cfg.TELEGRAM_BOT_TOKEN)
         elif channel == 'offsite':
             from .backup import offsite_copy
             offsite_copy(cfg, test=True)

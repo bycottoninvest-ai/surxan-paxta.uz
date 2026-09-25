@@ -93,8 +93,9 @@ def test_archive_channels_not_connected_until_configured(app, world):
 def test_archive_delivery_when_configured(app, world, monkeypatch):
     import surxon.outbox as ob
     sent, rows = [], []
-    monkeypatch.setattr(ob, 'telegram_upload', lambda method, fields, files: sent.append((method, fields, list(files))) or {'ok': True})
+    monkeypatch.setattr(ob, 'telegram_upload', lambda method, fields, files, token=None: sent.append((method, fields, list(files))) or {'ok': True})
     monkeypatch.setattr(ob, 'sheets_append', lambda sheet, r: rows.append((sheet, r)))
+    monkeypatch.setattr(ob, 'sheets_upsert', lambda sheet, r, header=None: rows.append((sheet, r)))
     cfg = app.config['SURXON']
     cfg.TELEGRAM_ARCHIVE_CHAT_ID, cfg.GOOGLE_SHEETS_ID, cfg.GOOGLE_SERVICE_ACCOUNT_FILE = '-100123', 'sheet', '/x.json'
     lid, wid = chain(world)
@@ -105,7 +106,7 @@ def test_archive_delivery_when_configured(app, world, monkeypatch):
         methods = [m for m, _, _ in sent]
         assert methods.count('sendDocument') == 2 and methods.count('sendPhoto') == 1
         assert all(f['chat_id'] == '-100123' for _, f, _ in sent)
-        assert {s for s, _ in rows} == {'Nakladnoylar', 'Tolovlar'}
+        assert {'PAXTA-PUNKT', 'NAYMAN TO‘LOVLARI'} <= {s for s, _ in rows}
         assert ob.run_once()['sent'] == 0                    # nothing sent twice
         st = {s['channel']: s['state'] for s in ob.status()}
         assert st['telegram_archive'] == 'working' and st['sheets'] == 'working' and st['offsite'] == 'not_connected'
@@ -139,7 +140,8 @@ def test_schema_upgrade_from_v1(tmp_path):
     db.commit(); db.close()
     app = create_app(TESTING=True, DATA_DIR=tmp_path, DB_PATH=tmp_path / 'old.sqlite3', UPLOAD_DIR=tmp_path / 'u', BACKUP_DIR=tmp_path / 'b')
     with app.app_context():
-        assert scalar('SELECT version FROM schema_version') == 4
+        assert scalar('SELECT version FROM schema_version') == 5
+        assert scalar('SELECT COUNT(*) FROM cashboxes') == 1
         assert 'basis' in {r[1] for r in get_db().execute('PRAGMA table_info(weighings)')}
         assert {'trip_no', 'station_id'} <= {r[1] for r in get_db().execute('PRAGMA table_info(trailer_loads)')}
         assert scalar('SELECT COUNT(*) FROM stations') == 1
@@ -147,3 +149,53 @@ def test_schema_upgrade_from_v1(tmp_path):
         assert list(tmp_path.glob('old.sqlite3.oldin-v1-*.bak'))
         assert scalar("SELECT COUNT(*) FROM brigadiers WHERE name='Eski brigada'") == 1
         assert scalar("SELECT COUNT(*) FROM sqlite_master WHERE name IN ('documents','outbox','channel_status')") == 3
+
+
+def test_sheets_upsert_never_duplicates_rows(app, monkeypatch):
+    """Fake Google Sheets API: the same operation id sent twice (retry) updates the row, never appends a second."""
+    import surxon.outbox as ob
+    tabs = {}
+
+    class Resp:
+        def __init__(self, code=200, data=None, text=''):
+            self.status_code, self._d, self.text = code, data or {}, text
+
+        def json(self):
+            return self._d
+
+    def tab_of(url):
+        import urllib.parse
+        rng = urllib.parse.unquote(url.split('/values/')[1].split('?')[0].split(':append')[0])
+        return rng.split('!')[0].strip("'"), rng.split('!')[1]
+
+    class Sess:
+        def get(self, url, timeout=None):
+            name, rng = tab_of(url)
+            if name not in tabs:
+                return Resp(400, text='Unable to parse range')
+            col = [[r[0]] for r in tabs[name]]
+            return Resp(200, {'values': col[:1] if rng == 'A1:A1' else col})
+
+        def post(self, url, json=None, timeout=None):
+            if url.endswith(':batchUpdate'):
+                tabs[json['requests'][0]['addSheet']['properties']['title']] = []
+                return Resp()
+            tabs[tab_of(url)[0]].extend(json['values'])
+            return Resp()
+
+        def put(self, url, json=None, timeout=None):
+            name, rng = tab_of(url)
+            n = int(rng[1:])
+            rows = tabs[name]
+            while len(rows) < n:
+                rows.append([])
+            rows[n - 1] = json['values'][0]
+            return Resp()
+    monkeypatch.setattr(ob, '_session', lambda: Sess())
+    app.config['SURXON'].GOOGLE_SHEETS_ID = 'x'
+    with app.test_request_context():
+        ob.sheets_upsert('KASSA', ['INC-2026-000001', 100], ['ID', 'Summa'])
+        ob.sheets_upsert('KASSA', ['INC-2026-000001', 100], ['ID', 'Summa'])     # retry
+        ob.sheets_upsert('KASSA', ['INC-2026-000002', 50], ['ID', 'Summa'])
+        ob.sheets_upsert('KASSA', ['INC-2026-000001', 'BEKOR'], ['ID', 'Summa'])  # later change of the same operation
+    assert tabs['KASSA'] == [['ID', 'Summa'], ['INC-2026-000001', 'BEKOR'], ['INC-2026-000002', 50]]

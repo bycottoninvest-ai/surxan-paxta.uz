@@ -10,7 +10,7 @@ from contextlib import contextmanager
 
 from flask import current_app, g
 
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 
 SCHEMA = r'''
 CREATE TABLE IF NOT EXISTS brigadiers (
@@ -37,7 +37,16 @@ CREATE TABLE IF NOT EXISTS users (
   must_change_password INTEGER NOT NULL DEFAULT 0,
   created_at TEXT NOT NULL,
   last_login_at TEXT,
-  station_id INTEGER REFERENCES stations(id)      -- punkt operator: the one receiving point they work at
+  station_id INTEGER REFERENCES stations(id),     -- punkt operator: the one receiving point they work at
+  cashbox_id INTEGER REFERENCES cashboxes(id)     -- cashier: the cash box they hand money out of
+);
+
+-- Real cash boxes (naqd pul). Money is always whole so‘m (INTEGER), never float.
+CREATE TABLE IF NOT EXISTS cashboxes (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL UNIQUE COLLATE NOCASE,
+  active INTEGER NOT NULL DEFAULT 1,
+  created_at TEXT NOT NULL
 );
 
 -- Receiving points (qabul punktlari), e.g. Nayman-1.
@@ -83,7 +92,9 @@ CREATE TABLE IF NOT EXISTS equipment (
   ownership TEXT NOT NULL DEFAULT 'own',
   notes TEXT,
   active INTEGER NOT NULL DEFAULT 1,
-  created_at TEXT NOT NULL
+  created_at TEXT NOT NULL,
+  tariff_type TEXT CHECK (tariff_type IS NULL OR tariff_type IN ('tonna','gektar','kunlik')),  -- combine pay basis
+  tariff_rate INTEGER CHECK (tariff_rate IS NULL OR tariff_rate > 0)                            -- so‘m per unit
 );
 
 CREATE TABLE IF NOT EXISTS seasons (
@@ -161,6 +172,9 @@ CREATE TABLE IF NOT EXISTS harvests (
   void_reason TEXT,
   voided_by INTEGER REFERENCES users(id),
   voided_at TEXT,
+  rate INTEGER,              -- pay rate in force when this kg was written (so‘m per rate_unit); never recalculated
+  rate_unit TEXT,            -- 'kg' (hand) or 'tonna' (combine)
+  amount INTEGER,            -- kg × rate, frozen; NULL = no rate was set → “hisoblanmagan”
   CHECK (method = 'combine' OR worker_id IS NOT NULL),
   CHECK (method = 'hand' OR combine_id IS NOT NULL)
 );
@@ -246,6 +260,12 @@ CREATE TABLE IF NOT EXISTS payments (
 
 CREATE TABLE IF NOT EXISTS expenses (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
+  doc_no TEXT,
+  cashbox_id INTEGER REFERENCES cashboxes(id),
+  station_id INTEGER REFERENCES stations(id),
+  status TEXT NOT NULL DEFAULT 'TASDIQLANGAN' CHECK (status IN ('TEKSHIRILMAGAN','TASDIQLANGAN')),
+  checked_by INTEGER REFERENCES users(id),
+  checked_at TEXT,
   season_year INTEGER NOT NULL REFERENCES seasons(year),
   expense_date TEXT NOT NULL,
   category TEXT NOT NULL,
@@ -266,6 +286,12 @@ CREATE TABLE IF NOT EXISTS expenses (
 
 CREATE TABLE IF NOT EXISTS cash_entries (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
+  doc_no TEXT,                                    -- INC-2026-000001 / EXP-… / PAY-… / ADJ-…
+  cashbox_id INTEGER REFERENCES cashboxes(id),
+  source TEXT,                                    -- where incoming money came from (Direktor, Nayman…)
+  combine_id INTEGER REFERENCES equipment(id),
+  payout_id INTEGER,
+  debt_id INTEGER,
   season_year INTEGER NOT NULL REFERENCES seasons(year),
   entry_date TEXT NOT NULL,
   direction TEXT NOT NULL CHECK (direction IN ('IN','OUT')),
@@ -284,6 +310,93 @@ CREATE TABLE IF NOT EXISTS cash_entries (
   voided_at TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_cash_season ON cash_entries(season_year, entry_date);
+
+-- Payment orders: the accountant prepares, the cashier hands out the cash ("BERILDI") exactly once.
+CREATE TABLE IF NOT EXISTS payouts (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  doc_no TEXT NOT NULL UNIQUE,
+  season_year INTEGER NOT NULL REFERENCES seasons(year),
+  kind TEXT NOT NULL CHECK (kind IN ('worker','combine')),
+  purpose TEXT NOT NULL DEFAULT 'pay' CHECK (purpose IN ('pay','advance')),
+  worker_id INTEGER REFERENCES workers(id),
+  combine_id INTEGER REFERENCES equipment(id),
+  amount INTEGER NOT NULL CHECK (amount > 0),
+  status TEXT NOT NULL DEFAULT 'TAYYOR' CHECK (status IN ('TAYYOR','BERILDI','BEKOR')),
+  note TEXT,
+  client_uuid TEXT UNIQUE,
+  cashbox_id INTEGER REFERENCES cashboxes(id),
+  prepared_by INTEGER REFERENCES users(id),
+  prepared_at TEXT NOT NULL,
+  paid_by INTEGER REFERENCES users(id),
+  paid_at TEXT,
+  cash_entry_id INTEGER REFERENCES cash_entries(id),
+  void_reason TEXT,
+  voided_by INTEGER REFERENCES users(id),
+  voided_at TEXT,
+  CHECK ((kind = 'worker' AND worker_id IS NOT NULL) OR (kind = 'combine' AND combine_id IS NOT NULL))
+);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_payout_open_worker ON payouts(worker_id) WHERE status='TAYYOR' AND kind='worker';
+CREATE UNIQUE INDEX IF NOT EXISTS uq_payout_open_combine ON payouts(combine_id) WHERE status='TAYYOR' AND kind='combine';
+
+-- Combine work paid per day or per hectare (per-tonne pay is frozen on the harvest rows themselves).
+CREATE TABLE IF NOT EXISTS combine_work (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  season_year INTEGER NOT NULL REFERENCES seasons(year),
+  combine_id INTEGER NOT NULL REFERENCES equipment(id),
+  work_date TEXT NOT NULL,
+  unit TEXT NOT NULL CHECK (unit IN ('kunlik','gektar')),
+  qty REAL NOT NULL CHECK (qty > 0),
+  rate INTEGER NOT NULL CHECK (rate > 0),
+  amount INTEGER NOT NULL CHECK (amount > 0),
+  field_id INTEGER REFERENCES fields(id),
+  source TEXT NOT NULL DEFAULT 'manual',
+  note TEXT,
+  created_by INTEGER REFERENCES users(id),
+  created_at TEXT NOT NULL,
+  void_reason TEXT,
+  voided_by INTEGER REFERENCES users(id),
+  voided_at TEXT
+);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_combine_day ON combine_work(combine_id, work_date) WHERE unit='kunlik' AND voided_at IS NULL;
+
+-- Day close: system balance vs counted cash; the difference is booked, the day is then locked.
+CREATE TABLE IF NOT EXISTS cash_days (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  cashbox_id INTEGER NOT NULL REFERENCES cashboxes(id),
+  day TEXT NOT NULL,
+  opening INTEGER NOT NULL,
+  inflow INTEGER NOT NULL,
+  outflow INTEGER NOT NULL,
+  system_balance INTEGER NOT NULL,
+  counted INTEGER NOT NULL,
+  diff INTEGER NOT NULL,
+  reason TEXT,
+  note TEXT,
+  adjust_entry_id INTEGER REFERENCES cash_entries(id),
+  closed_by INTEGER REFERENCES users(id),
+  closed_at TEXT NOT NULL,
+  UNIQUE (cashbox_id, day)
+);
+
+-- Receivables (biz olishimiz kerak) and payables (biz berishimiz kerak); settled through the cash box.
+CREATE TABLE IF NOT EXISTS debts (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  doc_no TEXT NOT NULL UNIQUE,
+  season_year INTEGER NOT NULL REFERENCES seasons(year),
+  direction TEXT NOT NULL CHECK (direction IN ('OLISH','BERISH')),
+  counterparty TEXT NOT NULL,
+  amount INTEGER NOT NULL CHECK (amount > 0),
+  reason TEXT,
+  debt_date TEXT NOT NULL,
+  due_date TEXT,
+  note TEXT,
+  client_uuid TEXT UNIQUE,
+  created_by INTEGER REFERENCES users(id),
+  created_at TEXT NOT NULL,
+  void_reason TEXT,
+  voided_by INTEGER REFERENCES users(id),
+  voided_at TEXT
+);
 
 CREATE TABLE IF NOT EXISTS photos (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -516,6 +629,28 @@ def migrate(db):
     db.execute('CREATE UNIQUE INDEX IF NOT EXISTS uq_loads_trip_no ON trailer_loads(trip_no)')
     db.execute('CREATE INDEX IF NOT EXISTS idx_loads_station ON trailer_loads(station_id)')
     _backfill_trip_numbers(db)
+    # v4 -> v5: accounting (rate history, cash boxes, document numbers, payouts, combine tariffs, day close, debts)
+    old_version = db.execute('SELECT version FROM schema_version').fetchone()[0]
+    _add_column(db, 'users', 'cashbox_id', 'INTEGER REFERENCES cashboxes(id)')
+    _add_column(db, 'equipment', 'tariff_type', "TEXT CHECK (tariff_type IS NULL OR tariff_type IN ('tonna','gektar','kunlik'))")
+    _add_column(db, 'equipment', 'tariff_rate', 'INTEGER CHECK (tariff_rate IS NULL OR tariff_rate > 0)')
+    for col, decl in (('rate', 'INTEGER'), ('rate_unit', 'TEXT'), ('amount', 'INTEGER')):
+        _add_column(db, 'harvests', col, decl)
+    for col, decl in (('doc_no', 'TEXT'), ('cashbox_id', 'INTEGER REFERENCES cashboxes(id)'), ('source', 'TEXT'),
+                      ('combine_id', 'INTEGER REFERENCES equipment(id)'), ('payout_id', 'INTEGER'), ('debt_id', 'INTEGER')):
+        _add_column(db, 'cash_entries', col, decl)
+    for col, decl in (('doc_no', 'TEXT'), ('cashbox_id', 'INTEGER REFERENCES cashboxes(id)'),
+                      ('station_id', 'INTEGER REFERENCES stations(id)'),
+                      ('status', "TEXT NOT NULL DEFAULT 'TASDIQLANGAN' CHECK (status IN ('TEKSHIRILMAGAN','TASDIQLANGAN'))"),
+                      ('checked_by', 'INTEGER REFERENCES users(id)'), ('checked_at', 'TEXT')):
+        _add_column(db, 'expenses', col, decl)
+    db.execute('CREATE UNIQUE INDEX IF NOT EXISTS uq_cash_doc ON cash_entries(doc_no)')
+    db.execute('CREATE UNIQUE INDEX IF NOT EXISTS uq_expense_doc ON expenses(doc_no)')
+    db.execute('CREATE INDEX IF NOT EXISTS idx_cash_payout ON cash_entries(payout_id)')
+    db.execute('CREATE INDEX IF NOT EXISTS idx_harvest_worker_season ON harvests(worker_id, season_year)')
+    if old_version < 5:
+        _backfill_v5(db)
+    _backfill_doc_numbers(db)
     # Future column changes go here as: if version < N: ALTER TABLE ...
     db.execute('UPDATE schema_version SET version=? WHERE version < ?', (SCHEMA_VERSION, SCHEMA_VERSION))
 
@@ -539,6 +674,55 @@ def _backfill_trip_numbers(db):
     try:
         for r in db.execute('SELECT id, season_year FROM trailer_loads WHERE trip_no IS NULL ORDER BY id').fetchall():
             db.execute('UPDATE trailer_loads SET trip_no=? WHERE id=?', (trip_number(db, r[1]), r[0]))
+        db.execute('COMMIT')
+    except Exception:
+        db.execute('ROLLBACK')
+        raise
+
+
+def doc_number(db, prefix, year):
+    """INC-2026-000001 style unique operation id (call inside tx()); retries never create a second one."""
+    return f'{prefix}-{year}-{next_counter(db, f"doc-{prefix}-{year}"):06d}'
+
+
+def cash_prefix(direction, category):
+    if direction == 'IN':
+        return 'INC'
+    if category in ('worker_pay', 'advance', 'combine_pay'):
+        return 'PAY'
+    if category in ('adjust_in', 'adjust_out'):
+        return 'ADJ'
+    return 'EXP'
+
+
+def _backfill_v5(db):
+    """Once, when upgrading to v5: freeze the hand-picking rate that was in force (the rate shown until now)
+    on existing rows. Rows written while no rate was set stay NULL (“hisoblanmagan”) — never guessed."""
+    row = db.execute("SELECT value FROM settings WHERE key='worker_rate_hand'").fetchone()
+    try:
+        rate = int(float(str(row[0]).replace(',', '.'))) if row and str(row[0]).strip() else None
+    except ValueError:
+        rate = None
+    if rate and rate > 0:
+        db.execute("UPDATE harvests SET rate=?, rate_unit='kg', amount=CAST(ROUND(kg * ?) AS INTEGER) "
+                   "WHERE method='hand' AND rate IS NULL", (rate, rate))
+
+
+def _backfill_doc_numbers(db):
+    """Operations created before v5 get INC/EXP/PAY numbers in the order they were written (idempotent)."""
+    todo_c = db.execute('SELECT id, season_year, direction, category FROM cash_entries WHERE doc_no IS NULL ORDER BY id').fetchall()
+    todo_e = db.execute('SELECT id, season_year, cash_entry_id FROM expenses WHERE doc_no IS NULL ORDER BY id').fetchall()
+    if not todo_c and not todo_e:
+        return
+    db.execute('BEGIN IMMEDIATE')
+    try:
+        for e in db.execute('SELECT id, season_year, cash_entry_id FROM expenses WHERE doc_no IS NULL ORDER BY id').fetchall():
+            no = doc_number(db, 'EXP', e[1])
+            db.execute('UPDATE expenses SET doc_no=? WHERE id=?', (no, e[0]))
+            if e[2]:
+                db.execute('UPDATE cash_entries SET doc_no=? WHERE id=? AND doc_no IS NULL', (no, e[2]))
+        for c in db.execute('SELECT id, season_year, direction, category FROM cash_entries WHERE doc_no IS NULL ORDER BY id').fetchall():
+            db.execute('UPDATE cash_entries SET doc_no=? WHERE id=?', (doc_number(db, cash_prefix(c[2], c[3]), c[1]), c[0]))
         db.execute('COMMIT')
     except Exception:
         db.execute('ROLLBACK')

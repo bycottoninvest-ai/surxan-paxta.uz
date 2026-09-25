@@ -1,0 +1,22 @@
+{% extends 'base.html' %}
+{% from 'macros.html' import icon, csrf, void_button, empty with context %}
+{% from 'acct_macros.html' import period_bar with context %}
+{% set page_title = 'To‘lovlar' %}
+{% block content %}
+<div class="page-h"><a class="icon-btn no-print" href="{{ url_for('main.dashboard') }}">{{ icon('chev-left') }}</a><h1>To‘lovlar</h1></div>
+<div class="a-chips mb">{% for st, lb in (('TAYYOR','Kutilayotgan'),('BERILDI','Berilgan'),('BEKOR','Bekor qilingan')) %}<a class="chip-btn{{ ' on' if status == st }}" href="{{ url_for('acct.payouts', status=st) }}">{{ lb }}</a>{% endfor %}</div>
+{% if status != 'TAYYOR' %}{{ period_bar('acct.payouts', periods, period, date_from, date_to, {'status': status}) }}{% endif %}
+<div class="m-tiles"><div class="m-tile"><span>Jami</span><b class="num">{{ total|num }} <small>so‘m</small></b><em>{{ rows|length }} ta</em></div></div>
+<section class="card"><div class="table-wrap"><table class="t">
+  <thead><tr><th>ID</th><th>Kimga</th><th>Turi</th><th class="num">Summa</th><th class="hide-m">Tayyorladi</th><th class="hide-m">Berdi</th><th></th></tr></thead>
+  <tbody>{% for p in rows %}<tr>
+    <td class="keep">{{ p.doc_no }}</td><td class="b">{{ p.worker_name or (p.combine_code ~ (' · ' ~ p.operator_name if p.operator_name else '')) }}</td>
+    <td>{{ 'Avans' if p.purpose == 'advance' else ('Kombayn' if p.kind == 'combine' else 'Ish haqi') }}</td><td class="num b">{{ p.amount|num }}</td>
+    <td class="hide-m small">{{ p.prepared_name }}<div class="tiny muted">{{ p.prepared_at|d }}</div></td>
+    <td class="hide-m small">{{ p.paid_name or '—' }}<div class="tiny muted">{{ p.paid_at|d if p.paid_at }} {{ p.box or '' }}</div>{% if p.void_reason %}<div class="tiny">{{ p.void_reason }}</div>{% endif %}</td>
+    <td class="right">{% if p.status == 'TAYYOR' %}
+      {% if can('payouts.pay') %}<form method="post" action="{{ url_for('acct.payout_pay', payout_id=p.id) }}" style="display:inline" data-confirm="{{ p.amount|num }} so‘m berilsinmi?">{{ csrf() }}<input type="hidden" name="next" value="{{ request.full_path }}"><button class="btn btn-green btn-sm">Berildi</button></form>{% endif %}
+      {% if can('payouts.prepare') %}{{ void_button(url_for('acct.payout_cancel', payout_id=p.id), 'Bekor', 'To‘lovni bekor qilish sababi') }}{% endif %}
+    {% elif p.status == 'BERILDI' and can('payouts.prepare') %}{{ void_button(url_for('acct.payout_refund', payout_id=p.id), 'Qaytarish', 'Pul qaytarilganining sababi (asl yozuv o‘zgarmaydi)') }}{% endif %}</td></tr>
+  {% else %}<tr><td colspan="7">{{ empty('To‘lov yo‘q', 'card') }}</td></tr>{% endfor %}</tbody></table></div></section>
+{% endblock %}

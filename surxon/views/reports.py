@@ -49,43 +49,43 @@ def _waybills(year, args):
 def _workers(year, args):
     brig = scope()
     rows = q('''SELECT w.full_name, b.name brigadier, COUNT(DISTINCT h.work_date) days, SUM(h.kg) kg,
-                       ROUND(SUM(h.kg)*1.0/COUNT(DISTINCT h.work_date),1) avg_kg, MAX(h.work_date) last_day
+                       ROUND(SUM(h.kg)*1.0/COUNT(DISTINCT h.work_date),1) avg_kg, MAX(h.work_date) last_day,
+                       SUM(h.amount) earned, SUM(CASE WHEN h.amount IS NULL THEN h.kg END) uncalc_kg
                 FROM harvests h JOIN workers w ON w.id=h.worker_id LEFT JOIN brigadiers b ON b.id=h.brigadier_id
                 WHERE h.season_year=? AND h.method='hand' AND h.voided_at IS NULL''' + (' AND h.brigadier_id=?' if brig else '') +
              ' GROUP BY w.id ORDER BY kg DESC', (year,) + ((brig,) if brig else ()))
-    rate = get_float('worker_rate_hand', None)
+    money = can('settlement.view')
     out = []
     for r in rows:
         d = dict(r)
-        if rate and can('settlement.view'):
-            d['earned'] = round(d['kg'] * rate)
+        if not money:
+            d.pop('earned'); d.pop('uncalc_kg')
         out.append(d)
     cols = [('full_name', 'F.I.Sh.', T), ('brigadier', 'Brigadir', T), ('days', 'Kunlar', N), ('kg', 'Jami kg', K),
             ('avg_kg', 'O‘rtacha kg/kun', K), ('last_day', 'Oxirgi kun', D)]
-    if rate and can('settlement.view'):
-        cols.append(('earned', f'Ish haqi ({rate:g} so‘m/kg)', M))
-    return {'title': f'Terimchilar hisoboti — {year}', 'columns': cols, 'rows': out, 'sum': ['kg', 'earned']}
+    if money:
+        # each weighing keeps the rate it was written at; kg written with no rate stay "hisoblanmagan"
+        cols += [('earned', 'Ish haqi (har tortish o‘z narxida)', M), ('uncalc_kg', 'Narxsiz kg (hisoblanmagan)', K)]
+    return {'title': f'Terimchilar hisoboti — {year}', 'columns': cols, 'rows': out, 'sum': ['kg', 'earned', 'uncalc_kg']}
 
 
 def _combines(year, args):
-    brig = scope()
-    rows = q('''SELECT c.code, c.operator_name, COUNT(DISTINCT h.work_date) days, COUNT(*) n, SUM(h.kg) kg,
-                       MAX(h.work_date) last_day
-                FROM harvests h JOIN equipment c ON c.id=h.combine_id
-                WHERE h.season_year=? AND h.method='combine' AND h.voided_at IS NULL''' + (' AND h.brigadier_id=?' if brig else '') +
-             ' GROUP BY c.id ORDER BY kg DESC', (year,) + ((brig,) if brig else ()))
-    rate = get_float('combine_rate', None)
+    from ..accounting import TARIFF_TYPES, combine_balances
+    money = can('settlement.view')
     out = []
-    for r in rows:
-        d = dict(r)
-        if rate and can('settlement.view'):
-            d['earned'] = round(d['kg'] * rate)
+    for c in combine_balances(year):
+        if not (c['kg'] or c['work_days'] or c['hectares'] or c['paid']):
+            continue
+        d = {'code': c['code'], 'operator_name': c['operator_name'], 'days': c['days'] or 0, 'kg': c['kg'],
+             'tariff': (f"{TARIFF_TYPES[c['tariff_type']]}: {c['tariff_rate']:,}".replace(',', ' ') if c['tariff_type'] else 'tarif yo‘q')}
+        if money:
+            d.update(earned=c['earned'], paid=c['paid'], balance=c['balance'])
         out.append(d)
-    cols = [('code', 'Kombayn', T), ('operator_name', 'Kombaynchi', T), ('days', 'Kunlar', N), ('n', 'Yozuvlar', N),
-            ('kg', 'Jami kg (ichki)', K), ('last_day', 'Oxirgi kun', D)]
-    if rate and can('settlement.view'):
-        cols.append(('earned', f'Kombayn haqi ({rate:g} so‘m/kg)', M))
-    return {'title': f'Kombaynlar hisoboti — {year}', 'columns': cols, 'rows': out, 'sum': ['n', 'kg', 'earned']}
+    cols = [('code', 'Kombayn', T), ('operator_name', 'Egasi / operator', T), ('days', 'Kunlar', N), ('kg', 'Jami kg (ichki)', K),
+            ('tariff', 'Tarif', T)]
+    if money:
+        cols += [('earned', 'Hisoblangan', M), ('paid', 'To‘langan', M), ('balance', 'Qoldiq', M)]
+    return {'title': f'Kombaynlar hisoboti — {year}', 'columns': cols, 'rows': out, 'sum': ['kg', 'earned', 'paid', 'balance']}
 
 
 def _brigadiers(year, args):

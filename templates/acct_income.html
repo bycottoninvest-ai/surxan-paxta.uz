@@ -1,0 +1,31 @@
+{% extends 'base.html' %}
+{% from 'macros.html' import icon, csrf, uuid_field with context %}
+{% set page_title = 'Pul kirimi' %}
+{% block content %}
+<div class="row mb"><a class="btn btn-ghost btn-sm" href="{{ url_for('acct.home') }}">{{ icon('chev-left','sm') }} Buxgalteriya</a></div>
+<section class="card">
+  <div class="card-h"><h3>{{ icon('plus') }} PUL KIRIMI</h3></div>
+  <form class="card-b form" method="post" enctype="multipart/form-data" data-offline="Kirim" data-confirm="Kirim saqlansinmi?">
+    {{ csrf() }}{{ uuid_field() }}
+    <div class="f"><label>Manba <span class="req">*</span></label>
+      <div class="a-pick">{% for s in sources %}<label><input type="radio" name="source" value="{{ s }}" {{ 'checked' if loop.first }} required><span>{{ s }}</span></label>{% endfor %}</div></div>
+    <div class="f"><label>Summa (so‘m) <span class="req">*</span></label><input name="amount" class="big a-money" inputmode="numeric" required placeholder="0" autocomplete="off" data-money></div>
+    {% if boxes|length > 1 %}<div class="f"><label>Kassa</label><select name="cashbox_id">{% for b in boxes %}<option value="{{ b.id }}">{{ b.name }}</option>{% endfor %}</select></div>
+    {% else %}<div class="f small muted">Kassa: <b>{{ boxes[0].name }}</b></div>{% endif %}
+    <div class="f small muted">Sana/vaqt avtomatik: {{ today|d }}, hozir</div>
+    <div class="f"><label>Izoh (ixtiyoriy)</label><input name="note" placeholder="Masalan: mavsumiy xarajatlar uchun"></div>
+    <div class="f"><label>Hujjat / rasm (ixtiyoriy)</label><label class="file-drop" style="padding:10px"><input type="file" name="photo" accept="image/*" capture="environment" data-preview>{{ icon('camera') }} Rasmga olish<div class="previews"></div></label></div>
+    <div class="f"><button class="btn btn-green btn-block btn-xl">KIRIMNI SAQLASH</button></div>
+    <div class="f tiny muted">Oldingi kirim hech qachon o‘zgartirilmaydi — har safar yangi kirim yoziladi (INC-raqam bilan).</div>
+  </form>
+</section>
+<section class="card">
+  <div class="card-h"><h3>Mavsum bo‘yicha manbalar</h3></div>
+  <div class="card-b">{% for r in by_source %}<div class="row a-line"><span>{{ r.source }}</span><span class="spacer"></span><b class="num">{{ r.total|num }} so‘m</b><span class="tiny muted">&nbsp;{{ r.n }} ta</span></div>{% else %}<div class="small muted">Hali kirim yo‘q.</div>{% endfor %}</div>
+</section>
+<section class="card">
+  <div class="card-h"><h3>Oxirgi kirimlar</h3></div>
+  <div class="table-wrap"><table class="t"><thead><tr><th>ID</th><th>Sana</th><th>Manba</th><th class="num">Summa</th><th class="hide-m">Kassa</th></tr></thead>
+  <tbody>{% for r in recent %}<tr class="{{ 'void' if r.voided_at }}"><td class="keep">{{ r.doc_no }}</td><td>{{ r.entry_date|d }}</td><td>{{ r.source or r.counterparty or '—' }}</td><td class="num b">{{ r.amount|num }}</td><td class="hide-m">{{ r.box }}</td></tr>{% endfor %}</tbody></table></div>
+</section>
+{% endblock %}

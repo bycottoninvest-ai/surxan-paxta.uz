@@ -1,0 +1,27 @@
+{% extends 'base.html' %}
+{% from 'macros.html' import icon, csrf, empty with context %}
+{% from 'acct_macros.html' import tile with context %}
+{% set page_title = 'Kassir' %}
+{% block content %}
+<div class="m-hello"><b>Kassa</b><span>{{ current_user['full_name'] }} · {{ today|d }}</span></div>
+<div class="a-tiles">
+  {{ tile('Pul oladiganlar', ready|length, 'kishi', ready_sum|num ~ ' so‘m', 't-orange') }}
+  {{ tile('Bugun berildi', paid|length, 'ta', paid_sum|num ~ ' so‘m', 't-green') }}
+  {% for s in shift %}{{ tile(s.name ~ ' qoldig‘i', s.system|num, 'so‘m', 'kirim ' ~ (s.inflow|num) ~ ' · chiqim ' ~ (s.outflow|num) ~ (' · kun yopilgan' if s.closed else ''), 't-blue') }}{% endfor %}
+</div>
+<form class="row mb" method="get"><input type="search" name="q" value="{{ search }}" placeholder="Ism, telefon yoki PAY-raqam…" style="flex:1"><button class="btn btn-primary">{{ icon('search','sm') }}</button></form>
+<h3 class="m-h">BUGUN PUL OLADIGANLAR</h3>
+{% for p in ready %}
+<div class="m-card a-pay">
+  <div class="row"><b class="a-name">{{ p.worker_name or p.combine_code }}</b><span class="spacer"></span><span class="tiny muted">{{ p.doc_no }}</span></div>
+  <div class="small muted">{{ 'Avans' if p.purpose == 'advance' else ('Kombayn' if p.kind == 'combine' else 'Ish haqi') }}{{ ' · ' ~ p.brigadier_name if p.brigadier_name }}{{ ' · ' ~ p.phone if p.phone }}{{ ' · ' ~ p.operator_name if p.operator_name }} · tayyorladi {{ p.prepared_name }}</div>
+  <div class="a-bigsum num">{{ p.amount|num }} so‘m</div>
+  <form method="post" action="{{ url_for('acct.payout_pay', payout_id=p.id) }}" data-confirm="{{ p.worker_name or p.combine_code }} — {{ p.amount|num }} so‘m qo‘liga berildimi?">
+    {{ csrf() }}<button class="btn btn-green btn-block btn-xl">✅ {{ p.amount|num }} SO‘M BERILDI</button></form>
+</div>
+{% else %}{{ empty('Kutilayotgan to‘lov yo‘q', 'card') }}{% endfor %}
+<h3 class="m-h">TO‘LANGANLAR (bugun)</h3>
+{% for p in paid %}<div class="m-card row"><b>{{ p.worker_name or p.combine_code }}</b><span class="small muted">{{ p.paid_at[11:16] }} · {{ p.doc_no }}</span><span class="spacer"></span><b class="num">{{ p.amount|num }}</b></div>
+{% else %}<div class="small muted">Bugun hali to‘lov berilmagan.</div>{% endfor %}
+<div class="a-links mt"><a href="{{ url_for('acct.payouts', status='BERILDI', period='hafta') }}">{{ icon('history','sm') }} To‘lovlar tarixi</a>{% if can('expenses.write') %}<a href="{{ url_for('acct.expense_pick') }}">{{ icon('receipt','sm') }} Xarajat yozish</a>{% endif %}</div>
+{% endblock %}

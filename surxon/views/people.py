@@ -1,10 +1,10 @@
 """Workers (terimchilar) and their settlement."""
-from flask import Blueprint, abort, render_template, request, url_for
+from flask import Blueprint, abort, redirect, render_template, request, url_for
 
 from .. import queries
 from ..db import q
 from ..photos import read_upload
-from ..security import perm_required, require
+from ..security import can, perm_required, require
 from ..services import create_worker, update_worker
 from ..settings import get_float
 from ..utils import today_str
@@ -59,24 +59,21 @@ def worker_detail(worker_id):
                 FROM harvests h LEFT JOIN fields f ON f.id=h.field_id LEFT JOIN equipment t ON t.id=h.trailer_id
                 WHERE h.worker_id=? AND h.season_year=? AND h.voided_at IS NULL GROUP BY h.work_date ORDER BY h.work_date DESC''',
              (worker_id, year))
-    rate = get_float('worker_rate_hand', None)
+    from ..accounting import worker_balances
     cash = q('''SELECT * FROM cash_entries WHERE worker_id=? AND season_year=? AND voided_at IS NULL ORDER BY entry_date DESC''',
              (worker_id, year))
     total_kg = sum(d['kg'] for d in days)
-    paid = sum(c['amount'] for c in cash)
-    return render_template('worker_detail.html', w=w, days=days, rate=rate, cash=cash, total_kg=total_kg, paid=paid,
-                           earned=(total_kg * rate) if rate else None, year=year,
+    bal = next(iter(worker_balances(year, worker_id=worker_id)), None)
+    # money only for those allowed to see it; amounts are the frozen per-weighing ones
+    show = can('settlement.view')
+    return render_template('worker_detail.html', w=w, days=days, rate=None, cash=cash if show else [], total_kg=total_kg,
+                           paid=(bal['paid'] + bal['advances']) if bal and show else 0,
+                           earned=bal['earned'] if bal and show and bal['earned'] else None, year=year,
                            history=queries.history('worker', worker_id))
 
 
 @bp.get('/ishchilar/hisob-kitob')
 @perm_required('settlement.view')
 def settlements():
-    year = season_arg()
-    rate = get_float('worker_rate_hand', None)
-    rows = []
-    for r in queries.worker_settlements(year, rate):
-        earned = r['kg'] * rate if rate else None
-        rows.append({**dict(r), 'earned': earned,
-                     'balance': (earned - r['paid'] - r['advances']) if earned is not None else None})
-    return render_template('settlements.html', rows=rows, rate=rate, year=year)
+    # one place for worker money: frozen per-weighing rates, advances, payment orders
+    return redirect(url_for('acct.workers', tab='barchasi', season=request.args.get('season')))

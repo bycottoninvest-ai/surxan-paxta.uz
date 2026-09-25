@@ -1,0 +1,27 @@
+{% extends 'base.html' %}
+{% from 'macros.html' import icon, csrf, uuid_field, empty with context %}
+{% set page_title = 'Debitor / kreditor' %}
+{% block content %}
+<div class="page-h"><a class="icon-btn no-print" href="{{ url_for('acct.home') }}">{{ icon('chev-left') }}</a><h1>Debitor / kreditor</h1></div>
+<div class="a-tiles"><div class="m-tile a-tile t-green"><span>BIZ OLISHIMIZ KERAK</span><b class="num">{{ olish|num }} <small>so‘m</small></b></div>
+  <div class="m-tile a-tile t-red"><span>BIZ BERISHIMIZ KERAK</span><b class="num">{{ berish|num }} <small>so‘m</small></b></div></div>
+{% if can('debts.write') %}
+<details class="card"><summary class="card-h"><h3>{{ icon('plus') }} Yangi yozuv</h3></summary>
+  <form method="post" class="card-b form">{{ csrf() }}{{ uuid_field() }}
+    <div class="f"><div class="a-pick"><label><input type="radio" name="direction" value="OLISH" checked><span>Biz olamiz</span></label><label><input type="radio" name="direction" value="BERISH"><span>Biz beramiz</span></label></div></div>
+    <div class="f h"><label>Kimdan / kimga <span class="req">*</span></label><input name="counterparty" required></div>
+    <div class="f h"><label>Summa <span class="req">*</span></label><input name="amount" inputmode="numeric" required data-money></div>
+    <div class="f"><label>Sabab</label><input name="reason"></div>
+    <div class="f h"><label>Sana</label><input type="date" name="debt_date" value="{{ today }}"></div>
+    <div class="f h"><label>Muddat</label><input type="date" name="due_date"></div>
+    <div class="f"><button class="btn btn-primary">Saqlash</button></div></form></details>
+{% endif %}
+{% for d in rows %}
+<div class="m-card"><div class="row"><span class="badge {{ 'b-green' if d.direction == 'OLISH' else 'b-red' }}">{{ 'Biz olamiz' if d.direction == 'OLISH' else 'Biz beramiz' }}</span><b>{{ d.counterparty }}</b><span class="spacer"></span><span class="tiny muted">{{ d.doc_no }}</span></div>
+  <div class="small muted">{{ d.reason or '' }} · {{ d.debt_date|d }}{% if d.due_date %} · muddat {{ d.due_date|d }}{% endif %}{% if d.overdue %} <span class="badge b-red">muddati o‘tgan</span>{% endif %}</div>
+  <div class="a-nums"><div><span>Summa</span><b class="num">{{ d.amount|num }}</b></div><div><span>To‘langan</span><b class="num">{{ d.settled|num }}</b></div><div><span>Qolgan</span><b class="num">{{ d.remaining|num }}</b></div></div>
+  {% if d.remaining > 0 and can('debts.write') %}<form method="post" class="row" data-confirm="Kassa orqali yozilsinmi?">{{ csrf() }}<input type="hidden" name="action" value="settle"><input type="hidden" name="debt_id" value="{{ d.id }}">
+    <input name="amount" inputmode="numeric" placeholder="{{ d.remaining }}" data-money style="flex:1"><button class="btn btn-green">{{ 'Pul keldi' if d.direction == 'OLISH' else 'To‘landi' }}</button></form>{% endif %}
+</div>
+{% else %}{{ empty('Qarz yozuvi yo‘q', 'wallet') }}{% endfor %}
+{% endblock %}

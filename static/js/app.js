@@ -236,5 +236,13 @@
     if (e.target.closest('[data-logout]') && 'caches' in window) caches.keys().then(k => k.forEach(n => n.startsWith('surxon-private') && caches.delete(n)));
   });
 
+  // ---- money inputs: whole so‘m, shown with spaces while typing (the server strips them)
+  document.addEventListener('input', e => {
+    const el = e.target.closest('[data-money]');
+    if (!el) return;
+    const digits = el.value.replace(/\D/g, '');
+    el.value = digits ? Number(digits).toLocaleString('ru-RU').replace(/\u00a0/g, ' ') : '';
+  });
+
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('/service-worker.js').catch(() => { });
 })();

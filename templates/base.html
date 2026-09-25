@@ -26,7 +26,16 @@
       <div class="sub">PAXTA HISOB TIZIMI</div><div class="sub2">TAXIATOSH</div>
     </div>
     <nav class="nav">
-      {% if current_user['role'] == 'station' %}
+      {% if current_user['role'] in ('accountant', 'cashier') %}
+  <a href="{{ url_for('main.dashboard') }}" class="{{ 'active' if ep in ('acct.home', 'acct.cashier') }}">{{ icon('home') }}Bosh</a>
+  {% if current_user['role'] == 'accountant' %}<a href="{{ url_for('acct.workers') }}" class="{{ 'active' if ep == 'acct.workers' }}">{{ icon('users') }}To‘lovlar</a>
+  <a href="{{ url_for('acct.expense_pick') }}" class="primary">{{ icon('plus') }}Xarajat</a>
+  <a href="{{ url_for('acct.cash') }}" class="{{ 'active' if ep == 'acct.cash' }}">{{ icon('cash') }}Kassa</a>
+  {% else %}<a href="{{ url_for('acct.payouts', status='BERILDI', period='bugun') }}">{{ icon('history') }}Berilgan</a>
+  <a href="{{ url_for('acct.cashier') }}" class="primary">{{ icon('cash') }}To‘lash</a>
+  <a href="{{ url_for('acct.expense_pick') }}">{{ icon('receipt') }}Xarajat</a>{% endif %}
+  <a href="#" data-open-nav>{{ icon('menu') }}Boshqa</a>
+  {% elif current_user['role'] == 'station' %}
       {{ nav('punkt.home', 'Punkt', 'factory', None, ['punkt.home', 'punkt.trip']) }}
       {{ nav('punkt.scanner', 'QR skaner', 'camera') }}
       {{ nav('punkt.history', 'Bugungi tarix', 'history') }}
@@ -39,10 +48,12 @@
       {{ nav('ops.waybills', 'Nakladnoy', 'doc', 'waybill.view', ['ops.waybills', 'ops.waybill_detail']) }}
       {{ nav('ops.nayman_list', 'Nayman', 'factory', 'waybill.view', ['ops.nayman_list', 'ops.nayman']) }}
       {{ nav('punkt.home', 'Punkt qabuli', 'building', 'station.view', ['punkt.home', 'punkt.trip', 'punkt.history', 'punkt.scanner']) }}
-      {{ nav('people.settlements', 'Buxgalteriya', 'calc', 'settlement.view') }}
+      {{ nav('acct.home', 'Buxgalteriya', 'calc', 'acct.view', ['acct.home', 'acct.income', 'acct.workers', 'acct.worker', 'acct.combines', 'acct.cotton', 'acct.cash', 'acct.day_close', 'acct.debts', 'acct.report', 'acct.expenses']) }}
+      {{ nav('acct.cashier', 'Kassir', 'cash', 'payouts.pay', ['acct.cashier']) }}
+      {{ nav('acct.payouts', 'Ishchilarga to‘lovlar', 'card', 'payouts.view', ['acct.payouts']) }}
       {{ nav('finance.payments', 'To‘lovlar', 'card', 'payments.view') }}
-      {{ nav('finance.expenses', 'Xarajatlar', 'receipt', 'reports.finance') }}
-      {{ nav('finance.cash', 'Kassa', 'cash', 'cash.view') }}
+      {{ nav('acct.expense_pick', 'Xarajat yozish', 'receipt', 'expenses.write', ['acct.expense_pick', 'acct.expense_new']) }}
+      {{ nav('finance.cash', 'Kassa kitobi', 'cash', 'cash.view') }}
       {{ nav('people.workers', 'Xodimlar', 'users', 'reports.view', ['people.workers', 'people.worker_detail']) }}
       {{ nav('admin.equipment', 'Texnikalar', 'tractor') }}
       {{ nav('admin.fields', 'Dalalar', 'field', 'reports.view', ['admin.fields', 'admin.field_detail']) }}
@@ -53,6 +64,7 @@
       {{ nav('admin.users', 'Foydalanuvchilar', 'user', 'users.manage') }}
       {{ nav('admin.brigadiers', 'Brigadirlar', 'users', 'masterdata.write') }}
       {{ nav('admin.stations', 'Punktlar', 'building', 'masterdata.write') }}
+      {{ nav('admin.cashboxes', 'Kassalar', 'cash', 'users.manage') }}
       {{ nav('admin.seasons', 'Mavsumlar', 'calendar', 'seasons.manage') }}
       {{ nav('reports.audit_log', 'Audit tarixi', 'shield', 'audit.view') }}
       {{ nav('admin.backups', 'Zaxira nusxa', 'database', 'backup.manage') }}

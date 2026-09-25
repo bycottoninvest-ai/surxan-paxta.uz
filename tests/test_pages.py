@@ -9,7 +9,7 @@ GET_PAGES = ['/', '/?view=full', '/?view=mobile', '/terim', '/telashkalar', '/ta
              '/admin/foydalanuvchilar', '/admin/brigadirlar', '/admin/dalalar', '/admin/texnikalar', '/admin/sozlamalar',
              '/admin/mavsumlar', '/admin/zaxira', '/admin/integratsiyalar', '/parol', '/qidiruv?q=TL', '/tv',
              '/hisobot/kunlik', '/hisobot/nakladnoylar', '/hisobot/terimchilar', '/hisobot/brigadirlar', '/hisobot/dalalar',
-             '/hisobot/telashkalar', '/hisobot/kombaynlar', '/hisobot/punktlar', '/hisobot/farq-sabablari', '/punkt', '/punkt/tarix', '/punkt/skaner', '/admin/punktlar', '/hisobot/nayman', '/hisobot/tolovlar', '/hisobot/xarajatlar', '/hisobot/kassa',
+             '/hisobot/telashkalar', '/hisobot/kombaynlar', '/hisobot/punktlar', '/hisobot/farq-sabablari', '/punkt', '/punkt/tarix', '/punkt/skaner', '/admin/punktlar', '/admin/kassalar', '/buxgalteriya', '/buxgalteriya/kirim', '/buxgalteriya/xarajat', '/buxgalteriya/xarajat/yangi?category=Ovqat', '/buxgalteriya/xarajatlar', '/buxgalteriya/ishchilar', '/buxgalteriya/tolovlar', '/kassir', '/buxgalteriya/kombaynlar', '/buxgalteriya/paxta', '/buxgalteriya/paxta?by=kun&period=mavsum', '/buxgalteriya/kassa', '/buxgalteriya/kun-yopish', '/buxgalteriya/qarzlar', '/buxgalteriya/hisobot', '/buxgalteriya/hisobot?period=mavsum&format=pdf', '/buxgalteriya/hisobot?period=oy&format=xlsx', '/hisobot/nayman', '/hisobot/tolovlar', '/hisobot/xarajatlar', '/hisobot/kassa',
              '/hisobot/mavsumlar']
 
 
@@ -61,7 +61,7 @@ def test_phone_gets_light_home_and_desktop_gets_dashboard(app, world):
 
 
 def test_role_home_screens(app, world):
-    for user, text in (('tarozi01', 'Tarozi navbati'), ('buxgalter', 'Nayman qabuli'), ('asadbek', 'Kassa kirim/chiqim'),
-                       ('rahbar', 'To‘liq dashboard')):
-        html = Client(app, user, 'Worker2026x', ua=PHONE).get('/').get_data(as_text=True)
+    for user, text in (('tarozi01', 'Tarozi navbati'), ('buxgalter', 'Bugun sizni kutayotgan ishlar'),
+                       ('asadbek', 'BUGUN PUL OLADIGANLAR'), ('rahbar', 'To‘liq dashboard')):
+        html = Client(app, user, 'Worker2026x', ua=PHONE).get('/', follow_redirects=True).get_data(as_text=True)
         assert text in html, user

@@ -1,0 +1,21 @@
+{% extends 'base.html' %}
+{% from 'macros.html' import icon, csrf, void_button, empty with context %}
+{% from 'acct_macros.html' import period_bar with context %}
+{% set page_title = 'Xarajatlar' %}
+{% block content %}
+<div class="page-h"><a class="icon-btn no-print" href="{{ url_for('acct.home') }}">{{ icon('chev-left') }}</a><h1>Xarajatlar</h1><span class="spacer"></span>
+  <a class="btn btn-green" href="{{ url_for('acct.expense_pick') }}">{{ icon('plus','sm') }} Xarajat</a></div>
+<div class="a-chips mb"><a class="chip-btn{{ ' on' if not status }}" href="{{ url_for('acct.expenses', period=period) }}">Barchasi</a><a class="chip-btn{{ ' on' if status == 'TEKSHIRILMAGAN' }}" href="{{ url_for('acct.expenses', status='TEKSHIRILMAGAN') }}">Tekshirilmagan</a><a class="chip-btn{{ ' on' if status == 'TASDIQLANGAN' }}" href="{{ url_for('acct.expenses', status='TASDIQLANGAN', period=period) }}">Tasdiqlangan</a></div>
+{% if status != 'TEKSHIRILMAGAN' %}{{ period_bar('acct.expenses', periods, period, date_from, date_to, {'status': status}) }}{% endif %}
+<div class="m-tiles"><div class="m-tile"><span>{{ period_label if status != 'TEKSHIRILMAGAN' else 'Tekshirilmagan' }}</span><b class="num">{{ total|num }} <small>so‘m</small></b><em>{{ rows|length }} ta yozuv</em></div>
+{% for cat, amt in by_cat[:3] %}<div class="m-tile"><span>{{ cat }}</span><b class="num">{{ amt|num }}</b></div>{% endfor %}</div>
+<section class="card"><div class="table-wrap"><table class="t">
+  <thead><tr><th>ID</th><th>Sana</th><th>Turi</th><th class="num">Summa</th><th class="hide-m">Dala / punkt / texnika</th><th class="hide-m">Izoh</th><th>Holat</th><th></th></tr></thead>
+  <tbody>{% for e in rows %}<tr class="{{ 'void' if e.voided_at }}">
+    <td class="keep">{{ e.doc_no }}</td><td>{{ e.expense_date|d }}</td><td>{{ e.category }}</td><td class="num b">{{ e.amount|num }}</td>
+    <td class="hide-m">{{ e.field_name or e.station_name or e.equipment_code or '—' }}</td><td class="hide-m small">{{ e.note or '' }}<div class="tiny muted">{{ e.created_name }}</div></td>
+    <td>{% if e.voided_at %}<span class="badge b-gray">Bekor</span>{% elif e.status == 'TEKSHIRILMAGAN' %}<span class="badge b-orange">Tekshirilmagan</span>{% else %}<span class="badge b-green">Tasdiqlangan</span>{% endif %}</td>
+    <td class="right">{% if not e.voided_at %}{% if e.status == 'TEKSHIRILMAGAN' and can('expenses.approve') %}<form method="post" action="{{ url_for('acct.expense_approve', expense_id=e.id) }}" style="display:inline">{{ csrf() }}<button class="btn btn-green btn-sm">{{ icon('check','sm') }} Tasdiqlash</button></form>{% endif %}
+      {% if can('expenses.approve') %}{{ void_button(url_for('finance.expense_void', expense_id=e.id), 'Bekor', 'Xarajatni bekor qilish sababi') }}{% endif %}{% endif %}</td></tr>
+  {% else %}<tr><td colspan="8">{{ empty('Xarajat yo‘q', 'receipt') }}</td></tr>{% endfor %}</tbody></table></div></section>
+{% endblock %}

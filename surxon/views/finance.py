@@ -110,7 +110,7 @@ def expenses():
 
 
 @bp.post('/xarajat/<int:expense_id>/bekor')
-@perm_required('expenses.write')
+@perm_required('expenses.approve')
 def expense_void(expense_id):
     void_expense(post_actor(), expense_id, request.form.get('reason'))
     return done('Xarajat bekor qilindi.', url_for('finance.expenses'))

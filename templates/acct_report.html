@@ -1,0 +1,31 @@
+{% extends 'base.html' %}
+{% from 'macros.html' import icon with context %}
+{% from 'acct_macros.html' import period_bar with context %}
+{% set page_title = title %}
+{% block content %}
+<div class="page-h"><a class="icon-btn no-print" href="{{ url_for('acct.home') }}">{{ icon('chev-left') }}</a><h1>{{ title }}</h1><span class="spacer"></span>
+  {% set qs = {'period': period, 'from': date_from, 'to': date_to} %}<a class="btn btn-light no-print" href="{{ url_for('acct.report', format='xlsx', **qs) }}">{{ icon('excel','sm') }} Excel</a>
+  <a class="btn btn-primary no-print" href="{{ url_for('acct.report', format='pdf', **qs) }}">{{ icon('printer','sm') }} PDF</a></div>
+{{ period_bar('acct.report', periods, period, date_from, date_to) }}
+<div class="small muted mb">{{ date_from|d }} — {{ date_to|d }}</div>
+<section class="card"><div class="card-b a-report">
+  <h4>Paxta</h4>
+  <div class="row a-line"><span>TERILGAN</span><span class="spacer"></span><b class="num">{{ s.cotton.field_kg|num }} kg</b></div>
+  <div class="row a-line"><span>PUNKT QABUL</span><span class="spacer"></span><b class="num">{{ s.cotton.punkt_kg|num }} kg</b></div>
+  <div class="row a-line"><span>FARQ</span><span class="spacer"></span><b class="num">{{ '%+.0f'|format(s.cotton.diff_kg) }} kg{{ (' (' ~ ('%+.2f'|format(s.cotton.diff_pct)) ~ '%)') if s.cotton.diff_pct is not none }}</b></div>
+  <h4>Hisoblangan</h4>
+  <div class="row a-line"><span>TERIMCHILAR PULI</span><span class="spacer"></span><b class="num">{{ s.wages_earned|num }} so‘m</b></div>
+  {% if s.wages_uncalc_kg %}<div class="row a-line"><span class="t-down">Narxsiz terim (hisoblanmagan)</span><span class="spacer"></span><b class="num">{{ s.wages_uncalc_kg|num }} kg</b></div>{% endif %}
+  <div class="row a-line"><span>KOMBAYN</span><span class="spacer"></span><b class="num">{{ s.combine_earned|num }} so‘m</b></div>
+  <h4>Xarajatlar</h4>
+  {% for e in s.expenses %}<div class="row a-line"><span>{{ e.category|upper }}</span><span class="spacer"></span><b class="num">{{ e.amount|num }} so‘m</b></div>{% else %}<div class="small muted">Xarajat yo‘q</div>{% endfor %}
+  <div class="row a-line a-strong"><span>JAMI XARAJAT</span><span class="spacer"></span><b class="num">{{ s.expenses_total|num }} so‘m</b></div>
+  {% if s.unchecked_expenses %}<div class="small t-down">{{ s.unchecked_expenses }} ta xarajat hali tasdiqlanmagan</div>{% endif %}
+  <h4>Kassa</h4>
+  <div class="row a-line"><span>KASSA KIRIM</span><span class="spacer"></span><b class="num">{{ s.cash_in|num }} so‘m</b></div>
+  <div class="row a-line"><span>KASSA CHIQIM</span><span class="spacer"></span><b class="num">{{ s.cash_out|num }} so‘m</b></div>
+  <div class="row a-line small"><span>shundan ish haqi / avans / kombayn</span><span class="spacer"></span><span class="num">{{ s.wages_paid|num }} / {{ s.advances|num }} / {{ s.combine_paid|num }}</span></div>
+  <div class="row a-line a-strong"><span>KASSA QOLDIQ (davr oxiri)</span><span class="spacer"></span><b class="num">{{ s.cash_balance|num }} so‘m</b></div>
+  {% if s.day_closes %}<h4>Kun yopilishlari</h4>{% for d in s.day_closes %}<div class="row a-line small"><span>{{ d.day|d }} · {{ d.box }}</span><span class="spacer"></span><span class="num">tizim {{ d.system_balance|num }} · real {{ d.counted|num }} · farq {{ d.diff|num }}</span></div>{% endfor %}{% endif %}
+</div></section>
+{% endblock %}

@@ -1,0 +1,22 @@
+{% extends 'base.html' %}
+{% from 'macros.html' import icon, empty with context %}
+{% from 'acct_macros.html' import period_bar with context %}
+{% set page_title = 'Kassa' %}
+{% block content %}
+<div class="page-h"><a class="icon-btn no-print" href="{{ url_for('acct.home') }}">{{ icon('chev-left') }}</a><h1>Kassa</h1><span class="spacer"></span>
+  <a class="btn btn-green" href="{{ url_for('acct.income') }}">{{ icon('plus','sm') }} Kirim</a><a class="btn btn-light" href="{{ url_for('acct.day_close') }}">Kunni yopish</a></div>
+<div class="a-chips mb"><a class="chip-btn{{ ' on' if not box }}" href="{{ url_for('acct.cash', period=period) }}">Barcha kassalar</a>{% for b in boxes %}<a class="chip-btn{{ ' on' if box == b.id }}" href="{{ url_for('acct.cash', kassa=b.id, period=period) }}">{{ b.name }}: {{ b.balance|num }}</a>{% endfor %}</div>
+{{ period_bar('acct.cash', periods, period, date_from, date_to, {'kassa': box}) }}
+<div class="a-tiles">
+  <div class="m-tile a-tile t-green"><span>Kirim ({{ period_label }})</span><b class="num">{{ tot['in']|num }}</b></div>
+  <div class="m-tile a-tile t-orange"><span>Chiqim</span><b class="num">{{ tot['out']|num }}</b></div>
+  <div class="m-tile a-tile t-blue"><span>Hozirgi qoldiq</span><b class="num">{{ balance|num }} <small>so‘m</small></b><em>kirim − chiqim = qoldiq</em></div>
+</div>
+<section class="card"><div class="table-wrap"><table class="t">
+  <thead><tr><th>ID</th><th>Sana</th><th>Turi</th><th>Kimga / kimdan</th><th class="num">Kirim</th><th class="num">Chiqim</th><th class="hide-m">Kassa · kiritdi</th></tr></thead>
+  <tbody>{% for c in rows %}<tr class="{{ 'void' if c.voided_at }}"><td class="keep">{{ c.doc_no }}</td><td>{{ c.entry_date|d }}</td><td>{{ categories.get(c.category, (None, c.category))[1] }}</td>
+    <td>{{ c.worker_name or c.combine_code or c.counterparty or c.source or '' }}<div class="tiny muted">{{ c.note or '' }}{{ ' · BEKOR: ' ~ c.void_reason if c.voided_at }}</div></td>
+    <td class="num b t-up">{{ c.amount|num if c.direction == 'IN' else '' }}</td><td class="num b">{{ c.amount|num if c.direction == 'OUT' else '' }}</td><td class="hide-m small">{{ c.box }} · {{ c.created_name }}</td></tr>
+  {% else %}<tr><td colspan="7">{{ empty('Bu davrda kassa harakati yo‘q', 'cash') }}</td></tr>{% endfor %}</tbody></table></div></section>
+<div class="a-links"><a href="{{ url_for('finance.cash') }}">{{ icon('cash','sm') }} To‘liq kassa kitobi (boshlang‘ich qoldiq, boshqa chiqim)</a></div>
+{% endblock %}

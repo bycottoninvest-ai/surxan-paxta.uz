@@ -4,7 +4,7 @@ from flask import Blueprint, abort, current_app, render_template, request, send_
 from .. import queries
 from ..db import q, scalar
 from ..security import PERMISSIONS, ROLES, perm_required
-from ..services import (close_season, reopen_season, save_brigadier, save_equipment, save_field, save_settings, save_station,
+from ..services import (close_season, reopen_season, save_brigadier, save_cashbox, save_equipment, save_field, save_settings, save_station,
                         save_user, telegram_link_code, unlink_telegram)
 from ..settings import all_settings, get_setting
 from ..utils import UserError, parse_int, parse_number
@@ -25,7 +25,8 @@ def users():
                   role=request.form.get('role'), password=request.form.get('password', ''),
                   brigadier_id=parse_int(request.form.get('brigadier_id'), 'Brigada', required=False),
                   phone=request.form.get('phone', ''), active=checkbox('active') if uid else True,
-                  station_id=parse_int(request.form.get('station_id'), 'Punkt', required=False))
+                  station_id=parse_int(request.form.get('station_id'), 'Punkt', required=False),
+                  cashbox_id=parse_int(request.form.get('cashbox_id'), 'Kassa', required=False))
         return done('Foydalanuvchi saqlandi.' + ('' if uid else ' Birinchi kirishda parolni almashtirish so‘raladi.'),
                     url_for('admin.users'))
     edit = None
@@ -37,6 +38,7 @@ def users():
                                                          ORDER BY u.active DESC, u.role, u.full_name'''),
                            brigadiers=q('SELECT * FROM brigadiers WHERE active=1 ORDER BY name'), roles=ROLES, edit=edit,
                            stations=q('SELECT * FROM stations WHERE active=1 ORDER BY name'),
+                           cashboxes=q('SELECT * FROM cashboxes WHERE active=1 ORDER BY id'),
                            permissions=PERMISSIONS)
 
 
@@ -67,6 +69,21 @@ def brigadiers():
     year = season_arg()
     return render_template('admin_brigadiers.html', rows=queries.brigadier_results(year), year=year,
                            all_rows=q('SELECT * FROM brigadiers ORDER BY active DESC, name'))
+
+
+@bp.route('/kassalar', methods=['GET', 'POST'])
+@perm_required('users.manage')
+def cashboxes():
+    if request.method == 'POST':
+        cid = parse_int(request.form.get('id'), 'ID', required=False)
+        save_cashbox(post_actor(), cid, name=request.form.get('name'), active=checkbox('active') if cid else True)
+        return done('Kassa saqlandi.', url_for('admin.cashboxes'))
+    from ..accounting import box_balance
+    from ..db import get_db
+    rows = [dict(r, balance=box_balance(get_db(), r['id']),
+                 cashiers=', '.join(u['full_name'] for u in q('SELECT full_name FROM users WHERE cashbox_id=? AND active=1', (r['id'],))))
+            for r in q('SELECT * FROM cashboxes ORDER BY active DESC, id')]
+    return render_template('admin_cashboxes.html', rows=rows)
 
 
 @bp.route('/punktlar', methods=['GET', 'POST'])

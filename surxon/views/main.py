@@ -31,6 +31,10 @@ def health():
 def dashboard():
     if g.user['role'] == 'station':
         return redirect(url_for('punkt.home'))
+    if g.user['role'] == 'accountant' and not request.args.get('view'):
+        return redirect(url_for('acct.home'))
+    if g.user['role'] == 'cashier':
+        return redirect(url_for('acct.cashier'))
     year = season_arg()
     day = request.args.get('date') or today_str()
     try:

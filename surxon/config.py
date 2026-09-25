@@ -37,6 +37,9 @@ class Config:
         self.MAX_UPLOAD_MB = int(env.get('MAX_UPLOAD_MB', '25'))
         # External archives — each one stays "not connected" until its settings are present.
         self.TELEGRAM_ARCHIVE_CHAT_ID = env.get('TELEGRAM_ARCHIVE_CHAT_ID', '').strip()
+        # read-only reporting channel (daily report + alerts). Its own bot is optional; nobody writes to it.
+        self.TELEGRAM_REPORT_CHAT_ID = env.get('TELEGRAM_REPORT_CHAT_ID', '').strip()
+        self.TELEGRAM_REPORT_BOT_TOKEN = env.get('TELEGRAM_REPORT_BOT_TOKEN', '').strip()
         self.GOOGLE_SHEETS_ID = env.get('GOOGLE_SHEETS_ID', '').strip()
         self.GOOGLE_SERVICE_ACCOUNT_FILE = env.get('GOOGLE_SERVICE_ACCOUNT_FILE', '').strip()
         self.OFFSITE_RCLONE_REMOTE = env.get('OFFSITE_RCLONE_REMOTE', '').strip()
@@ -46,6 +49,7 @@ class Config:
         if self.APP_MODE == 'test':
             # A test copy must never talk to the real bot, archive channel, Sheets or offsite storage.
             self.TELEGRAM_BOT_TOKEN = self.TELEGRAM_ARCHIVE_CHAT_ID = ''
+            self.TELEGRAM_REPORT_CHAT_ID = self.TELEGRAM_REPORT_BOT_TOKEN = ''
             self.GOOGLE_SHEETS_ID = self.GOOGLE_SERVICE_ACCOUNT_FILE = self.OFFSITE_RCLONE_REMOTE = ''
 
     def validate(self):

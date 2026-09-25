@@ -14,7 +14,7 @@ from .config import BASE_DIR, Config
 from .security import (PERMISSIONS, ROLES, brigadier_scope, can, csrf_token, load_user, wants_json)
 from .utils import UserError, fmt_date, fmt_money, fmt_num, now_str, today_str, weekday_name
 
-VERSION = '2.3.0'
+VERSION = '2.4.0'
 
 
 def create_app(**overrides):
@@ -51,8 +51,8 @@ def create_app(**overrides):
         dbmod.migrate(conn)
         seed(conn, cfg)
 
-    from .views import admin, auth, finance, integrations, main, ops, people, punkt, reports
-    for bp in (auth.bp, main.bp, ops.bp, people.bp, finance.bp, reports.bp, admin.bp, integrations.bp, punkt.bp):
+    from .views import acct, admin, auth, finance, integrations, main, ops, people, punkt, reports
+    for bp in (auth.bp, main.bp, ops.bp, people.bp, finance.bp, reports.bp, admin.bp, integrations.bp, punkt.bp, acct.bp):
         app.register_blueprint(bp)
     from .telegram_bot import bp as tg_bp
     app.register_blueprint(tg_bp)
@@ -127,6 +127,10 @@ def seed(conn, cfg):
             conn.execute("INSERT INTO stations(name, created_at) VALUES ('Nayman-1', ?)", (now_str_safe(),))
         conn.execute('UPDATE trailer_loads SET station_id=(SELECT MIN(id) FROM stations WHERE active=1) '
                      'WHERE station_id IS NULL')
+        if not conn.execute('SELECT 1 FROM cashboxes LIMIT 1').fetchone():
+            conn.execute("INSERT INTO cashboxes(name, created_at) VALUES ('Paxta mavsumi kassasi', ?)", (now_str_safe(),))
+        for t in ('cash_entries', 'expenses'):
+            conn.execute(f'UPDATE {t} SET cashbox_id=(SELECT MIN(id) FROM cashboxes WHERE active=1) WHERE cashbox_id IS NULL')
         if not conn.execute('SELECT 1 FROM equipment LIMIT 1').fetchone():
             for kind, codes in (('traktor', ['T-01', 'T-02', 'T-03']), ('telashka', ['TL-01', 'TL-02', 'TL-03', 'TL-04']),
                                 ('kombayn', ['K-01', 'K-02'])):

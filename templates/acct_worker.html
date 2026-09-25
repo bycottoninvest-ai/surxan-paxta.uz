@@ -1,0 +1,52 @@
+{% extends 'base.html' %}
+{% from 'macros.html' import icon, csrf, uuid_field, empty with context %}
+{% set page_title = w.full_name %}
+{% block content %}
+<div class="row mb"><a class="btn btn-ghost btn-sm" href="{{ url_for('acct.workers') }}">{{ icon('chev-left','sm') }} Ishchilar</a></div>
+<section class="card"><div class="card-b">
+  <div class="row"><h2 style="margin:0">{{ w.full_name }}</h2>{% if bal %}<span class="badge {{ bal.badge }}">{{ bal.status }}</span>{% endif %}</div>
+  <div class="small muted">{{ w.brigadier_name or '' }}{{ ' · ' ~ w.phone if w.phone }}</div>
+  {% if bal %}
+  <div class="a-summary">
+    <div><span>Jami terdi</span><b class="num">{{ bal.kg|num }} kg</b></div>
+    <div><span>Hisoblangan</span><b class="num">{{ bal.earned|num }} so‘m</b>{% if bal.uncalc_kg %}<em>+ {{ bal.uncalc_kg|num }} kg narxsiz (hisoblanmagan)</em>{% endif %}</div>
+    <div><span>Avans</span><b class="num">− {{ bal.advances|num }} so‘m</b></div>
+    <div><span>Oldin berilgan</span><b class="num">− {{ bal.paid|num }} so‘m</b></div>
+    <div class="a-total {{ 'neg' if bal.balance < 0 }}"><span>Qoldiq</span><b class="num">{{ bal.balance|num }} so‘m</b></div>
+    {% if bal.pending %}<div><span>Kassirda kutilmoqda</span><b class="num">{{ bal.pending|num }} so‘m</b></div>{% endif %}
+  </div>
+  {% if can('payouts.prepare') %}
+  {% if bal.payable > 0 %}
+  <form method="post" action="{{ url_for('acct.payout_prepare') }}" class="form mt" data-confirm="{{ w.full_name }} uchun to‘lov tayyorlansinmi?">
+    {{ csrf() }}{{ uuid_field() }}<input type="hidden" name="kind" value="worker"><input type="hidden" name="target_id" value="{{ w.id }}"><input type="hidden" name="next" value="{{ request.path }}">
+    <div class="f"><label>Summa (bo‘sh = to‘liq qoldiq {{ bal.payable|num }})</label><input name="amount" inputmode="numeric" placeholder="{{ bal.payable }}" data-money></div>
+    <div class="f"><button class="btn btn-green btn-block btn-xl">{{ bal.payable|num }} SO‘M TO‘LASH</button></div>
+  </form>
+  {% endif %}
+  {% if not bal.pending %}
+  <details class="mt"><summary class="b">Avans berish</summary>
+  <form method="post" action="{{ url_for('acct.payout_prepare') }}" class="form mt-s" data-confirm="Avans tayyorlansinmi?">
+    {{ csrf() }}{{ uuid_field() }}<input type="hidden" name="kind" value="worker"><input type="hidden" name="purpose" value="advance"><input type="hidden" name="target_id" value="{{ w.id }}"><input type="hidden" name="next" value="{{ request.path }}">
+    <div class="f"><label>Avans summasi</label><input name="amount" inputmode="numeric" required data-money></div>
+    <div class="f"><button class="btn btn-light btn-block">AVANSNI TAYYORLASH</button></div>
+    <div class="f tiny muted">Avans keyingi hisobdan avtomatik ayriladi.</div>
+  </form></details>{% endif %}
+  {% endif %}
+  {% endif %}
+</div></section>
+
+<section class="card"><div class="card-h"><h3>Narx tarixi bo‘yicha</h3></div>
+  <div class="table-wrap"><table class="t"><thead><tr><th>Narx</th><th class="num">Kg</th><th class="num">Summa</th></tr></thead>
+  <tbody>{% for r in rates %}<tr><td>{{ (r.rate|num ~ ' so‘m/kg') if r.rate else 'narx yo‘q — hisoblanmagan' }}</td><td class="num">{{ r.kg|num(1) }}</td><td class="num b">{{ r.amount|num if r.rate else '—' }}</td></tr>{% endfor %}</tbody></table></div></section>
+
+<section class="card"><div class="card-h"><h3>To‘lov va avanslar</h3></div>
+  <div class="table-wrap"><table class="t"><thead><tr><th>ID</th><th>Sana</th><th>Turi</th><th class="num">Summa</th><th class="hide-m">Kassa / kim</th></tr></thead>
+  <tbody>{% for m in money %}<tr class="{{ 'void' if m.voided_at }}"><td class="keep">{{ m.doc_no }}</td><td>{{ m.entry_date|d }}</td><td>{{ categories.get(m.category, (None, m.category))[1] }}</td><td class="num b">{{ m.amount|num }}</td><td class="hide-m small">{{ m.cashbox_name }} · {{ m.created_name }}</td></tr>
+  {% else %}<tr><td colspan="5" class="small muted">Hali to‘lov yo‘q.</td></tr>{% endfor %}
+  {% for o in orders if o.status != 'BERILDI' %}<tr><td class="keep">{{ o.doc_no }}</td><td>{{ o.prepared_at|d }}</td><td>{{ 'Avans' if o.purpose == 'advance' else 'To‘lov' }} · <span class="badge {{ 'b-orange' if o.status == 'TAYYOR' else 'b-gray' }}">{{ o.status }}</span></td><td class="num">{{ o.amount|num }}</td><td class="hide-m small">{{ o.prepared_name }}{{ ' · ' ~ o.void_reason if o.void_reason }}</td></tr>{% endfor %}</tbody></table></div></section>
+
+<section class="card"><div class="card-h"><h3>Har bir tortish (o‘z narxi bilan)</h3></div>
+  <div class="table-wrap"><table class="t"><thead><tr><th>Sana</th><th>Telashka</th><th class="hide-m">Dala</th><th class="num">Kg</th><th class="num">Narx</th><th class="num">Summa</th></tr></thead>
+  <tbody>{% for h in harvests %}<tr class="{{ 'void' if h.voided_at }}"><td>{{ h.created_at|d }}</td><td>{{ h.trip_no or '—' }}</td><td class="hide-m">{{ h.field_name }}</td><td class="num">{{ h.kg|num(1) }}</td><td class="num">{{ h.rate|num if h.rate else '—' }}</td><td class="num b">{{ h.amount|num if h.amount is not none else 'hisoblanmagan' }}</td></tr>
+  {% else %}<tr><td colspan="6">{{ empty('Tortish yo‘q') }}</td></tr>{% endfor %}</tbody></table></div></section>
+{% endblock %}

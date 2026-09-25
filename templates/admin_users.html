@@ -13,6 +13,7 @@
       <div class="f h"><label>Telefon</label><input name="phone" value="{{ edit.phone or '' if edit else '' }}"></div>
       <div class="f h"><label>Rol <span class="req">*</span></label><select name="role" id="role">{% for k, v in roles.items() %}<option value="{{ k }}" {{ 'selected' if edit and edit.role == k }}>{{ v }}</option>{% endfor %}</select></div>
       <div class="f h" id="brig"><label>Brigada (brigadir uchun)</label><select name="brigadier_id"><option value="">—</option>{% for b in brigadiers %}<option value="{{ b.id }}" {{ 'selected' if edit and edit.brigadier_id == b.id }}>{{ b.name }}</option>{% endfor %}</select></div>
+      <div class="f h" id="cbx"><label>Kassa (kassir uchun)</label><select name="cashbox_id"><option value="">—</option>{% for c in cashboxes %}<option value="{{ c.id }}" {{ 'selected' if edit and edit.cashbox_id == c.id }}>{{ c.name }}</option>{% endfor %}</select></div>
       <div class="f h" id="stn"><label>Punkt (punkt operatori uchun) <span class="req">*</span></label><select name="station_id"><option value="">—</option>{% for st in stations %}<option value="{{ st.id }}" {{ 'selected' if edit and edit.station_id == st.id }}>{{ st.name }}</option>{% endfor %}</select></div>
       <div class="f"><label>{{ 'Yangi parol (almashtirish uchun)' if edit else 'Vaqtinchalik parol' }} {% if not edit %}<span class="req">*</span>{% endif %}</label><input type="text" name="password" {{ 'required' if not edit }} minlength="8" autocomplete="new-password" placeholder="kamida 8 belgi, harf+raqam"><div class="hint">Xodim birinchi kirishda o‘z parolini o‘rnatadi.</div></div>
       {% if edit %}<div class="f"><label class="check"><input type="checkbox" name="active" value="1" {{ 'checked' if edit.active }}> Faol (o‘chirilsa tizimga kira olmaydi, tarixi saqlanadi)</label></div>{% endif %}
@@ -42,4 +43,4 @@
   </section>
 </div>
 {% endblock %}
-{% block scripts %}<script>(function(){const r=document.getElementById('role'),b=document.getElementById('brig'),s=document.getElementById('stn');const f=()=>{b.hidden=r.value!=='brigadier';s.hidden=r.value!=='station';};r.addEventListener('change',f);f();})();</script>{% endblock %}
+{% block scripts %}<script>(function(){const r=document.getElementById('role'),b=document.getElementById('brig'),s=document.getElementById('stn'),c=document.getElementById('cbx');const f=()=>{b.hidden=r.value!=='brigadier';s.hidden=r.value!=='station';c.hidden=r.value!=='cashier';};r.addEventListener('change',f);f();})();</script>{% endblock %}

@@ -1,0 +1,19 @@
+{% extends 'base.html' %}
+{% from 'macros.html' import icon, csrf with context %}
+{% set page_title = 'Kassalar' %}
+{% block content %}
+<div class="page-h"><h1>{{ icon('cash','lg') }} Kassalar</h1></div>
+<div class="grid">
+  <section class="card s4"><div class="card-h"><h3>Yangi kassa</h3></div>
+    <div class="card-b"><form method="post" class="form">{{ csrf() }}
+      <div class="f"><label>Nomi <span class="req">*</span></label><input name="name" required placeholder="Masalan: Dala kassasi"></div>
+      <div class="f"><button class="btn btn-primary btn-block">Saqlash</button></div></form></div>
+    <div class="card-b tiny muted">Kassirni kassaga bog‘lash: Foydalanuvchilar → rol “Kassir” → kassani tanlang. Kassir faqat o‘z kassasidan beradi.</div></section>
+  <section class="card s8"><div class="card-h"><h3>Ro‘yxat</h3></div>
+    <div class="table-wrap"><table class="t"><thead><tr><th>Nomi</th><th class="num">Qoldiq</th><th>Kassirlar</th><th>Holat</th><th></th></tr></thead>
+      <tbody>{% for c in rows %}<tr><form method="post">{{ csrf() }}<input type="hidden" name="id" value="{{ c.id }}">
+        <td><input class="input" name="name" value="{{ c.name }}" style="height:36px"></td><td class="num b">{{ c.balance|num }}</td><td class="small">{{ c.cashiers or '—' }}</td>
+        <td><label class="check"><input type="checkbox" name="active" value="1" {{ 'checked' if c.active }}> faol</label></td>
+        <td><button class="btn btn-light btn-sm">Saqlash</button></td></form></tr>{% endfor %}</tbody></table></div></section>
+</div>
+{% endblock %}

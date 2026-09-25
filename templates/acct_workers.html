@@ -1,0 +1,37 @@
+{% extends 'base.html' %}
+{% from 'macros.html' import icon, csrf, uuid_field, empty with context %}
+{% set page_title = 'Ishchilarga to‘lov' %}
+{% block content %}
+<div class="page-h"><a class="icon-btn no-print" href="{{ url_for('acct.home') }}">{{ icon('chev-left') }}</a><h1>Ishchilarga to‘lov</h1></div>
+{% if not rate %}<div class="flash error">{{ icon('alert','sm') }}<div>Terim narxi (so‘m/kg) kiritilmagan — yangi tortishlar “hisoblanmagan” bo‘lib yoziladi. <a class="link" href="{{ url_for('admin.settings') }}">Sozlamalar</a></div></div>
+{% else %}<div class="small muted mb">Hozirgi narx: <b>{{ rate|num }} so‘m/kg</b>. Har tortish o‘z vaqtidagi narx bilan saqlangan — narx o‘zgarsa eski hisob o‘zgarmaydi.</div>{% endif %}
+<div class="a-chips mb">
+  <a class="chip-btn{{ ' on' if tab == 'qoldiq' }}" href="{{ url_for('acct.workers', tab='qoldiq') }}">Qoldig‘i bor ({{ counts.qoldiq }})</a>
+  <a class="chip-btn{{ ' on' if tab == 'tayyor' }}" href="{{ url_for('acct.workers', tab='tayyor') }}">Kutilyapti ({{ counts.tayyor }})</a>
+  <a class="chip-btn{{ ' on' if tab == 'barchasi' }}" href="{{ url_for('acct.workers', tab='barchasi') }}">Barchasi ({{ counts.barchasi }})</a>
+</div>
+<form class="row mb a-filter" method="get"><input type="hidden" name="tab" value="{{ tab }}">
+  <input type="search" name="q" value="{{ request.args.get('q','') }}" placeholder="Ism yoki telefon…" style="flex:2">
+  <select name="brigada"><option value="">Brigada</option>{% for b in brigadiers %}<option value="{{ b.id }}" {{ 'selected' if request.args.get('brigada')|string == b.id|string }}>{{ b.name }}</option>{% endfor %}</select>
+  <select name="field" class="hide-m"><option value="">Dala</option>{% for f in fields %}<option value="{{ f.id }}" {{ 'selected' if request.args.get('field')|string == f.id|string }}>{{ f.name }}</option>{% endfor %}</select>
+  <input type="date" name="day" value="{{ request.args.get('day','') }}" class="hide-m" title="Shu kuni terganlar">
+  <button class="btn btn-primary">{{ icon('search','sm') }}</button></form>
+{% for w in rows %}
+<div class="m-card a-worker">
+  <div class="row"><a class="b a-name" href="{{ url_for('acct.worker', worker_id=w.id) }}">{{ w.full_name }}</a><span class="badge {{ w.badge }}">{{ w.status }}</span></div>
+  <div class="small muted">{{ w.brigadier_name or '' }}{{ ' · ' ~ w.phone if w.phone }} · {{ w.kg|num }} kg{% if w.uncalc_kg %} (shundan {{ w.uncalc_kg|num }} kg narxsiz){% endif %}</div>
+  <div class="a-nums">
+    <div><span>Hisoblangan</span><b class="num">{{ w.earned|num }}</b></div>
+    <div><span>Avans</span><b class="num">{{ w.advances|num }}</b></div>
+    <div><span>To‘langan</span><b class="num">{{ w.paid|num }}</b></div>
+    <div class="{{ 'neg' if w.balance < 0 }}"><span>Qoldiq</span><b class="num">{{ w.balance|num }}</b></div>
+  </div>
+  {% if w.pending %}<div class="a-pending">{{ icon('clock','sm') }} {{ w.pending|num }} so‘m kassirda kutilmoqda ({{ w.pending_doc }})</div>{% endif %}
+  {% if w.payable > 0 and can('payouts.prepare') %}
+  <form method="post" action="{{ url_for('acct.payout_prepare') }}" data-offline="To‘lov {{ w.full_name }}" data-confirm="{{ w.full_name }}: {{ w.payable|num }} so‘m to‘lovga tayyorlansinmi?">
+    {{ csrf() }}{{ uuid_field() }}<input type="hidden" name="kind" value="worker"><input type="hidden" name="target_id" value="{{ w.id }}"><input type="hidden" name="next" value="{{ request.full_path }}">
+    <button class="btn btn-green btn-block btn-lg">{{ w.payable|num }} SO‘M TO‘LASH</button></form>
+  {% endif %}
+</div>
+{% else %}{{ empty('Bu ro‘yxatda hech kim yo‘q', 'users') }}{% endfor %}
+{% endblock %}

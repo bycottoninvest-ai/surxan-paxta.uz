@@ -77,28 +77,33 @@ def test_full_chain_field_to_payment(app, world):
 
 
 def test_worker_payment_and_cash_rules(app, world):
-    admin, kassa = world['admin'], world['kassa']
+    admin, kassa, bux = world['admin'], world['kassa'], world['bux']
     lid = open_load(world['juma'], world)
-    add(world['juma'], lid, 'Sadoqat opa', '100')
-    # no opening balance -> paying out is refused (no invented money)
+    add(world['juma'], lid, 'Sadoqat opa', '100')          # written while no rate was set → stays "hisoblanmagan"
     with app.app_context():
         wid = q("SELECT id FROM workers WHERE full_name='Sadoqat opa'", one=True)['id']
-    r = kassa.post('/kassa', {'category': 'worker_pay', 'amount': '50000', 'entry_date': '2026-01-01', 'worker_id': wid,
-                              'client_uuid': uuid4()}).get_json()
+    # no opening balance -> paying out is refused (no invented money)
+    r = bux.post('/kassa', {'category': 'worker_pay', 'amount': '50000', 'entry_date': '2026-01-01', 'worker_id': wid,
+                            'client_uuid': uuid4()}).get_json()
     assert r['ok'] is False and 'yetarli' in r['error']
-    assert kassa.post('/kassa', {'category': 'opening', 'amount': '1000000', 'entry_date': '2026-01-01', 'client_uuid': uuid4()}).get_json()['ok']
-    assert kassa.post('/kassa', {'category': 'opening', 'amount': '5', 'entry_date': '2026-01-01', 'client_uuid': uuid4()}).get_json()['ok'] is False
-    assert kassa.post('/kassa', {'category': 'advance', 'amount': '30000', 'entry_date': '2026-01-01', 'worker_id': wid,
-                                 'client_uuid': uuid4()}).get_json()['ok']
-    assert world['bux'].post('/xarajatlar', {'category': 'Yoqilg‘i', 'amount': '200000', 'expense_date': '2026-01-01', 'from_cash': '1',
-                                             'client_uuid': uuid4()}).get_json()['ok']
+    # the cashier does not write the general cash book (only hands out prepared payments)
+    assert kassa.post('/kassa', {'category': 'opening', 'amount': '1000000', 'entry_date': '2026-01-01',
+                                 'client_uuid': uuid4()}).status_code == 403
+    assert bux.post('/kassa', {'category': 'opening', 'amount': '1000000', 'entry_date': '2026-01-01', 'client_uuid': uuid4()}).get_json()['ok']
+    assert bux.post('/kassa', {'category': 'opening', 'amount': '5', 'entry_date': '2026-01-01', 'client_uuid': uuid4()}).get_json()['ok'] is False
+    assert bux.post('/kassa', {'category': 'advance', 'amount': '30000', 'entry_date': '2026-01-01', 'worker_id': wid,
+                               'client_uuid': uuid4()}).get_json()['ok']
+    assert bux.post('/xarajatlar', {'category': 'Yoqilg‘i', 'amount': '200000', 'expense_date': '2026-01-01', 'from_cash': '1',
+                                    'client_uuid': uuid4()}).get_json()['ok']
     admin.post('/admin/sozlamalar', {'set_worker_rate_hand': '1500'})
-    html = kassa.get('/ishchilar/hisob-kitob').get_data(as_text=True)
-    assert '150' in html  # 100 kg * 1500
+    assert add(world['juma'], lid, 'Sadoqat opa', '100', confirm_duplicate='1')['ok']   # now at 1 500 so‘m/kg
+    from surxon.accounting import worker_balances
     with app.app_context():
-        from surxon.services import cash_balance
         year = q('SELECT year FROM seasons LIMIT 1', one=True)['year']
-        assert cash_balance(get_db(), year) == 1_000_000 - 30_000 - 200_000
+        w = worker_balances(year, worker_id=wid)[0]
+        assert (w['kg'], w['earned'], w['uncalc_kg'], w['advances'], w['balance']) == (200, 150_000, 100, 30_000, 120_000)
+        from surxon.accounting import total_balance
+        assert total_balance(get_db()) == 1_000_000 - 30_000 - 200_000
 
 
 # ------------------------------------------------------------------ Codex acceptance cases
@@ -355,29 +360,35 @@ def test_backup_from_live_wal_database_restores(app, world, tmp_path):
 
 
 def test_tally_clerk_enters_all_brigades_and_combine_pay(app, world):
-    """One 'Hisobchi (terim)' login works for every brigade; combine pay uses its own so'm/kg rate."""
-    admin = world['admin']
+    """One 'Hisobchi (terim)' login works for every brigade; combine pay uses that combine's own tariff."""
+    admin, bux = world['admin'], world['bux']
     from conftest import make_user
     tally = make_user(app, admin, 'sadokat', 'tally')
+    assert admin.post('/admin/sozlamalar', {'set_worker_rate_hand': '1500'}).get_json()['ok']
+    # K-01 is paid per tonne: 250 000 so‘m/t
+    r = bux.post('/buxgalteriya/kombaynlar', {'action': 'tariff', 'combine_id': world['eq']['K-01'], 'tariff_type': 'tonna',
+                                              'tariff_rate': '250 000', 'operator_name': 'Rasulov'}).get_json()
+    assert r['ok'], r
     for field, trailer in (('D-04', 'TL-01'), ('D-01', 'TL-02')):     # Juma ota's and Nurim ota's fields
         lid = open_load(tally, world, trailer=trailer, field=field)
-        assert add(tally, lid, 'Gulbahor opa', '40')['ok']
+        assert add(tally, lid, 'Gulbahor opa', '40', confirm_duplicate='1')['ok']
     lid = open_load(tally, world, trailer='TL-03', field='D-04')
-    assert tally.post('/terim', {'load_id': lid, 'method': 'combine', 'combine_id': world['eq']['K-01'], 'kg': '1000',
+    assert tally.post('/terim', {'load_id': lid, 'method': 'combine', 'combine_id': world['eq']['K-01'], 'kg': '3700',
                                  'client_uuid': uuid4()}).get_json()['ok']
-    # no rate yet -> no money column (never shown as 0)
-    html = admin.get('/hisobot/kombaynlar').get_data(as_text=True)
-    assert 'K-01' in html and 'Kombayn haqi' not in html
-    r = admin.post('/admin/sozlamalar', {'set_combine_rate': '1500', 'set_worker_rate_hand': '1500'})
-    assert r.get_json()['ok'], r.get_data(as_text=True)
+    from surxon.accounting import combine_balances, worker_balances
+    with app.app_context():
+        year = q('SELECT year FROM seasons LIMIT 1', one=True)['year']
+        k1 = [c for c in combine_balances(year) if c['code'] == 'K-01'][0]
+        assert (k1['kg'], k1['earned'], k1['balance']) == (3700, 925_000, 925_000)     # 3.7 t × 250 000
+        w = [x for x in worker_balances(year) if x['full_name'] == 'Gulbahor opa'][0]
+        assert (w['kg'], w['earned']) == (80, 120_000)
     html = admin.get('/hisobot/kombaynlar').get_data(as_text=True)
     flat = ''.join(html.split()).replace('\u202f', '').replace('\xa0', '')
-    assert 'Kombayn haqi (1500 so‘m/kg)' in html and '1500000' in flat
-    html = admin.get('/hisobot/terimchilar').get_data(as_text=True)
-    assert 'Ish haqi (1500 so‘m/kg)' in html
+    assert 'K-01' in flat and '925000' in flat and 'Tonnaga' in html
+    # the tally clerk never sees money screens
+    assert tally.get('/buxgalteriya').status_code in (302, 403)
+    assert tally.get('/kassa').status_code in (302, 403)
 
-
-# ------------------------------------------------------------------ hand-only trip: "Tugatish" issues the waybill
 
 def _auto_on(admin):
     assert admin.post('/admin/sozlamalar', {'set_auto_waybill_hand': '1'}).get_json()['ok']

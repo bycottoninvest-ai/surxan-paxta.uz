@@ -6,8 +6,9 @@ DEFAULTS = {
     'current_season': ('', 'Joriy mavsum yili (bo‘sh = joriy yil)'),
     'destination_name': ('Nayman paxta qabul punkti', 'Qabul qiluvchi (nakladnoyda)'),
     'price_per_kg': ('', 'Paxta narxi, so‘m/kg (bo‘sh = hali kelishilmagan)'),
-    'worker_rate_hand': ('', 'Qo‘l terimi ish haqi, so‘m/kg (bo‘sh = hisoblanmaydi)'),
-    'combine_rate': ('', 'Kombayn terimi haqi, so‘m/kg (bo‘sh = hisoblanmaydi)'),
+    'worker_rate_hand': ('', 'Qo‘l terimi narxi, so‘m/kg. Har tortishda shu paytdagi narx saqlanadi; o‘zgartirilsa eski hisob o‘zgarmaydi (bo‘sh = hisoblanmaydi)'),
+    'income_sources': ('Direktor, Nayman (paxta puli), Boshqa', 'Kassa kirimi manbalari (vergul bilan)'),
+    'report_time': ('21:00', 'Telegram kunlik hisobot vaqti (HH:MM); kun yopilsa, darhol yuboriladi'),
     'auto_waybill_hand': ('1', '“Tugatish” bosilganda telashka yopiladi, nakladnoy dala vazni bilan avtomatik chiqadi '
                                 'va “PUNKTGA YO‘LDA” bo‘ladi (1). 0 — eski tartib: avval umumiy tarozida brutto/tara.'),
     'punkt_warn_pct': ('1', 'Punkt farqi: shu % gacha normal (yashil), sabab so‘ralmaydi'),

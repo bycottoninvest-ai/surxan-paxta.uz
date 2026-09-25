@@ -1,0 +1,13 @@
+{% macro period_bar(endpoint, periods, period, date_from, date_to, extra={}) -%}
+<form class="a-period no-print" method="get" action="{{ url_for(endpoint) }}">
+  {% for k, v in extra.items() %}{% if v %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endif %}{% endfor %}
+  <div class="a-chips">{% for key, label in periods if key != 'custom' %}<button name="period" value="{{ key }}" class="chip-btn{{ ' on' if period == key }}">{{ label }}</button>{% endfor %}</div>
+  <div class="row a-custom"><input type="date" name="from" value="{{ date_from }}"><span>—</span><input type="date" name="to" value="{{ date_to }}"><button name="period" value="custom" class="btn btn-light btn-sm">Ko‘rsatish</button></div>
+</form>
+{%- endmacro %}
+{% macro tile(label, value, unit='', note='', cls='', href=None) -%}
+{% if href %}<a class="m-tile a-tile {{ cls }}" href="{{ href }}">{% else %}<div class="m-tile a-tile {{ cls }}">{% endif %}
+<span>{{ label }}</span><b class="num{{ ' long' if value|string|length > 11 }}">{{ value }}{% if unit %}<small> {{ unit }}</small>{% endif %}</b>{% if note %}<em>{{ note }}</em>{% endif %}
+{% if href %}</a>{% else %}</div>{% endif %}
+{%- endmacro %}
+{% macro som(v) -%}{{ '—' if v is none else (v|num ~ ' so‘m') }}{%- endmacro %}

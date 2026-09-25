@@ -1,0 +1,12 @@
+{% extends 'base.html' %}
+{% from 'macros.html' import icon with context %}
+{% set page_title = 'Xarajat' %}
+{% block content %}
+<div class="row mb"><a class="btn btn-ghost btn-sm" href="{{ url_for('main.dashboard') }}">{{ icon('chev-left','sm') }} Orqaga</a></div>
+<h2 class="m-h" style="font-size:20px">XARAJAT turi</h2>
+<div class="a-cats">
+  {% for name, ico in buttons %}<a class="m-act" href="{{ url_for('acct.expense_new', category=name) }}">{{ icon(ico, 'lg') }}<span>{{ name|upper }}</span></a>{% endfor %}
+  {% if can('acct.view') %}{% for name, ico, ep in shortcuts %}<a class="m-act a-short" href="{{ url_for(ep) }}">{{ icon(ico, 'lg') }}<span>{{ name|upper }}</span><em>alohida bo‘limda</em></a>{% endfor %}{% endif %}
+</div>
+<div class="small muted mt">Kombayn haqi, ish haqi va avans odam/kombayn hisobiga yoziladi — shuning uchun o‘z bo‘limida (qarz qoldig‘i avtomatik kamayadi).</div>
+{% endblock %}
