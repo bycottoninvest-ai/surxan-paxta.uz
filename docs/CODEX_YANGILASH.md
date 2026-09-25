@@ -1,20 +1,26 @@
-# Serverni yangilash (Codex uchun) — v2.9.0
+# Serverni yangilash (Codex uchun) — v2.10.0
 
 Serverni qayta qurmang, `.env`, `data/` va Caddy sozlamasiga tegmang. Vaqtinchalik sslip override'ni qayta yoqmang.
 
 ```bash
 cd /opt/surxan-paxta.uz
 docker compose exec -T app flask --app app backup          # yangilashdan oldin izchil zaxira
-git pull --ff-only                                          # kutilgan: v2.9.0 commiti
+git pull --ff-only                                          # kutilgan: v2.10.0 commiti
 docker compose up -d --build
-for i in $(seq 1 40); do curl -fsS https://surxan-paxta.uz/health && break; sleep 3; done   # "version":"2.9.0"
+for i in $(seq 1 40); do curl -fsS https://surxan-paxta.uz/health && break; sleep 3; done   # "version":"2.10.0"
 docker compose exec -T app flask --app app set-webhook      # channel_post yangilanishini qo'shadi (kanallarni tanish uchun)
 docker compose exec -T app flask --app app smoke-check
 ```
 
-Baza avtomatik yangilanadi (sxema v7): yangi jadval `cash_corrections` (v2.9.0 — kassa tuzatishlari); yangi ustunlar `nayman_receipts.station_gross_kg/station_tare_kg` (v2.8.0 — punkt brutto/tara),
+Baza avtomatik yangilanadi (sxema v8): yangi jadvallar `fuel_stations, fuel_tickets, fuel_ticket_funds, fuel_prices, fuel_scans, fuel_ops` va `equipment.fuel_type/fuel_carrier/qr_token` (v2.10.0 — solyarka); `cash_corrections` (v2.9.0 — kassa tuzatishlari); yangi ustunlar `nayman_receipts.station_gross_kg/station_tare_kg` (v2.8.0 — punkt brutto/tara),
 `trailer_loads.method/rate/rate_unit`, `workers.note`, `tg_chats.bot_status` (v2.7.0) qo'shiladi.
 Eski yozuvlar o'zgarmaydi. Ilova ishga tushganda migratsiyadan oldin `data/` ichida `*.oldin-v*` zaxira nusxa oladi.
+
+## v2.10.0 da nima o'zgardi
+Solyarka moduli: yangi rol “Yoqilg‘i mas’uli” (/yoqilgi — faqat QR bilan olish/berish, berishda kamera rasmi),
+buxgalter uchun /yoqilgi/boshqaruv (zapravka, tiket, narx, pul qo'shish, sverka bilan yopish, bekor qilish, QR chop etish).
+Tiket puli bitta “Yoqilg‘i” xarajati; olish/berish qayta xarajat yaratmaydi. Sxema v7 → v8: ishga tushganda `*.oldin-v7-*.bak`.
+Haqiqiy bazaga namunaviy tiket/litr kiritilmasin.
 
 ## v2.9.0 da nima o'zgardi
 Buxgalter va kassir telefonda “Mening kassam” (/hamyon): ishchiga pul berish, xarajat, kassaga kirim, bugungi amallar,

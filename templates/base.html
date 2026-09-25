@@ -34,6 +34,12 @@
       {{ nav('dala.home', 'Dala ishi', 'sprout', None, ['dala.home', 'dala.trip', 'dala.close', 'dala.docs']) }}
       {{ nav('dala.new_trip', 'Yangi telashka', 'plus') }}
       {{ nav('auth.change_password', 'Parolni almashtirish', 'shield') }}
+      {% elif current_user['role'] == 'fuel' %}
+      {{ nav('yoqilgi.home', 'Solyarka', 'fuel', None, ['yoqilgi.home', 'yoqilgi.op_view']) }}
+      {{ nav('yoqilgi.op_take', 'Solyarka olish', 'plus') }}
+      {{ nav('yoqilgi.op_give', 'Solyarka berish', 'tractor') }}
+      {{ nav('yoqilgi.op_history', 'Tarix', 'history') }}
+      {{ nav('auth.change_password', 'Parolni almashtirish', 'shield') }}
       {% elif current_user['role'] == 'cashier' %}
       {{ nav('hamyon.home', 'Mening kassam', 'wallet', None, ['hamyon.home', 'hamyon.pay', 'hamyon.order', 'hamyon.expense', 'hamyon.entry', 'hamyon.fix']) }}
       {{ nav('hamyon.today', 'Bugungi amallar', 'list') }}
@@ -45,6 +51,7 @@
       {% if current_user['role'] == 'accountant' %}{{ nav('hamyon.home', 'Mening kassam', 'wallet', None, ['hamyon.home', 'hamyon.pay', 'hamyon.pay_worker', 'hamyon.expense', 'hamyon.income', 'hamyon.entry', 'hamyon.fix']) }}
       {{ nav('hamyon.today', 'Bugungi amallar', 'list') }}{% endif %}
       {{ nav('hamyon.fixes', 'Tuzatishlar', 'edit', 'cash.view') }}
+      {{ nav('yoqilgi.manage', 'Solyarka', 'fuel', 'fuel.view') }}
       {{ nav('ops.harvest', 'Terim (Qo‘l terimi)', 'sprout', 'harvest.write') }}
       {{ nav('ops.harvest', 'Kombayn', 'combine', 'harvest.write', match=['__none'], args={'method': 'combine'}) }}
       {{ nav('ops.loads', 'Telashkalar', 'trailer', None, ['ops.loads', 'ops.load_detail']) }}
@@ -131,6 +138,12 @@
   <a href="{{ url_for('hamyon.pay') }}" class="primary">{{ icon('user') }}Pul berish</a>
   <a href="{{ url_for('hamyon.expense') }}" class="{{ 'active' if ep == 'hamyon.expense' }}">{{ icon('receipt') }}Xarajat</a>
   <a href="#" data-open-nav>{{ icon('menu') }}Boshqa</a>
+  {% elif current_user['role'] == 'fuel' %}
+  <a href="{{ url_for('yoqilgi.home') }}" class="{{ 'active' if ep == 'yoqilgi.home' }}">{{ icon('home') }}Bosh</a>
+  <a href="{{ url_for('yoqilgi.op_take') }}">{{ icon('fuel') }}Olish</a>
+  <a href="{{ url_for('yoqilgi.op_give') }}" class="primary">{{ icon('tractor') }}Berish</a>
+  <a href="{{ url_for('yoqilgi.op_history') }}" class="{{ 'active' if ep == 'yoqilgi.op_history' }}">{{ icon('history') }}Tarix</a>
+  <a href="{{ url_for('auth.logout') }}">{{ icon('logout') }}Chiqish</a>
   {% elif current_user['role'] == 'tally' %}
   <a href="{{ url_for('dala.home') }}" class="{{ 'active' if ep == 'dala.home' }}">{{ icon('home') }}Bosh</a>
   <a href="{{ url_for('dala.new_trip') }}" class="primary">{{ icon('plus') }}Yangi</a>

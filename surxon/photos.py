@@ -22,6 +22,7 @@ CATEGORIES = {
     'payment': 'To‘lov',
     'expense': 'Xarajat',
     'cash': 'Kassa',
+    'fuel': 'Yoqilg‘i',
     'other': 'Boshqa',
 }
 

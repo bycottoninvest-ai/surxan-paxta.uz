@@ -10,7 +10,7 @@ from contextlib import contextmanager
 
 from flask import current_app, g
 
-SCHEMA_VERSION = 7
+SCHEMA_VERSION = 8
 
 SCHEMA = r'''
 CREATE TABLE IF NOT EXISTS brigadiers (
@@ -671,6 +671,87 @@ CREATE TABLE IF NOT EXISTS cash_corrections (
   new_cash_entry_id INTEGER REFERENCES cash_entries(id)
 );
 CREATE UNIQUE INDEX IF NOT EXISTS uq_correction_open ON cash_corrections(cash_entry_id) WHERE status IN ('KUTILMOQDA','BAJARILDI');
+
+-- v8: diesel (solyarka). Two separate balances: a ticket's money (so‘m) and the liters a fuel keeper holds.
+-- Taking fuel at a station moves money off a ticket (liters × the price in force, frozen on the row) and liters onto
+-- the keeper; giving fuel to a machine only moves liters off the keeper. QR codes are mandatory (a scan row is
+-- issued by the server and used once); times are the server's.
+CREATE TABLE IF NOT EXISTS fuel_stations (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  code TEXT NOT NULL UNIQUE COLLATE NOCASE,
+  name TEXT NOT NULL,
+  address TEXT,
+  qr_token TEXT NOT NULL UNIQUE,
+  approved INTEGER NOT NULL DEFAULT 0,
+  active INTEGER NOT NULL DEFAULT 1,
+  created_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS fuel_tickets (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  doc_no TEXT NOT NULL UNIQUE,
+  station_id INTEGER NOT NULL REFERENCES fuel_stations(id),
+  price_per_l INTEGER NOT NULL CHECK (price_per_l > 0),
+  status TEXT NOT NULL DEFAULT 'AKTIV' CHECK (status IN ('AKTIV','YOPILGAN')),
+  note TEXT,
+  opened_by INTEGER REFERENCES users(id),
+  opened_at TEXT NOT NULL,
+  closed_by INTEGER REFERENCES users(id),
+  closed_at TEXT,
+  close_note TEXT,
+  station_balance INTEGER
+);
+CREATE TABLE IF NOT EXISTS fuel_ticket_funds (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  ticket_id INTEGER NOT NULL REFERENCES fuel_tickets(id),
+  amount INTEGER NOT NULL CHECK (amount > 0),
+  paid_from TEXT NOT NULL CHECK (paid_from IN ('kassa','bank')),
+  expense_id INTEGER REFERENCES expenses(id),
+  note TEXT,
+  client_uuid TEXT UNIQUE,
+  created_by INTEGER REFERENCES users(id),
+  created_at TEXT NOT NULL,
+  voided_at TEXT, voided_by INTEGER REFERENCES users(id), void_reason TEXT
+);
+CREATE TABLE IF NOT EXISTS fuel_prices (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  ticket_id INTEGER NOT NULL REFERENCES fuel_tickets(id),
+  price_per_l INTEGER NOT NULL CHECK (price_per_l > 0),
+  set_by INTEGER REFERENCES users(id),
+  set_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS fuel_scans (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL REFERENCES users(id),
+  target TEXT NOT NULL CHECK (target IN ('station','equipment')),
+  target_id INTEGER NOT NULL,
+  created_at TEXT NOT NULL,
+  used_at TEXT
+);
+CREATE TABLE IF NOT EXISTS fuel_ops (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  doc_no TEXT NOT NULL UNIQUE,
+  kind TEXT NOT NULL CHECK (kind IN ('OLISH','BERISH')),
+  keeper_id INTEGER NOT NULL REFERENCES users(id),
+  station_id INTEGER REFERENCES fuel_stations(id),
+  ticket_id INTEGER REFERENCES fuel_tickets(id),
+  equipment_id INTEGER REFERENCES equipment(id),
+  liters REAL NOT NULL CHECK (liters > 0),
+  price_per_l INTEGER,
+  amount INTEGER,
+  scan_id INTEGER REFERENCES fuel_scans(id),
+  scan_at TEXT,
+  photo_id INTEGER REFERENCES photos(id),
+  flag TEXT,
+  reason TEXT,
+  reason_note TEXT,
+  client_uuid TEXT UNIQUE,
+  created_at TEXT NOT NULL,
+  voided_at TEXT, voided_by INTEGER REFERENCES users(id), void_reason TEXT,
+  CHECK ((kind='OLISH' AND ticket_id IS NOT NULL AND station_id IS NOT NULL AND amount IS NOT NULL)
+         OR (kind='BERISH' AND equipment_id IS NOT NULL))
+);
+CREATE INDEX IF NOT EXISTS idx_fuel_ops_keeper ON fuel_ops(keeper_id, id);
+CREATE INDEX IF NOT EXISTS idx_fuel_ops_equipment ON fuel_ops(equipment_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_media_items_thumb ON media_items(thumb_path);
 
 CREATE TABLE IF NOT EXISTS schema_version (version INTEGER NOT NULL);
@@ -781,6 +862,11 @@ def migrate(db):
     # v6: punkt scale brutto and tara kept next to the accepted netto (NULL when a ready netto was typed)
     _add_column(db, 'nayman_receipts', 'station_gross_kg', 'REAL')
     _add_column(db, 'nayman_receipts', 'station_tare_kg', 'REAL')
+    # v8: which fuel a machine burns (solyarka / benzin / gaz), whether it carries the keeper's diesel, its QR code
+    _add_column(db, 'equipment', 'fuel_type', "TEXT CHECK (fuel_type IS NULL OR fuel_type IN ('solyarka','benzin','gaz'))")
+    _add_column(db, 'equipment', 'fuel_carrier', 'INTEGER NOT NULL DEFAULT 0')
+    _add_column(db, 'equipment', 'qr_token', 'TEXT')
+    db.execute('CREATE UNIQUE INDEX IF NOT EXISTS uq_equipment_qr ON equipment(qr_token)')
     # Future column changes go here as: if version < N: ALTER TABLE ...
     db.execute('UPDATE schema_version SET version=? WHERE version < ?', (SCHEMA_VERSION, SCHEMA_VERSION))
 

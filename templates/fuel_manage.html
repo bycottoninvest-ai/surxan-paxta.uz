@@ -1,0 +1,84 @@
+{% extends 'base.html' %}
+{% from 'macros.html' import icon, csrf, uuid_field, empty with context %}
+{% set page_title = 'Solyarka' %}
+{% set manage = can('fuel.manage') %}
+{% block content %}
+<div class="page-h"><h1>{{ icon('fuel','lg') }} Solyarka</h1><span class="sub">Tiket puli (so‘m) va mas’ullardagi solyarka (litr) — ikki alohida balans. Texnikaga berish tiketdan pulni qayta ayirmaydi.</span></div>
+<div class="row mb">{% for k, v in (('bugun','Bugun'),('hafta','Hafta'),('oy','Oy'),('mavsum','Mavsum')) %}<a class="btn btn-sm {{ 'btn-primary' if period == k else 'btn-light' }}" href="?period={{ k }}">{{ v }}</a>{% endfor %}
+  <span class="spacer"></span>{% if manage or can('masterdata.write') %}<a class="btn btn-light btn-sm" href="{{ url_for('yoqilgi.qr_pdf') }}" target="_blank">{{ icon('printer','sm') }} QR kodlarni chop etish</a>{% endif %}</div>
+<div class="a-tiles">
+  <div class="m-tile a-tile t-blue"><span>OLINGAN ({{ period_label }})</span><b class="num">{{ t.taken_l|num }} L</b><small>{{ t.taken_amount|num }} so‘m</small></div>
+  <div class="m-tile a-tile t-green"><span>TEXNIKAGA BERILGAN</span><b class="num">{{ t.given_l|num }} L</b></div>
+  <div class="m-tile a-tile"><span>HOZIR MAS’ULLARDA</span><b class="num">{{ t.held_l|num }} L</b></div>
+  <div class="m-tile a-tile"><span>FAOL TIKETLARDA QOLGAN</span><b class="num">{{ t.tickets_balance|num }} so‘m</b><small>{{ t.active_tickets }} ta tiket</small></div>
+  <div class="m-tile a-tile {{ 't-red' if t.flagged }}"><span>TEKSHIRISH KERAK</span><b class="num">{{ t.flagged }}</b></div>
+</div>
+
+<section class="card"><div class="card-h"><h3>{{ icon('card') }} Tiketlar</h3></div><div class="card-b">
+  {% if tickets %}<div class="table-wrap"><table class="t"><thead><tr><th>Tiket</th><th>Zapravka</th><th>Narx, so‘m/L</th><th>Qo‘yilgan</th><th>Olingan</th><th>Qolgan</th><th>Holat</th>{% if manage %}<th></th>{% endif %}</tr></thead><tbody>
+  {% for x in tickets %}<tr class="{{ 'void' if x.status == 'YOPILGAN' }}"><td class="b">{{ x.doc_no }}</td><td>{{ x.station_code }}</td><td class="num">{{ x.price_per_l|num }}</td><td class="num">{{ x.funds|num }}</td>
+    <td class="num">{{ x.taken_l|num }} L · {{ x.taken_amount|num }}</td><td class="num b">{{ x.balance|num }}</td>
+    <td>{{ 'Faol' if x.status == 'AKTIV' else 'Yopilgan ' ~ (x.closed_at or '')[:10] }}{% if x.station_balance is not none %}<div class="tiny muted">zapravka: {{ x.station_balance|num }} (farq {{ (x.station_balance - x.balance)|num }})</div>{% endif %}</td>
+    {% if manage %}<td>{% if x.status == 'AKTIV' %}<details><summary class="small">Amallar</summary>
+      <form method="post" class="form">{{ csrf() }}{{ uuid_field() }}<input type="hidden" name="action" value="fund"><input type="hidden" name="ticket_id" value="{{ x.id }}">
+        <input name="amount" data-money placeholder="Qo‘shiladigan summa" required><select name="paid_from"><option value="kassa">Kassadan</option><option value="bank">Bankdan</option></select>
+        {% if boxes|length > 1 %}<select name="cashbox_id">{% for b in boxes %}<option value="{{ b.id }}">{{ b.name }}</option>{% endfor %}</select>{% endif %}<button class="btn btn-light btn-sm">Pul qo‘shish</button></form>
+      <form method="post" class="form">{{ csrf() }}<input type="hidden" name="action" value="price"><input type="hidden" name="ticket_id" value="{{ x.id }}">
+        <input name="price_per_l" data-money placeholder="Yangi narx, so‘m/L" required><button class="btn btn-light btn-sm">Narxni o‘zgartirish</button><div class="tiny muted">Faqat keyingi olishlarga.</div></form>
+      <form method="post" class="form" data-confirm="Tiket yopilsinmi? Mas’ullardagi litr o‘zgarmaydi.">{{ csrf() }}<input type="hidden" name="action" value="close"><input type="hidden" name="ticket_id" value="{{ x.id }}">
+        <input name="station_balance" data-money placeholder="Zapravka aytgan qoldiq (sverka)"><input name="note" placeholder="Izoh"><button class="btn btn-ghost btn-sm">Tiketni yopish</button></form>
+    </details>{% endif %}</td>{% endif %}</tr>{% endfor %}
+  </tbody></table></div>{% else %}{{ empty('Tiket yo‘q', 'card') }}{% endif %}
+  {% if manage %}<details class="mt"><summary class="b">+ Yangi tiket</summary>
+    <form method="post" class="form">{{ csrf() }}{{ uuid_field() }}<input type="hidden" name="action" value="ticket">
+      <div class="f h"><label>Zapravka</label><select name="station_id" required>{% for s in stations if s.active %}<option value="{{ s.id }}">{{ s.code }} · {{ s.name }}</option>{% endfor %}</select></div>
+      <div class="f h"><label>1 litr narxi (so‘m)</label><input name="price_per_l" data-money required></div>
+      <div class="f h"><label>Tiket summasi (so‘m)</label><input name="amount" data-money required></div>
+      <div class="f h"><label>Qayerdan to‘landi</label><select name="paid_from"><option value="kassa">Kassadan (kassa chiqimi)</option><option value="bank">Bankdan (kassaga tegmaydi)</option></select></div>
+      {% if boxes|length > 1 %}<div class="f h"><label>Kassa</label><select name="cashbox_id">{% for b in boxes %}<option value="{{ b.id }}">{{ b.name }}</option>{% endfor %}</select></div>{% endif %}
+      <div class="f"><input name="note" placeholder="Izoh (ixtiyoriy)"></div>
+      <div class="tiny muted">Tiket puli buxgalteriyada bitta “Yoqilg‘i” xarajati bo‘lib yoziladi. Olish va berish qayta xarajat yaratmaydi.</div>
+      <div class="f"><button class="btn btn-primary">Tiket ochish</button></div></form></details>{% endif %}
+</div></section>
+
+<div class="fu-grid">
+<section class="card"><div class="card-h"><h3>{{ icon('user') }} Mas’ullardagi solyarka (hozir)</h3></div><div class="card-b">
+  {% for k in keepers %}<div class="row"><b>{{ k.full_name }}</b><span class="spacer"></span><b class="num">{{ k.liters|num }} L</b></div>{% else %}<div class="small muted">Yoqilg‘i mas’uli yo‘q — Admin → Xodimlar va loginlar → “Yoqilg‘i mas’uli”.</div>{% endfor %}
+</div></section>
+<section class="card"><div class="card-h"><h3>{{ icon('tractor') }} Texnikalar kesimi ({{ period_label }})</h3></div><div class="card-b">
+  {% for m in machines %}<div class="row"><b>{{ m.code }}</b><span class="small muted">{{ m.n }} marta · oxirgi {{ m.last_at[11:16] }}</span><span class="spacer"></span><b class="num">{{ m.liters|num }} L</b>{% if m.flagged %} <span class="badge b-orange">{{ m.flagged }} tekshirish</span>{% endif %}</div>
+  {% else %}<div class="small muted">Bu davrda berish yo‘q.</div>{% endfor %}
+</div></section>
+</div>
+
+<section class="card"><div class="card-h"><h3>{{ icon('list') }} Amallar ({{ period_label }})</h3></div><div class="card-b">
+  {% if ops %}<div class="table-wrap"><table class="t"><thead><tr><th>Vaqt</th><th>Hujjat</th><th>Amal</th><th>Qayerda / kimga</th><th>Litr</th><th>So‘m</th><th>Mas’ul</th><th>Belgi</th>{% if manage %}<th></th>{% endif %}</tr></thead><tbody>
+  {% for o in ops %}<tr class="{{ 'void' if o.voided_at }}"><td>{{ o.created_at[5:16] }}</td><td><a href="{{ url_for('yoqilgi.op_view', op_id=o.id) }}">{{ o.doc_no }}</a></td>
+    <td>{{ 'Olindi' if o.kind == 'OLISH' else 'Berildi' }}</td><td>{{ o.station_code ~ ' · ' ~ o.ticket_no if o.kind == 'OLISH' else o.equipment_code }}</td>
+    <td class="num b">{{ '+' if o.kind == 'OLISH' else '−' }}{{ o.liters|num }}</td><td class="num">{{ o.amount|num if o.amount else '' }}</td><td>{{ o.keeper_name }}</td>
+    <td>{% if o.voided_at %}<span class="badge b-gray">Bekor</span>{% elif o.flag %}<span class="badge b-orange" title="{{ o.flag }}">Tekshirish: {{ o.reason }}</span>{% endif %}</td>
+    {% if manage %}<td>{% if not o.voided_at %}<form method="post" data-confirm="Bekor qilinsinmi? Yozuv tarixda qoladi.">{{ csrf() }}<input type="hidden" name="action" value="void"><input type="hidden" name="op_id" value="{{ o.id }}"><input name="reason" placeholder="Sabab" required minlength="3" style="width:110px"><button class="btn btn-ghost btn-sm">Bekor</button></form>{% endif %}</td>{% endif %}</tr>{% endfor %}
+  </tbody></table></div>{% else %}{{ empty('Bu davrda amal yo‘q', 'fuel') }}{% endif %}
+</div></section>
+
+<section class="card"><div class="card-h"><h3>{{ icon('building') }} Zapravkalar</h3></div><div class="card-b">
+  {% for s in stations %}<div class="row"><b>{{ s.code }}</b><span>{{ s.name }}</span><span class="spacer"></span>
+    {% if s.approved %}<span class="badge b-green">QR tasdiqlangan</span>{% else %}<span class="badge b-orange">QR tasdiqlanmagan</span>{% endif %}
+    {% if manage %}<form method="post">{{ csrf() }}<input type="hidden" name="action" value="station"><input type="hidden" name="id" value="{{ s.id }}"><input type="hidden" name="code" value="{{ s.code }}"><input type="hidden" name="name" value="{{ s.name }}"><input type="hidden" name="address" value="{{ s.address or '' }}"><input type="hidden" name="approved" value="{{ '0' if s.approved else '1' }}"><button class="btn btn-light btn-sm">{{ 'Tasdiqni olish' if s.approved else 'Tasdiqlash' }}</button></form>{% endif %}</div>
+  {% else %}<div class="small muted">Zapravka qo‘shilmagan.</div>{% endfor %}
+  {% if manage %}<form method="post" class="form mt">{{ csrf() }}<input type="hidden" name="action" value="station">
+    <div class="row"><input name="code" placeholder="Kod (ZP-01)" required style="width:110px"><input name="name" placeholder="Nomi" required style="flex:1"><input name="address" placeholder="Manzil" style="flex:1">
+    <label class="small"><input type="checkbox" name="approved" value="1"> QR tasdiqlangan</label><button class="btn btn-primary btn-sm">Qo‘shish</button></div></form>{% endif %}
+</div></section>
+
+{% if can('masterdata.write') %}
+<section class="card"><div class="card-h"><h3>{{ icon('tractor') }} Texnikaning yoqilg‘i turi</h3></div><div class="card-b">
+  <div class="tiny muted mb">Solyarka faqat “Solyarka” belgilangan texnikaga beriladi. “Solyarka tashiydi” — mas’ulning zaxirasini tashiydigan mashina (Labo): idishdagi solyarka mas’ulniki, mashinaning o‘z bakiga quyilgani alohida “berish”.</div>
+  {% for e in equipment %}<form method="post" class="row">{{ csrf() }}<input type="hidden" name="action" value="machine"><input type="hidden" name="equipment_id" value="{{ e.id }}">
+    <b style="width:90px">{{ e.code }}</b><span class="small muted" style="width:80px">{{ e.kind }}</span>
+    <select name="fuel_type"><option value="">— belgilanmagan —</option>{% for k, v in fuel_types.items() %}<option value="{{ k }}" {{ 'selected' if e.fuel_type == k }}>{{ v }}</option>{% endfor %}</select>
+    <label class="small"><input type="checkbox" name="carrier" value="1" {{ 'checked' if e.fuel_carrier }}> Solyarka tashiydi</label>
+    <button class="btn btn-light btn-sm">Saqlash</button></form>{% endfor %}
+</div></section>
+{% endif %}
+{% endblock %}

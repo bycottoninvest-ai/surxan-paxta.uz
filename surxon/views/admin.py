@@ -49,6 +49,7 @@ STAFF_ROLES = [
     ('station', 'Punkt operatori', 'Punktda keladigan telashkani QR bilan topadi, punkt tarozisi kg ini yozib qabul qiladi.'),
     ('accountant', 'Buxgalter', 'Kassa kirimi, xarajat, ishchilarga to‘lovni tayyorlaydi, kunni yopadi, hisobot.'),
     ('cashier', 'Kassir', 'Buxgalter tayyorlagan to‘lovni odamga beradi va “BERILDI” bosadi, xarajat yozadi.'),
+    ('fuel', 'Yoqilg‘i mas’uli', 'Solyarkani zapravkadan QR bilan oladi va traktor/kombaynga QR + rasm bilan beradi. Tiket va narxni o‘zgartira olmaydi.'),
     ('scale', 'Tarozi xodimi', 'Katta tarozida brutto/tara tortadi (kombayn yuklari uchun). Kerak bo‘lmasa bo‘sh qoladi.'),
     ('driver', 'Haydovchi', 'Ixtiyoriy: telashka to‘lganda TOLDI + rasm. Kerak bo‘lmasa bo‘sh qoladi.'),
     ('admin', 'Admin', 'Tizim sozlamalari, loginlar, zaxira. Odatda faqat siz.'),

@@ -1,0 +1,70 @@
+{% extends 'base.html' %}
+{% from 'macros.html' import icon with context %}
+{% set page_title = 'Solyarka olish' %}
+{% block content %}
+<div class="d-wrap hm">
+  <div class="d-top"><a class="icon-btn" href="{{ url_for('yoqilgi.home') }}">{{ icon('chev-left') }}</a><h1 class="d-h1">Solyarka olish</h1></div>
+  <div id="fu-scan">
+    <div class="small muted">1. Zapravkadagi QR kodni skanerlang</div>
+    <div class="p-cam"><video id="fu-cam" playsinline muted></video><div class="p-frame"></div></div>
+    <div class="hm-msg info" id="fu-cam-msg">Kamera ochilmoqda…</div>
+  </div>
+  <div id="fu-form" hidden class="d-form">
+    <div class="fu-card"><span class="fu-ico">{{ icon('fuel','lg') }}</span><div><b id="fu-st-code"></b><small id="fu-st-name"></small></div></div>
+    <div id="fu-tickets"></div>
+    <label class="d-l">Olingan miqdor (L)</label>
+    <div class="fu-step"><button type="button" data-d="-10">−</button><input id="fu-l" class="d-num" inputmode="decimal" placeholder="0" autocomplete="off"><button type="button" data-d="10">+</button></div>
+    <div class="small muted" id="fu-sum"></div>
+    <button type="button" class="btn btn-green btn-block d-big" id="fu-ok">OLINDI ✓</button>
+    <div class="hm-msg" id="fu-msg" hidden></div>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='js/fuel.js') }}?v={{ version }}"></script>
+<script>
+(function(){
+  const video = document.getElementById('fu-cam'), camMsg = document.getElementById('fu-cam-msg');
+  const form = document.getElementById('fu-form'), msg = document.getElementById('fu-msg'), lit = document.getElementById('fu-l');
+  const fmt = v => Math.round(v).toLocaleString('ru-RU');
+  let scanId = null, tickets = [], done = false, key = Fuel.uuid(), busy = false;
+  const ticket = () => { const r = document.querySelector('input[name=ticket_id]:checked'); return r ? tickets.find(t => t.id == r.value) : (tickets.length === 1 ? tickets[0] : null); };
+  const sum = () => { const t = ticket(), l = parseFloat((lit.value || '').replace(',', '.')) || 0;
+    document.getElementById('fu-sum').textContent = t && l ? `Tiketdan ayriladi: ${fmt(l * t.price)} so‘m (${fmt(t.price)} so‘m/L)` : ''; };
+  lit.addEventListener('input', sum);
+  document.querySelectorAll('[data-d]').forEach(b => b.addEventListener('click', () => { lit.value = Math.max(0, (parseFloat(lit.value) || 0) + Number(b.dataset.d)); sum(); }));
+  async function onText(text) {
+    if (done) return;
+    const fd = new FormData(); fd.append('payload', text); fd.append('want', 'station');
+    try {
+      const { data } = await Fuel.post({{ url_for('yoqilgi.op_scan')|tojson }}, fd);
+      if (!data.ok) { camMsg.className = 'hm-msg err'; camMsg.textContent = data.error; return; }
+      done = true; Fuel.stopCam(); if (navigator.vibrate) navigator.vibrate(120);
+      scanId = data.scan_id; tickets = data.tickets;
+      document.getElementById('fu-st-code').textContent = data.station.code;
+      document.getElementById('fu-st-name').textContent = data.station.name;
+      const box = document.getElementById('fu-tickets');
+      if (!tickets.length) box.innerHTML = '<div class="hm-msg err">Bu zapravkada faol tiket yo‘q — buxgalterga ayting.</div>';
+      else if (tickets.length === 1) box.innerHTML = `<div class="hm-fig"><div><span>Tiket</span><b>${tickets[0].doc_no}</b></div><div><span>Qolgan</span><b class="num hm-green">${fmt(tickets[0].balance)} so‘m</b></div></div>`;
+      else box.innerHTML = '<label class="d-l">Tiketni tanlang</label><div class="pk-rs">' + tickets.map(t => `<label><input type="radio" name="ticket_id" value="${t.id}"><span>${t.doc_no} · qolgan ${fmt(t.balance)} so‘m</span></label>`).join('') + '</div>';
+      box.querySelectorAll('input[name=ticket_id]').forEach(r => r.addEventListener('change', sum));
+      document.getElementById('fu-scan').hidden = true; form.hidden = false; lit.focus();
+    } catch (_) { camMsg.className = 'hm-msg off'; camMsg.textContent = 'Internet yo‘q — QR tekshirilmadi. Internet kelganda qayta ko‘rsating.'; }
+  }
+  document.getElementById('fu-ok').addEventListener('click', async () => {
+    if (busy) return;
+    const t = ticket();
+    if (!t) { Fuel.say(msg, 'err', tickets.length ? 'Tiketni tanlang.' : 'Faol tiket yo‘q.'); return; }
+    if (!(parseFloat(lit.value) > 0)) { Fuel.say(msg, 'err', 'Litrni kiriting.'); return; }
+    busy = true; const btn = document.getElementById('fu-ok'); btn.disabled = true; btn.textContent = 'Saqlanmoqda…'; Fuel.say(msg, '', '');
+    const fd = new FormData(); fd.append('scan_id', scanId); fd.append('liters', lit.value); fd.append('ticket_id', t.id); fd.append('client_uuid', key);
+    try {
+      const { data } = await Fuel.post({{ url_for('yoqilgi.op_take_save')|tojson }}, fd);
+      if (data.ok) { location.href = data.redirect; return; }
+      Fuel.say(msg, 'err', 'Saqlanmadi: ' + data.error);
+    } catch (_) { Fuel.say(msg, 'off', Fuel.OFFLINE); }
+    busy = false; btn.disabled = false; btn.textContent = 'OLINDI ✓';
+  });
+  Fuel.openCam(video).then(() => { camMsg.textContent = 'QR kodni ramka ichiga keltiring.'; Fuel.scanLoop(video, onText, () => done); })
+    .catch(e => { camMsg.className = 'hm-msg err'; camMsg.textContent = 'Kamera ochilmadi: ' + (e.message || 'ruxsat berilmadi') + '. QR majburiy — kameraga ruxsat bering.'; });
+})();
+</script>{% endblock %}

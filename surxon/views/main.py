@@ -35,6 +35,8 @@ def dashboard():
         return redirect(url_for('hamyon.home'))
     if g.user['role'] == 'tally':
         return redirect(url_for('dala.home'))
+    if g.user['role'] == 'fuel':
+        return redirect(url_for('yoqilgi.home'))
     year = season_arg()
     day = request.args.get('date') or today_str()
     try:
@@ -199,6 +201,8 @@ def can_see_photo(photo):
     if photo['uploaded_by'] == uid:
         return True
     if photo['category'] in FINANCE_PHOTO_CATEGORIES and not sees_finance_photos():
+        return False
+    if g.user['role'] == 'fuel':      # the fuel keeper sees only the photos they took
         return False
     if g.user['role'] == 'station':
         return bool(photo['load_id'] and photo['category'] in ('trailer', 'cotton', 'nayman') and q(

@@ -412,3 +412,32 @@ def build_cash_pdf(e, corrections, *, company, printed_by, printed_at):
     c.drawString(x0, y, f'Chop etildi: {printed_at[:16]} · {printed_by}')
     c.save()
     return buf.getvalue()
+
+
+def build_qr_labels_pdf(items, *, company):
+    """A4 sheet of QR labels (6 per page): (qr_text, code, subtitle). Stick them on the pump / the machine."""
+    _fonts()
+    buf = io.BytesIO()
+    c = canvas.Canvas(buf, pagesize=A4)
+    W, H = A4
+    c.setTitle('Solyarka QR')
+    cols, rows = 2, 3
+    cw, ch = (W - 20 * mm) / cols, (H - 20 * mm) / rows
+    for i, (text, code, sub) in enumerate(items):
+        if i and i % (cols * rows) == 0:
+            c.showPage()
+        k = i % (cols * rows)
+        x0, y0 = 10 * mm + (k % cols) * cw, H - 10 * mm - (k // cols + 1) * ch
+        c.setDash(3, 3)
+        c.rect(x0 + 2 * mm, y0 + 2 * mm, cw - 4 * mm, ch - 4 * mm)
+        c.setDash()
+        size = min(cw, ch) - 36 * mm
+        _qr(c, text, x0 + (cw - size) / 2, y0 + 22 * mm, size)
+        c.setFont('DejaVu-Bold', 20)
+        c.drawCentredString(x0 + cw / 2, y0 + 14 * mm, code)
+        c.setFont('DejaVu', 9)
+        c.drawCentredString(x0 + cw / 2, y0 + 8.5 * mm, (sub or '')[:48])
+        c.setFont('DejaVu', 7)
+        c.drawCentredString(x0 + cw / 2, y0 + ch - 7 * mm, f'{company} · solyarka')
+    c.save()
+    return buf.getvalue()

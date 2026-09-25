@@ -708,3 +708,23 @@ a.a-tile:active{transform:scale(.98)}
 .hm-cmp{width:100%;border-collapse:collapse;font-size:15px}.hm-cmp th,.hm-cmp td{padding:8px 14px;border-top:1px solid var(--line-2);text-align:left}
 .hm-cmp th{font-size:12px;color:var(--muted)}
 .hm-review>.tiny,.hm-review>.small,.hm-review>.hm-msg{margin:0;padding:10px 14px;border-top:1px solid var(--line-2)}
+
+/* ---- Solyarka: fuel keeper phone screens ---- */
+.fu-big{display:grid;justify-items:center;gap:6px;padding:26px 12px;border-radius:18px;color:#fff;text-decoration:none;text-align:center}
+.fu-big b{font-size:24px;letter-spacing:.3px}.fu-big span{font-size:14px;opacity:.9}.fu-big .ico{width:44px;height:44px}
+.fu-blue{background:var(--blue)}.fu-green{background:#16a34a}
+.fu-have{display:flex;justify-content:space-between;align-items:center;background:#fff;border:1px solid var(--line);border-radius:14px;padding:12px 16px}
+.fu-have span{color:var(--text-2)}.fu-have b{font-size:26px;color:#15803d}.fu-have-s b{font-size:20px}
+.fu-hist{min-height:54px;font-size:17px}
+.fu-card{display:flex;gap:12px;align-items:center;background:#f5f8fc;border-radius:14px;padding:12px}
+.fu-card>div{display:grid;min-width:0}.fu-card b{font-size:22px}.fu-card small{color:var(--muted)}
+.fu-ico{background:#dbe8fb;color:var(--blue);border-radius:12px;padding:10px;display:flex}
+.fu-step{display:grid;grid-template-columns:64px minmax(0,1fr) 64px;gap:8px}
+.fu-step button{min-height:56px;border-radius:12px;border:1.5px solid var(--line);background:#eef2f7;font-size:28px;font-weight:800;color:var(--blue);cursor:pointer}
+.fu-step input{text-align:center}
+.fu-shot{position:relative}.fu-shot img{width:100%;border-radius:14px;display:block}
+.fu-shutter{justify-self:center;width:72px;height:72px;border-radius:50%;border:5px solid #fff;background:#fff;box-shadow:0 0 0 3px var(--blue);cursor:pointer}
+.fu-sumline{font-weight:700;text-align:center}
+.fu-grid{display:grid;gap:12px}@media (min-width:900px){.fu-grid{grid-template-columns:1fr 1fr}}
+.fu-fig b{white-space:normal!important;text-align:right;overflow-wrap:anywhere}
+.fu-shot img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}

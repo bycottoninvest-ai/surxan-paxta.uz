@@ -21,6 +21,7 @@ ROLES = {
     'tally': 'Hisobchi (terim)',
     'driver': 'Haydovchi',
     'station': 'Punkt operatori',
+    'fuel': 'Yoqilg‘i mas’uli',
 }
 
 # Punkt operators get a closed, minimal app: only these endpoints (checked on every request).
@@ -70,6 +71,9 @@ PERMISSIONS = {
     'kuzatuv.manage': {'manager'},
     'masterdata.write': {'manager'},
     'audit.view': {'manager', 'accountant'},
+    'fuel.operate': {'fuel'},                       # take diesel at a station, give it to a machine (own history)
+    'fuel.manage': {'accountant'},                  # tickets, price, funding, stations, reconciliation, corrections
+    'fuel.view': {'manager', 'accountant'},
     'users.manage': set(),
     'settings.manage': set(),
     'seasons.manage': set(),
@@ -205,12 +209,16 @@ TALLY_ENDPOINTS = STATION_ENDPOINTS | {'main.api_workers', 'main.media', 'ops.ha
                                        'ops.load_detail', 'ops.harvest_void', 'ops.load_photos', 'ops.waybill_external_pdf'}
 
 
+# Fuel keeper: only the fuel screens (take / give / own history).
+FUEL_ENDPOINTS = STATION_ENDPOINTS | {'main.media'}
+
+
 def station_gate():
     """Punkt operator and cashier logins open only their own screens — enforced here for every request, not just
     hidden menus."""
     user = g.get('user')
     ep = request.endpoint or ''
-    if not user or user['role'] not in ('station', 'cashier', 'tally'):
+    if not user or user['role'] not in ('station', 'cashier', 'tally', 'fuel'):
         return None
     if user['role'] == 'tally' and (ep in TALLY_ENDPOINTS or ep.startswith('dala.')):
         return None
@@ -218,9 +226,12 @@ def station_gate():
         return None
     if user['role'] == 'cashier' and (ep in CASHIER_ENDPOINTS or ep.startswith('hamyon.')):
         return None
+    if user['role'] == 'fuel' and (ep in FUEL_ENDPOINTS or ep.startswith('yoqilgi.op_') or ep == 'yoqilgi.home'):
+        return None
     if wants_json():
         return jsonify(ok=False, error='Bu amal uchun huquqingiz yo‘q.'), 403
-    return redirect(url_for({'station': 'punkt.home', 'cashier': 'hamyon.home', 'tally': 'dala.home'}[user['role']]))
+    return redirect(url_for({'station': 'punkt.home', 'cashier': 'hamyon.home', 'tally': 'dala.home',
+                             'fuel': 'yoqilgi.home'}[user['role']]))
 
 
 def login_required(fn):

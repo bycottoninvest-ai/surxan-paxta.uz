@@ -1,0 +1,19 @@
+{% extends 'base.html' %}
+{% from 'macros.html' import icon, empty with context %}
+{% set page_title = 'Bugungi tarix' %}
+{% block content %}
+<div class="d-wrap hm">
+  <div class="d-top"><a class="icon-btn" href="{{ url_for('yoqilgi.home') }}">{{ icon('chev-left') }}</a><h1 class="d-h1">Tarix · {{ day|d }}</h1></div>
+  <div class="fu-have fu-have-s"><span>Menda qolgan</span><b class="num">{{ have|num }} L</b></div>
+  <form method="get" class="row"><input type="date" name="day" value="{{ day }}" class="input" style="flex:1"><button class="btn btn-light">Ko‘rish</button></form>
+  <div class="hm-ops">
+  {% for o in ops %}
+  <a class="hm-op {{ 'hm-void' if o.voided_at }}" href="{{ url_for('yoqilgi.op_view', op_id=o.id) }}">
+    <span class="hm-op-ico {{ 'in' if o.kind == 'OLISH' }}">{{ icon('fuel' if o.kind == 'OLISH' else 'tractor') }}</span>
+    <span class="hm-op-b"><b>{{ o.station_code if o.kind == 'OLISH' else o.equipment_code }}</b><small>{{ 'Olindi' if o.kind == 'OLISH' else 'Berildi' }} · {{ o.created_at[11:16] }} · {{ o.doc_no }}</small></span>
+    <span class="hm-op-s"><b class="num {{ 'hm-green' if o.kind == 'OLISH' else 'hm-red' }}">{{ '+' if o.kind == 'OLISH' else '−' }}{{ o.liters|num }} L</b>
+      {% if o.voided_at %}<span class="badge b-gray">Bekor</span>{% elif o.flag %}<span class="badge b-orange">Tekshiriladi</span>{% else %}<span class="badge b-green">Saqlangan</span>{% endif %}</span></a>
+  {% else %}{{ empty('Bu kunda amal yo‘q', 'fuel') }}{% endfor %}
+  </div>
+</div>
+{% endblock %}

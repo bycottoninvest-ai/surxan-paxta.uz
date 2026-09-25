@@ -1,0 +1,32 @@
+{% extends 'base.html' %}
+{% from 'macros.html' import icon with context %}
+{% set page_title = o.doc_no %}
+{% block content %}
+<div class="d-wrap hm">
+  <div class="d-top"><a class="icon-btn" href="{{ url_for('yoqilgi.home') }}">{{ icon('chev-left') }}</a><h1 class="d-h1">{{ 'Solyarka olindi' if o.kind == 'OLISH' else 'Solyarka berildi' }}</h1></div>
+  {% if fresh and not o.voided_at %}<div class="d-ok">{{ icon('check-circle','lg') }}<b>{{ 'Solyarka olindi!' if o.kind == 'OLISH' else 'Solyarka berildi!' }}</b><span class="small">Server saqladi · {{ o.doc_no }}</span></div>{% endif %}
+  {% if o.voided_at %}<div class="notice">{{ icon('alert','sm') }} <div><b>Bekor qilingan — hisobga kirmaydi.</b><br><span class="small">{{ o.voided_name }} · {{ o.voided_at[:16] }} · {{ o.void_reason }}</span></div></div>{% endif %}
+  <div class="hm-card">
+    {% if o.kind == 'OLISH' %}
+    <div class="hm-rv-row"><span>Zapravka</span><b>{{ o.station_code }} · {{ o.station_name }}</b></div>
+    <div class="hm-rv-row"><span>Tiket</span><b>{{ o.ticket_no }}</b></div>
+    {% else %}
+    <div class="hm-rv-row"><span>Texnika</span><b>{{ o.equipment_code }}{{ ' · ' ~ o.equipment_plate if o.equipment_plate }}</b></div>
+    {% endif %}
+    <div class="hm-rv-big {{ 'hm-in' if o.kind == 'OLISH' }}"><span>Miqdor</span><b class="num">{{ o.liters|num }} L</b></div>
+    {% if o.kind == 'OLISH' and (can('fuel.view') or can('fuel.manage') or o.keeper_id == current_user['id']) %}
+    <div class="hm-rv-row"><span>Narx · summa</span><b class="num">{{ o.price_per_l|num }} × {{ o.liters|num }} = {{ o.amount|num }} so‘m</b></div>{% endif %}
+    {% if cost is not none %}<div class="hm-rv-row"><span>Qiymati (olingan narxlar bo‘yicha)</span><b class="num">{{ cost|num }} so‘m</b></div>{% endif %}
+    <div class="hm-rv-row"><span>Sana · vaqt</span><b>{{ o.created_at[:10]|d }} {{ o.created_at[11:16] }}</b></div>
+    <div class="hm-rv-row"><span>QR skanerlangan</span><b>{{ o.scan_at[11:19] if o.scan_at else '—' }}</b></div>
+    <div class="hm-rv-row"><span>Mas’ul</span><b>{{ o.keeper_name }}</b></div>
+    <div class="hm-rv-row"><span>Hujjat</span><b>{{ o.doc_no }}</b></div>
+    {% if o.flag %}<div class="hm-rv-row"><span>Tekshirish belgisi</span><b class="hm-red">{{ o.flag }}</b></div>
+    <div class="hm-rv-row"><span>Sabab</span><b>{{ o.reason }}{{ ' — ' ~ o.reason_note if o.reason_note }}</b></div>{% endif %}
+  </div>
+  {% if o.photo_path %}<div class="hm-photos"><img src="{{ photo_url(o.thumb_path or o.photo_path) }}" data-full="{{ photo_url(o.photo_path) }}" alt=""></div>{% endif %}
+  <div class="fu-have fu-have-s"><span>{{ 'Menda qolgan' if o.keeper_id == current_user['id'] else o.keeper_name ~ 'da qolgan' }}</span><b class="num">{{ have|num }} L</b></div>
+  <div class="tiny muted">QR skan joylashuvni (GPS) bildirmaydi — faqat kod o‘qilganini va vaqtini. Berilgan litr — texnikaga quyilgan miqdor, o‘lchangan sarf emas.</div>
+  <a class="btn btn-primary btn-block d-big" href="{{ url_for('yoqilgi.home') }}">{{ icon('home','sm') }} Bosh sahifaga</a>
+</div>
+{% endblock %}

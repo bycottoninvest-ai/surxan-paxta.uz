@@ -1222,7 +1222,8 @@ def save_user(actor, uid, *, username, full_name, role, password='', brigadier_i
 
 STAFF_ROLE_ALIASES = {'hisobchi': 'tally', 'terim': 'tally', 'punkt': 'station', 'buxgalter': 'accountant',
                       'kassir': 'cashier', 'kassa': 'cashier', 'rahbar': 'manager', 'tarozi': 'scale',
-                      'haydovchi': 'driver', 'brigadir': 'brigadier', 'admin': 'admin'}
+                      'haydovchi': 'driver', 'brigadir': 'brigadier', 'admin': 'admin',
+                      'yoqilgi': 'fuel', 'solyarka': 'fuel'}
 
 
 def random_password():

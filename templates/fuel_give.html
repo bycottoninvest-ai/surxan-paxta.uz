@@ -1,0 +1,102 @@
+{% extends 'base.html' %}
+{% from 'macros.html' import icon with context %}
+{% set page_title = 'Solyarka berish' %}
+{% block content %}
+<div class="d-wrap hm">
+  <div class="d-top"><a class="icon-btn" href="{{ url_for('yoqilgi.home') }}">{{ icon('chev-left') }}</a><h1 class="d-h1">Solyarka berish</h1></div>
+  <div class="small muted" id="fu-have">Menda bor: <b>{{ have|num }} L</b></div>
+  <div id="fu-scan">
+    <div class="small muted">1. Traktor / kombayn QR kodini skanerlang</div>
+    <div class="p-cam"><video id="fu-cam" playsinline muted></video><div class="p-frame"></div></div>
+    <div class="hm-msg info" id="fu-cam-msg">Kamera ochilmoqda…</div>
+  </div>
+  <div id="fu-form" hidden class="d-form">
+    <div class="fu-card"><span class="fu-ico">{{ icon('tractor','lg') }}</span><div><b id="fu-m-code"></b><small id="fu-m-sub"></small></div></div>
+    <div class="hm-fig fu-fig"><div><span>Bugungi jami</span><b id="fu-m-today"></b></div><div><span>Oxirgi berish</span><b id="fu-m-last"></b></div></div>
+    <div class="hm-msg info" id="fu-m-carrier" hidden>Bu mashina solyarka tashiydi. Idishdagi solyarka sizning zaxirangiz — bu yerda faqat mashinaning o‘z bakiga quyilganini yozing.</div>
+    <label class="d-l">2. Miqdor (L)</label>
+    <div class="fu-step"><button type="button" data-d="-10">−</button><input id="fu-l" class="d-num" inputmode="decimal" placeholder="0" autocomplete="off"><button type="button" data-d="10">+</button></div>
+    <button type="button" class="btn btn-primary btn-block d-big" id="fu-next">Davom etish →</button>
+    <div class="hm-msg" id="fu-msg1" hidden></div>
+  </div>
+  <div id="fu-photo" hidden class="d-form">
+    <div class="small muted">3. Yoqilg‘i quyilayotgan joyni rasmga oling</div>
+    <div class="p-cam fu-shot"><video id="fu-cam2" playsinline muted></video><img id="fu-prev" alt="" hidden></div>
+    <button type="button" class="fu-shutter" id="fu-snap" aria-label="Rasmga olish"></button>
+    <button type="button" class="btn btn-ghost btn-block" id="fu-again" hidden>↺ Qayta olish</button>
+    <div id="fu-flags" hidden>
+      <div class="hm-msg warn" id="fu-flag-text"></div>
+      <label class="d-l">Sababni tanlang</label>
+      <div class="pk-rs">{% for r in reasons %}<label><input type="radio" name="reason" value="{{ r }}"><span>{{ r }}</span></label>{% endfor %}</div>
+      <input id="fu-note" placeholder="Sababni qisqa yozing" maxlength="200" hidden>
+    </div>
+    <div class="fu-sumline" id="fu-sumline"></div>
+    <button type="button" class="btn btn-green btn-block d-big" id="fu-ok" disabled>BERILDI ✓</button>
+    <div class="hm-msg" id="fu-msg" hidden></div>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='js/fuel.js') }}?v={{ version }}"></script>
+<script>
+(function(){
+  const $ = id => document.getElementById(id);
+  const video = $('fu-cam'), camMsg = $('fu-cam-msg'), lit = $('fu-l');
+  let scanId = null, done = false, key = Fuel.uuid(), photo = null, flags = [], busy = false;
+  document.querySelectorAll('[data-d]').forEach(b => b.addEventListener('click', () => { lit.value = Math.max(0, (parseFloat(lit.value) || 0) + Number(b.dataset.d)); }));
+  async function onText(text) {
+    if (done) return;
+    const fd = new FormData(); fd.append('payload', text); fd.append('want', 'equipment');
+    try {
+      const { data } = await Fuel.post({{ url_for('yoqilgi.op_scan')|tojson }}, fd);
+      if (!data.ok) { camMsg.className = 'hm-msg err'; camMsg.textContent = data.error; return; }
+      done = true; Fuel.stopCam(); if (navigator.vibrate) navigator.vibrate(120);
+      scanId = data.scan_id; const m = data.machine;
+      $('fu-m-code').textContent = m.code; $('fu-m-sub').textContent = [m.kind, m.plate, m.operator].filter(Boolean).join(' · ');
+      $('fu-m-today').textContent = `${m.today_l} L · ${m.today_n} marta`; $('fu-m-last').textContent = m.last;
+      $('fu-m-carrier').hidden = !m.carrier;
+      $('fu-scan').hidden = true; $('fu-form').hidden = false; lit.focus();
+    } catch (_) { camMsg.className = 'hm-msg off'; camMsg.textContent = 'Internet yo‘q — QR tekshirilmadi.'; }
+  }
+  $('fu-next').addEventListener('click', async () => {
+    if (!(parseFloat(lit.value) > 0)) { Fuel.say($('fu-msg1'), 'err', 'Litrni kiriting.'); return; }
+    const fd = new FormData(); fd.append('scan_id', scanId); fd.append('liters', lit.value);
+    try {
+      const { data } = await Fuel.post({{ url_for('yoqilgi.op_give_check')|tojson }}, fd);
+      if (!data.ok) { Fuel.say($('fu-msg1'), 'err', data.error); return; }
+      flags = data.flags || [];
+      $('fu-flags').hidden = !flags.length;
+      $('fu-flag-text').textContent = 'Odatdagidan farq qiladi — tekshirish uchun belgilanadi: ' + flags.join('; ');
+      $('fu-sumline').textContent = `Beriladi: ${data.liters} L · sizda qoladi: ${data.after} L`;
+      $('fu-form').hidden = true; $('fu-photo').hidden = false;
+      await Fuel.openCam($('fu-cam2'));
+    } catch (e) { Fuel.say($('fu-msg1'), e && e.name === 'NotAllowedError' ? 'err' : 'off', e && e.name ? 'Kamera ochilmadi — ruxsat bering.' : 'Internet yo‘q — tekshirib bo‘lmadi.'); }
+  });
+  document.querySelectorAll('input[name=reason]').forEach(r => r.addEventListener('change', () => { $('fu-note').hidden = r.value !== 'Boshqa'; }));
+  $('fu-snap').addEventListener('click', async () => {
+    const v = $('fu-cam2'); if (!v.videoWidth) return;
+    photo = await Fuel.capture(v); Fuel.stopCam();
+    $('fu-prev').src = URL.createObjectURL(photo); $('fu-prev').hidden = false; v.hidden = true;
+    $('fu-snap').hidden = true; $('fu-again').hidden = false; $('fu-ok').disabled = false;
+  });
+  $('fu-again').addEventListener('click', async () => {
+    photo = null; $('fu-prev').hidden = true; $('fu-cam2').hidden = false; $('fu-snap').hidden = false; $('fu-again').hidden = true;
+    $('fu-ok').disabled = true; await Fuel.openCam($('fu-cam2'));
+  });
+  $('fu-ok').addEventListener('click', async () => {
+    if (busy || !photo) return;
+    const reason = (document.querySelector('input[name=reason]:checked') || {}).value || '';
+    if (flags.length && !reason) { Fuel.say($('fu-msg'), 'err', 'Sababni tanlang.'); return; }
+    busy = true; const btn = $('fu-ok'); btn.disabled = true; btn.textContent = 'Saqlanmoqda…'; Fuel.say($('fu-msg'), '', '');
+    const fd = new FormData(); fd.append('scan_id', scanId); fd.append('liters', lit.value); fd.append('client_uuid', key);
+    fd.append('reason', reason); fd.append('reason_note', $('fu-note').value); fd.append('photo', photo, 'kamera.jpg');
+    try {
+      const { data } = await Fuel.post({{ url_for('yoqilgi.op_give_save')|tojson }}, fd);
+      if (data.ok) { location.href = data.redirect; return; }
+      Fuel.say($('fu-msg'), 'err', 'Saqlanmadi: ' + data.error);
+    } catch (_) { Fuel.say($('fu-msg'), 'off', Fuel.OFFLINE); }
+    busy = false; btn.disabled = false; btn.textContent = 'BERILDI ✓';
+  });
+  Fuel.openCam(video).then(() => { camMsg.textContent = 'QR kodni ramka ichiga keltiring.'; Fuel.scanLoop(video, onText, () => done); })
+    .catch(e => { camMsg.className = 'hm-msg err'; camMsg.textContent = 'Kamera ochilmadi: ' + (e.message || 'ruxsat berilmadi') + '. QR majburiy — kameraga ruxsat bering.'; });
+})();
+</script>{% endblock %}

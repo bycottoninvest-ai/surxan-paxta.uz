@@ -35,6 +35,10 @@ DEFAULTS = {
     'kuzatuv_deadline_min': ('120', 'Kuzatuv: rasm/video so‘rovi javobi uchun necha daqiqa beriladi (keyin “KECHIKDI”)'),
     'kuzatuv_late_alert': ('1', 'Kuzatuv: javob kechiksa hisobot kanaliga yozilsin (1/0)'),
     'notify_telegram': ('1', 'Rahbar/Adminga Telegram xabarnomalar (1/0)'),
+    'fuel_max_issue_l': ('200', 'Solyarka: bitta berishda shundan ko‘p litr — “tekshirish kerak” (sabab so‘raladi)'),
+    'fuel_max_day_l': ('400', 'Solyarka: bir texnikaga bir kunda shundan ko‘p litr — “tekshirish kerak”'),
+    'fuel_min_gap_min': ('60', 'Solyarka: bir texnikaga oldingi berishdan shuncha daqiqa o‘tmasdan yana berilsa — “tekshirish kerak”'),
+    'fuel_scan_valid_min': ('30', 'Solyarka: QR skan necha daqiqa amal qiladi (keyin qayta skanerlash kerak)'),
     'erp_enabled': ('0', 'Azizbek ERP ulanishi yoqilgan (1/0) — Integratsiyalar sahifasida boshqariladi'),
     'tv_enabled': ('0', 'TV ekrani ulanishi yoqilgan (1/0) — Integratsiyalar sahifasida boshqariladi'),
 }

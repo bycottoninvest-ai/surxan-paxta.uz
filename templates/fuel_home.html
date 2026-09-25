@@ -1,0 +1,19 @@
+{% extends 'base.html' %}
+{% from 'macros.html' import icon with context %}
+{% set page_title = 'Solyarka' %}
+{% block content %}
+<div class="d-wrap hm">
+  <a class="fu-big fu-blue" href="{{ url_for('yoqilgi.op_take') }}">{{ icon('fuel','lg') }}<b>SOLYARKA OLISH</b><span>zapravkada</span></a>
+  <a class="fu-big fu-green" href="{{ url_for('yoqilgi.op_give') }}">{{ icon('tractor','lg') }}<b>SOLYARKA BERISH</b><span>traktor / kombayn / mashina</span></a>
+  <div class="fu-have"><span>Menda qolgan</span><b class="num">{{ have|num }} L</b></div>
+  <a class="hm-btn fu-hist" href="{{ url_for('yoqilgi.op_history') }}">{{ icon('list') }}<span>Bugungi tarix{% if ops %}<small>{{ ops|length }} ta amal</small>{% endif %}</span>{{ icon('chev-right') }}</a>
+  {% for o in ops[:5] %}
+  <a class="hm-op {{ 'hm-void' if o.voided_at }}" href="{{ url_for('yoqilgi.op_view', op_id=o.id) }}">
+    <span class="hm-op-ico {{ 'in' if o.kind == 'OLISH' }}">{{ icon('fuel' if o.kind == 'OLISH' else 'tractor') }}</span>
+    <span class="hm-op-b"><b>{{ o.station_code if o.kind == 'OLISH' else o.equipment_code }}</b><small>{{ 'Olindi' if o.kind == 'OLISH' else 'Berildi' }} · {{ o.created_at[11:16] }}</small></span>
+    <span class="hm-op-s"><b class="num {{ 'hm-green' if o.kind == 'OLISH' else 'hm-red' }}">{{ '+' if o.kind == 'OLISH' else '−' }}{{ o.liters|num }} L</b>
+      {% if o.voided_at %}<span class="badge b-gray">Bekor</span>{% elif o.flag %}<span class="badge b-orange">Tekshiriladi</span>{% endif %}</span></a>
+  {% endfor %}
+  <div class="hm-note">{{ icon('user','sm') }} Yoqilg‘i mas’uli: {{ current_user['full_name'] }}</div>
+</div>
+{% endblock %}
