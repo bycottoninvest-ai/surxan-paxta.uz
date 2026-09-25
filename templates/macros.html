@@ -1,5 +1,5 @@
 {% macro icon(name, cls='') -%}
-<svg class="ico {{ cls }}" aria-hidden="true"><use href="{{ url_for('static', filename='icons.svg') }}#{{ name }}"/></svg>
+<svg class="ico {{ cls }}" aria-hidden="true"><use href="{{ url_for('static', filename='icons.svg') }}?v={{ version }}#{{ name }}"/></svg>
 {%- endmacro %}
 
 {% macro csrf() -%}<input type="hidden" name="_csrf" value="{{ csrf_token() }}">{%- endmacro %}

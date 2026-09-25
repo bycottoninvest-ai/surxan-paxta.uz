@@ -2,7 +2,7 @@
    Only PUBLIC static assets are cached. Logged-in HTML, API responses and photos are
    never stored, so one user's data can't be shown to the next person on a shared phone.
    Offline data entry is handled by the IndexedDB queue in app.js, not by this cache. */
-const VERSION = 'surxon-static-v2';
+const VERSION = 'surxon-static-v3';
 const ASSETS = [
   '/static/css/app.css', '/static/js/app.js', '/static/icons.svg',
   '/static/img/logo-light.png', '/static/img/logo-dark.png', '/static/img/hero-field.jpg',
@@ -25,11 +25,16 @@ self.addEventListener('fetch', e => {
   const url = new URL(req.url);
   if (url.origin !== location.origin) return;
   if (url.pathname.startsWith('/static/')) {
-    // stale-while-revalidate for static files only
+    // network first for static files (a new version is used right after an update); the cache is only the offline
+    // fallback. Files are versioned (?v=…), so a cached copy of an old version is never picked for a new page.
     e.respondWith(caches.open(VERSION).then(async cache => {
-      const hit = await cache.match(req, { ignoreSearch: true });
-      const net = fetch(req).then(res => { if (res.ok) cache.put(req, res.clone()); return res; }).catch(() => hit);
-      return hit || net;
+      try {
+        const res = await fetch(req);
+        if (res.ok) cache.put(req, res.clone());
+        return res;
+      } catch (_) {
+        return (await cache.match(req)) || (await cache.match(req, { ignoreSearch: true })) || Response.error();
+      }
     }));
     return;
   }
