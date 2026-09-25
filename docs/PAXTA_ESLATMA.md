@@ -83,11 +83,13 @@ Azizbek topshirig‘i: 1) hisobot kanali — ma’lumot doim tushib turadi va sa
 - v2.11.2 Google xarita kaliti Admin → Integratsiyalar’da · v2.12.0 Direktor paneli `/rahbar` (telefon, faqat ko‘rish)
 - v2.12.1 Google Sheets’ni Integratsiyalar’dan ulash (havola + service account .json)
 - v2.12.2 Admin: “Reysni to‘liq bekor qilish” (tortish + nakladnoy + punkt qabuli, sabab bilan, o‘chirmasdan)
+- v2.13.0 yangi TV dashboard `/tv` (foydalanuvchi dizayni bo‘yicha, pulsiz; mavsum rejasi: season_target_kg) — GitHub’da, serverga hali qo‘yilmagan
 - Rollar bo‘yicha rasmli PDF qo‘llanmalar: `docs/qollanma/` (hisobchi, punkt, buxgalter, kassir, yoqilg‘i, direktor, admin)
 
 ## HOZIR QAYERDA TO‘XTADIK (keyingi qadam)
 
-1. Serverda oxirgi tasdiqlangan versiya v2.11.1; Codex’ga v2.12.2 yangilash + faqat-o‘qish yozuvlar soni so‘ralgan.
+1. Serverda v2.12.2 ishlayapti (/health tasdiqlandi). v2.13.0 (TV) ni Codex bilan qo‘yish kerak — qadamlarni birma-bir
+   so‘rash (uzun xabarda Codex qotib qoldi). Faqat-o‘qish yozuvlar soni jadvali hali olinmagan.
 2. Ertalab haqiqiy ish boshlanadi: avval Admin → Zaxira → “Hozir zaxira olish”, keyin test reys(lar)ni
    “Reysni to‘liq bekor qilish” bilan, solyarka/kassa sinovlarini “Bekor” bilan tozalash → direktor paneli 0.
    Test nakladnoy PA-000001 ni olgan — raqamlar qayta ishlatilmaydi (ataylab).
