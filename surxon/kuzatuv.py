@@ -179,13 +179,17 @@ def link_system_user(db, user):
                (user['full_name'], ROLES.get(user['role'], ''), tid, user['id'], now_str(), now_str()))
 
 
-def chat_seen(db, chat):
-    if chat.get('type') not in ('group', 'supergroup'):
+def chat_seen(db, chat, bot_status=None):
+    """Remember a group or channel by id and title only. Channels are recorded so the admin can pick the archive and
+    report channel on the Integrations page; nothing posted in them is stored."""
+    if chat.get('type') not in ('group', 'supergroup', 'channel'):
         return None
     cid = str(chat['id'])
     db.execute('''INSERT INTO tg_chats(chat_id, title, type, first_seen_at, last_seen_at) VALUES (?,?,?,?,?)
                   ON CONFLICT(chat_id) DO UPDATE SET title=excluded.title, type=excluded.type, last_seen_at=excluded.last_seen_at''',
                (cid, clean_text(chat.get('title') or '', 120), chat.get('type'), now_str(), now_str()))
+    if bot_status is not None:
+        db.execute('UPDATE tg_chats SET bot_status=? WHERE chat_id=?', (bot_status, cid))
     return db.execute('SELECT * FROM tg_chats WHERE chat_id=?', (cid,)).fetchone()
 
 

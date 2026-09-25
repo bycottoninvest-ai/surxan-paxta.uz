@@ -65,6 +65,16 @@ Azizbek topshirig‘i: 1) hisobot kanali — ma’lumot doim tushib turadi va sa
 - Hisobot kanaliga `reporting.feed()`: reys tugadi, punkt qabul, har bir kassa harakati, kuzatuv kechikdi.
 - 77 test o‘tadi. Haqiqiy Telegram bilan sinalmagan (token serverda kiritilgach).
 
+## 2026-09-25 kech — real ishga chiqish (Codex serverni o‘rnatdi)
+- Server: https://surxan-paxta.uz ishlaydi (Codex: fcc08a0 o‘rnatilgan). Admin paroli almashtirilgan. Bot webhook ishlaydi.
+- Yangi: Admin → **Xodimlar va loginlar** (rol yonida ism → login + bir martalik parol); telefonda **nakladnoy PDF: Ko‘rish / Ulashish / Yuklab olish**
+  (printer yo‘q; Web Share bilan fayl Telegramga); **Telegram kanallari** Admin → Integratsiyalar'da tanlanadi (getUpdates yo‘q).
+- Codex qabul misoli `tests/test_acceptance.py` da (360 000 / 210 000 / 830 000 / −2 kg) — o‘tadi.
+- Xodimlar (Azizbek tasdiqladi): Rahbar — Salayev Aziz; Hisobchi — Asadbek, Mirjalol, Sadokat, Gulbohar; Punkt — Yunus;
+  Buxgalter+kassir — Ibdulayev Asadbek (Asadbek bilan bir odam, lekin alohida login). Tarozi xodimi yo‘q.
+- To‘siq: dalalar kiritilmagan (nomi/gektar/brigada Azizbekdan). Bir reys = bir dala (aralashtirilmaydi).
+- Kompyuterdagi Wi-Fi router DNS (192.168.100.1) domenni topmagan edi → kompyuterga 1.1.1.1/8.8.8.8 qo‘yildi.
+
 ## HOZIR QAYERDA TO‘XTADIK (keyingi qadam — Azizbekda)
 1. **DNS (sayt.uz → Domenlarim → surxan-paxta.uz → DNS):** avval mavjud yozuvlar rasmini olish; faqat `A @ → 88.198.122.72` va `A www → 88.198.122.72`; MX/TXT/NS ga tegmaslik. Domen faollashgan (Azizbek aytdi), DNS tekshiruvi hali qilinmagan.
 2. **Serverga o‘rnatish:** `ssh root@88.198.122.72`, keyin

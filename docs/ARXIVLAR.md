@@ -65,10 +65,12 @@ Har tungi zaxiradan keyin yangi fayllar nusxalanadi. `rclone copy` masofadagi fa
 Bu kanal Azizbek loyihasidan alohida, faqat SURXAN-PAXTA.UZ uchun. Unga odamlar yozmaydi — tizim yuboradi.
 
 1. Telegram'da **yopiq kanal** yarating, masalan “SURXAN-PAXTA hisobot”. Rahbar va buxgalterni obunachi qiling.
-2. Botni kanalga **admin** qiling. Asosiy bot bo‘lishi mumkin; alohida bot xohlasangiz, @BotFather'dan yangi bot oching.
-3. Kanal ID sini oling (−100… bilan boshlanadi).
-4. Serverdagi `.env` ga yozing: `TELEGRAM_REPORT_CHAT_ID=-100…`. Alohida bot bo‘lsa, `TELEGRAM_REPORT_BOT_TOKEN=…` ham yozing. Keyin `docker compose up -d`.
-5. Integratsiyalar sahifasida “Telegram hisobot kanali” → **Sinov**.
+2. Botni kanalga **admin** qiling va kanalga bitta xabar yozing (masalan “salom”).
+3. Saytda **Admin → Integratsiyalar → Telegram kanallari**: kanal ro‘yxatda chiqadi → **Hisobot qilish** (arxiv kanali uchun **Arxiv qilish**).
+4. Pastdagi “Tashqi arxivlar holati” jadvalida **Sinov** — kanalga haqiqiy xabar kelishi kerak.
+
+Bot kanal postlarining matnini saqlamaydi, faqat kanal ID va nomini. Botga kelgan shaxsiy xabarlarni yig‘adigan `getUpdates` usuli ishlatilmaydi.
+(Muqobil: `.env` da `TELEGRAM_ARCHIVE_CHAT_ID` / `TELEGRAM_REPORT_CHAT_ID`; saytda tanlangan kanal ustun turadi.)
 
 Kanalga keladi:
 - **darhol, har bir hodisa** (sozlama `report_feed=1`): reys tugadi (TL-…, dala, kg, nakladnoy), punktda qabul (dala kg → punkt kg, farq), kassaning har bir kirim/chiqimi (INC-/EXP-/PAY-…, summa, kim, qaysi kassa), kuzatuv javobi kechikdi;

@@ -285,3 +285,40 @@ def test_request_before_person_joins_is_sent_when_they_link(app, world):
     assert 'paxtaning hozirgi holati' in last_text('920')
     with app.app_context():
         assert q('SELECT sent_via FROM media_requests', one=True)['sent_via'] == 'dm'
+
+
+def test_channels_are_picked_on_the_site_without_reading_posts(app, world, monkeypatch):
+    """Bot made admin in a channel + one post there → the channel shows on Integrations; admin picks archive/report.
+    Only id and title are kept (no post text). Deliveries then go to the picked ids."""
+    import surxon.outbox as ob
+    sent = []
+    monkeypatch.setattr(ob, 'telegram_upload', lambda method, fields, files, token=None: sent.append((method, fields)) or {'ok': True})
+    tg, admin = TG(app), world['admin']
+    tg.post({'my_chat_member': {'chat': {'id': -1003319805350, 'type': 'channel', 'title': 'SURXAN-PAXTA arxiv'},
+                                'from': {'id': 1}, 'new_chat_member': {'status': 'administrator', 'user': {'id': 42, 'is_bot': True}}}})
+    tg.post({'channel_post': {'message_id': 5, 'chat': {'id': -1009990001, 'type': 'channel', 'title': 'SURXAN-PAXTA hisobot'},
+                              'text': 'salom maxfiy matn'}})
+    with app.app_context():
+        rows = {r['chat_id']: r for r in q("SELECT * FROM tg_chats WHERE type='channel'")}
+        assert set(rows) == {'-1003319805350', '-1009990001'}
+        from surxon.outbox import configured
+        assert not configured('telegram_archive') and not configured('telegram_report')
+        # nothing from the post body is stored anywhere
+        assert not q("SELECT 1 FROM tg_members") and 'maxfiy' not in str([dict(r) for r in q('SELECT * FROM tg_chats')])
+    page = admin.get('/admin/integratsiyalar').get_data(as_text=True)
+    assert 'SURXAN-PAXTA arxiv' in page and 'SURXAN-PAXTA hisobot' in page
+    assert admin.post('/admin/integratsiyalar', {'action': 'tg_channel', 'chat_id': '-1003319805350', 'role': 'archive'}).get_json()['ok']
+    assert admin.post('/admin/integratsiyalar', {'action': 'tg_channel', 'chat_id': '-1009990001', 'role': 'report'}).get_json()['ok']
+    # the same channel cannot be both
+    assert not admin.post('/admin/integratsiyalar', {'action': 'tg_channel', 'chat_id': '-1009990001', 'role': 'archive'}).get_json()['ok']
+    # a random id that the bot never saw cannot be chosen
+    assert not admin.post('/admin/integratsiyalar', {'action': 'tg_channel', 'chat_id': '-100123', 'role': 'archive'}).get_json()['ok']
+    assert admin.post('/admin/integratsiyalar', {'action': 'test_telegram_archive'}).get_json()['ok']
+    assert admin.post('/admin/integratsiyalar', {'action': 'test_telegram_report'}).get_json()['ok']
+    assert [f['chat_id'] for m, f in sent] == ['-1003319805350', '-1009990001']
+    with app.app_context():
+        from surxon.outbox import configured
+        assert configured('telegram_archive') and configured('telegram_report')
+    # only admins may do this
+    assert world['rahbar'].post('/admin/integratsiyalar', {'action': 'tg_channel', 'chat_id': '-1003319805350',
+                                                            'role': 'report'}).status_code in (302, 403)

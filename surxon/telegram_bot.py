@@ -179,6 +179,12 @@ def _chat_of(update):
 
 
 def process_update(update):
+    if update.get('channel_post'):
+        # a post in a channel where the bot is admin: record the channel (id + title), ignore the content
+        from . import kuzatuv
+        with tx() as db:
+            kuzatuv.chat_seen(db, update['channel_post'].get('chat') or {}, bot_status='administrator')
+        return
     if update.get('my_chat_member') or update.get('chat_member'):
         return _on_member_update(update.get('my_chat_member') or update['chat_member'])
     if update.get('callback_query'):
@@ -204,10 +210,15 @@ def _on_member_update(upd):
     """Bot added to / removed from a group, or (bot is admin) someone joined the group."""
     from . import kuzatuv
     chat = upd.get('chat') or {}
+    new = upd.get('new_chat_member') or {}
+    who = new.get('user') or {}
     with tx() as db:
+        if chat.get('type') == 'channel':
+            # only the bot's own membership in a channel is of interest (to offer it as archive/report channel)
+            if who.get('is_bot'):
+                kuzatuv.chat_seen(db, chat, bot_status=new.get('status'))
+            return
         kuzatuv.chat_seen(db, chat)
-        new = upd.get('new_chat_member') or {}
-        who = new.get('user') or {}
         if who and not who.get('is_bot') and new.get('status') in ('member', 'administrator', 'creator', 'restricted'):
             kuzatuv.seen(db, who, chat)
         elif who and not who.get('is_bot') and new.get('status') in ('left', 'kicked'):

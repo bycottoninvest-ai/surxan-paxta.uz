@@ -745,6 +745,8 @@ def migrate(db):
     if old_version < 5:
         _backfill_v5(db)
     _backfill_doc_numbers(db)
+    # v6: whether the bot is admin / member / removed in a chat (channels are picked on the Integrations page)
+    _add_column(db, 'tg_chats', 'bot_status', 'TEXT')
     # Future column changes go here as: if version < N: ALTER TABLE ...
     db.execute('UPDATE schema_version SET version=? WHERE version < ?', (SCHEMA_VERSION, SCHEMA_VERSION))
 

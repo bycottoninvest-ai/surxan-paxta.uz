@@ -39,7 +39,7 @@ telegram)
   read -rsp "   TOKEN: " T; echo
   T=$(echo "$T" | tr -d '[:space:]')
   [[ "$T" =~ ^[0-9]+:[A-Za-z0-9_-]{30,}$ ]] || { echo "Token ko‘rinishi noto‘g‘ri — qaytadan nusxalang"; exit 1; }
-  echo "Bot va kanallar avtomatik qidirilmoqda..."
+  echo "Token tekshirilmoqda..."
   OUT=$(TG_TOKEN="$T" python3 tools/tg_topish.py) || exit 1
   setenv TELEGRAM_BOT_TOKEN "$T"
   while IFS='=' read -r K V; do [[ "$K" =~ ^TELEGRAM_[A-Z_]+$ ]] && setenv "$K" "$V"; done <<< "$OUT"
@@ -47,7 +47,8 @@ telegram)
   restart
   flask set-webhook
   flask smoke-check --send-tests | grep -i 'telegram' || true
-  echo; echo "✅ Tayyor. Telegramda ikkala kanalga “ulandi” degan xabar kelgan bo‘lishi kerak."
+  echo; echo "✅ Bot ulandi. Kanallar: botni ikkala kanalga admin qiling, har biriga bitta xabar yozing,"
+  echo "   keyin saytda Admin → Integratsiyalar → “Telegram kanallari” dan arxiv va hisobot kanalini tanlang."
   ;;
 sheets)
   read -rp "1) Jadval ID [1eWl21webrxSAV_NDdvv8dX1lWmu5gSEMSD1fvMWh8Mw]: " S

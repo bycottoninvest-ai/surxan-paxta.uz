@@ -18,7 +18,7 @@ from .. import queries
 from ..db import get_db, q, scalar, tx
 from ..security import audit, perm_required
 from ..services import current_season
-from ..settings import get_bool, get_float
+from ..settings import get_bool, get_float, get_setting
 from ..utils import UserError, clean_text, now_str, today_str
 from . import done, post_actor
 
@@ -88,8 +88,26 @@ def index():
                                                                 actor.user_id, now_str()))
                 audit(db, actor, 'CREATE', 'integration_client', cur.lastrowid, new={'kind': kind, 'name': name, 'scopes': scopes})
                 msg = 'Kalit yaratildi. Uni hozir nusxalab oling — keyin qayta ko‘rsatilmaydi.'
-            elif action in ('test_telegram_archive', 'test_sheets', 'test_offsite', 'outbox_run', 'outbox_retry'):
+            elif action in ('test_telegram_archive', 'test_telegram_report', 'test_sheets', 'test_offsite', 'outbox_run',
+                            'outbox_retry'):
                 msg = None
+            elif action == 'tg_channel':
+                # the admin picks which channel (one the bot is admin of) is the archive / the report channel
+                role = request.form.get('role')
+                key = {'archive': 'tg_archive_chat_id', 'report': 'tg_report_chat_id'}.get(role)
+                ch = db.execute("SELECT * FROM tg_chats WHERE chat_id=? AND type='channel'",
+                                (request.form.get('chat_id', ''),)).fetchone()
+                if not key or not ch:
+                    raise UserError('Kanal topilmadi.')
+                other = 'tg_report_chat_id' if key == 'tg_archive_chat_id' else 'tg_archive_chat_id'
+                if (db.execute('SELECT value FROM settings WHERE key=?', (other,)).fetchone() or {'value': ''})['value'] == ch['chat_id']:
+                    raise UserError('Bu kanal allaqachon boshqa vazifaga tanlangan. Arxiv va hisobot alohida kanal bo‘lsin.')
+                db.execute('INSERT INTO settings(key, value, updated_at, updated_by) VALUES (?,?,?,?) ON CONFLICT(key) '
+                           'DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at, updated_by=excluded.updated_by',
+                           (key, ch['chat_id'], now_str(), actor.user_id))
+                audit(db, actor, 'UPDATE', 'integration', key, new={key: ch['chat_id'], 'title': ch['title']})
+                msg = (f'“{ch["title"]}” — {"arxiv" if role == "archive" else "hisobot"} kanali qilib tanlandi. '
+                       'Endi “Sinov” tugmasi bilan haqiqiy xabar yuboring.')
             else:
                 cid = int(request.form.get('id') or 0)
                 c = db.execute('SELECT * FROM integration_clients WHERE id=?', (cid,)).fetchone()
@@ -152,7 +170,10 @@ def render(new_key=None, message=None):
     return render_template('admin_integrations.html', clients=clients, log=log, scopes=SCOPES, new_key=new_key,
                            archives=outbox_status(), recent_jobs=recent_jobs,
                            message=message, erp_on=get_bool('erp_enabled'), tv_on=get_bool('tv_enabled'),
-                           base=request.host_url.rstrip('/'), loads=json.loads)
+                           base=request.host_url.rstrip('/'), loads=json.loads,
+                           channels=q("SELECT * FROM tg_chats WHERE type='channel' ORDER BY last_seen_at DESC"),
+                           chosen={'archive': get_setting('tg_archive_chat_id'), 'report': get_setting('tg_report_chat_id')},
+                           bot_user=current_app.config['SURXON'].TELEGRAM_BOT_USERNAME)
 
 
 # =================================================================== auth helpers

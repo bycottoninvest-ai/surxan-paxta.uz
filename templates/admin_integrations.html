@@ -40,6 +40,26 @@
   </section>
 
   <section class="card s12">
+    <div class="card-h"><h3>{{ icon('telegram') }} Telegram kanallari (arxiv va hisobot)</h3></div>
+    <div class="card-b">
+      <p class="small">Botni{% if bot_user %} (<b>@{{ bot_user }}</b>){% endif %} kanalga <b>administrator</b> qiling, keyin o‘sha kanalga istalgan bitta xabar yozing (masalan “salom”) — kanal shu ro‘yxatda paydo bo‘ladi (sahifani yangilang). Keyin uning vazifasini tanlang. Bot kanal xabarlarining matnini saqlamaydi.</p>
+      {% for c in channels %}
+      <div class="row" style="padding:8px 0;border-bottom:1px solid var(--line-2);gap:8px;flex-wrap:wrap">
+        <b>{{ c.title or c.chat_id }}</b><span class="tiny muted">{{ c.chat_id }}</span>
+        {% if c.chat_id == chosen.archive %}<span class="badge b-green">Arxiv kanali</span>{% endif %}
+        {% if c.chat_id == chosen.report %}<span class="badge b-blue">Hisobot kanali</span>{% endif %}
+        {% if c.bot_status in ('left', 'kicked') %}<span class="badge b-red">bot chiqarilgan</span>{% endif %}
+        <span class="spacer"></span>
+        <form method="post" class="row" style="gap:6px">{{ csrf() }}<input type="hidden" name="action" value="tg_channel"><input type="hidden" name="chat_id" value="{{ c.chat_id }}">
+          {% if c.chat_id != chosen.archive %}<button class="btn btn-light btn-sm" name="role" value="archive">Arxiv qilish</button>{% endif %}
+          {% if c.chat_id != chosen.report %}<button class="btn btn-light btn-sm" name="role" value="report">Hisobot qilish</button>{% endif %}
+        </form>
+      </div>
+      {% else %}<div class="note">Hali kanal ko‘rinmadi. Bot kanalda admin ekanini tekshiring va kanalga bitta xabar yozing, keyin sahifani yangilang.</div>{% endfor %}
+    </div>
+  </section>
+
+  <section class="card s12">
     <div class="card-h"><h3>{{ icon('shield') }} Tashqi arxivlar holati</h3>
       <form method="post" style="margin-left:auto" class="row">{{ csrf() }}
         <button class="btn btn-light btn-sm" name="action" value="outbox_run">{{ icon('refresh','sm') }} Navbatni hozir yuborish</button>
@@ -54,7 +74,7 @@
         <td class="keep">{% if a.configured %}<form method="post">{{ csrf() }}<button class="btn btn-light btn-sm" name="action" value="test_{{ a.channel }}">Sinov</button></form>{% endif %}</td></tr>{% endfor %}</tbody>
     </table></div>
     <div class="card-b tiny muted">“Ishlayapti” faqat haqiqiy yuborish muvaffaqiyatli bo‘lgandan keyin ko‘rsatiladi. Ulanmagan arxiv uchun yozuvlar navbatda saqlanadi va sozlangach yuboriladi.
-      Sozlash (.env): Telegram kanali — <code>TELEGRAM_ARCHIVE_CHAT_ID</code>; Google Sheets — <code>GOOGLE_SHEETS_ID</code>, <code>GOOGLE_SERVICE_ACCOUNT_FILE</code>; mustaqil zaxira — <code>OFFSITE_RCLONE_REMOTE</code>. Qo‘llanma: <code>docs/ARXIVLAR.md</code>.</div>
+      Telegram kanallari — yuqoridagi bo‘limda tanlanadi (yoki .env: <code>TELEGRAM_ARCHIVE_CHAT_ID</code>, <code>TELEGRAM_REPORT_CHAT_ID</code>); Google Sheets — <code>GOOGLE_SHEETS_ID</code>, <code>GOOGLE_SERVICE_ACCOUNT_FILE</code>; mustaqil zaxira — <code>OFFSITE_RCLONE_REMOTE</code>. Qo‘llanma: <code>docs/ARXIVLAR.md</code>.</div>
   </section>
 
   <section class="card s12">

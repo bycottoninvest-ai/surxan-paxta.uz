@@ -38,14 +38,26 @@ def enqueue(db, channel, kind, ref, payload):
                (channel, kind, str(ref), json.dumps(payload, ensure_ascii=False, default=str), now_str()))
 
 
+def chat_id(channel, cfg=None):
+    """Telegram channel id: the one the admin picked on the Integrations page (bot is admin there), else .env."""
+    cfg = cfg or current_app.config['SURXON']
+    key = {'telegram_archive': 'tg_archive_chat_id', 'telegram_report': 'tg_report_chat_id'}[channel]
+    try:
+        from .settings import get_setting
+        val = (get_setting(key) or '').strip()
+    except Exception:
+        val = ''
+    return val or (cfg.TELEGRAM_ARCHIVE_CHAT_ID if channel == 'telegram_archive' else cfg.TELEGRAM_REPORT_CHAT_ID)
+
+
 def configured(channel, cfg=None):
     cfg = cfg or current_app.config['SURXON']
     if channel == 'telegram_archive':
-        return bool(cfg.TELEGRAM_BOT_TOKEN and cfg.TELEGRAM_ARCHIVE_CHAT_ID)
+        return bool(cfg.TELEGRAM_BOT_TOKEN and chat_id('telegram_archive', cfg))
     if channel == 'sheets':
         return bool(cfg.GOOGLE_SHEETS_ID and cfg.GOOGLE_SERVICE_ACCOUNT_FILE)
     if channel == 'telegram_report':
-        return bool((cfg.TELEGRAM_REPORT_BOT_TOKEN or cfg.TELEGRAM_BOT_TOKEN) and cfg.TELEGRAM_REPORT_CHAT_ID)
+        return bool((cfg.TELEGRAM_REPORT_BOT_TOKEN or cfg.TELEGRAM_BOT_TOKEN) and chat_id('telegram_report', cfg))
     if channel == 'offsite':
         return bool(cfg.OFFSITE_RCLONE_REMOTE)
     return False
@@ -115,13 +127,13 @@ def _send_telegram(job, payload):
     cfg = current_app.config['SURXON']
     if job['kind'] == 'copy':
         # a kuzatuv video over the 20 MB download limit: Telegram copies it server-side into the archive channel
-        telegram_upload('copyMessage', {'chat_id': cfg.TELEGRAM_ARCHIVE_CHAT_ID, 'from_chat_id': payload['from_chat_id'],
+        telegram_upload('copyMessage', {'chat_id': chat_id('telegram_archive'), 'from_chat_id': payload['from_chat_id'],
                                         'message_id': payload['message_id'],
                                         'caption': payload.get('caption', '')[:1000]}, {})
         return
     path = cfg.UPLOAD_DIR / payload['path']
     data = path.read_bytes()
-    fields = {'chat_id': cfg.TELEGRAM_ARCHIVE_CHAT_ID, 'caption': payload.get('caption', '')[:1000]}
+    fields = {'chat_id': chat_id('telegram_archive'), 'caption': payload.get('caption', '')[:1000]}
     if job['kind'] == 'document':
         telegram_upload('sendDocument', fields, {'document': (payload.get('filename', path.name), data, 'application/pdf')})
     elif job['kind'] == 'photo':
@@ -134,7 +146,7 @@ def _send_telegram(job, payload):
 
 def _send_report(job, payload):
     cfg = current_app.config['SURXON']
-    telegram_upload('sendMessage', {'chat_id': cfg.TELEGRAM_REPORT_CHAT_ID, 'text': payload['text'][:4000]}, {},
+    telegram_upload('sendMessage', {'chat_id': chat_id('telegram_report'), 'text': payload['text'][:4000]}, {},
                     token=cfg.TELEGRAM_REPORT_BOT_TOKEN or cfg.TELEGRAM_BOT_TOKEN)
 
 
@@ -347,12 +359,12 @@ def send_test(channel):
     cfg = current_app.config['SURXON']
     try:
         if channel == 'telegram_archive':
-            telegram_upload('sendMessage', {'chat_id': cfg.TELEGRAM_ARCHIVE_CHAT_ID,
+            telegram_upload('sendMessage', {'chat_id': chat_id('telegram_archive'),
                                             'text': f'✅ SURXON PAXTA: arxiv kanali sinovi · {now_str()}'}, {})
         elif channel == 'sheets':
             sheets_upsert('Sinov', ['TEST-1', now_str(), 'SURXAN-PAXTA.UZ ulanish sinovi'], ['ID', 'Vaqt', 'Matn'])
         elif channel == 'telegram_report':
-            telegram_upload('sendMessage', {'chat_id': cfg.TELEGRAM_REPORT_CHAT_ID,
+            telegram_upload('sendMessage', {'chat_id': chat_id('telegram_report'),
                                             'text': f'✅ SURXAN-PAXTA.UZ hisobot kanali sinovi · {now_str()}'}, {},
                             token=cfg.TELEGRAM_REPORT_BOT_TOKEN or cfg.TELEGRAM_BOT_TOKEN)
         elif channel == 'offsite':
