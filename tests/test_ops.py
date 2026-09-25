@@ -80,3 +80,21 @@ def test_sheets_inspect_is_read_only(app, world, monkeypatch):
     out = app.test_cli_runner().invoke(args=['sheets-inspect']).output
     assert '[Umumiy hisob] (qo‘lda — tizim YOZMAYDI)' in out and 'formulali katak: 1' in out
     assert fake.tabs == before
+
+
+def test_bulk_staff_logins(app, tmp_path):
+    runner = app.test_cli_runner()
+    r = runner.invoke(args=['xodimlar', 'Asadbek:hisobchi', 'Mirjalol:hisobchi', 'Yunus:punkt', 'Karim aka:kassir'])
+    assert r.exit_code == 0, r.output
+    assert 'login: asadbek' in r.output and 'login: yunus' in r.output and 'Punkt operatori' in r.output
+    with app.app_context():
+        from surxon.db import q
+        y = q("SELECT * FROM users WHERE username='yunus'", one=True)
+        k = q("SELECT * FROM users WHERE username='karim'", one=True)
+        assert y['role'] == 'station' and y['station_id'] and k['role'] == 'cashier' and k['cashbox_id']
+        assert y['must_change_password'] == 1
+    # running again changes nothing; a bad role is refused
+    r2 = runner.invoke(args=['xodimlar', 'Asadbek:hisobchi'])
+    assert 'allaqachon bor' in r2.output
+    assert runner.invoke(args=['xodimlar', 'Ali:bosh']).exit_code != 0
+    assert (app.config['SURXON'].DATA_DIR / 'LOGINLAR.txt').read_text(encoding='utf-8').count('login:') == 4

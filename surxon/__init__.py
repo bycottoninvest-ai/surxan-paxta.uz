@@ -252,6 +252,52 @@ def register_cli(app):
         dbmod.get_db().execute('UPDATE users SET must_change_password=1, active=1 WHERE id=?', (user['id'],))
         click.echo('Parol yangilandi (birinchi kirishda almashtirish talab qilinadi).')
 
+    @app.cli.command('xodimlar')
+    @click.argument('rows', nargs=-1, required=True)
+    def xodimlar(rows):
+        """Create staff logins in one go: "Asadbek:hisobchi" "Yunus:punkt" "Karim aka:kassir" ...
+        Roles: hisobchi, punkt, buxgalter, kassir, rahbar, tarozi, haydovchi, admin. Passwords are generated here,
+        printed once and saved to data/LOGINLAR.txt (never sent anywhere). Existing logins are left untouched."""
+        import os
+        import secrets
+        from .security import Actor
+        from .services import save_user
+        aliases = {'hisobchi': 'tally', 'terim': 'tally', 'punkt': 'station', 'buxgalter': 'accountant',
+                   'kassir': 'cashier', 'kassa': 'cashier', 'rahbar': 'manager', 'tarozi': 'scale',
+                   'haydovchi': 'driver', 'admin': 'admin'}
+        tr = str.maketrans({'‘': '', '’': '', "'": '', 'ʻ': '', 'ʼ': '', '`': ''})
+        actor = Actor(None, 'admin', source='cli', name='server')
+        out = []
+        for row in rows:
+            name, _, role = row.rpartition(':')
+            name, role = name.strip(), aliases.get(role.strip().lower(), role.strip().lower())
+            if not name or role not in aliases.values():
+                raise click.ClickException(f'“{row}” — format: "Ism:rol" (rol: {", ".join(sorted(aliases))})')
+            base = ''.join(ch for ch in name.split()[0].lower().translate(tr) if ch.isalnum()) or 'xodim'
+            if dbmod.q('SELECT 1 FROM users WHERE lower(full_name)=lower(?) AND role=?', (name, role), one=True):
+                click.echo(f'  = {name}: allaqachon bor, o‘zgartirilmadi')
+                continue
+            username, n = base, 1
+            while dbmod.q('SELECT 1 FROM users WHERE username=?', (username,), one=True):
+                n += 1
+                username = f'{base}{n}'
+            alphabet = 'abcdefghjkmnpqrstuvwxyz'
+            pw = ''.join(secrets.choice(alphabet) for _ in range(4)) + ''.join(secrets.choice('23456789') for _ in range(4))
+            station = dbmod.q('SELECT id FROM stations WHERE active=1 ORDER BY id LIMIT 1', one=True) if role == 'station' else None
+            box = dbmod.q('SELECT id FROM cashboxes WHERE active=1 ORDER BY id LIMIT 1', one=True) if role == 'cashier' else None
+            save_user(actor, None, username=username, full_name=name, role=role, password=pw,
+                      station_id=station['id'] if station else None, cashbox_id=box['id'] if box else None)
+            out.append((name, ROLES.get(role, role), username, pw))
+        if not out:
+            return
+        lines = [f'{a:<22} {b:<20} login: {c:<14} parol: {d}' for a, b, c, d in out]
+        path = app.config['SURXON'].DATA_DIR / 'LOGINLAR.txt'
+        with open(path, 'a', encoding='utf-8') as fh:
+            fh.write('\n'.join(lines) + '\n')
+        os.chmod(path, 0o600)
+        click.echo('\n'.join(lines))
+        click.echo(f'\nSaqlandi: {path}. Har kim birinchi kirganda o‘z parolini qo‘yadi.')
+
     @app.cli.command('set-webhook')
     def set_webhook():
         """Register the Telegram webhook at https://DOMAIN/telegram/webhook/SECRET."""
