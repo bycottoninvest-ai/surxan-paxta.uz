@@ -18,6 +18,12 @@ services:
     volumes:
       - ./data:/data
     command: ["python", "-m", "surxon.backup"]
+    # no web server here: the image's HTTP healthcheck does not apply; start only after the app made the database
+    healthcheck:
+      disable: true
+    depends_on:
+      app:
+        condition: service_healthy
 
   # Sends waybill PDFs and trip photos to the private Telegram archive channel and rows to Google Sheets,
   # and regenerates any missing PDF. Channels without settings stay "not connected" (jobs wait in the queue).
@@ -28,6 +34,11 @@ services:
     volumes:
       - ./data:/data
     command: ["python", "-m", "surxon.outbox"]
+    healthcheck:
+      disable: true
+    depends_on:
+      app:
+        condition: service_healthy
 
   caddy:
     image: caddy:2

@@ -23,7 +23,14 @@ if not done:
 open('.env', 'w', encoding='utf-8').write('\n'.join(out) + '\n')
 PY
 }
-restart() { docker compose up -d >/dev/null; sleep 6; }
+restart() {  # recreate with the new .env and wait until the app answers again
+  docker compose up -d >/dev/null
+  for _ in $(seq 1 40); do
+    docker compose exec -T app python -c "import urllib.request;urllib.request.urlopen('http://127.0.0.1:5000/health')" 2>/dev/null && return 0
+    sleep 3
+  done
+  echo "Ilova qayta ishga tushmadi: docker compose logs app | tail -40"; exit 1
+}
 flask() { docker compose exec -T app flask --app app "$@"; }
 
 case "${1:-}" in
