@@ -14,9 +14,11 @@ A channel whose settings are missing is reported as NOT CONNECTED; its jobs stay
 pending and are delivered once it is configured — nothing is silently dropped.
 """
 import json
+import os
 import secrets
 import time
 import urllib.request
+from pathlib import Path
 
 from flask import current_app
 
@@ -55,12 +57,29 @@ def configured(channel, cfg=None):
     if channel == 'telegram_archive':
         return bool(cfg.TELEGRAM_BOT_TOKEN and chat_id('telegram_archive', cfg))
     if channel == 'sheets':
-        return bool(cfg.GOOGLE_SHEETS_ID and cfg.GOOGLE_SERVICE_ACCOUNT_FILE)
+        return all(sheets_conf(cfg))
     if channel == 'telegram_report':
         return bool((cfg.TELEGRAM_REPORT_BOT_TOKEN or cfg.TELEGRAM_BOT_TOKEN) and chat_id('telegram_report', cfg))
     if channel == 'offsite':
         return bool(cfg.OFFSITE_RCLONE_REMOTE)
     return False
+
+
+SA_FILE_NAME = 'google-service-account.json'
+
+
+def sheets_conf(cfg=None):
+    """(spreadsheet id, service-account file). Server .env wins; otherwise what the admin saved on the Integrations
+    page (the id in settings, the JSON key as a private file in DATA_DIR). A test copy never connects."""
+    cfg = cfg or current_app.config['SURXON']
+    if cfg.APP_MODE == 'test':
+        return '', ''
+    if cfg.GOOGLE_SHEETS_ID and cfg.GOOGLE_SERVICE_ACCOUNT_FILE:
+        return cfg.GOOGLE_SHEETS_ID, cfg.GOOGLE_SERVICE_ACCOUNT_FILE
+    row = get_db().execute("SELECT value FROM settings WHERE key='google_sheets_id'").fetchone()
+    sid = (row['value'] or '').strip() if row else ''
+    f = Path(cfg.DATA_DIR) / SA_FILE_NAME
+    return (sid, str(f)) if sid and f.exists() else ('', '')
 
 
 def record_result(channel, ok, error=None, db=None):
@@ -151,23 +170,25 @@ def _send_report(job, payload):
 
 
 _sheets_session = None
+_sheets_session_key = None
 
 
 def _session():
-    global _sheets_session
-    cfg = current_app.config['SURXON']
-    if _sheets_session is None:
+    global _sheets_session, _sheets_session_key
+    sa_file = sheets_conf()[1]
+    key = (sa_file, os.path.getmtime(sa_file) if sa_file and os.path.exists(sa_file) else None)
+    if _sheets_session is None or _sheets_session_key != key:     # a new key saved on the admin page takes effect at once
         from google.auth.transport.requests import AuthorizedSession
         from google.oauth2 import service_account
         creds = service_account.Credentials.from_service_account_file(
-            cfg.GOOGLE_SERVICE_ACCOUNT_FILE, scopes=['https://www.googleapis.com/auth/spreadsheets'])
-        _sheets_session = AuthorizedSession(creds)
+            sa_file, scopes=['https://www.googleapis.com/auth/spreadsheets'])
+        _sheets_session, _sheets_session_key = AuthorizedSession(creds), key
     return _sheets_session
 
 
 def _values_url(sheet, rng):
     cfg = current_app.config['SURXON']
-    return (f'https://sheets.googleapis.com/v4/spreadsheets/{cfg.GOOGLE_SHEETS_ID}/values/'
+    return (f'https://sheets.googleapis.com/v4/spreadsheets/{sheets_conf()[0]}/values/'
             f'{urllib.request.quote(f"{chr(39)}{sheet}{chr(39)}!{rng}")}')
 
 
@@ -185,7 +206,7 @@ def _ensure_tab(sheet, header):
     sess = _session()
     r = sess.get(_values_url(sheet, '1:1'), timeout=30)
     if r.status_code == 400 and 'Unable to parse range' in r.text:
-        rr = sess.post(f'https://sheets.googleapis.com/v4/spreadsheets/{cfg.GOOGLE_SHEETS_ID}:batchUpdate',
+        rr = sess.post(f'https://sheets.googleapis.com/v4/spreadsheets/{sheets_conf()[0]}:batchUpdate',
                        json={'requests': [{'addSheet': {'properties': {'title': sheet}}}]}, timeout=30)
         if rr.status_code >= 300:
             raise RuntimeError(f'Sheets {rr.status_code}: {rr.text[:300]}')
@@ -240,7 +261,7 @@ def sheets_upsert_many(sheet, rows, header=None):
             new.append(row)
             ids.append(row[0])
     if updates:
-        w = sess.post(f'https://sheets.googleapis.com/v4/spreadsheets/{cfg.GOOGLE_SHEETS_ID}/values:batchUpdate',
+        w = sess.post(f'https://sheets.googleapis.com/v4/spreadsheets/{sheets_conf()[0]}/values:batchUpdate',
                       json={'valueInputOption': 'RAW', 'data': updates}, timeout=60)
         if w.status_code >= 300:
             raise RuntimeError(f'Sheets {w.status_code}: {w.text[:300]}')
@@ -260,7 +281,7 @@ def sheets_inspect():
     """Read-only look at the spreadsheet: every tab, its header row, size and how many cells hold formulas."""
     cfg = current_app.config['SURXON']
     sess = _session()
-    r = sess.get(f'https://sheets.googleapis.com/v4/spreadsheets/{cfg.GOOGLE_SHEETS_ID}'
+    r = sess.get(f'https://sheets.googleapis.com/v4/spreadsheets/{sheets_conf()[0]}'
                  '?fields=properties.title,sheets.properties(title,gridProperties)', timeout=30)
     if r.status_code >= 300:
         raise RuntimeError(f'Sheets {r.status_code}: {r.text[:300]}')

@@ -9,8 +9,10 @@ Security model
 """
 import hashlib
 import json
+import os
 import secrets
 import time
+from pathlib import Path
 
 from flask import (Blueprint, abort, current_app, g, jsonify, make_response, render_template, request, url_for)
 
@@ -106,6 +108,8 @@ def index():
                 audit(db, actor, 'UPDATE', 'integration', 'google_maps_key', new={'google_maps_key': ('…' + val[-4:]) if val else ''})
                 msg = 'Google kaliti saqlandi. Xaritani yangilang (Ctrl+Shift+R) → qatlamlar → “Google sun’iy yo‘ldosh”.' if val \
                     else 'Google kaliti o‘chirildi — bepul Esri foni ishlatiladi.'
+            elif action in ('sheets_save', 'sheets_clear'):
+                msg = _sheets_save(db, actor, action)
             elif action == 'tg_channel':
                 # the admin picks which channel (one the bot is admin of) is the archive / the report channel
                 role = request.form.get('role')
@@ -175,6 +179,68 @@ def index():
     return render()
 
 
+def _sheets_save(db, actor, action):
+    """Google Sheets: the spreadsheet link/id goes to settings, the service-account JSON key to a private file in
+    DATA_DIR (never shown again, never in the audit — only its client_email, which is not secret)."""
+    import re as _re
+    from ..outbox import SA_FILE_NAME
+    cfg = current_app.config['SURXON']
+    path = Path(cfg.DATA_DIR) / SA_FILE_NAME
+
+    def put(key, val):
+        db.execute('INSERT INTO settings(key, value, updated_at, updated_by) VALUES (?,?,?,?) ON CONFLICT(key) '
+                   'DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at, updated_by=excluded.updated_by',
+                   (key, val, now_str(), actor.user_id))
+    if action == 'sheets_clear':
+        put('google_sheets_id', ''); put('google_sheets_email', '')
+        path.unlink(missing_ok=True)
+        audit(db, actor, 'UPDATE', 'integration', 'google_sheets', new={'google_sheets': 'o‘chirildi'})
+        return 'Google Sheets uzildi. Yozuvlar navbatda qoladi — qayta ulansa yuboriladi.'
+    link = (request.form.get('sheet') or '').strip()
+    m = _re.search(r'/spreadsheets/d/([A-Za-z0-9_-]{20,})', link) or _re.fullmatch(r'([A-Za-z0-9_-]{20,})', link)
+    if not m:
+        raise UserError('Jadval havolasini to‘liq nusxalang (https://docs.google.com/spreadsheets/d/… ).')
+    sid = m.group(1)
+    raw = b''
+    f = request.files.get('sa_file')
+    if f and f.filename:
+        raw = f.read(20000)
+    elif (request.form.get('sa_json') or '').strip():
+        raw = request.form['sa_json'].strip().encode()
+    email = get_setting('google_sheets_email') or ''
+    if raw:
+        try:
+            info = json.loads(raw.decode('utf-8-sig'))
+        except ValueError:
+            raise UserError('JSON faylni o‘qib bo‘lmadi — Google Cloud’dan yuklangan .json faylni tanlang.')
+        if not isinstance(info, dict) or info.get('type') != 'service_account' or not info.get('client_email') \
+                or 'PRIVATE KEY' not in (info.get('private_key') or ''):
+            raise UserError('Bu xizmat akkaunti (service account) kaliti emas. Google Cloud → IAM → Service accounts → '
+                            'Keys → Add key → JSON.')
+        path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = path.with_suffix('.tmp')
+        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd, 'wb') as out:
+            out.write(json.dumps(info).encode())
+        os.replace(tmp, path)
+        email = info['client_email']
+    elif not path.exists():
+        raise UserError('Xizmat akkaunti JSON faylini tanlang.')
+    put('google_sheets_id', sid); put('google_sheets_email', email)
+    audit(db, actor, 'UPDATE', 'integration', 'google_sheets', new={'sheet_id': sid, 'client_email': email})
+    return (f'Saqlandi. Endi jadvalda “Share / Поделиться” → {email} ni “Editor” qilib qo‘shing, keyin “Sinov” tugmasini '
+            'bosing.')
+
+
+def _sheets_state():
+    from ..outbox import sheets_conf
+    cfg = current_app.config['SURXON']
+    sid, sa = sheets_conf()
+    return {'on': bool(sid and sa), 'env': bool(cfg.GOOGLE_SHEETS_ID and cfg.GOOGLE_SERVICE_ACCOUNT_FILE),
+            'id': sid or get_setting('google_sheets_id') or '', 'email': get_setting('google_sheets_email') or '',
+            'test': cfg.APP_MODE == 'test', 'prefix': get_setting('sheets_prefix') or ''}
+
+
 def render(new_key=None, message=None):
     clients = q('''SELECT c.*, u.full_name created_name FROM integration_clients c LEFT JOIN users u ON u.id=c.created_by
                    ORDER BY c.active DESC, c.id DESC''')
@@ -189,6 +255,7 @@ def render(new_key=None, message=None):
                            channels=q("SELECT * FROM tg_chats WHERE type='channel' ORDER BY last_seen_at DESC"),
                            gmaps_tail=(lambda k: ('…' + k[-4:]) if k else '')(get_setting('google_maps_key') or ''),
                            gmaps_env=bool(current_app.config['SURXON'].GOOGLE_MAPS_KEY),
+                           sheets=_sheets_state(),
                            chosen={'archive': get_setting('tg_archive_chat_id'), 'report': get_setting('tg_report_chat_id')},
                            bot_user=current_app.config['SURXON'].TELEGRAM_BOT_USERNAME)
 

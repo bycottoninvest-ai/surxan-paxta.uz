@@ -52,6 +52,27 @@
   </section>
 
   <section class="card s12">
+    <div class="card-h"><h3>{{ icon('list') }} Google Sheets (pul yozuvlarining ikkinchi nusxasi)</h3>
+      <span class="badge {{ 'b-green' if sheets.on else 'b-gray' }}" style="margin-left:auto">{{ ('Ulangan' ~ (' (server .env)' if sheets.env else '')) if sheets.on else 'Ulanmagan' }}</span></div>
+    <div class="card-b">
+      <p class="small">Tizim kassa kirim-chiqimlari, to‘lovlar, nakladnoylar va umumiy hisobni jadvalga <b>o‘zi</b> yozib boradi (asl hisob shu saytda qoladi). Sizning qo‘lda qilgan varaqlaringiz va formulalaringizga tegmaydi — tizim faqat o‘z nomli varaqlarini (<code>{{ sheets.prefix }}…</code>) yaratadi. Internet yo‘q paytdagi yozuvlar navbatda turadi va keyin yuboriladi.</p>
+      {% if sheets.test %}<div class="small" style="color:var(--orange,#b45309)">Test nusxa — Google Sheets’ga ulanmaydi.</div>{% endif %}
+      {% if sheets.email %}<div class="small mb">Xizmat akkaunti: <b style="user-select:all">{{ sheets.email }}</b> — jadvalda <b>Share → Editor</b> qilib qo‘shilgan bo‘lsin.</div>{% endif %}
+      {% if not sheets.env %}
+      <form method="post" enctype="multipart/form-data" class="form">{{ csrf() }}<input type="hidden" name="action" value="sheets_save">
+        <div class="f"><label>1. Jadval havolasi</label><input class="input" name="sheet" value="{{ ('https://docs.google.com/spreadsheets/d/' ~ sheets.id) if sheets.id }}" placeholder="https://docs.google.com/spreadsheets/d/…" required></div>
+        <div class="f"><label>2. Xizmat akkaunti kaliti (.json fayl){% if sheets.email %} — faqat almashtirish uchun{% endif %}</label><input type="file" name="sa_file" accept=".json,application/json"></div>
+        <div class="f"><div class="tiny muted">Kalit serverda yopiq faylda saqlanadi va qayta ko‘rsatilmaydi. Uni chatga yoki boshqa joyga yubormang.</div></div>
+        <div class="f"><button class="btn btn-primary" style="width:auto">Saqlash</button></div></form>
+      {% endif %}
+      {% if sheets.on %}<div class="row mt-s" style="gap:8px">
+        <form method="post">{{ csrf() }}<input type="hidden" name="action" value="test_sheets"><button class="btn btn-light btn-sm">Sinov (jadvalga bitta qator yozish)</button></form>
+        {% if not sheets.env %}<form method="post" data-confirm="Google Sheets uzilsinmi?">{{ csrf() }}<input type="hidden" name="action" value="sheets_clear"><button class="btn btn-ghost btn-sm">Uzish</button></form>{% endif %}
+      </div>{% endif %}
+    </div>
+  </section>
+
+  <section class="card s12">
     <div class="card-h"><h3>{{ icon('telegram') }} Telegram kanallari (arxiv va hisobot)</h3></div>
     <div class="card-b">
       <p class="small">Botni{% if bot_user %} (<b>@{{ bot_user }}</b>){% endif %} kanalga <b>administrator</b> qiling, keyin o‘sha kanalga istalgan bitta xabar yozing (masalan “salom”) — kanal shu ro‘yxatda paydo bo‘ladi (sahifani yangilang). Keyin uning vazifasini tanlang. Bot kanal xabarlarining matnini saqlamaydi.</p>
