@@ -37,7 +37,30 @@ def home():
     return render_template('rahbar_home.html', **_ctx(
         cot=D.cotton(year, a, b), now=D.trips_now(), cash=D.cash(a, b), wages=D.wages(year, a, b), fuel=D.fuel(a, b),
         checks=checks, red=sum(1 for c in checks if c['level'] == 'red'), feed=D.feed(8), staff=_staff_count(),
-        fleet=_fleet_count()))
+        fleet=_fleet_count(), live=_live(8)))
+
+
+def _live(limit):
+    from ..security import can
+    if not can('kuzatuv.view'):
+        return None
+    from .. import livefeed
+    return {'cards': livefeed.cards(limit=limit), 'status': livefeed.status()}
+
+
+@bp.get('/rahbar/kuzatuv')
+@perm_required('kuzatuv.view')
+def live():
+    from .. import livefeed
+    from ..utils import parse_date, today_str, UserError
+    try:
+        day = parse_date(request.args.get('sana') or today_str())
+    except UserError:
+        day = today_str()
+    src = request.args.get('manba')
+    sources = ('telegram',) if src == 'telegram' else ('event',) if src == 'tizim' else ('telegram', 'event')
+    return render_template('rahbar_live.html', **_ctx(cards=livefeed.cards(day, limit=120, sources=sources),
+                                                       status=livefeed.status(day), day=day, src=src or ''))
 
 
 def _fleet_count():

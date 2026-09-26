@@ -806,13 +806,29 @@ def tv_data():
     return resp
 
 
+@bp.get('/tv/kuzatuv/<int:item_id>')
+def tv_kuzatuv(item_id):
+    """Thumbnail of a photo/video sent through the bot (the video file itself is never served to the TV)."""
+    ok, _ = _tv_allowed()
+    if not ok:
+        abort(403)
+    it = q('SELECT thumb_path FROM media_items WHERE id=? AND voided_at IS NULL AND thumb_path IS NOT NULL', (item_id,), one=True)
+    if not it:
+        abort(404)
+    from flask import send_from_directory
+    resp = make_response(send_from_directory(current_app.config['SURXON'].UPLOAD_DIR, it['thumb_path'], max_age=3600))
+    resp.headers['Cache-Control'] = 'private, max-age=3600'
+    return resp
+
+
 @bp.get('/tv/foto/<int:photo_id>')
 def tv_photo(photo_id):
     """Thumbnails of field / trailer photos only (never cash, fuel or document photos)."""
     ok, _ = _tv_allowed()
     if not ok:
         abort(403)
-    p = q("SELECT * FROM photos WHERE id=? AND voided_at IS NULL AND category IN ('trailer','field')", (photo_id,), one=True)
+    p = q("SELECT * FROM photos WHERE id=? AND voided_at IS NULL AND category IN ('trailer','cotton','field','combine')",
+          (photo_id,), one=True)
     if not p:
         abort(404)
     from flask import send_from_directory

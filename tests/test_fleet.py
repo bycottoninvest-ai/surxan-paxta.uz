@@ -211,3 +211,27 @@ def test_field_history_and_where_fuel_was_used(app, world):
     assert world['juma'].get('/rahbar/dalalar').status_code == 302
     # the keeper sees their own record, but not the GPS analysis
     assert 'qayerda ishlatildi' not in yq.get(f'/yoqilgi/amal/{oid}').get_data(as_text=True)
+
+
+def test_machine_standing_long_asks_its_driver_for_a_video_once(app, world, monkeypatch):
+    import surxon.telegram_bot as tb
+    sent = []
+    monkeypatch.setattr(tb, 'tg_api', lambda m, p=None: sent.append((m, p)) or {'ok': True, 'result': {'message_id': 7}})
+    imei = '359339075088888'
+    with app.app_context():
+        get_db().execute('UPDATE fields SET polygon_json=? WHERE code=?', (json.dumps(POLY), 'D-04'))
+        get_db().execute("INSERT INTO settings(key, value, updated_at) VALUES ('fleet_work_hours','00:00-23:59','x')")
+        fleet.store_event(imei, {'kind': 'login', 'imei': imei})
+        get_db().execute('''INSERT INTO tg_members(full_name, role_label, telegram_id, status, source, dm_ok, equipment_id, created_at)
+                            VALUES ('Rustam','Traktorchi','777','FAOL','admin',1,?,'2026-01-01')''', (world['eq']['T-01'],))
+    world['admin'].post('/admin/texnikalar', {'id': world['eq']['T-01'], 'kind': 'traktor', 'code': 'T-01', 'active': '1', 'imei': imei})
+    now = datetime.now(timezone.utc)
+    feed(app, imei, [{'kind': 'gps', 'lat': 42.305, 'lon': 59.605, 'speed': 0.0, 'course': 0, 'valid': True, 'acc': 1,
+                      'at': now - timedelta(minutes=mm)} for mm in (50, 40, 30, 20, 10, 0)])
+    from surxon import kuzatuv as K
+    with app.app_context():
+        assert K.auto_idle_requests() == 1 and K.auto_idle_requests() == 0          # once per stop
+        r = q('SELECT * FROM media_requests', one=True)
+        assert r['event'] == 'Texnika uzoq turibdi' and r['kind'] == 'video' and r['context'].startswith(f'idle:{world["eq"]["T-01"]}:')
+    assert [p['chat_id'] for m, p in sent if m == 'sendMessage'] == ['777']
+    assert 'T-01' in sent[-1][1]['text'] and 'turibdi' in sent[-1][1]['text']

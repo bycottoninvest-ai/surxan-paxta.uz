@@ -10,7 +10,7 @@ from contextlib import contextmanager
 
 from flask import current_app, g
 
-SCHEMA_VERSION = 12
+SCHEMA_VERSION = 13
 
 SCHEMA = r'''
 CREATE TABLE IF NOT EXISTS brigadiers (
@@ -972,6 +972,13 @@ def migrate(db):
     _add_column(db, 'equipment', 'norm_idle_lph', 'REAL')
     _add_column(db, 'equipment', 'work_hours', 'TEXT')
     _add_column(db, 'fuel_ops', 'purpose', 'TEXT')      # what the fuel is for: Paxta terish / Shudgor / Lazer …
+    # v13: what a photo/video request is about (a group, a field, a machine, an event) and where the answer belongs
+    _add_column(db, 'media_requests', 'context', 'TEXT')        # group:agronom / field:3 / equipment:5 / brigade:2 / idle:5:…
+    _add_column(db, 'media_requests', 'event', 'TEXT')          # “Texnika uzoq turibdi” … (shown on the card)
+    _add_column(db, 'media_requests', 'batch', 'TEXT')          # one “ask” by the director = one batch (for its status)
+    _add_column(db, 'media_items', 'field_id', 'INTEGER REFERENCES fields(id)')
+    _add_column(db, 'media_items', 'equipment_id', 'INTEGER REFERENCES equipment(id)')
+    db.execute('CREATE INDEX IF NOT EXISTS idx_media_req_context ON media_requests(context)')
     db.execute('CREATE UNIQUE INDEX IF NOT EXISTS uq_trackers_eq ON trackers(equipment_id) WHERE equipment_id IS NOT NULL')
     # Future column changes go here as: if version < N: ALTER TABLE ...
     db.execute('UPDATE schema_version SET version=? WHERE version < ?', (SCHEMA_VERSION, SCHEMA_VERSION))

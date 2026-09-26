@@ -1,10 +1,16 @@
 {% extends 'base.html' %}
 {% from 'macros.html' import icon with context %}
+{% from 'partials/live_cards.html' import live_cards, live_status with context %}
 {% set page_title = 'Direktor paneli' %}
 {% block content %}
 <div class="d-wrap rb">
   {% with rb_title='Direktor paneli' %}{% include 'partials/rb_head.html' %}{% endwith %}
   <form class="hm-search" method="get" action="{{ url_for('main.search') }}">{{ icon('search','sm') }}<input name="q" placeholder="Texnika, reys, nakladnoy, dala, ishchi…" autocomplete="off"></form>
+  {% if live is not none %}<div class="lv-head"><b>📸 Jonli kuzatuv</b>
+    <span>{% if can('kuzatuv.request') %}<a class="btn btn-primary" href="{{ url_for('kuzatuv.ask') }}">+ So‘rash</a>{% endif %}
+      <a class="btn btn-ghost" href="{{ url_for('rahbar.live') }}">Barchasi</a></span></div>
+  {% if live.status.asked %}{{ live_status(live.status) }}{% endif %}
+  {% if live.cards %}{{ live_cards(live.cards, compact=True) }}{% else %}<div class="small muted">Bugun hali rasm/video kelmagan.</div>{% endif %}{% endif %}
   <div class="rb-grid">
     <a class="rb-card rb-green" href="{{ url_for('rahbar.cotton', period=period) }}">
       <div class="rb-h">{{ icon('cotton') }} PAXTA <small>{{ period_label }}</small></div>
@@ -64,4 +70,4 @@
   <a class="hm-more" href="{{ url_for('main.dashboard', view='full') }}">Kompyuter ko‘rinishidagi to‘liq dashboard →</a>
 </div>
 {% endblock %}
-{% block scripts %}{% include 'partials/rb_poll.html' %}{% endblock %}
+{% block scripts %}{% include 'partials/rb_poll.html' %}<script src="{{ url_for('static', filename='js/livefeed.js') }}?v={{ version }}"></script>{% endblock %}

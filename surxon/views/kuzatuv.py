@@ -53,6 +53,25 @@ def home():
                            bot_ok=bool(cfg.TELEGRAM_BOT_TOKEN), groups=q('SELECT * FROM tg_chats WHERE is_work=1'))
 
 
+@bp.route('/kuzatuv/sorash', methods=['GET', 'POST'])
+@perm_required('kuzatuv.request')
+def ask():
+    """“+ Rasm/video so‘rash” (linked from the director panel): pick who — a group, a field, a brigade, a person —
+    and what; the bot asks each of them privately."""
+    if request.method == 'POST':
+        r = K.ask(post_actor(), request.form.get('target', ''), quick=request.form.get('quick', 'holat'),
+                  text=request.form.get('text', '').strip(), kind=request.form.get('kind', 'any'),
+                  deadline_min=request.form.get('deadline_min') or None)
+        msg = f'{r["label"]}: {r["asked"]} kishiga so‘rov yuborildi'
+        if r['sent'] < r['asked']:
+            msg += f' ({r["asked"] - r["sent"]} tasi botni ochganda o‘zi boradi)'
+        return done(msg + '.', url_for('rahbar.live'))
+    from .. import director as D
+    from ..utils import now_str
+    return render_template('rahbar_ask.html', choices=K.target_choices(), quick=K.QUICK_LABELS,
+                           preset=request.args.get('kimga', ''), stamp=D.stamp(), loaded_at=now_str())
+
+
 @bp.post('/kuzatuv/fayl/<int:item_id>/yashirish')
 @perm_required('kuzatuv.manage')
 def void(item_id):

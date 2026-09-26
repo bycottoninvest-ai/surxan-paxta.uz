@@ -1,0 +1,18 @@
+{% extends 'base.html' %}
+{% from 'macros.html' import icon, empty with context %}
+{% from 'partials/live_cards.html' import live_cards, live_status with context %}
+{% set page_title = 'Jonli kuzatuv' %}
+{% block content %}
+<div class="d-wrap rb">
+  {% with rb_title='Jonli kuzatuv', rb_back=url_for('rahbar.home'), rb_no_period=True %}{% include 'partials/rb_head.html' %}{% endwith %}
+  <div class="lv-head"><form method="get" class="lv-day"><input type="date" name="sana" value="{{ day }}" onchange="this.form.submit()">
+      {% if src %}<input type="hidden" name="manba" value="{{ src }}">{% endif %}</form>
+    {% if can('kuzatuv.request') %}<a class="btn btn-primary" href="{{ url_for('kuzatuv.ask') }}">+ Rasm/video so‘rash</a>{% endif %}</div>
+  <div class="rb-tabs"><a class="{{ 'on' if not src }}" href="?sana={{ day }}">Hammasi</a><a class="{{ 'on' if src == 'telegram' }}" href="?sana={{ day }}&manba=telegram">Xodimlardan (bot)</a><a class="{{ 'on' if src == 'tizim' }}" href="?sana={{ day }}&manba=tizim">Tizim hodisalari</a></div>
+  {{ live_status(status) }}
+  {% if status.late_people %}<div class="hm-msg warn">Hali yubormaganlar: {% for p in status.late_people %}{{ p.full_name }}{% if p.role_label %} ({{ p.role_label }}){% endif %}{{ ', ' if not loop.last }}{% endfor %}</div>{% endif %}
+  {% if cards %}{{ live_cards(cards) }}{% else %}{{ empty('Hali rasm/video kelmagan', 'camera') }}{% endif %}
+  <div class="tiny muted">Bu yerda faqat haqiqiy rasm va videolar: xodimlar bot orqali yuborgani va tizim hodisalarida olingan rasmlar (telashka to‘ldi, tarozi, punkt, solyarka). Telegram yozishmalari ko‘rsatilmaydi. Video faqat ▶ bosilganda yuklanadi.</div>
+</div>
+{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='js/livefeed.js') }}?v={{ version }}"></script>{% endblock %}

@@ -325,7 +325,7 @@ def live():
         d = {'id': e['id'], 'code': e['code'], 'kind': e['kind'], 'operator': e['operator_name'] or '',
              'lat': e['last_lat'], 'lon': e['last_lon'], 'speed': round(e['last_speed'] or 0), 'course': e['last_course'] or 0,
              'acc': e['last_acc'], 'at': (e['last_fix_at'] or e['last_seen'] or '')[11:16], 'field': None,
-             'state': 'none', 'label': 'Hali joylashuv kelmagan', 'still_min': 0, 'alert': None}
+             'state': 'none', 'label': 'Hali joylashuv kelmagan', 'still_min': 0, 'alert': None, 'since': None}
         if e['last_lat'] is None:
             out.append(d)
             continue
@@ -350,6 +350,7 @@ def live():
             since = _since_still(e['id'], e['last_lat'], e['last_lon'])
             mins = int((n - _dt(since)).total_seconds() // 60) if since else 0
             d['still_min'] = mins
+            d['since'] = since
             where = f' · {f[1]}' if f else ''
             if e['last_acc'] == 1:
                 d.update(state='idle', label=f'Motor yoniq turibdi{where}' + (f' · {_dur(mins)}' if mins >= 5 else ''))

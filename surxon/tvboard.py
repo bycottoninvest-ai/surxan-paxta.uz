@@ -106,6 +106,32 @@ def photos(limit=3):
                  ORDER BY p.id DESC LIMIT ?''', (limit,))]
 
 
+TV_EVENT_CATEGORIES = ('trailer', 'cotton', 'field', 'combine')
+
+
+def live(limit=6):
+    """“Bugungi real voqealar” for the TV: bot photos/videos and field/trailer event photos (never fuel, punkt or
+    document photos). Thumbnails only — a TV never downloads a video."""
+    from . import livefeed
+    out = []
+    for c in livefeed.cards(limit=limit * 2):
+        m = c['media'][0]
+        if c['src'] == 'telegram':
+            if not m['thumb']:
+                continue
+            url = f'/tv/kuzatuv/{m["id"]}'
+        else:
+            cat = q('SELECT category FROM photos WHERE id=?', (m['photo_id'],), one=True)
+            if not cat or cat['category'] not in TV_EVENT_CATEGORIES:
+                continue
+            url = f'/tv/foto/{m["photo_id"]}'
+        out.append({'url': url, 'video': m['kind'] == 'video', 'place': c['place'], 'title': c['title'], 'time': c['time'],
+                    'n': c['photos'] + c['videos']})
+        if len(out) >= limit:
+            break
+    return out
+
+
 def feed(limit=10):
     """The director feed without anything about money."""
     return [{'time': x['time'], 'text': x['text'], 'icon': x['icon']} for x in D.feed(limit * 2)
@@ -150,6 +176,6 @@ def build(year):
         'brigades': brigades(day), 'hourly': hourly(day),
         'fuel': None if fuel is None else {'taken': fuel['taken_l'], 'given': fuel['given_l'], 'flagged': fuel['flagged']},
         'workers': top_workers(day) if show_workers else None,
-        'photos': photos(), 'feed': feed(),
+        'photos': photos(), 'live': live(), 'feed': feed(),
         'weather': {'lat': get_setting('weather_lat'), 'lon': get_setting('weather_lon'), 'place': get_setting('weather_place')},
     }

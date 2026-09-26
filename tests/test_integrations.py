@@ -117,6 +117,19 @@ def test_tv_access_and_no_private_data(app, world):
     body = str(data)
     assert data['kpi']['net'] == 100
     assert '777777' not in body and 'amount' not in body and 'so‘m' not in body     # never money on the TV
+    # “Bugungi real voqealar”: the trailer photo of the day, served to the TV as a thumbnail
+    assert data['live'] and data['live'][0]['url'].startswith('/tv/foto/') and tv.get(data['live'][0]['url']).status_code == 200
+    with app.app_context():
+        from surxon.db import get_db
+        get_db().execute('''INSERT INTO tg_members(full_name, status, source, created_at) VALUES ('Ali','FAOL','admin','x')''')
+        pid = q("SELECT thumb_path FROM photos WHERE category='trailer' LIMIT 1", one=True)['thumb_path']
+        from surxon.utils import now_str
+        get_db().execute('''INSERT INTO media_items(member_id, kind, path, thumb_path, created_at) VALUES
+                            ((SELECT MAX(id) FROM tg_members), 'video', 'kuzatuv/x.mp4', ?, ?)''', (pid, now_str()))
+        iid = q('SELECT MAX(id) i FROM media_items', one=True)['i']
+    live = tv.get('/tv/data.json').get_json()['live']
+    assert any(x['video'] and x['url'] == f'/tv/kuzatuv/{iid}' for x in live)
+    assert tv.get(f'/tv/kuzatuv/{iid}').status_code == 200 and anon.get(f'/tv/kuzatuv/{iid}').status_code == 403
     world['admin'].post('/admin/sozlamalar', {'set_tv_show_workers': '0'})
     assert 'Gulbahor' not in str(tv.get('/tv/data.json').get_json())            # names can be switched off
     assert world['juma'].get('/tv/data.json').status_code == 200   # logged-in users need no key

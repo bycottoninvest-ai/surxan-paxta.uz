@@ -17,7 +17,12 @@ Baza avtomatik yangilanadi (sxema v9): `field_imports, field_assignments` va `fi
 Eski yozuvlar o'zgarmaydi. Ilova ishga tushganda migratsiyadan oldin `data/` ichida `*.oldin-v*` zaxira nusxa oladi.
 
 ## v2.18.0 da nima o'zgardi
-Sxema v11 → v12 (ishga tushganda `*.oldin-v11-*.bak`): yangi jadvallar `trackers, vehicle_positions, vehicle_days,
+Sxema v11 → v13 (v12: GPS; v13: `media_requests.context/event/batch`, `media_items.field_id/equipment_id`).
+- Jonli kuzatuv: direktor "+ Rasm/video so'rash" (`/kuzatuv/sorash`) — guruh (agronom, brigadir, haydovchi, kombaynchi,
+  hisobchi, tarozi, punkt, yoqilg'i), dala (hozir o'sha dalada turganlar ham), brigada yoki xodim; bot har biriga yozadi.
+  Muddat o'tsa bot bir marta eslatadi; baribir kelmasa bitta umumiy ogohlantirish. GPS texnika uzoq tursa haydovchisidan video.
+  Lenta: dashboard, direktor paneli (`/rahbar/kuzatuv`), TV "Bugungi real voqealar" (faqat eskiz, video TV'ga yuklanmaydi).
+Avvalgi v12 qismi: (ishga tushganda `*.oldin-v11-*.bak`): yangi jadvallar `trackers, vehicle_positions, vehicle_days,
 vehicle_works`; ustunlar `equipment.norm_field_lph/norm_road_lpkm/norm_idle_lph/work_hours`, `fuel_ops.purpose`.
 - GPS treker (GT06): yangi konteyner `gps` (`python -m surxon.gt06`), TCP port **5023** ochiq bo'lishi kerak
   (Hetzner Firewall bo'lsa: Inbound TCP 5023 qo'shing). `docker compose up -d --build` uni o'zi ishga tushiradi.

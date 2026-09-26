@@ -221,7 +221,8 @@ def _deadline(minutes):
     return max(10, min(minutes, 24 * 60))
 
 
-def create_requests(actor, member_ids, text, *, kind='any', deadline_min=None, rule_id=None, slot=None, db=None):
+def create_requests(actor, member_ids, text, *, kind='any', deadline_min=None, rule_id=None, slot=None, db=None,
+                    context=None, event=None, batch=None):
     """Insert one request per member (inside a transaction) — sending happens after commit (deliver)."""
     text = clean_text(text, 300)
     if len(text) < 3:
@@ -241,9 +242,10 @@ def create_requests(actor, member_ids, text, *, kind='any', deadline_min=None, r
                 continue
             ts = now()
             cur = db.execute('''INSERT OR IGNORE INTO media_requests(member_id, text, kind, rule_id, slot, requested_by,
-                                    created_at, due_at) VALUES (?,?,?,?,?,?,?,?)''',
+                                    created_at, due_at, context, event, batch) VALUES (?,?,?,?,?,?,?,?,?,?,?)''',
                              (mid, text, kind, rule_id, slot, actor.user_id if actor else None,
-                              ts.strftime('%Y-%m-%d %H:%M:%S'), (ts + timedelta(minutes=mins)).strftime('%Y-%m-%d %H:%M:%S')))
+                              ts.strftime('%Y-%m-%d %H:%M:%S'), (ts + timedelta(minutes=mins)).strftime('%Y-%m-%d %H:%M:%S'),
+                              context, clean_text(event or '', 80) or None, batch))
             if cur.rowcount:
                 created.append(cur.lastrowid)
                 audit(db, actor, 'CREATE', 'media_request', cur.lastrowid,
@@ -362,21 +364,59 @@ def deliver_pending(limit=30, member_id=None):
 
 
 def mark_late():
-    """Past the deadline without an answer → KECHIKDI (+ one line in the report channel)."""
+    """Past the deadline without an answer → KECHIKDI, and the bot reminds the person once. If there is still nothing
+    after the grace time, ONE grouped alert goes to the report channel and the managers: “3 kishi hali yubormadi”."""
     with tx() as db:
-        rows = db.execute('''SELECT r.*, m.full_name, m.role_label FROM media_requests r JOIN tg_members m ON m.id=r.member_id
-                             WHERE r.status='KUTILMOQDA' AND r.due_at < ?''', (now_str(),)).fetchall()
-        if not rows:
-            return 0
-        db.execute("UPDATE media_requests SET status='KECHIKDI' WHERE status='KUTILMOQDA' AND due_at < ?", (now_str(),))
-        if get_bool('kuzatuv_late_alert', db):
-            from .reporting import feed
-            for r in rows:
-                feed(db, f'late:{r["id"]}', f'⏰ Kuzatuv: javob kelmadi — {r["full_name"]}'
-                                           + (f' ({r["role_label"]})' if r['role_label'] else '')
-                                           + f'\n“{r["text"]}” · {r["created_at"][11:16]} da so‘ralgan')
-                db.execute('UPDATE media_requests SET late_alerted=1 WHERE id=?', (r['id'],))
-        return len(rows)
+        rows = db.execute("""SELECT * FROM media_requests WHERE status='KUTILMOQDA' AND due_at < ?""", (now_str(),)).fetchall()
+        if rows:
+            db.execute("UPDATE media_requests SET status='KECHIKDI' WHERE status='KUTILMOQDA' AND due_at < ?", (now_str(),))
+    if rows and get_bool('kuzatuv_auto_remind'):
+        for r in rows:
+            if not r['reminded_at'] and r['sent_at']:
+                deliver(r['id'], reminder=True)
+    grace = int(float(get_setting('kuzatuv_grace_min') or 30))
+    limit = (now().replace(tzinfo=None) - timedelta(minutes=grace)).strftime('%Y-%m-%d %H:%M:%S')
+    text = None
+    with tx() as db:
+        due = db.execute("""SELECT r.*, m.full_name, m.role_label FROM media_requests r JOIN tg_members m ON m.id=r.member_id
+                            WHERE r.status='KECHIKDI' AND r.late_alerted=0 AND COALESCE(r.reminded_at, r.due_at) < ?
+                            ORDER BY r.id""", (limit,)).fetchall()
+        if due:
+            db.execute(f"UPDATE media_requests SET late_alerted=1 WHERE id IN ({','.join('?' * len(due))})", [r['id'] for r in due])
+            if get_bool('kuzatuv_late_alert', db):
+                from .reporting import feed
+                lines = [f'• {r["full_name"]}' + (f' ({r["role_label"]})' if r['role_label'] else '') + f' — “{r["text"]}”'
+                         f' · {r["created_at"][11:16]} da so‘ralgan' for r in due[:15]]
+                text = (f'⏰ Kuzatuv: {len(due)} kishi hali rasm/video yubormadi (eslatmadan keyin ham)\n' + '\n'.join(lines)
+                        + (f'\n… va yana {len(due) - 15} kishi' if len(due) > 15 else ''))
+                feed(db, f'late:{due[0]["id"]}-{due[-1]["id"]}', text)
+    if text:
+        _bot().notify_async(text)
+    return len(rows)
+
+
+def auto_idle_requests():
+    """A machine standing long in working hours → its driver is asked for a video once per stop (setting kuzatuv_auto_idle)."""
+    if not get_bool('kuzatuv_auto_idle'):
+        return 0
+    from . import fleet
+    made = []
+    for m in fleet.live():
+        if not m['alert'] or m['state'] not in ('idle', 'parked') or not m.get('since'):
+            continue
+        ctx = f'idle:{m["id"]}:{m["since"]}'
+        if q('SELECT 1 FROM media_requests WHERE context=?', (ctx,), one=True):
+            continue
+        people = [r['id'] for r in q("SELECT id FROM tg_members WHERE status='FAOL' AND equipment_id=?", (m['id'],))]
+        if not people:
+            continue
+        with tx() as db:
+            made += create_requests(None, people, f'{m["code"]} {m["still_min"]} daqiqadan beri bir joyda turibdi. '
+                                                  'Texnika va joyni ko‘rsatib qisqa video yuboring.',
+                                    kind='video', deadline_min=30, db=db, context=ctx, event='Texnika uzoq turibdi')
+    for rid in made:
+        deliver(rid)
+    return len(made)
 
 
 # ------------------------------------------------------------------ rules (schedule)
@@ -454,6 +494,10 @@ def run_rules(at=None):
 def tick():
     """Called from the outbox worker loop every ~30 s."""
     made = run_rules()
+    try:
+        made += auto_idle_requests()
+    except Exception as exc:      # GPS part must never stop the kuzatuv loop
+        current_app.logger.warning('auto idle requests: %s', exc)
     sent = deliver_pending()
     late = mark_late()
     return {'rule_requests': made, 'delivered': sent, 'late': late}
@@ -535,13 +579,16 @@ def save_incoming(member, message, request=None):
             except Exception:
                 thumb_path = None
     loc = message.get('location') or {}
+    field_id, equipment_id, lat, lon = place_of(db, member, request, loc)
     with tx(db):
         cur = db.execute('''INSERT OR IGNORE INTO media_items(request_id, member_id, kind, path, thumb_path, size_bytes, duration_s,
-                                caption, lat, lon, chat_id, tg_message_id, tg_file_id, tg_file_unique_id, note, created_at)
-                            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
+                                caption, lat, lon, chat_id, tg_message_id, tg_file_id, tg_file_unique_id, note, created_at,
+                                field_id, equipment_id)
+                            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
                          (request['id'] if request else None, member['id'], kind, path, thumb_path, size, f.get('duration'),
-                          clean_text(message.get('caption') or '', 300), loc.get('latitude'), loc.get('longitude'),
-                          str(message['chat']['id']), message.get('message_id'), f.get('file_id'), uniq, note, now_str()))
+                          clean_text(message.get('caption') or '', 300), lat, lon,
+                          str(message['chat']['id']), message.get('message_id'), f.get('file_id'), uniq, note, now_str(),
+                          field_id, equipment_id))
         if not cur.rowcount:
             return None
         mid = cur.lastrowid
@@ -557,6 +604,151 @@ def save_incoming(member, message, request=None):
             enqueue(db, 'telegram_archive', 'copy', f'kuzatuv:{mid}',
                     {'from_chat_id': message['chat']['id'], 'message_id': message.get('message_id'), 'caption': caption})
     return mid
+
+
+def place_of(db, member, request, loc):
+    """Where a photo/video belongs: the request's field/machine, else the person's own, else where their live location
+    (Telegram / app, last 30 min) puts them. GPS: from the message, else that live location."""
+    field_id = equipment_id = None
+    ctx = (request['context'] if request and 'context' in request.keys() else None) or ''
+    kind, _, val = ctx.partition(':')
+    if kind == 'field' and val.isdigit():
+        field_id = int(val)
+    elif kind in ('equipment', 'idle') and val.split(':')[0].isdigit():
+        equipment_id = int(val.split(':')[0])
+    equipment_id = equipment_id or member['equipment_id']
+    lat, lon = loc.get('latitude'), loc.get('longitude')
+    if lat is None:
+        since = (now().replace(tzinfo=None) - timedelta(minutes=30)).strftime('%Y-%m-%d %H:%M:%S')
+        pos = db.execute('''SELECT lat, lon FROM staff_positions WHERE (member_id=? OR (user_id IS NOT NULL AND user_id=?))
+                             AND at>=? ORDER BY id DESC LIMIT 1''', (member['id'], member['user_id'] or -1, since)).fetchone()
+        if pos:
+            lat, lon = pos['lat'], pos['lon']
+    if not field_id and lat is not None:
+        from .fleet import field_at
+        f = field_at(lat, lon)
+        field_id = f[0] if f else None
+    return field_id or member['field_id'], equipment_id, lat, lon
+
+
+# ------------------------------------------------------------------ asking a whole group at once
+
+GROUPS = {   # key: (label, words in the role label, system roles, equipment kind)
+    'agronom': ('Barcha agronomlar', ('agronom',), (), None),
+    'brigadir': ('Barcha brigadirlar', ('brigadir',), ('brigadier',), None),
+    'traktor': ('Barcha traktor haydovchilari', ('traktor', 'haydovchi', 'mexanizator'), ('driver',), 'traktor'),
+    'kombayn': ('Barcha kombaynchilar', ('kombayn',), (), 'kombayn'),
+    'hisobchi': ('Terim hisobchilari', ('hisobchi',), ('tally',), None),
+    'tarozi': ('Tarozi xodimlari', ('tarozi',), ('scale',), None),
+    'punkt': ('Punkt xodimlari', ('punkt',), ('station',), None),
+    'yoqilgi': ('Yoqilg‘i mas’ullari', ('yoqilg', 'solyarka'), ('fuel',), None),
+}
+GROUP_TEXT = {
+    'agronom': 'Hozir dalada nima bo‘layapti? 20–30 soniyalik video yuboring.',
+    'brigadir': 'Terim jarayonidan rasm yoki video yuboring.',
+    'traktor': 'Texnika va bajarilayotgan ishni ko‘rsatib video yuboring.',
+    'kombayn': 'Kombaynning hozirgi ish holatini video qilib yuboring.',
+    'hisobchi': 'Terim va telashkaning hozirgi holatini rasmga olib yuboring.',
+    'tarozi': 'Tarozi va kelgan telashkani rasmga olib yuboring.',
+    'punkt': 'Qabul jarayonidan rasm yoki video yuboring.',
+    'yoqilgi': 'Solyarka berilayotgan texnikani rasmga olib yuboring.',
+}
+QUICK = {
+    'holat': 'Hozirgi holatdan rasm yoki qisqa video yuboring.',
+    'terim': 'Terim jarayonini ko‘rsatib rasm yoki video yuboring.',
+    'texnika': 'Texnika va bajarilayotgan ishni ko‘rsatib video yuboring.',
+    'muammo': 'Muammo bo‘lsa, uni ko‘rsatib rasm yoki video yuboring.',
+    'video30': '20–30 soniyalik video yuboring.',
+}
+QUICK_LABELS = {'holat': 'Hozirgi holatni yuboring', 'terim': 'Terimni ko‘rsating', 'texnika': 'Texnika ishini ko‘rsating',
+                'muammo': 'Muammoni ko‘rsating', 'video30': '30 soniyalik video yuboring'}
+
+
+def _in_group(m, key, user_roles, eq_kinds):
+    label, words, roles, eq_kind = GROUPS[key]
+    rl = (m['role_label'] or '').lower()
+    return (any(w in rl for w in words) or (m['user_id'] and user_roles.get(m['user_id']) in roles)
+            or (eq_kind and m['equipment_id'] and eq_kinds.get(m['equipment_id']) == eq_kind))
+
+
+def group_members(key):
+    user_roles = {r['id']: r['role'] for r in q('SELECT id, role FROM users')}
+    eq_kinds = {r['id']: r['kind'] for r in q('SELECT id, kind FROM equipment')}
+    return [m for m in q("SELECT * FROM tg_members WHERE status='FAOL' ORDER BY full_name") if _in_group(m, key, user_roles, eq_kinds)]
+
+
+def field_members(field_id):
+    """People of a field: assigned to it, its brigadier, or standing in it now (live location, last 30 min)."""
+    f = q('SELECT id, brigadier_id FROM fields WHERE id=?', (field_id,), one=True)
+    if not f:
+        return []
+    out = {m['id']: m for m in q("SELECT * FROM tg_members WHERE status='FAOL' AND field_id=?", (field_id,))}
+    if f['brigadier_id']:
+        for m in q('''SELECT m.* FROM tg_members m JOIN users u ON u.id=m.user_id WHERE m.status='FAOL'
+                      AND u.role='brigadier' AND u.brigadier_id=?''', (f['brigadier_id'],)):
+            out[m['id']] = m
+    from . import staffmap
+    for p in staffmap.people(hours=1):
+        if not p['stale'] and p['field']:
+            code = q('SELECT code FROM fields WHERE id=?', (field_id,), one=True)['code']
+            if p['field'] == code:
+                col, val = ('member_id', int(p['key'][1:])) if p['key'].startswith('m') else ('user_id', int(p['key'][1:]))
+                for m in q(f"SELECT * FROM tg_members WHERE status='FAOL' AND {'id' if col == 'member_id' else 'user_id'}=?", (val,)):
+                    out[m['id']] = m
+    return sorted(out.values(), key=lambda m: m['full_name'])
+
+
+def brigade_members(brigadier_id):
+    ids = {}
+    for f in q('SELECT id FROM fields WHERE brigadier_id=? AND active=1', (brigadier_id,)):
+        for m in q("SELECT * FROM tg_members WHERE status='FAOL' AND field_id=?", (f['id'],)):
+            ids[m['id']] = m
+    for m in q('''SELECT m.* FROM tg_members m JOIN users u ON u.id=m.user_id WHERE m.status='FAOL'
+                  AND u.brigadier_id=?''', (brigadier_id,)):
+        ids[m['id']] = m
+    return sorted(ids.values(), key=lambda m: m['full_name'])
+
+
+def resolve_target(target):
+    """'group:agronom' / 'field:3' / 'brigade:2' / 'member:7' → (members, label, context)."""
+    kind, _, val = (target or '').partition(':')
+    if kind == 'group' and val in GROUPS:
+        return group_members(val), GROUPS[val][0], f'group:{val}'
+    if kind in ('field', 'brigade', 'member') and val.isdigit():
+        v = int(val)
+        if kind == 'field':
+            f = q('SELECT code, name FROM fields WHERE id=?', (v,), one=True)
+            return field_members(v), f'{f["code"]} dala' if f else 'Dala', f'field:{v}'
+        if kind == 'brigade':
+            b = q('SELECT name FROM brigadiers WHERE id=?', (v,), one=True)
+            return brigade_members(v), f'{b["name"]} brigadasi' if b else 'Brigada', f'brigade:{v}'
+        m = q("SELECT * FROM tg_members WHERE id=? AND status='FAOL'", (v,), one=True)
+        return ([m] if m else []), (m['full_name'] if m else 'Xodim'), (f'equipment:{m["equipment_id"]}' if m and m['equipment_id'] else f'member:{v}')
+    raise UserError('Kimdan so‘rashni tanlang.')
+
+
+def ask(actor, target, quick='holat', text='', kind='any', deadline_min=None):
+    """The director's one-tap “ask”: every person of the target gets the request privately from the bot."""
+    members_, label, context = resolve_target(target)
+    if not members_:
+        raise UserError(f'{label}: Telegramga ulangan faol odam topilmadi. Kuzatuv → Odamlar bo‘limida qo‘shing.')
+    if not text:
+        grp = context.split(':')[1] if context.startswith('group:') else None
+        text = GROUP_TEXT.get(grp) if quick == 'holat' and grp else QUICK.get(quick, QUICK['holat'])
+    batch = secrets.token_hex(6)
+    ids = create_requests(actor, [m['id'] for m in members_], text, kind=kind, deadline_min=deadline_min,
+                          context=context, event=label, batch=batch)
+    sent = sum(1 for rid in ids if deliver(rid))
+    return {'label': label, 'asked': len(ids), 'sent': sent, 'batch': batch}
+
+
+def target_choices():
+    """Everything the “ask” form offers, with how many connected people each has."""
+    groups = [(f'group:{k}', v[0], len(group_members(k))) for k, v in GROUPS.items()]
+    return {'groups': groups,
+            'fields': q("SELECT id, code, name FROM fields WHERE active=1 ORDER BY code"),
+            'brigades': q('SELECT id, name FROM brigadiers WHERE active=1 ORDER BY name'),
+            'members': q("SELECT id, full_name, role_label FROM tg_members WHERE status='FAOL' ORDER BY full_name")}
 
 
 def void_item(actor, item_id, reason):

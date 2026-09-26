@@ -98,7 +98,8 @@ def _kuz(day):
     if not can('kuzatuv.view'):
         return None
     from ..kuzatuv import day_stats, latest
-    return {'stats': day_stats(day), 'latest': latest(6)}
+    from .. import livefeed
+    return {'stats': day_stats(day), 'latest': latest(6), 'cards': livefeed.cards(day, limit=8), 'status': livefeed.status(day)}
 
 
 def full_dashboard(year, day, brig, kpi):

@@ -1,0 +1,22 @@
+{# “Jonli kuzatuv” cards: real photos/videos only. Thumbnails load, a video loads only when played.
+   live_cards(cards, compact=False) — compact = one horizontal strip (phone home). #}
+{% macro live_cards(cards, compact=False) -%}
+<div class="lv-grid {{ 'lv-strip' if compact }}">
+  {% for c in cards %}{% set m = c.media[0] %}
+  <div class="lv-card" data-lv="{{ c.media|tojson|forceescape }}">
+    <button type="button" class="lv-thumb" aria-label="Ochish">
+      {% if m.thumb %}<img src="{{ url_for('main.media', path=m.thumb) }}" alt="" loading="lazy">{% else %}<span class="lv-nothumb">{{ '🎥' if m.kind == 'video' else '📷' }}</span>{% endif %}
+      {% if m.kind == 'video' %}<span class="lv-play">▶</span>{% endif %}
+      {% if c.media|length > 1 %}<span class="lv-more">+{{ c.media|length - 1 }}</span>{% endif %}
+    </button>
+    <div class="lv-b"><b>{{ c.place or '—' }} · {{ c.time }}</b><span>{{ c.title }}</span>
+      {% if not compact %}<small>{{ c.who }}</small>{% endif %}
+      <small class="lv-n">{% if c.photos %}📷 {{ c.photos }} rasm{% endif %}{% if c.photos and c.videos %} · {% endif %}{% if c.videos %}🎥 {{ c.videos }} video{% endif %}{% if c.src == 'event' %} · tizim{% endif %}</small></div>
+  </div>
+  {% endfor %}
+</div>
+{%- endmacro %}
+{% macro live_status(st) -%}
+<div class="lv-st"><span>So‘raldi: <b>{{ st.asked }}</b></span><span>Javob berdi: <b class="ok">{{ st.answered }}</b></span><span>Kutilmoqda: <b class="{{ 'warn' if st.waiting }}">{{ st.waiting }}</b></span>
+  {% if st.late %}<span class="lv-late">⏰ {{ st.late }} kishi vaqtida yubormadi</span>{% endif %}</div>
+{%- endmacro %}

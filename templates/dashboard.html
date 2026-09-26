@@ -1,5 +1,6 @@
 {% extends 'base.html' %}
 {% from 'macros.html' import icon, kpi, status, photo_card, empty with context %}
+{% from 'partials/live_cards.html' import live_cards, live_status with context %}
 {% set page_title = 'Bosh sahifa' %}
 {% block topbar_extra %}<div class="chip weather hide-md" data-weather data-lat="{{ weather.lat }}" data-lon="{{ weather.lon }}">{{ icon('sun') }}<div><b data-temp>—</b><br><span>{{ weather.place }}</span></div></div>{% endblock %}
 {% block content %}
@@ -168,10 +169,12 @@
   </section>
 
   {% if kuz %}
-  <!-- kuzatuv: photos/videos people sent on request -->
-  <section class="card s6">
-    <div class="card-h"><h3>{{ icon('video') }} Kuzatuv (bugun)</h3><a class="more" href="{{ url_for('kuzatuv.home') }}">Barchasi</a></div>
-    <div class="card-b">{% include 'partials/k_strip.html' %}</div>
+  <!-- jonli kuzatuv: real photos/videos (bot answers + system events) -->
+  <section class="card s12">
+    <div class="card-h"><h3>{{ icon('video') }} Jonli kuzatuv (bugun)</h3>
+      {% if can('kuzatuv.request') %}<a class="more" href="{{ url_for('kuzatuv.ask') }}">+ So‘rash</a>{% endif %}<a class="more" href="{{ url_for('rahbar.live', sana=day) }}">Barchasi</a></div>
+    <div class="card-b">{{ live_status(kuz.status) }}
+      {% if kuz.cards %}{{ live_cards(kuz.cards) }}{% else %}{{ empty('Hali rasm/video kelmagan', 'camera') }}{% endif %}</div>
   </section>
   {% endif %}
 
@@ -200,7 +203,7 @@
   </section>
 </div>
 {% endblock %}
-{% block scripts %}
+{% block scripts %}<script src="{{ url_for('static', filename='js/livefeed.js') }}?v={{ version }}"></script>
 <link rel="stylesheet" href="{{ url_for('static', filename='vendor/leaflet/leaflet.css') }}">
 <script src="{{ url_for('static', filename='vendor/leaflet/leaflet.js') }}"></script>
 <script src="{{ url_for('static', filename='js/basemap.js') }}?v={{ version }}"></script>

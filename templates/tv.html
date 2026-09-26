@@ -66,6 +66,8 @@ main{display:grid;grid-template-columns:505px 1fr 488px;gap:12px;min-height:0}
 .shots{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;padding:4px 12px 12px;height:calc(100% - 44px)}
 .shots div{border-radius:8px;background:#0b1b30 center/cover;position:relative;border:1px solid #2d5a8f;overflow:hidden}
 .shots div span{position:absolute;left:6px;bottom:6px;background:rgba(0,0,0,.6);padding:2px 8px;border-radius:6px;font-size:14px}
+.shots .play{position:absolute;inset:0;margin:auto;width:54px;height:54px;border-radius:50%;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;font-size:24px;padding-left:4px}
+.shots div span small{font-size:12px;opacity:.85}
 .shots .none{display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:16px}
 table{width:100%;border-collapse:collapse;font-size:18px}
 td,th{padding:5px 8px;text-align:left;white-space:nowrap}th{font-size:15px;color:var(--muted);font-weight:500}
@@ -135,7 +137,7 @@ footer>div{background:linear-gradient(180deg,var(--card2),var(--card));border:1p
           <div><i style="background:#ffc53a"></i>800 – 1 500</div><div><i style="background:#ff4f6d"></i>&lt; 800</div><div><i style="background:#7d8ea5"></i>Terim yo‘q</div></div>
         <div class="mstat" id="mstat"></div>
       </div>
-      <div class="card" style="height:250px;flex:none"><div class="h">Daladan jonli kadrlar <span class="r">Yangilanadi: 30 soniyada</span></div><div class="shots" id="shots"></div></div>
+      <div class="card" style="height:250px;flex:none"><div class="h">Bugungi real voqealar <span class="r">Yangilanadi: 30 soniyada</span></div><div class="shots" id="shots"></div></div>
     </div>
 
     <div class="col">
@@ -232,7 +234,9 @@ footer>div{background:linear-gradient(180deg,var(--card2),var(--card));border:1p
         <div class="kg num">${kg(c.kg)}</div><div class="s">${c.last_at ? 'Oxirgi yozuv ' + esc(c.last_at.slice(5, 16).replace('-', '.')) : 'Hali yozuv yo‘q'}</div></div></div>`).join('')
       : '<div class="empty">Kombayn kiritilmagan</div>';
     drawMap(d);
-    $('shots').innerHTML = [0, 1, 2].map(i => { const p = d.photos[i]; return p ? `<div style="background-image:url('/tv/foto/${p.id}')"><span>${esc(p.code)} · ${esc(p.at)}</span></div>` : '<div class="none">Hali rasm yo‘q</div>'; }).join('');
+    const lv = d.live || [];
+    $('shots').innerHTML = lv.length ? [0, 1, 2].map(i => { const p = lv[i]; return p ? `<div style="background-image:url('${p.url}')">${p.video ? '<b class="play">▶</b>' : ''}<span>${esc(p.place || '')}${p.place ? ' · ' : ''}${esc(p.time)}<br><small>${esc(p.title)}</small></span></div>` : '<div class="none"></div>'; }).join('')
+      : '<div class="none" style="grid-column:1/-1">Hali rasm/video kelmagan</div>';
     const mx = Math.max(1, ...d.brigades.map(b => b.per || 0));
     $('br').innerHTML = d.brigades.length ? d.brigades.slice(0, 5).map((b, i) => `<tr><td><span class="rk rk${i + 1}">${i + 1}</span></td><td>${esc(b.name)}</td><td class="num">${fmt(b.kg)}</td><td class="num">${b.people}</td><td class="num">${fmt(b.per)}</td>
         <td><div class="bar"><i style="width:${Math.round((b.per || 0) / mx * 100)}%;background:${i < 3 ? 'var(--green)' : 'var(--yellow)'}"></i></div></td></tr>`).join('')

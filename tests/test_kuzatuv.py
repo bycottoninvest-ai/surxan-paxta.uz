@@ -113,7 +113,7 @@ def test_invite_link_request_and_photo_answer(app, world):
     assert world['juma'].get(f'/media/{item["path"]}').status_code == 404
     assert world['bux'].get('/kuzatuv').status_code in (302, 403)          # no access: sent back
     dash = world['rahbar'].get('/?view=full').get_data(as_text=True)
-    assert 'Kuzatuv (bugun)' in dash and item['thumb_path'] in dash
+    assert 'Jonli kuzatuv (bugun)' in dash and item['thumb_path'] in dash
 
 
 def test_video_small_and_too_big(app, world):
@@ -214,12 +214,20 @@ def test_schedule_rules_late_and_report_feed(app, world):
         assert K.run_rules(at.replace(hour=12)) == 0                   # 09:00 is too old to catch up at 12:00
         req = q('SELECT * FROM media_requests', one=True)
         assert req['rule_id'] == rule['id'] and req['slot'].endswith('09:00') and req['sent_via'] == 'dm'
-        # past the deadline → KECHIKDI + one line in the report channel
+        # past the deadline → KECHIKDI and the bot reminds the person once (no alert yet)
         get_db().execute("UPDATE media_requests SET due_at='2000-01-01 00:00:00'")
         assert K.mark_late() == 1 and K.mark_late() == 0
-        assert q('SELECT status FROM media_requests', one=True)['status'] == 'KECHIKDI'
-        late = q("SELECT payload_json FROM outbox WHERE channel='telegram_report' AND ref=?", (f'feed:late:{req["id"]}',), one=True)
-        assert 'javob kelmadi — Mirjalol' in json.loads(late['payload_json'])['text']
+        assert q('SELECT status, reminded_at FROM media_requests', one=True)['reminded_at']
+        assert 'ESLATMA' in last_text('900')
+        assert not q("SELECT 1 FROM outbox WHERE channel='telegram_report' AND ref LIKE 'feed:late:%'", one=True)
+        # still nothing after the grace time → one grouped alert
+        get_db().execute("UPDATE media_requests SET reminded_at='2000-01-01 00:10:00'")
+        K.mark_late()
+        late = q("SELECT payload_json FROM outbox WHERE channel='telegram_report' AND ref LIKE 'feed:late:%'", one=True)
+        assert '1 kishi hali rasm/video yubormadi' in json.loads(late['payload_json'])['text']
+        assert 'Mirjalol' in json.loads(late['payload_json'])['text']
+        K.mark_late()
+        assert scalar("SELECT COUNT(*) FROM outbox WHERE channel='telegram_report' AND ref LIKE 'feed:late:%'") == 1
     # a late answer still closes the request
     tg.dm(900, **photo('late1'))
     with app.app_context():
@@ -322,3 +330,45 @@ def test_channels_are_picked_on_the_site_without_reading_posts(app, world, monke
     # only admins may do this
     assert world['rahbar'].post('/admin/integratsiyalar', {'action': 'tg_channel', 'chat_id': '-1003319805350',
                                                             'role': 'report'}).status_code in (302, 403)
+
+
+def test_director_asks_a_group_and_sees_the_live_feed(app, world):
+    admin, rahbar, tg = world['admin'], world['rahbar'], TG(app)
+    with app.app_context():
+        a1 = add_member(admin, 'Sadokat', 'Agronom')
+        a2 = add_member(admin, 'Botir', 'Bosh agronom')
+        t1 = add_member(admin, 'Rustam', 'Traktorchi')
+        get_db().execute("UPDATE fields SET polygon_json=? WHERE code='D-04'",
+                         (json.dumps([[42.30, 59.60], [42.31, 59.60], [42.31, 59.61], [42.30, 59.61]]),))
+    tg.dm(901, first='Sadokat', text=f'/start {a1["link_code"]}')
+    tg.dm(902, first='Botir', text=f'/start {a2["link_code"]}')
+    tg.dm(903, first='Rustam', text=f'/start {t1["link_code"]}')
+    page = rahbar.get('/kuzatuv/sorash').get_data(as_text=True)
+    assert 'Barcha agronomlar (2 kishi)' in page and 'Barcha traktor haydovchilari (1 kishi)' in page
+    SENT.clear()
+    r = rahbar.post('/kuzatuv/sorash', {'target': 'group:agronom', 'quick': 'holat', 'kind': 'video', 'deadline_min': '60'})
+    assert r.get_json()['ok'] and 'Barcha agronomlar: 2 kishiga' in r.get_json()['message']
+    to = sorted(p['chat_id'] for m, p in SENT if m == 'sendMessage')
+    assert to == ['901', '902'] and all('20–30 soniyalik video' in p['text'] for m, p in SENT if m == 'sendMessage')
+    with app.app_context():
+        assert scalar("SELECT COUNT(DISTINCT batch) FROM media_requests WHERE context='group:agronom'") == 1
+    home = rahbar.get('/rahbar').get_data(as_text=True)
+    assert 'Jonli kuzatuv' in home and 'Kutilmoqda: <b class="warn">2</b>' in home
+    # Sadokat shares her live location in D-04 and sends a video → the card says D-04, with the video thumbnail
+    tg.dm(901, first='Sadokat', location={'latitude': 42.305, 'longitude': 59.605, 'live_period': 3600})
+    tg.dm(901, first='Sadokat', video={'file_id': 'vid9', 'file_unique_id': 'v9', 'file_size': 2100, 'duration': 25,
+                                       'mime_type': 'video/mp4', 'thumbnail': {'file_id': 'th9', 'file_unique_id': 't9'}})
+    with app.app_context():
+        it = q('SELECT * FROM media_items', one=True)
+        assert it['field_id'] == world['f']['D-04'] and it['lat'] == 42.305
+    live = rahbar.get('/rahbar/kuzatuv').get_data(as_text=True)
+    assert 'D-04 dala' in live and '🎥 1 video' in live and 'Javob berdi: <b class="ok">1</b>' in live
+    assert 'preload' not in live                                # no <video> on the page: it loads only on play
+    # a field target reaches the person standing in that field right now
+    SENT.clear()
+    r = rahbar.post('/kuzatuv/sorash', {'target': f'field:{world["f"]["D-04"]}', 'quick': 'terim'})
+    assert r.get_json()['ok'] and '1 kishiga' in r.get_json()['message']
+    assert [p['chat_id'] for m, p in SENT if m == 'sendMessage'] == ['901']
+    # nobody connected → a clear message, nothing sent
+    assert not rahbar.post('/kuzatuv/sorash', {'target': 'group:punkt'}).get_json()['ok']
+    assert world['juma'].get('/kuzatuv/sorash').status_code in (302, 403)

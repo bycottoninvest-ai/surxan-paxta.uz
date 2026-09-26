@@ -44,6 +44,9 @@ DEFAULTS = {
     'report_feed': ('1', 'Hisobot kanaliga har bir muhim hodisa (reys tugadi, punkt qabul, kassa kirim/chiqim, kuzatuv '
                          'kechikishi) darhol yoziladi (1/0). Kunlik hisobot bundan tashqari keladi'),
     'kuzatuv_deadline_min': ('120', 'Kuzatuv: rasm/video so‘rovi javobi uchun necha daqiqa beriladi (keyin “KECHIKDI”)'),
+    'kuzatuv_auto_remind': ('1', 'Kuzatuv: muddat o‘tsa bot odamga bir marta avtomatik eslatsin (1/0)'),
+    'kuzatuv_grace_min': ('30', 'Kuzatuv: eslatmadan keyin shuncha daqiqada ham javob bo‘lmasa — rahbarga bitta umumiy ogohlantirish'),
+    'kuzatuv_auto_idle': ('1', 'Kuzatuv: GPS texnika ish vaqtida uzoq tursa, uning haydovchisidan bot video so‘rasin (1/0)'),
     'kuzatuv_late_alert': ('1', 'Kuzatuv: javob kechiksa hisobot kanaliga yozilsin (1/0)'),
     'notify_telegram': ('1', 'Rahbar/Adminga Telegram xabarnomalar (1/0)'),
     'fuel_max_issue_l': ('200', 'Solyarka: bitta berishda shundan ko‘p litr — “tekshirish kerak” (sabab so‘raladi)'),

@@ -1,0 +1,27 @@
+{% extends 'base.html' %}
+{% from 'macros.html' import icon, csrf with context %}
+{% set page_title = 'Rasm/video so‘rash' %}
+{% block content %}
+<div class="d-wrap rb">
+  {% with rb_title='Rasm/video so‘rash', rb_back=url_for('rahbar.live'), rb_no_period=True %}{% include 'partials/rb_head.html' %}{% endwith %}
+  <form method="post" class="d-form ak-form">{{ csrf() }}
+    <label class="d-l">1. Kimdan so‘raymiz?</label>
+    <select name="target" required class="ak-sel">
+      <option value="">— tanlang —</option>
+      <optgroup label="Guruhlar">{% for v, label, n in choices.groups %}<option value="{{ v }}" {{ 'selected' if preset == v }} {{ 'disabled' if not n }}>{{ label }} ({{ n }} kishi)</option>{% endfor %}</optgroup>
+      <optgroup label="Dala (biriktirilgan + hozir o‘sha dalada turganlar)">{% for f in choices.fields %}<option value="field:{{ f.id }}" {{ 'selected' if preset == 'field:' ~ f.id }}>{{ f.code }} · {{ f.name }}</option>{% endfor %}</optgroup>
+      <optgroup label="Brigada">{% for b in choices.brigades %}<option value="brigade:{{ b.id }}">{{ b.name }} brigadasi</option>{% endfor %}</optgroup>
+      <optgroup label="Xodim">{% for m in choices.members %}<option value="member:{{ m.id }}" {{ 'selected' if preset == 'member:' ~ m.id }}>{{ m.full_name }}{{ ' · ' ~ m.role_label if m.role_label }}</option>{% endfor %}</optgroup>
+    </select>
+    <label class="d-l">2. Nima so‘raymiz?</label>
+    <div class="pk-rs ak-quick">{% for k, label in quick.items() %}<label><input type="radio" name="quick" value="{{ k }}" {{ 'checked' if loop.first }}><span>{{ label }}</span></label>{% endfor %}</div>
+    <input name="text" maxlength="300" placeholder="yoki o‘zingiz yozing (ixtiyoriy)" class="ak-text">
+    <label class="d-l">3. Nima kerak?</label>
+    <div class="rb-tabs ak-kind"><label><input type="radio" name="kind" value="any" checked><span>Rasm yoki video</span></label><label><input type="radio" name="kind" value="photo"><span>Rasm</span></label><label><input type="radio" name="kind" value="video"><span>Video</span></label></div>
+    <label class="d-l">Javob muddati</label>
+    <select name="deadline_min"><option value="30">30 daqiqa</option><option value="60" selected>1 soat</option><option value="120">2 soat</option></select>
+    <button class="btn btn-green btn-block d-big">📨 Bot orqali yuborish</button>
+    <div class="tiny muted">Bot har bir odamga shaxsan yozadi. Muddat o‘tsa, bir marta eslatadi; baribir kelmasa, sizga “N kishi hali yubormadi” deb chiqadi.</div>
+  </form>
+</div>
+{% endblock %}
