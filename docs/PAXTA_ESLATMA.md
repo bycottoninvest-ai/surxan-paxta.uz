@@ -3,7 +3,32 @@
 Oxirgi yangilanish: 2026-09-25 (kech, v2.5.0 — ikki bot). Yozgan: Claude (bulutdagi sessiya “Yangi loya qilash”).
 
 
-## HOLAT 27.09.2026 (eng oxirgi — shu yerdan davom eting)
+## HOLAT 27.09.2026, 04:40 (ENG OXIRGI — “paxta” deyilsa shu yerdan davom eting)
+
+**Server yangilandi va hammasi ulandi:**
+- Server = v2.18.1 (health ok), avtomatik yangilash yoqilgan (systemd timer, har 5 daqiqa, `production` ni kuzatadi).
+  GitHub `production` = 491a72c. Endi Console kerak emas: main → (foydalanuvchi “tasdiqlayman”) → `git push origin main:production`.
+- Hetzner Console’da `:` belgisi noto‘g‘ri yoziladi — buyruqlarda `https://` ishlatmang (`curl -sL surxan-paxta.uz/health`).
+- Narxlar kiritildi: qo‘l 7800, kombayn 7600 → punktdan kutilayotgan 18 202 000 so‘m (2350 kg). Reyslar to‘g‘ri (faqat 2 ta haqiqiy).
+- Punkt Nayman-1 koordinatasi saqlandi (admin/punktlar).
+- Telegram: bot @surxan_paxta_bot yangi “PAXTA_SURXAN” guruhida admin, “Ishchi guruh” qilindi. 6 kishi ulangan.
+  Agronom/brigadir/haydovchilarni shu guruhga qo‘shish qoldi (foydalanuvchi o‘zi qo‘shadi).
+- TV yoqildi, TV kaliti yaratildi (“Ofis televizori”), /tv ishlayapti.
+- Google xarita kaliti O‘CHIRILDI (Google kulrang chiqdi + pulli) — bepul Esri ishlaydi.
+  `static/js/basemap.js` tuzatildi (Google tile haqiqatan yuklansagina o‘tadi) — main’da (4b576ac), production’da HALI YO‘Q.
+- Google Sheets ULANDI (loyiha bycotton-tizim, surxon-sheets@bycotton-tizim.iam.gserviceaccount.com, jadval “SURXAN-PAXTA”,
+  ruxsat “Доступ ограничен”). Sinov o‘tdi. Tizim “SPX …” varaqlarini yaratdi: KASSA KIRIM-CHIQIM, PAXTA-PUNKT,
+  XARAJATLAR, TERIMCHILAR, Sinov. (Birinchi JSON kalit chatga tushib qolgan edi — o‘chirildi, yangisi yuklangan.)
+
+**KEYINGI QADAM (foydalanuvchi “paxta” / “davom etamiz” desa):**
+1. Foydalanuvchining “Umumiy hisob” varag‘i eski varaqlardan (Pul harakati, Reyslar, Nayman…) o‘qiydi → o‘zi to‘lmaydi.
+   Foydalanuvchi “SPX KASSA KIRIM-CHIQIM” va “SPX PAXTA-PUNKT” varaqlarining rasmini yuboradi → “Umumiy hisob” uchun
+   SPX varaqlardan o‘qiydigan yangi formulalar yozib berish (sheets.new emas, mavjud jadval; tizim qo‘lda varaqlarga tegmaydi).
+2. Task #38: dashboard/TV/telefon dizayni (Codex rasmi) — real ma’lumot bilan, skrinshot → “tasdiqlayman” → production.
+3. basemap.js tuzatishi keyingi reliz bilan production’ga.
+4. Keyin: GT06 trekerlar (sotib olinganda SMS sozlash), kamera (pulli — alohida kelishuv).
+
+## HOLAT 27.09.2026 (kechroq bo‘lim — yuqoridagi yangiroq)
 
 - GitHub `main` = `production` = v2.18.1 (152 test). Serverda hali v2.14.0 — foydalanuvchi Console’da yangilaydi
   (Hetzner akkaunt paroli muammosi: 10 daqiqa bloklangan, "Forgot password" tavsiya qilindi).
