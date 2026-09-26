@@ -1,13 +1,13 @@
-# Serverni yangilash (Codex uchun) — v2.17.0
+# Serverni yangilash (Codex uchun) — v2.18.0
 
 Serverni qayta qurmang, `.env`, `data/` va Caddy sozlamasiga tegmang. Vaqtinchalik sslip override'ni qayta yoqmang.
 
 ```bash
 cd /opt/surxan-paxta.uz
 docker compose exec -T app flask --app app backup          # yangilashdan oldin izchil zaxira
-git pull --ff-only                                          # kutilgan: v2.17.0 commiti
+git pull --ff-only                                          # kutilgan: v2.18.0 commiti
 docker compose up -d --build
-for i in $(seq 1 40); do curl -fsS https://surxan-paxta.uz/health && break; sleep 3; done   # "version":"2.17.0"
+for i in $(seq 1 40); do curl -fsS https://surxan-paxta.uz/health && break; sleep 3; done   # "version":"2.18.0"
 docker compose exec -T app flask --app app set-webhook      # channel_post + edited_message (Telegram jonli joylashuv) yangilanishlarini yoqadi — v2.17.0 da SHART
 docker compose exec -T app flask --app app smoke-check
 ```
@@ -15,6 +15,16 @@ docker compose exec -T app flask --app app smoke-check
 Baza avtomatik yangilanadi (sxema v9): `field_imports, field_assignments` va `fields.source_id/map_area_ha/area_source`, `field_seasons.crop` (v2.11.0 — dalalar importi); yangi jadvallar `fuel_stations, fuel_tickets, fuel_ticket_funds, fuel_prices, fuel_scans, fuel_ops` va `equipment.fuel_type/fuel_carrier/qr_token` (v2.10.0 — solyarka); `cash_corrections` (v2.9.0 — kassa tuzatishlari); yangi ustunlar `nayman_receipts.station_gross_kg/station_tare_kg` (v2.8.0 — punkt brutto/tara),
 `trailer_loads.method/rate/rate_unit`, `workers.note`, `tg_chats.bot_status` (v2.7.0) qo'shiladi.
 Eski yozuvlar o'zgarmaydi. Ilova ishga tushganda migratsiyadan oldin `data/` ichida `*.oldin-v*` zaxira nusxa oladi.
+
+## v2.18.0 da nima o'zgardi
+Sxema v11 → v12 (ishga tushganda `*.oldin-v11-*.bak`): yangi jadvallar `trackers, vehicle_positions, vehicle_days,
+vehicle_works`; ustunlar `equipment.norm_field_lph/norm_road_lpkm/norm_idle_lph/work_hours`, `fuel_ops.purpose`.
+- GPS treker (GT06): yangi konteyner `gps` (`python -m surxon.gt06`), TCP port **5023** ochiq bo'lishi kerak
+  (Hetzner Firewall bo'lsa: Inbound TCP 5023 qo'shing). `docker compose up -d --build` uni o'zi ishga tushiradi.
+- Admin → Texnikalar: texnikaga treker IMEI, salarka me'yori, ish vaqti; ulanmagan yangi trekerlar ro'yxati.
+- Solyarka berishda "Nima ish uchun?" (Sozlamalar → fleet_work_types: nomi=l/soat).
+- Direktor paneli → "Texnika xaritada": jonli holat (dalada / yo'lda / motor yoniq turibdi / turibdi / aloqa yo'q),
+  bir joyda uzoq turish belgisi, bugungi yo'l, salarka me'yor va berilgan, dalalarda bajarilgan ishlar (qamrov %).
 
 ## v2.17.0 da nima o'zgardi
 Sxema v10 → v11 (ishga tushganda `*.oldin-v10-*.bak`): trailer_loads.harvest_round/picked_cells/picked_ha/picked_split,

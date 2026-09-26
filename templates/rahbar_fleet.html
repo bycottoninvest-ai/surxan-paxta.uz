@@ -1,0 +1,90 @@
+{% extends 'base.html' %}
+{% from 'macros.html' import icon, empty with context %}
+{% set page_title = 'Texnika xaritada' %}
+{% set kinds = {'traktor': '🚜', 'kombayn': '🌾', 'mashina': '🚚'} %}
+{% block content %}
+<div class="d-wrap rb">
+  {% with rb_title='Texnika xaritada', rb_back=url_for('rahbar.home') %}{% include 'partials/rb_head.html' %}{% endwith %}
+  {% for m in machines if m.alert %}<div class="hm-msg warn fl-alert">⚠ <b>{{ m.code }}</b> — {{ m.alert }}{% if m.field %} · {{ m.field }}{% endif %}</div>{% endfor %}
+  <div id="fl-map" class="sm-map spx-vivid"></div>
+  <div class="fl-legend"><span class="s-field">Dalada ishlayapti</span><span class="s-road">Yo‘lda</span><span class="s-idle">Motor yoniq turibdi</span><span class="s-parked">Turibdi</span><span class="s-offline">Aloqa yo‘q</span></div>
+  <div class="hm-ops" id="fl-list">
+    {% for m in machines %}<a class="hm-op" href="#" data-id="{{ m.id }}">
+      <span class="fl-ico s-{{ m.state }}">{{ kinds.get(m.kind, '🚜') }}</span>
+      <span class="hm-op-b"><b>{{ m.code }}{% if m.operator %} · {{ m.operator }}{% endif %}</b><small>{{ m.label }}{% if m.state not in ('none','offline') %} · {{ m.at }}{% endif %}</small></span></a>
+    {% else %}{{ empty('GPS treker hali ulanmagan. Admin → Texnikalar → texnikani tahrirlash → “GPS treker IMEI”.', 'map') }}{% endfor %}
+  </div>
+
+  <div class="rb-sec"><b>Salarka: me’yor va berilgan · {{ period_label }}</b></div>
+  {% if usage %}<div class="fl-use">{% for u in usage %}<div class="fl-u {{ 'fl-over' if u.flag }}">
+      <div class="fl-u-h"><b>{{ u.code }}{% if u.operator %} · {{ u.operator }}{% endif %}</b>
+        <span>{% if u.diff is none %}—{% elif u.flag %}+{{ u.diff|num }} L ({{ u.pct }}%) · me’yordan ko‘p{% elif u.diff > 0 %}+{{ u.diff|num }} L{% else %}{{ u.diff|num }} L · me’yorda{% endif %}</span></div>
+      <div class="fl-u-f"><div><small>Me’yor</small><b>{{ u.expected|num if u.expected else '—' }} L</b></div><div><small>Berildi</small><b>{{ u.given|num }} L</b></div>
+        <div><small>Motor</small><b>{{ u.engine_h }} soat</b></div></div>
+      <small class="muted">dalada {{ u.field_h }} soat · yo‘lda {{ u.road_km }} km · motor yoniq turdi {{ u.idle_h }} soat</small></div>{% endfor %}</div>
+  {% else %}<div class="small muted">GPS ma’lumoti hali yo‘q.</div>{% endif %}
+
+  <div class="rb-sec"><b>Bajarilgan ishlar (dalalar) · {{ period_label }}</b></div>
+  <div class="hm-ops" id="fl-works">
+    {% for w in works %}<a class="hm-op {{ 'fl-more' if loop.index > 6 }}" href="#" data-w="{{ loop.index0 }}" {{ 'hidden' if loop.index > 6 }}>
+      <span class="fl-pct">{{ w.pct }}%</span>
+      <span class="hm-op-b"><b>{{ w.code }} · {{ w.job }}</b><small>≈ {{ w.ha }} ga / {{ w.field_ha }} ga · {{ w.hours }} soat · {{ w.machines|join(', ') }} · {{ w.first|d }}{% if w.last != w.first %}–{{ w.last|d }}{% endif %}</small></span></a>
+    {% else %}<div class="small muted">Bu davrda GPS bo‘yicha dalada ish qayd etilmagan.</div>{% endfor %}
+  </div>
+  {% if works|length > 6 %}<button type="button" class="btn btn-ghost btn-block" id="fl-more">Yana {{ works|length - 6 }} ta ko‘rsatish</button>{% endif %}
+  <div class="tiny muted" style="margin:6px 2px">Ish turi — solyarka berilganda tanlangan ish. Qamrov taxminiy: texnika yurgan dala kataklari (20–60 m) bo‘yicha. Bosing — xaritada ko‘rsatiladi.</div>
+</div>
+{% endblock %}
+{% block scripts %}<link rel="stylesheet" href="{{ url_for('static', filename='vendor/leaflet/leaflet.css') }}">
+<script src="{{ url_for('static', filename='vendor/leaflet/leaflet.js') }}"></script>
+<script src="{{ url_for('static', filename='js/basemap.js') }}"></script>
+{% include 'partials/rb_poll.html' %}
+<script>
+(function () {
+  const JSONU = '{{ url_for('rahbar.fleet_json') }}', KIND = {{ kinds|tojson }};
+  const COLOR = { field: '#22c55e', road: '#3b82f6', idle: '#f59e0b', parked: '#94a3b8', offline: '#475569', none: '#475569', off: '#94a3b8' };
+  const esc = window.surxonEsc || (s => String(s));
+  const map = L.map('fl-map', { attributionControl: false, maxZoom: 20 });
+  if (window.spxBasemap) spxBasemap(map); else L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19 }).addTo(map);
+  map.setView([{{ center[0] }}, {{ center[1] }}], 12);
+  const FIELDS = {{ fields|tojson }};
+  FIELDS.forEach(f => L.polygon(f.poly, { color: '#fde68a', weight: 1.5, fillOpacity: 0.05, interactive: false }).addTo(map));
+  const works = {{ works|tojson }};
+  const marks = {}; let layer = null, fitted = false;
+  const icon = m => L.divIcon({ className: 'sm-pin', iconSize: [44, 56], iconAnchor: [22, 22],
+    html: `<span class="fl-pin s-${m.state}">${KIND[m.kind] || '🚜'}</span><span class="fl-code">${esc(m.code)}</span>` });
+  function draw(ms) {
+    const seen = new Set(), pts = [];
+    ms.filter(m => m.lat != null).forEach(m => {
+      seen.add(m.id); pts.push([m.lat, m.lon]);
+      const tip = `<b>${esc(m.code)}</b>${m.operator ? ' · ' + esc(m.operator) : ''}<br>${esc(m.label)}<br>${m.at}`;
+      if (!marks[m.id]) marks[m.id] = L.marker([m.lat, m.lon], { icon: icon(m) }).bindTooltip(tip, { direction: 'top', offset: [0, -18] })
+        .on('click', () => showTrack(m.id)).addTo(map);
+      else marks[m.id].setLatLng([m.lat, m.lon]).setIcon(icon(m)).setTooltipContent(tip);
+    });
+    Object.keys(marks).forEach(k => { if (!seen.has(Number(k))) { marks[k].remove(); delete marks[k]; } });
+    if (!fitted && pts.length) { map.fitBounds(pts, { padding: [40, 40], maxZoom: 16 }); fitted = true; }
+  }
+  function clear() { if (layer) { layer.remove(); layer = null; } }
+  async function showTrack(id) {
+    const r = await (await fetch(JSONU + '?iz=' + id, { headers: { 'X-Requested-With': 'fetch' } })).json();
+    clear();
+    const all = [];
+    layer = L.layerGroup((r.track || []).map(run => { all.push(...run.pts);
+      return L.polyline(run.pts, { color: COLOR[run.kind] || '#fff', weight: run.kind === 'field' ? 5 : 3.5, opacity: .95,
+        dashArray: run.kind === 'off' ? '4 6' : null }).bindTooltip(`${run.from}–${run.to}`); })).addTo(map);
+    if (all.length > 1) map.fitBounds(all, { padding: [40, 40] }); else if (marks[id]) map.setView(marks[id].getLatLng(), 17);
+  }
+  function showWork(i) {
+    const w = works[i]; clear(); if (!w || !w.polys.length) return;
+    layer = L.layerGroup(w.polys.map(p => L.polygon(p, { color: '#22c55e', weight: 0.5, fillColor: '#22c55e', fillOpacity: .45 }))).addTo(map);
+    map.fitBounds(w.polys.flat(), { padding: [30, 30] });
+  }
+  document.querySelectorAll('#fl-list [data-id]').forEach(a => a.addEventListener('click', e => { e.preventDefault(); showTrack(Number(a.dataset.id)); window.scrollTo(0, 0); }));
+  document.querySelectorAll('#fl-works [data-w]').forEach(a => a.addEventListener('click', e => { e.preventDefault(); showWork(Number(a.dataset.w)); window.scrollTo(0, 0); }));
+  const more = document.getElementById('fl-more');
+  if (more) more.addEventListener('click', () => { document.querySelectorAll('.fl-more').forEach(x => { x.hidden = false; }); more.remove(); });
+  draw({{ machines|tojson }});
+  setInterval(async () => { try { const r = await (await fetch(JSONU, { headers: { 'X-Requested-With': 'fetch' } })).json(); draw(r.machines); } catch (_) {} }, 30000);
+})();
+</script>{% endblock %}

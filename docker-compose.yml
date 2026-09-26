@@ -40,6 +40,22 @@ services:
       app:
         condition: service_healthy
 
+  # GPS trackers (GT06) on tractors / combines connect here over TCP (port 5023; open it in the Hetzner firewall).
+  gps:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - ./data:/data
+    command: ["python", "-m", "surxon.gt06"]
+    ports:
+      - "5023:5023"
+    healthcheck:
+      disable: true
+    depends_on:
+      app:
+        condition: service_healthy
+
   caddy:
     image: caddy:2
     restart: unless-stopped

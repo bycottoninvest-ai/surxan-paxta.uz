@@ -39,7 +39,9 @@ def op_take():
 @bp.get('/yoqilgi/berish')
 @perm_required('fuel.operate')
 def op_give():
-    return render_template('fuel_give.html', have=F.keeper_liters(get_db(), g.user['id']), reasons=F.REASONS)
+    from ..fleet import work_types
+    return render_template('fuel_give.html', have=F.keeper_liters(get_db(), g.user['id']), reasons=F.REASONS,
+                           jobs=[n for n, _ in work_types()])
 
 
 @bp.post('/yoqilgi/skan')
@@ -58,6 +60,9 @@ def op_scan():
     return jsonify(ok=True, scan_id=sid, have=F.keeper_liters(db, g.user['id']),
                    machine={'code': t['code'], 'kind': kinds.get(t['kind'], t['kind']), 'plate': t['plate'] or '',
                             'operator': t['operator_name'] or '', 'carrier': bool(t['fuel_carrier']),
+                            'job': (db.execute('''SELECT purpose FROM fuel_ops WHERE equipment_id=? AND kind='BERISH'
+                                                  AND voided_at IS NULL AND purpose IS NOT NULL ORDER BY id DESC LIMIT 1''',
+                                               (t['id'],)).fetchone() or [''])[0],
                             'today_l': F.fmt_l(info['today_l']), 'today_n': info['today_n'],
                             'last': (info['last_at'][11:16] + (' (bugun)' if info['last_at'][:10] == today_str() else
                                      ' · ' + info['last_at'][8:10] + '.' + info['last_at'][5:7])
@@ -86,7 +91,8 @@ def op_give_check():
 def op_give_save():
     oid, again = F.give(post_actor(), scan_id=parse_int(request.form.get('scan_id'), 'QR skan'), liters=request.form.get('liters'),
                         photo=read_upload(request.files.get('photo')), reason=request.form.get('reason', ''),
-                        reason_note=request.form.get('reason_note', ''), client_uuid=form_uuid())
+                        reason_note=request.form.get('reason_note', ''), client_uuid=form_uuid(),
+                        purpose=request.form.get('purpose', ''))
     return done('Solyarka berildi.' if not again else 'Bu berish avval saqlangan — ikkinchi marta yozilmadi.',
                 url_for('yoqilgi.op_view', op_id=oid, yangi=1))
 

@@ -202,3 +202,24 @@ def cell_of(poly_latlon, lat, lon):
         if len(p) == 4 and min(x[0] for x in p) <= lat <= max(x[0] for x in p) and min(x[1] for x in p) <= lon <= max(x[1] for x in p):
             return c['id']
     return None
+
+
+def grid_locator(poly_latlon):
+    """Fast point → grid cell id for field_grid's cells (same frame: size, origin), or None outside the grid."""
+    cells, size = field_grid(poly_latlon)
+    if not cells:
+        return lambda lat, lon: None
+    lat0 = sum(p[0] for p in poly_latlon) / len(poly_latlon)
+    kx, ky = 111320 * math.cos(math.radians(lat0)), 110540.0
+    if len(cells) == 1 and cells[0]['id'] == '0:0' and size:
+        ys = [p[0] for p in poly_latlon]
+        xs = [p[1] for p in poly_latlon]
+        return lambda lat, lon: '0:0' if min(ys) <= lat <= max(ys) and min(xs) <= lon <= max(xs) else None
+    x0 = math.floor(min(p[1] * kx for p in poly_latlon) / size) * size
+    y0 = math.floor(min(p[0] * ky for p in poly_latlon) / size) * size
+    ids = {c['id'] for c in cells}
+
+    def locate(lat, lon):
+        cid = f'{int((lon * kx - x0) // size)}:{int((lat * ky - y0) // size)}'
+        return cid if cid in ids else None
+    return locate

@@ -33,6 +33,13 @@ DEFAULTS = {
     'season_target_kg': ('', 'Mavsum terim rejasi, kg — TV’dagi “Reja bajarilishi” (bo‘sh = ko‘rsatilmaydi)'),
     'tractor_speed_kmh': ('20', 'Telashkali traktor o‘rtacha tezligi, km/soat — punktga yetib borish vaqtini taxmin qilish uchun'),
     'road_factor': ('1.3', 'Yo‘l to‘g‘ri chiziqdan necha barobar uzun (odatda 1.2–1.5) — punktgacha masofa uchun'),
+    'fleet_work_types': ('Paxta terish=9, Shudgor=14, Lazer (tekislash)=12, Kultivatsiya=8, Ekish=7, Chizel=13, '
+                         'Yuk tashish=6, Boshqa=9',
+                         'Solyarka berilganda tanlanadigan ishlar va traktor uchun me’yor, l/soat (dalada ishlaganda). '
+                         'Vergul bilan: Nomi=litr'),
+    'fleet_idle_alert_min': ('30', 'GPS texnika: ish vaqtida bir joyda shuncha daqiqadan ko‘p tursa — dashboardda belgi'),
+    'fleet_work_hours': ('07:00-19:00', 'GPS texnika: odatiy ish vaqti (texnikada alohida yozilmagan bo‘lsa)'),
+    'fleet_over_pct': ('15', 'GPS texnika: berilgan salarka me’yordan shu % dan ko‘p bo‘lsa — “me’yordan ko‘p” (sariq)'),
     'tv_show_workers': ('1', 'TV’da bugungi eng yaxshi 5 terimchi (ism + familiya bosh harfi) ko‘rsatilsinmi (1/0)'),
     'report_feed': ('1', 'Hisobot kanaliga har bir muhim hodisa (reys tugadi, punkt qabul, kassa kirim/chiqim, kuzatuv '
                          'kechikishi) darhol yoziladi (1/0). Kunlik hisobot bundan tashqari keladi'),

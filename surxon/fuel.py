@@ -351,7 +351,7 @@ def give_check(actor, *, scan_id, liters):
     return {'liters': liters, 'have': have, 'after': round(have - liters, 1), 'flags': flags, 'info': info}
 
 
-def give(actor, *, scan_id, liters, photo, reason='', reason_note='', client_uuid=None):
+def give(actor, *, scan_id, liters, photo, reason='', reason_note='', client_uuid=None, purpose=''):
     _need(actor, 'fuel.operate')
     liters = _liters(liters)
     if not photo:
@@ -380,21 +380,27 @@ def give(actor, *, scan_id, liters, photo, reason='', reason_note='', client_uui
                 raise UserError('“Boshqa” tanlansa, sababni qisqa yozing.')
         else:
             reason, reason_note = '', ''
+        purpose = clean_text(purpose, 40) or None
+        if purpose:
+            from .fleet import work_types
+            if purpose not in [n for n, _ in work_types()]:
+                raise UserError('Ish turi ro‘yxatda yo‘q — qaytadan tanlang.')
         ts = now_str()
         no = doc_number(db, 'YQ', _season(db))
         oid = db.execute('''INSERT INTO fuel_ops(doc_no, kind, keeper_id, equipment_id, liters, scan_id, scan_at, flag, reason,
-                                reason_note, client_uuid, created_at) VALUES (?,'BERISH',?,?,?,?,?,?,?,?,?,?)''',
+                                reason_note, client_uuid, created_at, purpose) VALUES (?,'BERISH',?,?,?,?,?,?,?,?,?,?,?)''',
                          (no, actor.user_id, s['target_id'], liters, scan_id, s['created_at'], '; '.join(flags) or None,
-                          reason or None, reason_note or None, client_uuid, ts)).lastrowid
+                          reason or None, reason_note or None, client_uuid, ts, purpose)).lastrowid
         eq = db.execute('SELECT code FROM equipment WHERE id=?', (s['target_id'],)).fetchone()
         pid = store_photo(db, actor, photo, category='fuel', entity_type='fuel_op', entity_id=oid,
                           caption=f'{no} · {eq["code"]} · {fmt_l(liters)} L')
         db.execute('UPDATE fuel_ops SET photo_id=? WHERE id=?', (pid, oid))
         db.execute('UPDATE fuel_scans SET used_at=? WHERE id=?', (ts, scan_id))
         audit(db, actor, 'BERISH', 'fuel_op', oid, new={'doc_no': no, 'equipment': eq['code'], 'liters': liters,
-                                                         'flag': flags or None, 'reason': reason or None})
+                                                         'flag': flags or None, 'reason': reason or None, 'purpose': purpose})
         from .reporting import feed
-        feed(db, f'fuel:{oid}', f'🚜 Solyarka berildi: {eq["code"]} −{fmt_l(liters)} L\n{no} · {actor.name or ""}')
+        feed(db, f'fuel:{oid}', f'🚜 Solyarka berildi: {eq["code"]} −{fmt_l(liters)} L' + (f' · {purpose}' if purpose else '')
+             + f'\n{no} · {actor.name or ""}')
         if flags:
             text = (f'⚠️ Solyarka — tekshirish kerak: {eq["code"]} {fmt_l(liters)} L\n' + '; '.join(flags)
                     + f'\nSabab: {reason}' + (f' — {reason_note}' if reason_note else '') + f'\n{no} · {actor.name or ""}')

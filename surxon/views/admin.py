@@ -8,7 +8,7 @@ from ..security import PERMISSIONS, ROLES, perm_required
 from ..services import (close_season, reopen_season, save_brigadier, save_cashbox, save_equipment, save_field, save_settings, save_station,
                         save_user, telegram_link_code, unlink_telegram)
 from ..settings import all_settings, get_setting
-from ..utils import UserError, clean_text, parse_int, parse_number
+from ..utils import UserError, clean_text, parse_int, parse_number, today_str
 from . import checkbox, done, post_actor, season_arg
 
 bp = Blueprint('admin', __name__, url_prefix='/admin')
@@ -270,10 +270,16 @@ def equipment():
     if request.method == 'POST':
         from ..security import require
         require('masterdata.write')
-        save_equipment(post_actor(), parse_int(request.form.get('id'), 'ID', required=False),
-                       kind=request.form.get('kind'), code=request.form.get('code'), plate=request.form.get('plate', ''),
-                       operator_name=request.form.get('operator_name', ''), ownership=request.form.get('ownership') or 'own',
-                       notes=request.form.get('notes', ''), active=checkbox('active') if request.form.get('id') else True)
+        actor = post_actor()
+        eid = save_equipment(actor, parse_int(request.form.get('id'), 'ID', required=False),
+                             kind=request.form.get('kind'), code=request.form.get('code'), plate=request.form.get('plate', ''),
+                             operator_name=request.form.get('operator_name', ''), ownership=request.form.get('ownership') or 'own',
+                             notes=request.form.get('notes', ''), active=checkbox('active') if request.form.get('id') else True)
+        if 'imei' in request.form:
+            from ..fleet import save_machine_gps
+            save_machine_gps(actor, eid, imei=request.form.get('imei', ''), norm_field=request.form.get('norm_field_lph'),
+                             norm_road=request.form.get('norm_road_lpkm'), norm_idle=request.form.get('norm_idle_lph'),
+                             hours=request.form.get('work_hours'))
         return done('Texnika saqlandi.', url_for('admin.equipment'))
     year = season_arg()
     rows = q('''SELECT e.*,
@@ -281,12 +287,17 @@ def equipment():
                       AND tl.status<>'BEKOR') trips,
                    (SELECT COALESCE(SUM(kg),0) FROM harvests h WHERE h.combine_id=e.id AND h.season_year=? AND h.voided_at IS NULL) combine_kg,
                    (SELECT status FROM trailer_loads tl WHERE (tl.trailer_id=e.id OR tl.tractor_id=e.id)
-                      AND tl.status IN ('OCHIQ','TOLDI') LIMIT 1) busy
-                FROM equipment e ORDER BY e.active DESC, e.kind, e.code''', (year, year))
+                      AND tl.status IN ('OCHIQ','TOLDI') LIMIT 1) busy,
+                   t.imei, t.last_seen gps_seen
+                FROM equipment e LEFT JOIN trackers t ON t.equipment_id=e.id ORDER BY e.active DESC, e.kind, e.code''', (year, year))
     edit = None
     if request.args.get('edit', '').isdigit():
-        edit = q('SELECT * FROM equipment WHERE id=?', (int(request.args['edit']),), one=True)
-    return render_template('admin_equipment.html', rows=rows, edit=edit, year=year)
+        edit = q('''SELECT e.*, t.imei FROM equipment e LEFT JOIN trackers t ON t.equipment_id=e.id WHERE e.id=?''',
+                 (int(request.args['edit']),), one=True)
+    from .. import fleet
+    return render_template('admin_equipment.html', rows=rows, edit=edit, year=year, unknown=fleet.unknown_trackers(),
+                           kind_norms=fleet.KIND_NORMS, def_hours=get_setting('fleet_work_hours'),
+                           today=today_str())
 
 
 @bp.route('/sozlamalar', methods=['GET', 'POST'])

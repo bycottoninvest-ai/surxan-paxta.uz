@@ -14,15 +14,28 @@
       <div class="f h"><label>Haydovchi / operator</label><input name="operator_name" value="{{ edit.operator_name or '' if edit else '' }}"></div>
       <div class="f"><label>Egalik</label><select name="ownership"><option value="own">O‘zimizniki</option><option value="external" {{ 'selected' if edit and edit.ownership == 'external' }}>Tashqi (ijaraga / xizmat)</option></select></div>
       <div class="f"><label>Izoh</label><input name="notes" value="{{ edit.notes or '' if edit else '' }}"></div>
+      <div class="f"><label>GPS treker IMEI</label><input name="imei" inputmode="numeric" value="{{ edit.imei or '' if edit else '' }}" placeholder="15 ta raqam (trekerning yorlig‘ida)"></div>
+      <details class="f" {{ 'open' if edit and (edit.norm_field_lph or edit.norm_road_lpkm or edit.norm_idle_lph or edit.work_hours) }}><summary class="small">Salarka me’yori va ish vaqti (bo‘sh = odatiy)</summary>
+        {% set kn = kind_norms.get(edit.kind if edit else 'traktor', kind_norms['traktor']) %}
+        <div class="f h"><label>Dalada, l/soat</label><input name="norm_field_lph" inputmode="decimal" value="{{ edit.norm_field_lph or '' if edit else '' }}" placeholder="ish turiga qarab ({{ kn[0]|round|int }})"></div>
+        <div class="f h"><label>Yo‘lda, l/km</label><input name="norm_road_lpkm" inputmode="decimal" value="{{ edit.norm_road_lpkm or '' if edit else '' }}" placeholder="{{ kn[1] }}"></div>
+        <div class="f h"><label>Motor yoniq turganda, l/soat</label><input name="norm_idle_lph" inputmode="decimal" value="{{ edit.norm_idle_lph or '' if edit else '' }}" placeholder="{{ kn[2] }}"></div>
+        <div class="f h"><label>Ish vaqti</label><input name="work_hours" value="{{ edit.work_hours or '' if edit else '' }}" placeholder="{{ def_hours }}"></div>
+      </details>
       {% if edit %}<div class="f"><label class="check"><input type="checkbox" name="active" value="1" {{ 'checked' if edit.active }}> Faol</label></div>{% endif %}
       <div class="f"><button class="btn btn-primary btn-block">Saqlash</button></div></form></div></section>
   {% endif %}
   <section class="card {{ 's8' if can('masterdata.write') else 's12' }}"><div class="card-h"><h3>Ro‘yxat ({{ year }})</h3></div>
-    <div class="table-wrap"><table class="t"><thead><tr><th>Turi</th><th>Kod</th><th>Raqam</th><th>Operator</th><th>Egalik</th><th class="num">Reyslar</th><th class="num">Kombayn kg</th><th>Hozir</th><th></th></tr></thead>
+    <div class="table-wrap"><table class="t"><thead><tr><th>Turi</th><th>Kod</th><th>Raqam</th><th>Operator</th><th>Egalik</th><th class="num">Reyslar</th><th class="num">Kombayn kg</th><th>Hozir</th><th>GPS</th><th></th></tr></thead>
       <tbody>{% for e in rows %}<tr class="{{ 'void' if not e.active }}"><td>{{ kinds.get(e.kind) }}</td><td class="b">{{ e.code }}</td><td>{{ e.plate or '—' }}</td><td>{{ e.operator_name or '—' }}</td><td>{{ 'Tashqi' if e.ownership == 'external' else 'O‘zimizniki' }}</td>
         <td class="num">{{ e.trips }}</td><td class="num">{{ e.combine_kg|num if e.kind == 'kombayn' else '' }}</td>
         <td class="keep">{% if e.busy %}<span class="badge b-green">Ishlayapti ({{ e.busy }})</span>{% else %}<span class="badge b-gray">Bo‘sh</span>{% endif %}</td>
+        <td class="keep">{% if e.imei %}<span class="badge {{ 'b-green' if e.gps_seen and e.gps_seen[:10] == today else 'b-gray' }}" title="IMEI {{ e.imei }}">{{ 'ulangan' if e.gps_seen else 'kutilmoqda' }}</span>{% else %}—{% endif %}</td>
         <td class="keep">{% if can('masterdata.write') %}<a class="btn btn-ghost btn-sm" href="{{ url_for('admin.equipment', edit=e.id) }}">{{ icon('edit','sm') }}</a>{% endif %}</td></tr>
       {% endfor %}</tbody></table></div></section>
+  {% if unknown %}<section class="card s12"><div class="card-h"><h3>Yangi GPS trekerlar (hali texnikaga ulanmagan)</h3></div>
+    <div class="card-b small">Treker serverga ulandi, lekin qaysi texnikaga tegishliligi yozilmagan. IMEI ni ko‘chirib, texnikani tahrirlashda “GPS treker IMEI” ga qo‘ying.
+      <table class="t"><thead><tr><th>IMEI</th><th>Birinchi marta</th><th>Oxirgi aloqa</th></tr></thead><tbody>
+      {% for t in unknown %}<tr><td class="b num">{{ t.imei }}</td><td>{{ t.first_seen }}</td><td>{{ t.last_seen or '—' }}</td></tr>{% endfor %}</tbody></table></div></section>{% endif %}
 </div>
 {% endblock %}

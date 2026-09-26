@@ -49,6 +49,8 @@
   </div>
   <a class="rb-staff" href="{{ url_for('rahbar.staff_map') }}">📍 <b>Xodimlar xaritada</b>
     <span>{% if staff.n %}{{ staff.live }} ta hozir ko‘rinmoqda{% if staff.n > staff.live %} · {{ staff.n - staff.live }} ta eski{% endif %}{% else %}hali hech kim joylashuv ulashmagan{% endif %}</span>{{ icon('chev-right') }}</a>
+  <a class="rb-staff rb-fleet {{ 'rb-fleet-warn' if fleet.alerts }}" href="{{ url_for('rahbar.fleet_map') }}">🚜 <b>Texnika xaritada</b>
+    <span>{% if fleet.n %}{{ fleet.work }} ta ishlayapti / {{ fleet.n }}{% if fleet.alerts %} · ⚠ {{ fleet.alerts }} ta e’tibor{% endif %}{% else %}GPS treker hali ulanmagan{% endif %}</span>{{ icon('chev-right') }}</a>
   <div class="rb-sec"><b>So‘nggi hodisalar</b></div>
   <div class="hm-ops">
     {% for e in feed %}<a class="hm-op" {% if e.link %}href="{{ url_for(e.link[0], **e.link[1]) }}"{% endif %}>

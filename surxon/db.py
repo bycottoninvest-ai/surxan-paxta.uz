@@ -10,7 +10,7 @@ from contextlib import contextmanager
 
 from flask import current_app, g
 
-SCHEMA_VERSION = 11
+SCHEMA_VERSION = 12
 
 SCHEMA = r'''
 CREATE TABLE IF NOT EXISTS brigadiers (
@@ -576,6 +576,44 @@ CREATE TABLE IF NOT EXISTS staff_positions (
 CREATE INDEX IF NOT EXISTS idx_staffpos_user ON staff_positions(user_id, at);
 CREATE INDEX IF NOT EXISTS idx_staffpos_member ON staff_positions(member_id, at);
 
+-- v12: GPS trackers on machines (GT06). A tracker is known by its IMEI; unknown ones are listed for the admin to assign.
+CREATE TABLE IF NOT EXISTS trackers (
+  imei TEXT PRIMARY KEY,
+  equipment_id INTEGER REFERENCES equipment(id),
+  first_seen TEXT NOT NULL,
+  last_seen TEXT,
+  last_lat REAL, last_lon REAL, last_speed REAL, last_course INTEGER,
+  last_acc INTEGER,                          -- engine (ignition wire): 1 on, 0 off, NULL unknown
+  last_fix_at TEXT,                          -- time of the last GPS position (local)
+  power INTEGER, gsm INTEGER
+);
+CREATE TABLE IF NOT EXISTS vehicle_positions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  equipment_id INTEGER NOT NULL REFERENCES equipment(id),
+  lat REAL NOT NULL, lon REAL NOT NULL,
+  speed REAL, course INTEGER, acc INTEGER,
+  at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_vpos_eq ON vehicle_positions(equipment_id, at);
+-- finished days are computed once (engine hours, km, field hours, idle hours, expected litres)
+CREATE TABLE IF NOT EXISTS vehicle_days (
+  equipment_id INTEGER NOT NULL REFERENCES equipment(id),
+  day TEXT NOT NULL,
+  engine_h REAL, field_h REAL, road_km REAL, idle_h REAL, points INTEGER,
+  PRIMARY KEY (equipment_id, day)
+);
+-- …and which field it worked on, for which job (the job chosen when fuel was given), which grid cells it covered
+CREATE TABLE IF NOT EXISTS vehicle_works (
+  equipment_id INTEGER NOT NULL REFERENCES equipment(id),
+  day TEXT NOT NULL,
+  field_id INTEGER NOT NULL REFERENCES fields(id),
+  purpose TEXT NOT NULL,
+  hours REAL NOT NULL, km REAL NOT NULL DEFAULT 0,
+  cells TEXT,
+  PRIMARY KEY (equipment_id, day, field_id, purpose)
+);
+CREATE INDEX IF NOT EXISTS idx_vworks_field ON vehicle_works(field_id, day);
+
 CREATE TABLE IF NOT EXISTS tg_members (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   full_name TEXT NOT NULL,
@@ -928,6 +966,13 @@ def migrate(db):
     _add_column(db, 'tg_members', 'avatar_path', 'TEXT')
     _add_column(db, 'stations', 'lat', 'REAL')           # where the punkt is — for “when will the trailer arrive”
     _add_column(db, 'stations', 'lon', 'REAL')   # {field_id: hectares} when a trip picked across 2+ fields
+    # v12: GPS tracker and fuel norms per machine (blank norm = the default for its kind), working hours "07:00-19:00"
+    _add_column(db, 'equipment', 'norm_field_lph', 'REAL')
+    _add_column(db, 'equipment', 'norm_road_lpkm', 'REAL')
+    _add_column(db, 'equipment', 'norm_idle_lph', 'REAL')
+    _add_column(db, 'equipment', 'work_hours', 'TEXT')
+    _add_column(db, 'fuel_ops', 'purpose', 'TEXT')      # what the fuel is for: Paxta terish / Shudgor / Lazer …
+    db.execute('CREATE UNIQUE INDEX IF NOT EXISTS uq_trackers_eq ON trackers(equipment_id) WHERE equipment_id IS NOT NULL')
     # Future column changes go here as: if version < N: ALTER TABLE ...
     db.execute('UPDATE schema_version SET version=? WHERE version < ?', (SCHEMA_VERSION, SCHEMA_VERSION))
 

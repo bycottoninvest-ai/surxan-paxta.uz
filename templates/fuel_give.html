@@ -16,11 +16,13 @@
     <div class="hm-msg info" id="fu-m-carrier" hidden>Bu mashina solyarka tashiydi. Idishdagi solyarka sizning zaxirangiz — bu yerda faqat mashinaning o‘z bakiga quyilganini yozing.</div>
     <label class="d-l">2. Miqdor (L)</label>
     <div class="fu-step"><button type="button" data-d="-10">−</button><input id="fu-l" class="d-num" inputmode="decimal" placeholder="0" autocomplete="off"><button type="button" data-d="10">+</button></div>
+    {% if jobs %}<label class="d-l">3. Nima ish uchun?</label>
+    <div class="pk-rs fu-jobs">{% for j in jobs %}<label><input type="radio" name="job" value="{{ j }}"><span>{{ j }}</span></label>{% endfor %}</div>{% endif %}
     <button type="button" class="btn btn-primary btn-block d-big" id="fu-next">Davom etish →</button>
     <div class="hm-msg" id="fu-msg1" hidden></div>
   </div>
   <div id="fu-photo" hidden class="d-form">
-    <div class="small muted">3. Yoqilg‘i quyilayotgan joyni rasmga oling</div>
+    <div class="small muted">{{ 4 if jobs else 3 }}. Yoqilg‘i quyilayotgan joyni rasmga oling</div>
     <div class="p-cam fu-shot"><video id="fu-cam2" playsinline muted></video><img id="fu-prev" alt="" hidden></div>
     <button type="button" class="fu-shutter" id="fu-snap" aria-label="Rasmga olish"></button>
     <button type="button" class="btn btn-ghost btn-block" id="fu-again" hidden>↺ Qayta olish</button>
@@ -54,11 +56,13 @@
       $('fu-m-code').textContent = m.code; $('fu-m-sub').textContent = [m.kind, m.plate, m.operator].filter(Boolean).join(' · ');
       $('fu-m-today').textContent = `${m.today_l} L · ${m.today_n} marta`; $('fu-m-last').textContent = m.last;
       $('fu-m-carrier').hidden = !m.carrier;
+      const jb = m.job && document.querySelector(`input[name=job][value="${CSS.escape(m.job)}"]`); if (jb) jb.checked = true;
       $('fu-scan').hidden = true; $('fu-form').hidden = false; lit.focus();
     } catch (_) { camMsg.className = 'hm-msg off'; camMsg.textContent = 'Internet yo‘q — QR tekshirilmadi.'; }
   }
   $('fu-next').addEventListener('click', async () => {
     if (!(parseFloat(lit.value) > 0)) { Fuel.say($('fu-msg1'), 'err', 'Litrni kiriting.'); return; }
+    if (document.querySelector('input[name=job]') && !document.querySelector('input[name=job]:checked')) { Fuel.say($('fu-msg1'), 'err', 'Nima ish uchun — tanlang.'); return; }
     const fd = new FormData(); fd.append('scan_id', scanId); fd.append('liters', lit.value);
     try {
       const { data } = await Fuel.post({{ url_for('yoqilgi.op_give_check')|tojson }}, fd);
@@ -66,7 +70,8 @@
       flags = data.flags || [];
       $('fu-flags').hidden = !flags.length;
       $('fu-flag-text').textContent = 'Odatdagidan farq qiladi — tekshirish uchun belgilanadi: ' + flags.join('; ');
-      $('fu-sumline').textContent = `Beriladi: ${data.liters} L · sizda qoladi: ${data.after} L`;
+      const job = (document.querySelector('input[name=job]:checked') || {}).value;
+      $('fu-sumline').textContent = `Beriladi: ${data.liters} L${job ? ' · ' + job : ''} · sizda qoladi: ${data.after} L`;
       $('fu-form').hidden = true; $('fu-photo').hidden = false;
       await Fuel.openCam($('fu-cam2'));
     } catch (e) { Fuel.say($('fu-msg1'), e && e.name === 'NotAllowedError' ? 'err' : 'off', e && e.name ? 'Kamera ochilmadi — ruxsat bering.' : 'Internet yo‘q — tekshirib bo‘lmadi.'); }
@@ -88,7 +93,8 @@
     if (flags.length && !reason) { Fuel.say($('fu-msg'), 'err', 'Sababni tanlang.'); return; }
     busy = true; const btn = $('fu-ok'); btn.disabled = true; btn.textContent = 'Saqlanmoqda…'; Fuel.say($('fu-msg'), '', '');
     const fd = new FormData(); fd.append('scan_id', scanId); fd.append('liters', lit.value); fd.append('client_uuid', key);
-    fd.append('reason', reason); fd.append('reason_note', $('fu-note').value); fd.append('photo', photo, 'kamera.jpg');
+    fd.append('reason', reason); fd.append('reason_note', $('fu-note').value);
+    fd.append('purpose', (document.querySelector('input[name=job]:checked') || {}).value || ''); fd.append('photo', photo, 'kamera.jpg');
     try {
       const { data } = await Fuel.post({{ url_for('yoqilgi.op_give_save')|tojson }}, fd);
       if (data.ok) { location.href = data.redirect; return; }

@@ -36,7 +36,15 @@ def home():
     checks = D.checks(year, a, b)
     return render_template('rahbar_home.html', **_ctx(
         cot=D.cotton(year, a, b), now=D.trips_now(), cash=D.cash(a, b), wages=D.wages(year, a, b), fuel=D.fuel(a, b),
-        checks=checks, red=sum(1 for c in checks if c['level'] == 'red'), feed=D.feed(8), staff=_staff_count()))
+        checks=checks, red=sum(1 for c in checks if c['level'] == 'red'), feed=D.feed(8), staff=_staff_count(),
+        fleet=_fleet_count()))
+
+
+def _fleet_count():
+    from .. import fleet
+    rows = fleet.live()
+    return {'n': len(rows), 'work': sum(1 for r in rows if r['state'] in ('field', 'road')),
+            'alerts': sum(1 for r in rows if r['alert'])}
 
 
 def _staff_count():
@@ -61,6 +69,40 @@ def staff_json():
     if request.args.get('iz'):
         return jsonify(track=staffmap.track(request.args['iz']))
     return jsonify(people=staffmap.people(), at=now_str()[11:19])
+
+
+@bp.get('/rahbar/texnika')
+@perm_required(VIEW)
+def fleet_map():
+    from .. import fleet
+    from ..settings import get_setting
+    year, p, a, b, _ = _period()
+    c = (get_setting('map_center') or '42.3,59.6').split(',')
+    import json
+    from .. import geo
+    works = fleet.works(a, b)
+    polys = {}
+    for r in q('SELECT id, code, polygon_json FROM fields WHERE polygon_json IS NOT NULL AND active=1'):
+        try:
+            polys[r['id']] = (r['code'], json.loads(r['polygon_json']))
+        except ValueError:
+            pass
+    for w in works:                                   # the covered grid cells as small squares for the map
+        poly = polys.get(w['field_id'], (None, None))[1]
+        ids = set(w.pop('cells'))
+        w['polys'] = [c['poly'] for c in geo.field_grid(poly)[0] if c['id'] in ids] if poly else []
+    return render_template('rahbar_fleet.html', **_ctx(machines=fleet.live(), center=[float(c[0]), float(c[1])],
+                                                        usage=fleet.usage(a, b), works=works,
+                                                        fields=[{'code': v[0], 'poly': v[1]} for v in polys.values()]))
+
+
+@bp.get('/rahbar/texnika.json')
+@perm_required(VIEW)
+def fleet_json():
+    from .. import fleet
+    if request.args.get('iz', '').isdigit():
+        return jsonify(track=fleet.track(int(request.args['iz'])))
+    return jsonify(machines=fleet.live(), at=now_str()[11:19])
 
 
 @bp.get('/rahbar/avatar/<path:rel>')
