@@ -9,6 +9,7 @@
 
   <form method="post" action="{{ url_for('dala.weigh', load_id=ld.id) }}" class="d-form" id="d-entry" data-offline="Tortish {{ ld.trip_no }}" data-after="reset" autocomplete="off">
     {{ csrf() }}{{ uuid_field() }}
+    <div id="d-gps-st" class="tiny" style="color:#8a97aa;margin-bottom:6px">📍 Joylashuv aniqlanmoqda…</div>
     <input type="hidden" name="lat" id="d-glat" data-keep><input type="hidden" name="lon" id="d-glon" data-keep><input type="hidden" name="acc" id="d-gacc" data-keep>
     {% if method == 'combine' %}
     <label class="d-l">Kombayn</label>
@@ -89,9 +90,15 @@
 
   // phone position with every weighing (where the cotton was picked); nothing waits for it and nothing breaks without it
   if (navigator.geolocation) {
-    const put = pos => { const c = pos.coords; if (c.accuracy > 200) return;
+    const st = document.getElementById('d-gps-st');
+    const put = pos => { const c = pos.coords;
+      if (c.accuracy > 200) { st.textContent = `📍 Joylashuv aniq emas (±${Math.round(c.accuracy)} m) — ochiq joyga chiqing`; st.style.color = '#b45309'; return; }
+      st.textContent = `📍 Joylashuv yozilmoqda (±${Math.round(c.accuracy)} m)`; st.style.color = '#15803d';
       [['d-glat', c.latitude], ['d-glon', c.longitude], ['d-gacc', Math.round(c.accuracy)]].forEach(([id, v]) => {
         const el = document.getElementById(id); el.value = v; el.setAttribute('value', v); }); };
-    navigator.geolocation.watchPosition(put, () => {}, { enableHighAccuracy: true, maximumAge: 60000, timeout: 30000 });
-  }
+    navigator.geolocation.watchPosition(put, err => {
+      st.textContent = err.code === 1 ? '📍 Joylashuvga ruxsat yo‘q — tortish baribir saqlanadi (brauzer sozlamasida ruxsat bering)'
+                                      : '📍 Joylashuv topilmadi — tortish baribir saqlanadi'; st.style.color = '#b45309'; },
+      { enableHighAccuracy: true, maximumAge: 60000, timeout: 30000 });
+  } else { const st = document.getElementById('d-gps-st'); st.textContent = '📍 Bu telefonda joylashuv yo‘q — tortish baribir saqlanadi'; }
 </script>{% endblock %}
