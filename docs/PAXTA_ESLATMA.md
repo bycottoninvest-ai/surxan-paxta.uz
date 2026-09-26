@@ -88,8 +88,9 @@ Azizbek topshirig‘i: 1) hisobot kanali — ma’lumot doim tushib turadi va sa
 
 ## HOZIR QAYERDA TO‘XTADIK (keyingi qadam)
 
-1. Serverda v2.12.2 ishlayapti (/health tasdiqlandi). v2.13.0 (TV) ni Codex bilan qo‘yish kerak — qadamlarni birma-bir
-   so‘rash (uzun xabarda Codex qotib qoldi). Faqat-o‘qish yozuvlar soni jadvali hali olinmagan.
+1. 2026-09-26: serverda v2.14.0 (TV + Storage Box sahifasi) — foydalanuvchi Hetzner Console (>_) orqali root bilan o‘zi
+   o‘rnatdi. Yo‘l: Hetzner → server → Rescue → Reset root password → Console; `&&` belgisi Console’da yozilmaydi
+   (Shift+7 → 7), buyruqlar alohida-alohida beriladi. Brauzerdagi Codex’da SSH kaliti yo‘q. Faqat-o‘qish yozuvlar soni jadvali hali olinmagan.
 2. Ertalab haqiqiy ish boshlanadi: avval Admin → Zaxira → “Hozir zaxira olish”, keyin test reys(lar)ni
    “Reysni to‘liq bekor qilish” bilan, solyarka/kassa sinovlarini “Bekor” bilan tozalash → direktor paneli 0.
    Test nakladnoy PA-000001 ni olgan — raqamlar qayta ishlatilmaydi (ataylab).
