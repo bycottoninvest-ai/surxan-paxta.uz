@@ -1,5 +1,5 @@
 /* Map backgrounds for every map in the app. Free Esri imagery by default; when the server has a Google Map Tiles API
-   key, a “Google sun’iy yo‘ldosh” layer is added (and chosen). If Google fails (key limits, billing, no internet),
+   key, a “Google sun’iy yo‘ldosh” layer is added (and chosen once a Google tile for this spot really loads). If Google fails (key limits, billing, no internet),
    the Esri layer stays and the contours keep working. Imagery is never live: the date is Google’s / Esri’s. */
 (function () {
   const ESRI = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
@@ -25,10 +25,17 @@
     const key = (document.body.dataset.gmaps || '').trim();
     if (key) {
       googleSession(key).then(session => {
-        const g = L.tileLayer('https://tile.googleapis.com/v1/2dtiles/{z}/{x}/{y}?session=' + session + '&key=' + encodeURIComponent(key),
+        const url = 'https://tile.googleapis.com/v1/2dtiles/{z}/{x}/{y}?session=' + session + '&key=' + encodeURIComponent(key);
+        const g = L.tileLayer(url,
           { maxZoom: 21, maxNativeZoom: 20, attribution: 'Sun’iy yo‘ldosh: © Google (jonli emas)' });
         ctl.addBaseLayer(g, 'Google sun’iy yo‘ldosh');
-        map.removeLayer(esri); g.addTo(map);
+        // switch only when Google really has a picture here (some villages have no close-up imagery → grey tiles)
+        map.whenReady(() => {
+          const z = Math.min(Math.round(map.getZoom()), 20), c = map.project(map.getCenter(), z).divideBy(256).floor();
+          const img = new Image();
+          img.onload = () => { if (map.hasLayer(esri)) { map.removeLayer(esri); g.addTo(map); } };
+          img.src = L.Util.template(url, { x: c.x, y: c.y, z: z });
+        });
         let errors = 0;
         g.on('tileerror', () => { if (++errors === 8 && map.hasLayer(g)) { map.removeLayer(g); esri.addTo(map);
           try { localStorage.removeItem('spx-gtiles'); } catch (_) { } } });
