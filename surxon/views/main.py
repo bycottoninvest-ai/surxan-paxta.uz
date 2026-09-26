@@ -120,7 +120,8 @@ def full_dashboard(year, day, brig, kpi):
         receipts=q('''SELECT nr.*, wb.number FROM nayman_receipts nr JOIN waybills wb ON wb.id=nr.waybill_id
                       WHERE nr.received_date=? ORDER BY nr.id DESC LIMIT 6''', (day,)),
         events=queries.recent_events(6),
-        photos=q('SELECT * FROM photos WHERE voided_at IS NULL' + ('' if sees_finance_photos() else
+        photos=q('SELECT * FROM photos WHERE voided_at IS NULL AND (load_id IS NULL OR load_id NOT IN '
+                 "(SELECT id FROM trailer_loads WHERE status='BEKOR'))" + ('' if sees_finance_photos() else
                  " AND category NOT IN ('cash','expense','payment')") + ' ORDER BY id DESC LIMIT 6'),
         seasons_cmp=queries.season_comparison(), fin=fin, setup=setup, kuz=_kuz(day),
         target=get_float('daily_target_kg', None), map_center=get_setting('map_center'),

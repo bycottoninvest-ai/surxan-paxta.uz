@@ -102,7 +102,8 @@ def photos(limit=3):
     return [{'id': r['id'], 'at': r['created_at'][11:16], 'code': r['code'] or ''} for r in
             q('''SELECT p.id, p.uploaded_at created_at, t.code FROM photos p LEFT JOIN trailer_loads tl ON tl.id=p.load_id
                  LEFT JOIN equipment t ON t.id=tl.trailer_id
-                 WHERE p.voided_at IS NULL AND p.category IN ('trailer','field') ORDER BY p.id DESC LIMIT ?''', (limit,))]
+                 WHERE p.voided_at IS NULL AND p.category IN ('trailer','field') AND COALESCE(tl.status,'')<>'BEKOR'
+                 ORDER BY p.id DESC LIMIT ?''', (limit,))]
 
 
 def feed(limit=10):
