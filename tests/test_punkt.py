@@ -112,7 +112,7 @@ def test_owner_scenario_field_to_punkt(app, world):
                                        (str(wid),))]
         assert 'ARRIVED' in acts and 'RECEIVE' in acts
     done = norm(yunus.get(f'/punkt/yuk/{wid}').get_data(as_text=True))
-    assert '4. Qabul qilindi' in done and '3 480 kg' in done and '-220 kg' in done and 'Qabul hujjati' in done
+    assert '4. Qabul qilindi' in done and '3 480 kg' in done and '-220 kg' in done and 'Tasdiqlangan nakladnoy' in done
 
     # reports see it
     rep = world['admin'].get('/hisobot/punktlar').get_data(as_text=True)
@@ -214,3 +214,54 @@ def test_nakladnoy_pdf_on_phone_view_share_download(app, world):
     # other roles/brigades: a brigadier of another brigade may not fetch it; unknown ids are 404
     assert world['nurim'].get(f'/nakladnoy/{wid}/nakladnoy.pdf').status_code == 403
     assert tally.get('/nakladnoy/99999/nakladnoy.pdf').status_code == 404
+
+
+def test_confirmed_waybill_with_stamp_verify_and_paper_photo(app, world):
+    tally, yunus, ali, _st = setup(app, world)
+    lid = open_load(tally, world)
+    for i in range(4):
+        assert add(tally, lid, f'Akmal {i}', '250')['ok']
+    assert tally.post(f'/yuk/{lid}/toldi', files={'photos': jpeg()}).get_json()['ok']
+    with app.app_context():
+        wid = q('SELECT id FROM waybills WHERE load_id=?', (lid,), one=True)['id']
+    assert yunus.get(f'/punkt/yuk/{wid}/qabul.pdf').status_code == 404               # nothing to confirm before receipt
+    r = yunus.post(f'/punkt/yuk/{wid}/qabul', {'gross_kg': '3710', 'tare_kg': '2700', 'reason': 'Namlik o‘zgarishi'}).get_json()
+    assert r['ok']
+    pdf = yunus.get(f'/punkt/yuk/{wid}/qabul.pdf')
+    assert pdf.status_code == 200 and pdf.data[:4] == b'%PDF'
+    text = norm(pdf_text(pdf.data))
+    assert 'TASDIQLANGAN NAKLADNOY' in text and '1 010 kg' in text and '3 710 kg' in text and 'Elektron muhr' in text
+    assert 'QABUL QILINDI' in text and 'Tekshiruv kodi:' in text and 'so‘m' not in text
+    code = text.split('Tekshiruv kodi:')[1].split()[0]
+    anon = app.test_client()
+    ok = anon.get(f'/tekshir/{wid}/{code}')
+    assert ok.status_code == 200 and 'Muhr haqiqiy' in ok.get_data(as_text=True) and '1 010 kg' in norm(ok.get_data(as_text=True))
+    assert anon.get(f'/tekshir/{wid}/AAAAAAAAAA').status_code == 404
+    # the paper with the punkt's real stamp: photographed and kept; the company sees the confirmed PDF too
+    assert yunus.post(f'/punkt/yuk/{wid}/pechat', files={'photo': jpeg((10, 10, 200))}).get_json()['ok']
+    assert 'Pechatli qog‘oz' in yunus.get(f'/punkt/yuk/{wid}').get_data(as_text=True)
+    with app.app_context():
+        assert scalar("SELECT COUNT(*) FROM photos WHERE entity_type='waybill_stamp' AND entity_id=?", (wid,)) == 1
+    assert 'pechatli qog‘oz rasmi tizimda' in norm(pdf_text(yunus.get(f'/punkt/yuk/{wid}/qabul.pdf').data))
+    assert 'Punkt tasdiqlagan nakladnoy' in world['admin'].get(f'/nakladnoy/{wid}').get_data(as_text=True)
+    assert ali.get(f'/punkt/yuk/{wid}/qabul.pdf').status_code == 403                 # another punkt: no
+
+
+def test_office_enters_punkt_kg_from_stamped_paper(app, world):
+    """The punkt does not use the system: it weighs, writes its kg on the paper and stamps it. The office types the kg
+    and uploads the photo — the confirmed PDF says so honestly."""
+    tally, _yunus, _ali, _st = setup(app, world)
+    lid = open_load(tally, world)
+    assert add(tally, lid, 'Akmal', '200')['ok']
+    assert tally.post(f'/yuk/{lid}/toldi', files={'photos': jpeg()}).get_json()['ok']
+    with app.app_context():
+        wid = q('SELECT id FROM waybills WHERE load_id=?', (lid,), one=True)['id']
+    bux = world['bux']
+    r = bux.post(f'/nayman/{wid}', {'accepted_kg': '198', 'received_date': '2026-09-27', 'diff_reason': 'Tarozi farqi'}).get_json()
+    assert r['ok'], r
+    assert bux.post(f'/nakladnoy/{wid}/pechat', files={'photo': jpeg((200, 30, 30))}).get_json()['ok']
+    page = bux.get(f'/nakladnoy/{wid}').get_data(as_text=True)
+    assert 'Pechatli qog‘oz nakladnoy' in page and 'Punkt tasdiqlagan nakladnoy' in page
+    text = norm(pdf_text(bux.get(f'/punkt/yuk/{wid}/qabul.pdf').data))
+    assert 'korxona kiritdi' in text and '198 kg' in text and 'pechatli qog‘oz rasmi tizimda' in text
+    assert world['juma'].post(f'/nakladnoy/{wid}/pechat', files={'photo': jpeg()}).status_code in (302, 403)

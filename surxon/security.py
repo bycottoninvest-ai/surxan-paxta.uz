@@ -25,7 +25,7 @@ ROLES = {
 }
 
 # Punkt operators get a closed, minimal app: only these endpoints (checked on every request).
-STATION_ENDPOINTS = {'static', 'auth.login', 'auth.logout', 'auth.change_password', 'main.health', 'main.manifest',
+STATION_ENDPOINTS = {'static', 'auth.login', 'auth.logout', 'auth.change_password', 'main.health', 'main.verify_receipt', 'main.manifest',
                      'main.service_worker', 'main.offline', 'main.dashboard'}
 # trip photos on the punkt cards (checked per photo in main.media: only trips sent to that punkt)
 STATION_EXTRA = {'main.media'}

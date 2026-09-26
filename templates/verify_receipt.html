@@ -1,0 +1,20 @@
+<!doctype html><html lang="uz"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Nakladnoy tekshiruvi · SURXON</title><meta name="robots" content="noindex">
+<style>body{margin:0;font-family:system-ui,sans-serif;background:#eef3f9;color:#0f2a4a}.w{max-width:480px;margin:0 auto;padding:24px 16px}
+.logo{display:block;margin:0 auto 16px;height:48px}.c{background:#fff;border-radius:16px;padding:18px;box-shadow:0 2px 12px rgba(0,0,0,.06)}
+.ok{color:#15803d}.bad{color:#b91c1c}h1{font-size:20px;margin:0 0 12px}.r{display:flex;justify-content:space-between;gap:12px;padding:9px 0;border-top:1px solid #e5ebf2;font-size:15px}
+.r span{color:#64748b}.big{font-size:26px;font-weight:800}small{color:#64748b}</style></head><body><div class="w">
+<img class="logo" src="{{ url_for('static', filename='img/logo-dark.png') }}" alt="SURXON">
+<div class="c">{% if ok %}
+  <h1 class="ok">✓ Muhr haqiqiy — punkt qabul qilgan</h1>
+  <div class="r"><span>Nakladnoy</span><b>{{ wb.number }}</b></div>
+  <div class="r"><span>Telashka</span><b>{{ wb.trip_no or '—' }}</b></div>
+  <div class="r"><span>Punkt</span><b>{{ wb.station_name or '—' }}</b></div>
+  <div class="r"><span>Jo‘natilgan</span><b>{{ wb.net_kg|num }} kg</b></div>
+  <div class="r"><span>Tasdiqlangan (punkt netto)</span><b class="big ok">{{ wb.accepted_kg|num }} kg</b></div>
+  <div class="r"><span>Qabul vaqti</span><b>{{ (wb.received_at[:10]|d ~ ' ' ~ wb.received_at[11:16]) if wb.received_at else '—' }}</b></div>
+  <small>{{ company }} · SURXAN-PAXTA.UZ tizimida saqlangan, o‘zgartirilmaydi.</small>
+{% else %}
+  <h1 class="bad">✗ Tasdiqlanmadi</h1>
+  <p>Bu kod bo‘yicha punkt qabul qilgan nakladnoy topilmadi yoki kod noto‘g‘ri. Qog‘ozdagi QR ni qayta skaner qiling.</p>
+{% endif %}</div></div></body></html>

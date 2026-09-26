@@ -3,7 +3,7 @@
 A punkt operator (role 'station') sees only the trips sent to the punkt they are assigned to; every action is
 checked again in services.py, so hiding buttons is never the only protection.
 """
-from flask import Blueprint, abort, flash, g, jsonify, redirect, render_template, request, url_for
+from flask import Blueprint, abort, current_app, flash, g, jsonify, redirect, render_template, request, url_for
 
 from .. import queries
 from ..db import q
@@ -106,7 +106,8 @@ def trip(waybill_id):
     return render_template('punkt_trip.html', wb=wb, state=queries.trip_state(wb), level=level,
                            reasons=STATION_DIFF_REASONS, other_reason=OTHER_REASON, warn=get_float('punkt_warn_pct', 1),
                            alert=get_float('punkt_alert_pct', 3), scale=scale_reading(probe=True),
-                           timeline=queries.load_timeline(wb['load_id']), event_text=queries.EVENT_TEXT)
+                           timeline=queries.load_timeline(wb['load_id']), event_text=queries.EVENT_TEXT,
+                           stamps=_stamp_photos(waybill_id) if wb['receipt_id'] else [])
 
 
 @bp.post('/yuk/<int:waybill_id>/keldi')
@@ -153,11 +154,34 @@ def receipt_pdf(waybill_id):
     wb = _trip_or_404(waybill_id)
     if not wb['receipt_id']:
         abort(404)
-    pdf = build_receipt_pdf(wb, company=get_setting('company_name'))
-    name = f'{wb["trip_no"] or wb["number"]}_{wb["number"]}_qabul.pdf'
+    from ..pdfdoc import receipt_code
+    cfg = current_app.config['SURXON']
+    by = q('''SELECT u.role FROM nayman_receipts nr LEFT JOIN users u ON u.id=nr.created_by WHERE nr.id=?''',
+           (wb['receipt_id'],), one=True)
+    pdf = build_receipt_pdf(wb, company=get_setting('company_name'), code=receipt_code(wb, cfg.SECRET_KEY),
+                            domain=cfg.DOMAIN, stamp_photo=bool(_stamp_photos(waybill_id)),
+                            by_punkt=bool(by and by['role'] == 'station'))
+    name = f'{wb["trip_no"] or wb["number"]}_{wb["number"]}_tasdiqlangan.pdf'
     disp = 'attachment' if request.args.get('download') == '1' else 'inline'
     return Response(pdf, mimetype='application/pdf', headers={'Content-Disposition': f'{disp}; filename="{name}"',
                                                              'Cache-Control': 'private, no-store'})
+
+
+def _stamp_photos(waybill_id):
+    from ..services import stamp_photos
+    return stamp_photos(waybill_id)
+
+
+@bp.post('/yuk/<int:waybill_id>/pechat')
+@perm_required('station.receive')
+def stamp_photo(waybill_id):
+    """Photo of the paper waybill with the punkt's real stamp and signature (after the receipt is saved)."""
+    wb = _trip_or_404(waybill_id)
+    if not wb['receipt_id']:
+        raise UserError('Avval qabulni tasdiqlang.')
+    from ..services import save_stamp_photo
+    save_stamp_photo(post_actor(), waybill_id, read_upload(request.files.get('photo')))
+    return done('Pechatli nakladnoy rasmi saqlandi.', url_for('punkt.trip', waybill_id=waybill_id))
 
 
 @bp.get('/tarix')

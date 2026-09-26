@@ -16,6 +16,20 @@ from . import done, post_actor, scope, season_arg
 bp = Blueprint('main', __name__)
 
 
+@bp.get('/tekshir/<int:waybill_id>/<code>')
+def verify_receipt(waybill_id, code):
+    """Public check of the electronic stamp on a confirmed waybill (the QR on the PDF): is it real, and what did the
+    punkt accept. No login; shows only the waybill number, trip, punkt, kg and time — never money or names of pickers."""
+    from ..pdfdoc import receipt_code
+    wb = queries.waybill(waybill_id)
+    ok = bool(wb and wb['receipt_id'] and wb['status'] == 'QABUL'
+              and receipt_code(wb, current_app.config['SURXON'].SECRET_KEY) == (code or '').upper())
+    resp = make_response(render_template('verify_receipt.html', ok=ok, wb=wb if ok else None,
+                                         company=get_setting('company_name')), 200 if ok else 404)
+    resp.headers['Cache-Control'] = 'no-store'
+    return resp
+
+
 @bp.get('/health')
 def health():
     try:

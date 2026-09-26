@@ -312,7 +312,8 @@ def waybill_detail(waybill_id):
                 WHERE d.waybill_id=? ORDER BY d.version DESC, d.kind''', (waybill_id,))
     return render_template(tpl, wb=wb, workers=workers, photos=queries.photos_for(load_id=wb['load_id']),
                            timeline=queries.load_timeline(wb['load_id']), company=get_setting('company_name'), docs=docs,
-                           payments=q('SELECT * FROM payments WHERE waybill_id=? ORDER BY id', (waybill_id,)))
+                           payments=q('SELECT * FROM payments WHERE waybill_id=? ORDER BY id', (waybill_id,)),
+                           stamps=__import__('surxon.services', fromlist=['stamp_photos']).stamp_photos(waybill_id))
 
 
 @bp.post('/nakladnoy/<int:waybill_id>/bekor')
@@ -360,6 +361,15 @@ def nayman(waybill_id):
     exp = expected_payment(receipt['received_date'], receipt['amount']) if receipt and receipt['amount'] else None
     return render_template('nayman.html', wb=wb, receipt=receipt, reasons=NAYMAN_DIFF_REASONS,
                            default_price=default_price, expected=exp)
+
+
+@bp.post('/nakladnoy/<int:waybill_id>/pechat')
+@perm_required('nayman.write', 'station.receive')
+def waybill_stamp(waybill_id):
+    """The office uploads the photo of the paper waybill the punkt weighed, wrote its kg on and stamped."""
+    from ..services import save_stamp_photo
+    save_stamp_photo(post_actor(), waybill_id, read_upload(request.files.get('photo')))
+    return done('Pechatli nakladnoy rasmi saqlandi.', url_for('ops.waybill_detail', waybill_id=waybill_id))
 
 
 @bp.get('/hujjat/<int:doc_id>')

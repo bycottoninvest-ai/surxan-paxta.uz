@@ -74,158 +74,205 @@ def build_waybill_pdf(wb, *, copy, company, version, generated_at, generated_by,
     c.setAuthor(company)
     c.setSubject('Punkt (Nayman) nusxasi' if copy == 'nayman' else 'Ichki terim hisoboti')
     W, H = A4
-    x0, x1 = 20 * mm, W - 20 * mm
-    y = H - 18 * mm
+    parts = (['1-NUSXA — punktda qoladi', '2-NUSXA — punkt kg yozib, imzo va muhr bilan korxonaga qaytariladi']
+             if copy == 'nayman' else [None])
+    for part in parts:
+        x0, x1 = 20 * mm, W - 20 * mm
+        y = H - 18 * mm
 
-    logo = Path(current_app.static_folder) / 'img' / 'logo-dark.png'
-    if logo.exists():
-        c.drawImage(str(logo), W / 2 - 40 * mm, y - 22 * mm, width=80 * mm, height=24 * mm, mask='auto',
-                    preserveAspectRatio=True, anchor='c')
-    y -= 30 * mm
-    c.setLineWidth(1.2)
-    c.line(x0, y, x1, y)
-    y -= 12 * mm
-    c.setFont('DejaVu-Bold', 17)
-    c.drawCentredString(W / 2, y, 'PUNKT UCHUN NAKLADNOY' if copy == 'nayman' else 'ICHKI TERIM HISOBOTI')
-    y -= 7 * mm
-    c.setFont('DejaVu-Bold', 12)
-    c.drawCentredString(W / 2, y, f'Telashka: {trip}   ·   Nakladnoy № {wb["number"]}' if trip else f'NAKLADNOY № {wb["number"]}')
-    y -= 6 * mm
-    c.setFont('DejaVu', 10)
-    label = 'Punkt / Nayman uchun nusxa' if copy == 'nayman' else 'Ichki hisob uchun (korxona)'
-    c.drawCentredString(W / 2, y, f'{label} · {version}-versiya')
-    c.setFont('DejaVu-Bold', 11)
-    c.drawRightString(x1, y - 8 * mm, _date(wb['document_date']))
-    y -= 16 * mm
-
-    if wb['status'] == 'BEKOR':
-        c.saveState()
-        c.setFillColor(colors.HexColor('#c01b43'))
-        c.setFont('DejaVu-Bold', 44)
-        c.translate(W / 2, H / 2)
-        c.rotate(30)
-        c.drawCentredString(0, 0, 'BEKOR QILINGAN')
-        c.restoreState()
-
-    def table(rows, y, col=62 * mm, row_h=8 * mm, bold_last=False, big=False):
-        for i, (k, v) in enumerate(rows):
-            last = bold_last and i == len(rows) - 1
-            if last:
-                c.setFillColor(colors.HexColor('#e8f6ec'))
-                c.rect(x0, y - row_h, x1 - x0, row_h, stroke=0, fill=1)
-                c.setFillColor(colors.black)
-            c.rect(x0, y - row_h, col, row_h)
-            c.rect(x0 + col, y - row_h, x1 - x0 - col, row_h)
-            c.setFont('DejaVu', 10)
-            c.drawString(x0 + 2.5 * mm, y - row_h + 2.6 * mm, k)
-            c.setFont('DejaVu-Bold', 14 if (last and big) else 10.5)
-            if big:
-                c.drawRightString(x1 - 3 * mm, y - row_h + 2.6 * mm, v)
-            else:
-                c.drawString(x0 + col + 2.5 * mm, y - row_h + 2.6 * mm, v)
-            y -= row_h
-        return y
-
-    top = y
-    col = 52 * mm if copy == 'nayman' and trip else 62 * mm
-    right = x1 - 52 * mm if copy == 'nayman' and trip else x1
-    sent = wb['sent_at'] if 'sent_at' in wb.keys() else None
-
-    def table2(rows, y, row_h=8 * mm):
-        for k, v in rows:
-            c.rect(x0, y - row_h, col, row_h)
-            c.rect(x0 + col, y - row_h, right - x0 - col, row_h)
-            c.setFont('DejaVu', 10)
-            c.drawString(x0 + 2.5 * mm, y - row_h + 2.6 * mm, k)
-            c.setFont('DejaVu-Bold', 10.5)
-            c.drawString(x0 + col + 2.5 * mm, y - row_h + 2.6 * mm, v)
-            y -= row_h
-        return y
-
-    y = table2([
-        ('Jo‘natuvchi', company),
-        ('Qabul qiluvchi (punkt)', wb['destination'] or 'Nayman'),
-        ('Telashka raqami', trip or '—'),
-        ('Dala', f'{wb["field_code"] or ""} · {wb["field_name"] or ""}'),
-        ('Brigada', wb['brigadier_name'] or '—'),
-        ('Jo‘natilgan vaqt', _date(sent) if sent else '—'),
-        ('Transport', f'{wb["tractor_code"] or "—"} · {wb["trailer_code"]}' + (f' · {wb["vehicle_plate"]}' if wb['vehicle_plate'] else '')),
-        ('Haydovchi', wb['driver_name'] or '—'),
-        ('Ishchilar soni', str(workers_count)),
-    ], y)
-    if copy == 'nayman' and trip:
-        payload = qr_payload(trip, domain)
-        _qr(c, payload, x1 - 46 * mm, top - 50 * mm, 46 * mm)
-        c.setFont('DejaVu', 7.5)
-        c.drawCentredString(x1 - 23 * mm, top - 54 * mm, 'QR: punktda skaner qiling')
-        c.setFont('DejaVu-Bold', 9)
-        c.drawCentredString(x1 - 23 * mm, top - 58 * mm, trip)
-    y -= 6 * mm
-    field_sum = wb['basis'] == 'dala'
-    if field_sum:
-        # not a weighbridge netto: the sum of the field-scale weighings (the punkt weighs it again)
-        weights = [('Og‘irlik manbai', 'Dala tarozisi yig‘indisi (tarozi netto emas)'),
-                   ('Dala hisobidagi kg', f'{_num(wb["net_kg"])} kg')]
-    else:
-        weights = [('Brutto', f'{_num(wb["gross_kg"])} kg'), ('Tara', f'{_num(wb["tare_kg"])} kg'),
-                   ('Netto', f'{_num(wb["net_kg"])} kg')]
-    y = table(weights, y, bold_last=True, big=True)
-    if copy == 'ichki' and wb['price_per_kg']:
-        y -= 4 * mm
-        y = table([('Narx', f'{_num(wb["price_per_kg"])} so‘m/kg'),
-                   ('Jami summa (ichki hisob)', f'{_num(wb["net_kg"] * wb["price_per_kg"])} so‘m')], y, big=True)
-    elif copy == 'ichki':
-        y -= 4 * mm
-        c.setFont('DejaVu', 9)
-        c.drawString(x0, y - 4 * mm, 'Narx hali kiritilmagan — summa hisoblanmagan.')
+        logo = Path(current_app.static_folder) / 'img' / 'logo-dark.png'
+        if logo.exists():
+            c.drawImage(str(logo), W / 2 - 40 * mm, y - 22 * mm, width=80 * mm, height=24 * mm, mask='auto',
+                        preserveAspectRatio=True, anchor='c')
+        y -= 30 * mm
+        c.setLineWidth(1.2)
+        c.line(x0, y, x1, y)
+        y -= 12 * mm
+        c.setFont('DejaVu-Bold', 17)
+        c.drawCentredString(W / 2, y, 'PUNKT UCHUN NAKLADNOY' if copy == 'nayman' else 'ICHKI TERIM HISOBOTI')
+        y -= 7 * mm
+        c.setFont('DejaVu-Bold', 12)
+        c.drawCentredString(W / 2, y, f'Telashka: {trip}   ·   Nakladnoy № {wb["number"]}' if trip else f'NAKLADNOY № {wb["number"]}')
         y -= 6 * mm
-    y -= 6 * mm
-    c.setFont('DejaVu', 9)
-    c.drawString(x0, y, f'Dala tarozisida bittalab tortilgan kg yig‘indisi · {_date(wb["tare_at"])}' if field_sum else
-                 f'Brutto: {_date(wb["gross_at"])}   ·   Tara: {_date(wb["tare_at"])}')
-    if copy == 'ichki' and lines:
-        # every worker's kg — the basis of the pickers' pay
-        y -= 8 * mm
+        c.setFont('DejaVu', 10)
+        label = 'Punkt / Nayman uchun nusxa' if copy == 'nayman' else 'Ichki hisob uchun (korxona)'
+        c.drawCentredString(W / 2, y, f'{label} · {version}-versiya')
+        if part:
+            c.setFont('DejaVu-Bold', 9)
+            c.setFillColor(colors.HexColor('#1d4ed8'))
+            c.drawString(x0, y - 8 * mm, part)
+            c.setFillColor(colors.black)
         c.setFont('DejaVu-Bold', 11)
-        c.drawString(x0, y, 'Terimchilar (dala tarozisi)')
-        y -= 3 * mm
-        row_h = 6.2 * mm
-        total = 0
-        for i, (name, kg) in enumerate(lines, 1):
-            if y - row_h < 30 * mm:
-                c.setFont('DejaVu', 8)
-                c.drawString(x0, 14 * mm, f'{trip or wb["number"]} · davomi keyingi sahifada')
+        c.drawRightString(x1, y - 8 * mm, _date(wb['document_date']))
+        y -= 16 * mm
+
+        if wb['status'] == 'BEKOR':
+            c.saveState()
+            c.setFillColor(colors.HexColor('#c01b43'))
+            c.setFont('DejaVu-Bold', 44)
+            c.translate(W / 2, H / 2)
+            c.rotate(30)
+            c.drawCentredString(0, 0, 'BEKOR QILINGAN')
+            c.restoreState()
+
+        def table(rows, y, col=62 * mm, row_h=8 * mm, bold_last=False, big=False):
+            for i, (k, v) in enumerate(rows):
+                last = bold_last and i == len(rows) - 1
+                if last:
+                    c.setFillColor(colors.HexColor('#e8f6ec'))
+                    c.rect(x0, y - row_h, x1 - x0, row_h, stroke=0, fill=1)
+                    c.setFillColor(colors.black)
+                c.rect(x0, y - row_h, col, row_h)
+                c.rect(x0 + col, y - row_h, x1 - x0 - col, row_h)
+                c.setFont('DejaVu', 10)
+                c.drawString(x0 + 2.5 * mm, y - row_h + 2.6 * mm, k)
+                c.setFont('DejaVu-Bold', 14 if (last and big) else 10.5)
+                if big:
+                    c.drawRightString(x1 - 3 * mm, y - row_h + 2.6 * mm, v)
+                else:
+                    c.drawString(x0 + col + 2.5 * mm, y - row_h + 2.6 * mm, v)
+                y -= row_h
+            return y
+
+        top = y
+        col = 52 * mm if copy == 'nayman' and trip else 62 * mm
+        right = x1 - 52 * mm if copy == 'nayman' and trip else x1
+        sent = wb['sent_at'] if 'sent_at' in wb.keys() else None
+
+        def table2(rows, y, row_h=8 * mm):
+            for k, v in rows:
+                c.rect(x0, y - row_h, col, row_h)
+                c.rect(x0 + col, y - row_h, right - x0 - col, row_h)
+                c.setFont('DejaVu', 10)
+                c.drawString(x0 + 2.5 * mm, y - row_h + 2.6 * mm, k)
+                c.setFont('DejaVu-Bold', 10.5)
+                c.drawString(x0 + col + 2.5 * mm, y - row_h + 2.6 * mm, v)
+                y -= row_h
+            return y
+
+        y = table2([
+            ('Jo‘natuvchi', company),
+            ('Qabul qiluvchi (punkt)', wb['destination'] or 'Nayman'),
+            ('Telashka raqami', trip or '—'),
+            ('Dala', f'{wb["field_code"] or ""} · {wb["field_name"] or ""}'),
+            ('Brigada', wb['brigadier_name'] or '—'),
+            ('Jo‘natilgan vaqt', _date(sent) if sent else '—'),
+            ('Transport', f'{wb["tractor_code"] or "—"} · {wb["trailer_code"]}' + (f' · {wb["vehicle_plate"]}' if wb['vehicle_plate'] else '')),
+            ('Haydovchi', wb['driver_name'] or '—'),
+            ('Ishchilar soni', str(workers_count)),
+        ], y)
+        if copy == 'nayman' and trip:
+            payload = qr_payload(trip, domain)
+            _qr(c, payload, x1 - 46 * mm, top - 50 * mm, 46 * mm)
+            c.setFont('DejaVu', 7.5)
+            c.drawCentredString(x1 - 23 * mm, top - 54 * mm, 'QR: punktda skaner qiling')
+            c.setFont('DejaVu-Bold', 9)
+            c.drawCentredString(x1 - 23 * mm, top - 58 * mm, trip)
+        y -= 6 * mm
+        field_sum = wb['basis'] == 'dala'
+        if field_sum:
+            # not a weighbridge netto: the sum of the field-scale weighings (the punkt weighs it again)
+            weights = [('Og‘irlik manbai', 'Dala tarozisi yig‘indisi (tarozi netto emas)'),
+                       ('Dala hisobidagi kg', f'{_num(wb["net_kg"])} kg')]
+        else:
+            weights = [('Brutto', f'{_num(wb["gross_kg"])} kg'), ('Tara', f'{_num(wb["tare_kg"])} kg'),
+                       ('Netto', f'{_num(wb["net_kg"])} kg')]
+        y = table(weights, y, bold_last=True, big=True)
+        if copy == 'ichki' and wb['price_per_kg']:
+            y -= 4 * mm
+            y = table([('Narx', f'{_num(wb["price_per_kg"])} so‘m/kg'),
+                       ('Jami summa (ichki hisob)', f'{_num(wb["net_kg"] * wb["price_per_kg"])} so‘m')], y, big=True)
+        elif copy == 'ichki':
+            y -= 4 * mm
+            c.setFont('DejaVu', 9)
+            c.drawString(x0, y - 4 * mm, 'Narx hali kiritilmagan — summa hisoblanmagan.')
+            y -= 6 * mm
+        y -= 6 * mm
+        c.setFont('DejaVu', 9)
+        c.drawString(x0, y, f'Dala tarozisida bittalab tortilgan kg yig‘indisi · {_date(wb["tare_at"])}' if field_sum else
+                     f'Brutto: {_date(wb["gross_at"])}   ·   Tara: {_date(wb["tare_at"])}')
+        if copy == 'ichki' and lines:
+            # every worker's kg — the basis of the pickers' pay
+            y -= 8 * mm
+            c.setFont('DejaVu-Bold', 11)
+            c.drawString(x0, y, 'Terimchilar (dala tarozisi)')
+            y -= 3 * mm
+            row_h = 6.2 * mm
+            total = 0
+            for i, (name, kg) in enumerate(lines, 1):
+                if y - row_h < 30 * mm:
+                    c.setFont('DejaVu', 8)
+                    c.drawString(x0, 14 * mm, f'{trip or wb["number"]} · davomi keyingi sahifada')
+                    c.showPage()
+                    y = H - 20 * mm
+                c.rect(x0, y - row_h, 12 * mm, row_h)
+                c.rect(x0 + 12 * mm, y - row_h, x1 - x0 - 52 * mm, row_h)
+                c.rect(x1 - 40 * mm, y - row_h, 40 * mm, row_h)
+                c.setFont('DejaVu', 9.5)
+                c.drawRightString(x0 + 10 * mm, y - row_h + 2 * mm, str(i))
+                c.drawString(x0 + 14 * mm, y - row_h + 2 * mm, name[:60])
+                c.drawRightString(x1 - 3 * mm, y - row_h + 2 * mm, f'{_num(kg, 1 if kg % 1 else 0)} kg')
+                total += kg
+                y -= row_h
+            c.setFont('DejaVu-Bold', 11)
+            c.drawRightString(x1 - 3 * mm, y - 6 * mm, f'JAMI: {_num(total, 1 if total % 1 else 0)} kg · {len(lines)} yozuv')
+            y -= 10 * mm
+        if copy == 'nayman':
+            y = _punkt_form(c, x0, x1, y - 6 * mm)
+        y -= 16 * mm if lines and copy == 'ichki' else (12 * mm if copy == 'nayman' else 22 * mm)
+        if copy != 'nayman':                # the punkt copy has signature + stamp boxes in its form instead
+            if y < 24 * mm:                 # signatures need ~10 mm above the footer
                 c.showPage()
-                y = H - 20 * mm
-            c.rect(x0, y - row_h, 12 * mm, row_h)
-            c.rect(x0 + 12 * mm, y - row_h, x1 - x0 - 52 * mm, row_h)
-            c.rect(x1 - 40 * mm, y - row_h, 40 * mm, row_h)
-            c.setFont('DejaVu', 9.5)
-            c.drawRightString(x0 + 10 * mm, y - row_h + 2 * mm, str(i))
-            c.drawString(x0 + 14 * mm, y - row_h + 2 * mm, name[:60])
-            c.drawRightString(x1 - 3 * mm, y - row_h + 2 * mm, f'{_num(kg, 1 if kg % 1 else 0)} kg')
-            total += kg
-            y -= row_h
-        c.setFont('DejaVu-Bold', 11)
-        c.drawRightString(x1 - 3 * mm, y - 6 * mm, f'JAMI: {_num(total, 1 if total % 1 else 0)} kg · {len(lines)} yozuv')
-        y -= 10 * mm
-    y -= 16 * mm if lines and copy == 'ichki' else 22 * mm
-    if y < 24 * mm:                     # signatures need ~10 mm above the footer
+                y = H - 40 * mm
+            c.setLineWidth(0.8)
+            c.line(x0, y, x0 + 70 * mm, y)
+            c.line(x1 - 70 * mm, y, x1, y)
+            c.setFont('DejaVu', 10)
+            c.drawCentredString(x0 + 35 * mm, y - 5 * mm, 'Jo‘natuvchi (imzo)')
+            c.drawCentredString(x1 - 35 * mm, y - 5 * mm, 'Qabul qiluvchi (imzo)')
+        c.setFont('DejaVu', 7.5)
+        c.setFillColor(colors.HexColor('#555555'))
+        c.drawString(x0, 14 * mm, f'SURXON PAXTA HISOB TIZIMI · {wb["number"]} · {version}-versiya · yaratildi {generated_at} · {generated_by}')
+        c.drawString(x0, 10 * mm, 'Raqam tizim tomonidan beriladi va takrorlanmaydi. Oldingi versiyalar arxivda saqlanadi.')
         c.showPage()
-        y = H - 40 * mm
-    c.setLineWidth(0.8)
-    c.line(x0, y, x0 + 70 * mm, y)
-    c.line(x1 - 70 * mm, y, x1, y)
-    c.setFont('DejaVu', 10)
-    c.drawCentredString(x0 + 35 * mm, y - 5 * mm, 'Jo‘natuvchi (imzo)')
-    c.drawCentredString(x1 - 35 * mm, y - 5 * mm, 'Qabul qiluvchi (imzo)')
-    c.setFont('DejaVu', 7.5)
-    c.setFillColor(colors.HexColor('#555555'))
-    c.drawString(x0, 14 * mm, f'SURXON PAXTA HISOB TIZIMI · {wb["number"]} · {version}-versiya · yaratildi {generated_at} · {generated_by}')
-    c.drawString(x0, 10 * mm, 'Raqam tizim tomonidan beriladi va takrorlanmaydi. Oldingi versiyalar arxivda saqlanadi.')
-    c.showPage()
     c.save()
     return buf.getvalue()
+
+
+def _punkt_form(c, x0, x1, y):
+    """Empty boxes the punkt fills in by hand on the printed waybill: its scale weight, the accepted kg, date, who,
+    signature and the punkt's stamp — so the company keeps a waybill confirmed by the punkt."""
+    h = 9 * mm
+    c.setFont('DejaVu-Bold', 10.5)
+    c.drawString(x0, y, 'PUNKT TOMONIDAN TO‘LDIRILADI (qo‘lda)')
+    y -= 2.5 * mm
+    mid = (x0 + x1) / 2
+    rows = [(('Punkt tarozisi — brutto', 'kg'), ('Tara', 'kg')),
+            (('QABUL QILINGAN KG (netto)', 'kg'), None),
+            (('Qabul sanasi va vaqti', ''), None),
+            (('Qabul qildi (F.I.Sh.)', ''), ('Imzo', ''))]
+    for left, right in rows:
+        cells = [(x0, mid if right else x1, left)] + ([(mid, x1, right)] if right else [])
+        for a, b, (label, unit) in cells:
+            c.rect(a, y - h, b - a, h)
+            c.setFont('DejaVu-Bold' if 'QABUL' in label else 'DejaVu', 9.5 if 'QABUL' in label else 8.5)
+            c.drawString(a + 2 * mm, y - h + 3 * mm, label + ':')
+            if unit:
+                c.setFont('DejaVu', 9)
+                c.drawRightString(b - 2.5 * mm, y - h + 3 * mm, unit)
+        y -= h
+    # stamp places
+    y -= 3 * mm
+    box = 30 * mm
+    for a, text in ((x0, 'PUNKT MUHRI'), (x1 - 62 * mm, 'JO‘NATUVCHI MUHRI VA IMZOSI')):
+        c.setDash(3, 2)
+        c.roundRect(a, y - box, 62 * mm, box, 3 * mm)
+        c.setDash()
+        c.setFont('DejaVu', 8)
+        c.setFillColor(colors.HexColor('#777777'))
+        c.drawCentredString(a + 31 * mm, y - box / 2 - 1 * mm, text + ' (M.O.)')
+        c.setFillColor(colors.black)
+    return y - box
 
 
 def build_workers_report_pdf(ld, lines, *, company, generated_at, generated_by):
@@ -308,46 +355,148 @@ def build_workers_report_pdf(ld, lines, *, company, generated_at, generated_by):
     return buf.getvalue()
 
 
-def build_receipt_pdf(wb, *, company):
-    """PUNKT QABUL HUJJATI: one received trip — no price, wages or worker names."""
+def _stamp(c, cx, cy, r, ring, lines, color='#1d4ed8'):
+    """A round electronic stamp: text around the ring, a few lines in the middle (slightly tilted like a real one)."""
+    import math
+    c.saveState()
+    c.translate(cx, cy)
+    c.rotate(-8)
+    col = colors.HexColor(color)
+    c.setStrokeColor(col)
+    c.setFillColor(col)
+    c.setLineWidth(1.6)
+    c.circle(0, 0, r)
+    c.setLineWidth(0.8)
+    c.circle(0, 0, r - 2.2 * mm)
+    c.circle(0, 0, r - 7.2 * mm)
+    c.setFont('DejaVu-Bold', 7.2)
+    ring = (ring + ' • ') * 3
+    rr = r - 5.6 * mm
+    step = 360 / max(len(ring), 1) if len(ring) > 60 else 6.2
+    angle = 90
+    for ch in ring[:int(360 / step)]:
+        rad = math.radians(angle)
+        c.saveState()
+        c.translate(rr * math.cos(rad), rr * math.sin(rad))
+        c.rotate(angle - 90)
+        c.drawCentredString(0, -1.2 * mm, ch)
+        c.restoreState()
+        angle -= step
+    y = (len(lines) - 1) * 2.3 * mm
+    for i, (txt, size) in enumerate(lines):
+        c.setFont('DejaVu-Bold', size)
+        c.drawCentredString(0, y - 1.2 * mm, txt)
+        y -= 4.6 * mm
+    c.restoreState()
+
+
+def receipt_code(wb, secret):
+    """Short check code of a punkt receipt: anyone can verify the stamp on /tekshir/<id>/<code>."""
+    import hashlib
+    import hmac
+    msg = f'{wb["id"]}:{wb["receipt_id"]}:{wb["accepted_kg"]}:{wb["received_at"]}'.encode()
+    return hmac.new((secret or 'surxon').encode(), msg, hashlib.sha256).hexdigest()[:10].upper()
+
+
+def build_receipt_pdf(wb, *, company, code='', domain='', stamp_photo=False, by_punkt=True):
+    """TASDIQLANGAN NAKLADNOY: the waybill as the punkt accepted it — what was sent, what the punkt scale showed,
+    the difference, who accepted and when, an electronic stamp and a QR to verify it. No price, wages or names."""
     _fonts()
     buf = io.BytesIO()
     c = canvas.Canvas(buf, pagesize=A4)
     W, H = A4
     x0, x1 = 18 * mm, W - 18 * mm
     trip = wb['trip_no'] or wb['number']
-    c.setTitle(f'Qabul {trip}')
-    y = H - 20 * mm
-    c.setFont('DejaVu-Bold', 15)
-    c.drawString(x0, y, company)
+    c.setTitle(f'Tasdiqlangan nakladnoy {trip}')
+    c.setAuthor(company)
+    y = H - 16 * mm
+    logo = Path(current_app.static_folder) / 'img' / 'logo-dark.png'
+    if logo.exists():
+        c.drawImage(str(logo), W / 2 - 36 * mm, y - 20 * mm, width=72 * mm, height=22 * mm, mask='auto',
+                    preserveAspectRatio=True, anchor='c')
+    y -= 27 * mm
+    c.setLineWidth(1.2)
+    c.line(x0, y, x1, y)
     y -= 10 * mm
     c.setFont('DejaVu-Bold', 17)
-    c.drawCentredString(W / 2, y, 'PUNKT QABUL HUJJATI')
-    y -= 6 * mm
-    c.setFont('DejaVu', 10)
-    c.drawCentredString(W / 2, y, f'{wb["number"]} · {trip} · {wb["station_name"] or ""}')
-    y -= 10 * mm
+    c.drawCentredString(W / 2, y, 'TASDIQLANGAN NAKLADNOY')
+    y -= 6.5 * mm
+    c.setFont('DejaVu-Bold', 11.5)
+    c.drawCentredString(W / 2, y, f'Nakladnoy № {wb["number"]}   ·   Telashka: {trip}')
+    y -= 5.5 * mm
+    c.setFont('DejaVu', 9.5)
+    c.drawCentredString(W / 2, y, (f'Punkt qabul qildi va tizimda tasdiqladi · {wb["station_name"] or ""}' if by_punkt else
+                                   f'Punkt qog‘oz nakladnoyda tasdiqlagan kg (korxona kiritdi) · {wb["station_name"] or ""}'))
+    y -= 9 * mm
+
+    def rows(items, y, col=62 * mm, big_last=False, fill=None):
+        for i, (k, v) in enumerate(items):
+            last = big_last and i == len(items) - 1
+            h = 10 * mm if last else 8 * mm
+            if last and fill:
+                c.setFillColor(colors.HexColor(fill))
+                c.rect(x0, y - h, x1 - x0, h, stroke=0, fill=1)
+                c.setFillColor(colors.black)
+            c.rect(x0, y - h, col, h)
+            c.rect(x0 + col, y - h, x1 - x0 - col, h)
+            c.setFont('DejaVu', 9.5)
+            c.drawString(x0 + 2.5 * mm, y - h + 2.8 * mm, k)
+            c.setFont('DejaVu-Bold', 15 if last else 10.5)
+            c.drawString(x0 + col + 2.5 * mm, y - h + 2.8 * mm, str(v)[:64])
+            y -= h
+        return y
+
     src = 'dala tarozisi yig‘indisi' if wb['basis'] == 'dala' else 'jo‘natish tarozisi netto'
-    rows = [('Dala', f'{wb["field_code"] or ""} · {wb["field_name"] or ""}'), ('Brigada', wb['brigadier_name'] or '—'),
-            ('Telashka', f'{wb["trailer_code"]}' + (f' · {wb["tractor_code"]}' if wb['tractor_code'] else '')),
-            ('Jo‘natilgan', f'{_num(wb["net_kg"])} kg ({src})')]
+    c.setFont('DejaVu-Bold', 10.5)
+    c.drawString(x0, y, 'JO‘NATILDI')
+    y -= 2.5 * mm
+    y = rows([('Jo‘natuvchi', company), ('Dala', f'{wb["field_code"] or ""} · {wb["field_name"] or ""}'),
+              ('Brigada', wb['brigadier_name'] or '—'),
+              ('Transport', f'{wb["tractor_code"] or "—"} · {wb["trailer_code"]}' + (f' · {wb["vehicle_plate"]}' if wb['vehicle_plate'] else '')),
+              ('Haydovchi', wb['driver_name'] or '—'), ('Nakladnoy sanasi', _date(wb['document_date'])),
+              ('Jo‘natilgan kg', f'{_num(wb["net_kg"])} kg ({src})')], y)
+    y -= 7 * mm
+    c.setFont('DejaVu-Bold', 10.5)
+    c.drawString(x0, y, 'PUNKT QABULI (punkt tarozisi)')
+    y -= 2.5 * mm
+    items = []
     if wb['station_gross_kg'] is not None:
-        rows += [('Punkt brutto', f'{_num(wb["station_gross_kg"])} kg'), ('Punkt tara', f'{_num(wb["station_tare_kg"])} kg')]
-    rows += [('Punkt netto (qabul)', f'{_num(wb["accepted_kg"])} kg'),
-             ('Farq (qabul − jo‘natilgan)', f'{wb["nayman_diff_kg"]:+,.0f} kg'.replace(',', ' ')),
-             ('Sabab', wb['nayman_diff_reason'] or '—'),
-             ('Qabul qildi', f'{wb["receiver_name"] or "—"} · {_date(wb["received_at"])}')]
-    for k, v in rows:
-        c.rect(x0, y - 9 * mm, 62 * mm, 9 * mm)
-        c.rect(x0 + 62 * mm, y - 9 * mm, x1 - x0 - 62 * mm, 9 * mm)
-        c.setFont('DejaVu', 10)
-        c.drawString(x0 + 2.5 * mm, y - 6 * mm, k)
-        c.setFont('DejaVu-Bold', 11)
-        c.drawString(x0 + 64.5 * mm, y - 6 * mm, str(v)[:60])
-        y -= 9 * mm
-    y -= 12 * mm
-    c.setFont('DejaVu', 9)
-    c.drawString(x0, y, 'Qabul qildi: ____________________        Topshirdi (haydovchi): ____________________')
+        items += [('Brutto', f'{_num(wb["station_gross_kg"])} kg'), ('Tara', f'{_num(wb["station_tare_kg"])} kg')]
+    diff = wb['nayman_diff_kg'] or 0
+    pct = (diff / wb['net_kg'] * 100) if wb['net_kg'] else 0
+    items += [('Farq (qabul − jo‘natilgan)', f'{diff:+,.0f} kg ({pct:+.2f}%)'.replace(',', ' ')),
+              ('Farq sababi', wb['nayman_diff_reason'] or '—'),
+              ('Qabul qildi', f'{wb["receiver_name"] or "—"} · {_date(wb["received_at"])}'),
+              ('TASDIQLANGAN KG (netto)', f'{_num(wb["accepted_kg"])} kg')]
+    y = rows(items, y, big_last=True, fill='#e8f6ec')
+    # the stamp and the verification QR
+    sy = y - 34 * mm
+    station = (wb['station_name'] or 'PAXTA QABUL PUNKTI').upper()
+    _stamp(c, x0 + 36 * mm, sy, 26 * mm, f'{station} · ' + ('ELEKTRON MUHR' if by_punkt else 'QOG‘OZDAN KIRITILDI'),
+           [('QABUL QILINDI', 10), (f'{_num(wb["accepted_kg"])} kg', 12), (_date(wb['received_at']), 7.5),
+            (f'№ {wb["number"]}', 7.5)])
+    if code:
+        url = f'https://{domain}/tekshir/{wb["id"]}/{code}' if domain and domain not in ('localhost', '127.0.0.1') \
+            else f'/tekshir/{wb["id"]}/{code}'
+        _qr(c, url, x1 - 42 * mm, sy - 21 * mm, 42 * mm)
+        c.setFont('DejaVu', 7.5)
+        c.drawCentredString(x1 - 21 * mm, sy - 24 * mm, 'Muhrni tekshirish: QR ni skaner qiling')
+        c.setFont('DejaVu-Bold', 9)
+        c.drawCentredString(x1 - 21 * mm, sy - 28 * mm, f'Tekshiruv kodi: {code}')
+    y = sy - 40 * mm
+    c.setLineWidth(0.8)
+    c.line(x0, y, x0 + 70 * mm, y)
+    c.line(x1 - 70 * mm, y, x1, y)
+    c.setFont('DejaVu', 9.5)
+    c.drawCentredString(x0 + 35 * mm, y - 5 * mm, 'Qabul qildi (imzo, muhr)')
+    c.drawCentredString(x1 - 35 * mm, y - 5 * mm, 'Topshirdi (haydovchi, imzo)')
+    c.setFont('DejaVu', 7.5)
+    c.setFillColor(colors.HexColor('#555555'))
+    c.drawString(x0, 16 * mm, ('Elektron muhr: punkt operatori tizimda “Qabulni tasdiqlash” ni bosganda qo‘yiladi. ' if by_punkt else
+                               'Kg punktning pechatli qog‘oz nakladnoyidan kiritilgan. ') + 'Saqlangan qabul o‘zgartirilmaydi.')
+    c.drawString(x0, 12 * mm, f'SURXON PAXTA HISOB TIZIMI · {wb["number"]} · {trip}'
+                 + (' · pechatli qog‘oz rasmi tizimda saqlangan' if stamp_photo else ''))
+    c.showPage()
     c.save()
     return buf.getvalue()
 

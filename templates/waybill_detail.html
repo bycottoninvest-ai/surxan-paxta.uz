@@ -6,6 +6,7 @@
   <span class="spacer"></span>
   {% set nay = docs|selectattr('kind', 'equalto', 'nayman')|first %}
   {% if nay %}<a class="btn btn-red" href="{{ url_for('ops.document', doc_id=nay.id) }}" target="_blank">PDF (Nayman nusxasi)</a>{% endif %}
+  {% if wb.status == 'QABUL' and can('station.view') %}<a class="btn btn-green" href="{{ url_for('punkt.receipt_pdf', waybill_id=wb.id) }}" target="_blank">✓ Punkt tasdiqlagan nakladnoy (muhrli)</a>{% endif %}
   <a class="btn btn-primary" href="{{ url_for('ops.waybill_detail', waybill_id=wb.id, print=1, auto=1) }}" target="_blank">{{ icon('printer','sm') }} Chop etish</a>
   {% if wb.status == 'YARATILDI' and can('nayman.write') %}<a class="btn btn-green" href="{{ url_for('ops.nayman', waybill_id=wb.id) }}">{{ icon('factory','sm') }} Nayman qabuli</a>{% endif %}
 </div>
@@ -44,7 +45,12 @@
       </div>
       <p class="small muted">Sabab: {{ wb.nayman_diff_reason or '—' }} · Qabul sanasi: {{ wb.received_date|d }}</p>
       {% if can('nayman.write') %}<a class="btn btn-light btn-sm" href="{{ url_for('ops.nayman', waybill_id=wb.id) }}">{{ icon('edit','sm') }} Qabulni ko‘rish / tuzatish</a>{% endif %}
-      {% else %}<div class="notice blue">{{ icon('truck') }}<div>Yo‘lda / Nayman qabuli kutilmoqda. Bu kamomad hisoblanmaydi.</div></div>{% endif %}
+      {% else %}<div class="notice blue">{{ icon('truck') }}<div>Yo‘lda / Nayman qabuli kutilmoqda.</div></div>{% endif %}
+      {% if wb.status != 'BEKOR' %}<div class="pk-stamp mt"><b>Pechatli qog‘oz nakladnoy (punkt kg yozib, pechat qo‘ygan)</b>
+        {% if stamps %}<div class="hm-photos">{% for p in stamps %}<img src="{{ photo_url(p.thumb_path) }}" data-full="{{ photo_url(p.path) }}" alt="">{% endfor %}</div>{% else %}<span class="tiny muted">Hali yuklanmagan.</span>{% endif %}
+        {% if can('nayman.write') or can('station.receive') %}<form method="post" action="{{ url_for('ops.waybill_stamp', waybill_id=wb.id) }}" enctype="multipart/form-data" class="pk-stamp-f">{{ csrf() }}
+          <input type="file" name="photo" accept="image/*" capture="environment" required><button class="btn btn-green btn-sm">Rasmni yuklash</button></form>{% endif %}
+        <span class="tiny muted">Tartib: punkt kg ni “Qabulni ko‘rish / tuzatish” da kiriting, pechatli qog‘oz rasmini shu yerga yuklang — “Punkt tasdiqlagan nakladnoy” PDF tayyor bo‘ladi.</span></div>{% endif %}
       {% if payments %}<table class="t mt"><thead><tr><th>To‘lov sanasi</th><th class="num">Summa</th><th>Usul</th><th>Holat</th></tr></thead><tbody>
         {% for p in payments %}<tr class="{{ 'void' if p.voided_at }}"><td>{{ p.payment_date|d }}</td><td class="num">{{ p.amount|num }}</td><td>{{ p.method or '—' }}</td><td class="keep">{{ 'Bekor' if p.voided_at else 'Faol' }}</td></tr>{% endfor %}</tbody></table>{% endif %}
     </div>

@@ -22,6 +22,9 @@ Sxema v11 → v13 (v12: GPS; v13: `media_requests.context/event/batch`, `media_i
   hisobchi, tarozi, punkt, yoqilg'i), dala (hozir o'sha dalada turganlar ham), brigada yoki xodim; bot har biriga yozadi.
   Muddat o'tsa bot bir marta eslatadi; baribir kelmasa bitta umumiy ogohlantirish. GPS texnika uzoq tursa haydovchisidan video.
   Lenta: dashboard, direktor paneli (`/rahbar/kuzatuv`), TV "Bugungi real voqealar" (faqat eskiz, video TV'ga yuklanmaydi).
+- Nakladnoy (punkt nusxasi) 2 nusxada: "PUNKT TOMONIDAN TO'LDIRILADI" (brutto, tara, qabul kg, sana, F.I.Sh., imzo) va
+  punkt muhri / jo'natuvchi muhri joylari. Punkt qabul qilgach: "Tasdiqlangan nakladnoy" PDF (punkt kg, elektron muhr,
+  QR → ochiq `/tekshir/<id>/<kod>`); pechatli qog'oz rasmi punktdan yoki ofisdan (nakladnoy sahifasi) yuklanadi.
 Avvalgi v12 qismi: (ishga tushganda `*.oldin-v11-*.bak`): yangi jadvallar `trackers, vehicle_positions, vehicle_days,
 vehicle_works`; ustunlar `equipment.norm_field_lph/norm_road_lpkm/norm_idle_lph/work_hours`, `fuel_ops.purpose`.
 - GPS treker (GT06): yangi konteyner `gps` (`python -m surxon.gt06`), TCP port **5023** ochiq bo'lishi kerak

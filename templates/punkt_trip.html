@@ -12,9 +12,18 @@
     <div><span>Farq</span><b class="{{ 'pk-red' if wb.nayman_diff_kg < 0 else 'pk-green' }}">{{ '%+.0f'|format(wb.nayman_diff_kg) }} kg</b></div>
     <div class="tiny muted">Jo‘natilgan {{ wb.net_kg|num }} kg{% if wb.station_gross_kg is not none %} · brutto {{ wb.station_gross_kg|num }} − tara {{ wb.station_tare_kg|num }}{% endif %}{% if wb.nayman_diff_reason %} · {{ wb.nayman_diff_reason }}{% endif %}</div>
   </div>
-  {% set doc_url = url_for('punkt.receipt_pdf', waybill_id=wb.id) %}{% set doc_file = (wb.trip_no or '') ~ '_' ~ wb.number ~ '_qabul.pdf' %}
-  {% set doc_title = 'Qabul hujjati' %}{% set doc_sub = 'Jo‘natilgan va qabul kg, farq, sabab' %}
+  {% set doc_url = url_for('punkt.receipt_pdf', waybill_id=wb.id) %}{% set doc_file = (wb.trip_no or '') ~ '_' ~ wb.number ~ '_tasdiqlangan.pdf' %}
+  {% set doc_title = 'Tasdiqlangan nakladnoy (muhrli)' %}{% set doc_sub = 'Punkt kg, farq, elektron muhr va tekshiruv QR' %}
   {% include 'partials/doc_card.html' %}
+  <div class="pk-stamp">
+    <b>Pechatli qog‘oz nakladnoy</b>
+    {% if stamps %}<div class="hm-photos">{% for p in stamps %}<img src="{{ photo_url(p.thumb_path) }}" data-full="{{ photo_url(p.path) }}" alt="">{% endfor %}</div>
+      <span class="tiny muted">✓ Saqlangan. Yana rasm qo‘shish mumkin.</span>{% else %}
+      <span class="tiny muted">Qog‘oz nakladnoyga pechat va imzo qo‘yilgach, rasmga olib shu yerga yuklang — korxona ham ko‘radi.</span>{% endif %}
+    {% if can('station.receive') %}<form method="post" action="{{ url_for('punkt.stamp_photo', waybill_id=wb.id) }}" enctype="multipart/form-data" class="pk-stamp-f">{{ csrf() }}
+      <label class="file-drop d-photo"><input type="file" name="photo" accept="image/*" capture="environment" data-preview required>{{ icon('camera','lg') }}<b>Pechatli nakladnoyni rasmga olish</b><div class="previews"></div></label>
+      <button class="btn btn-green btn-block">Saqlash</button></form>{% endif %}
+  </div>
   <a class="btn btn-primary btn-block d-big" href="{{ url_for('punkt.home') }}">Keyingi telashka ›</a>
 {% else %}
   <div class="d-top"><a class="icon-btn" href="{{ url_for('punkt.home') }}">{{ icon('chev-left') }}</a><span class="small">Orqaga</span></div>

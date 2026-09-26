@@ -10,7 +10,7 @@ from datetime import date, timedelta
 
 from werkzeug.security import generate_password_hash
 
-from .db import get_db, next_counter, trip_number, tx
+from .db import get_db, next_counter, q, trip_number, tx
 from .outbox import enqueue
 from .photos import store_photo
 from .security import ROLES, audit
@@ -1694,3 +1694,24 @@ def settle_cancelled_field_waybills():
                 for wid in workers:
                     mirror_worker(db, wid, o['season_year'])
         return len(rows) + len(orphans)
+
+
+def save_stamp_photo(actor, waybill_id, data):
+    """Photo of the paper waybill after the punkt wrote its kg and put its stamp — from the punkt screen or the office."""
+    if not data:
+        raise UserError('Pechatli nakladnoyni rasmga oling.')
+    with tx() as db:
+        wb = db.execute("SELECT wb.*, tl.season_year sy FROM waybills wb JOIN trailer_loads tl ON tl.id=wb.load_id WHERE wb.id=?",
+                        (waybill_id,)).fetchone()
+        if not wb or wb['status'] == 'BEKOR':
+            raise UserError('Nakladnoy topilmadi.')
+        pid = store_photo(db, actor, data, category='nayman', entity_type='waybill_stamp', entity_id=waybill_id,
+                          caption=f'Pechatli nakladnoy · {wb["number"]}',
+                          links={'waybill_id': waybill_id, 'load_id': wb['load_id'], 'season_year': wb['sy']})
+        audit(db, actor, 'STAMP_PHOTO', 'waybill', waybill_id, new={'photo_id': pid})
+    return pid
+
+
+def stamp_photos(waybill_id):
+    return q("SELECT * FROM photos WHERE entity_type='waybill_stamp' AND entity_id=? AND voided_at IS NULL ORDER BY id",
+             (waybill_id,))
