@@ -86,6 +86,22 @@ Azizbek topshirig‘i: 1) hisobot kanali — ma’lumot doim tushib turadi va sa
 - v2.13.0 yangi TV dashboard `/tv` (foydalanuvchi dizayni bo‘yicha, pulsiz; mavsum rejasi: season_target_kg) — GitHub’da, serverga hali qo‘yilmagan
 - Rollar bo‘yicha rasmli PDF qo‘llanmalar: `docs/qollanma/` (hisobchi, punkt, buxgalter, kassir, yoqilg‘i, direktor, admin)
 
+## 2026-09-26 KUNDUZI — OXIRGI HOLAT (“paxta” deganda shundan boshlang)
+
+- Server: **v2.14.0** ishlayapti (/health tasdiqlandi). GitHub’da **v2.14.1** (zaxira sahifasida sana + tashqi nusxa holati,
+  TV izohi) — keyingi yangilashda qo‘yiladi. Yangilash yo‘li: Hetzner Console → server → `>_` → root (parolni foydalanuvchi
+  o‘zi yozadi; chatga so‘ramang) → `cd /opt/surxan-paxta.uz` → `docker compose exec -T app flask --app app backup` →
+  `git pull --ff-only` → `docker compose up -d --build` → /health. Console’da `&&` yozilmaydi — buyruqlar alohida.
+- Himoya ✅: kunlik zaxira (30 kun) + Storage Box u676951 (Helsinki, “Sinov muvaffaqiyatli”, zaxira xabarida
+  “Serverdan tashqariga nusxalandi”) + Hetzner Backups yoqilgan + Delete/Rebuild Protection yoqilgan.
+  (Backups keyin server → Backups bo‘limida “Disable backups” turganini bir marta tasdiqlash — ro‘yxatda belgi ko‘rinmay qoldi.)
+- Root parol eski (rasmlarda ko‘ringan) — foydalanuvchi almashtirmadi; vaqti bo‘lsa `passwd` taklif qilish.
+- 26.09 kunduzi haqiqiy terim BOSHLANDI. Test reyslar (25.09) hali bekor qilinmagan → kechqurun: Telashkalar → test reys →
+  “Reysni to‘liq bekor qilish” (sabab “Sinov”), solyarka/kassa testlari “Bekor” → Direktor paneli → Mavsum = faqat haqiqiy ish.
+  Bugungi haqiqiy reyslarni ADASHIB bekor qilmaslik: sana va reys raqamiga qarab tanlash.
+- Keyin: UptimeRobot (bepul, /health), Google xarita kaliti, Google Sheets, Hayitvoy bilan solyarka (avval tiket), TV kaliti
+  (Integratsiyalar → TV → Yoqish → kalit), mavsum rejasi (Sozlamalar → season_target_kg).
+
 ## HOZIR QAYERDA TO‘XTADIK (keyingi qadam)
 
 1. 2026-09-26: serverda v2.14.0 (TV + Storage Box sahifasi) — foydalanuvchi Hetzner Console (>_) orqali root bilan o‘zi
