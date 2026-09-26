@@ -10,7 +10,10 @@
   <div class="notice">{{ icon('alert','sm') }} <div><b>Bo‘sh telashka yo‘q.</b><br>Hamma telashkada ochiq ish bor — avval ularni yoping.</div></div>
   {% else %}
   <form method="post" class="d-form" id="d-open">{{ csrf() }}{{ uuid_field() }}
-    <label class="d-l">Dala</label>
+    <input type="hidden" name="lat" id="d-lat"><input type="hidden" name="lon" id="d-lon"><input type="hidden" name="acc" id="d-acc">
+    <div class="d-l" style="display:flex;align-items:center;justify-content:space-between;gap:8px">Dala
+      <button type="button" class="btn btn-light btn-sm" id="d-gps">📍 Joylashuvdan aniqlash</button></div>
+    <div id="d-gps-msg" class="tiny" hidden></div>
     <select name="field_id" required id="d-field">{% for f in fields %}<option value="{{ f.id }}" data-brig="{{ f.brigadier_id or '' }}">{{ f.code }} · {{ f.name }}</option>{% endfor %}</select>
     <label class="d-l">Telashka</label>
     <select name="trailer_id" required>{% for t in trailers %}<option value="{{ t.id }}">{{ t.code }}{{ ' · ' ~ t.plate if t.plate }}</option>{% endfor %}</select>
@@ -28,7 +31,59 @@
   {% endif %}
 </div>
 {% endblock %}
-{% block scripts %}<script>
+{% block scripts %}
+<script id="d-fields" type="application/json">[{% for f in fields if f.polygon_json %}{"id": {{ f.id }}, "label": {{ (f.code ~ ' · ' ~ f.name)|tojson }}, "poly": {{ f.polygon_json|safe }}}{{ ',' if not loop.last }}{% endfor %}]</script>
+<script>
+/* Which field am I in? Phone position → the field contour that contains it, or the nearest one within 500 m.
+   The position also goes with the form (where the trip was opened). Nothing is required: without GPS the list works as before. */
+(function(){
+  const btn = document.getElementById('d-gps'), msg = document.getElementById('d-gps-msg'), sel = document.getElementById('d-field');
+  if (!btn || !sel) return;
+  let fields = []; try { fields = JSON.parse(document.getElementById('d-fields').textContent || '[]'); } catch (_) {}
+  const R = 6371000, rad = d => d * Math.PI / 180;
+  function inside(p, poly) {            // poly: [[lat, lon], ...]
+    let c = false;
+    for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+      const [yi, xi] = poly[i], [yj, xj] = poly[j];
+      if (((yi > p[0]) !== (yj > p[0])) && (p[1] < (xj - xi) * (p[0] - yi) / (yj - yi) + xi)) c = !c;
+    }
+    return c;
+  }
+  function dist(p, poly) {              // metres from the point to the contour's edge
+    const k = Math.cos(rad(p[0])), xy = q => [rad(q[1]) * k * R, rad(q[0]) * R], P = xy(p);
+    let best = Infinity;
+    for (let i = 0; i < poly.length; i++) {
+      const A = xy(poly[i]), B = xy(poly[(i + 1) % poly.length]);
+      const dx = B[0] - A[0], dy = B[1] - A[1], L = dx * dx + dy * dy;
+      let t = L ? ((P[0] - A[0]) * dx + (P[1] - A[1]) * dy) / L : 0; t = Math.max(0, Math.min(1, t));
+      best = Math.min(best, Math.hypot(P[0] - A[0] - t * dx, P[1] - A[1] - t * dy));
+    }
+    return best;
+  }
+  function say(text, ok) { msg.hidden = false; msg.textContent = text; msg.style.color = ok ? '#15803d' : '#b45309'; }
+  function locate(fresh) {
+    if (!navigator.geolocation) return say('Bu telefonda joylashuv yo‘q — dalani ro‘yxatdan tanlang.');
+    say('Joylashuv aniqlanmoqda…', true);
+    navigator.geolocation.getCurrentPosition(pos => {
+      const p = [pos.coords.latitude, pos.coords.longitude], acc = Math.round(pos.coords.accuracy || 0);
+      document.getElementById('d-lat').value = p[0]; document.getElementById('d-lon').value = p[1]; document.getElementById('d-acc').value = acc;
+      let hit = fields.find(f => inside(p, f.poly)), d = 0;
+      if (!hit) {
+        let best = null;
+        fields.forEach(f => { const m = dist(p, f.poly); if (!best || m < best.m) best = { f, m }; });
+        if (best && best.m <= 500) { hit = best.f; d = Math.round(best.m); }
+        else return say(best ? `Hech qaysi dala ichida emassiz (eng yaqini ${best.f.label}, ${(best.m / 1000).toFixed(1)} km). Ro‘yxatdan tanlang.` : 'Dalalar xaritada chizilmagan — ro‘yxatdan tanlang.');
+      }
+      sel.value = String(hit.id); sel.dispatchEvent(new Event('change'));
+      say(d ? `📍 ${hit.label} — dala chetidan ${d} m (±${acc} m). To‘g‘ri bo‘lmasa, ro‘yxatdan o‘zgartiring.` : `📍 Siz ${hit.label} ichidasiz (±${acc} m).`, true);
+    }, err => say(err.code === 1 ? 'Joylashuvga ruxsat berilmadi. Brauzer sozlamasida ruxsat bering yoki dalani ro‘yxatdan tanlang.' : 'Joylashuv topilmadi — ochiq joyda qayta urinib ko‘ring yoki ro‘yxatdan tanlang.'),
+    { enableHighAccuracy: true, timeout: 20000, maximumAge: fresh ? 0 : 60000 });
+  }
+  btn.addEventListener('click', () => locate(true));
+  locate();
+})();
+</script>
+<script>
 (function(){
   const f = document.getElementById('d-field'), b = document.getElementById('d-brig'), r = document.getElementById('d-rate');
   if (!f) return;

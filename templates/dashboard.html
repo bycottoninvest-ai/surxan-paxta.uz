@@ -32,10 +32,11 @@
   <!-- map -->
   <section class="card s5">
     <div class="card-h"><h3>Dalalar xaritasi</h3>
-      <div class="tabs" style="margin-left:auto" data-map-tabs><button class="on" data-mode="yield">Hosildorlik</button><button data-mode="brig">Brigadirlar</button><button data-mode="state">Terim holati</button></div></div>
+      <div class="tabs" style="margin-left:auto" data-map-tabs><button class="on" data-mode="yield">Hosildorlik</button><button data-mode="brig">Brigadirlar</button><button data-mode="state">Terim holati</button><button data-mode="picked">Terilgan joylar</button></div></div>
     <div class="card-b">
       <div class="map" id="fields-map" data-center="{{ map_center }}"></div>
       <script type="application/json" id="fields-data">{{ fields_json|tojson }}</script>
+      <script type="application/json" id="picked-data">{{ picked_json|tojson }}</script>
     </div>
   </section>
 

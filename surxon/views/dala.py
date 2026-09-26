@@ -7,7 +7,7 @@
 from flask import Blueprint, Response, abort, g, jsonify, redirect, render_template, request, url_for
 
 from .. import queries
-from ..db import q
+from ..db import q, tx
 from ..photos import uploads_from_request
 from ..security import can, perm_required
 from ..services import add_harvest, after_waybill_change, mark_full, open_load
@@ -83,6 +83,18 @@ def home():
     return render_template('dala_home.html', open_trips=open_trips, done_trips=done_trips, today=today)
 
 
+def _gps():
+    """Phone position sent with the form (optional): (lat, lon, accuracy m) or None. Never required to save."""
+    try:
+        lat, lon = float(request.form.get('lat', '')), float(request.form.get('lon', ''))
+        acc = float(request.form.get('acc') or 0)
+    except ValueError:
+        return None
+    if not (-90 <= lat <= 90 and -180 <= lon <= 180) or (lat == 0 and lon == 0) or acc < 0 or acc > 5000:
+        return None
+    return round(lat, 7), round(lon, 7), round(acc, 1)
+
+
 @bp.route('/dala/yangi', methods=['GET', 'POST'])
 @perm_required('load.open')
 def new_trip():
@@ -93,12 +105,17 @@ def new_trip():
                         tractor_id=parse_int(request.form.get('tractor_id'), 'Traktor', required=False),
                         method=request.form.get('method') or 'hand', rate=request.form.get('rate'),
                         client_uuid=form_uuid())
+        gps = _gps()
+        if gps:
+            with tx() as db:
+                db.execute('UPDATE trailer_loads SET open_lat=?, open_lon=?, open_acc=? WHERE id=? AND open_lat IS NULL',
+                           gps + (lid,))
         return done('Telashka ochildi.', url_for('dala.trip', load_id=lid), load_id=lid)
     busy = {r['trailer_id'] for r in q("SELECT trailer_id FROM trailer_loads WHERE status IN ('OCHIQ','TOLDI')")}
     trailers = [t for t in q("SELECT id, code, plate FROM equipment WHERE kind='telashka' AND active=1 ORDER BY code")
                 if t['id'] not in busy]
     brig = scope()
-    fields = q('SELECT f.id, f.code, f.name, f.brigadier_id, b.name brigadier_name FROM fields f '
+    fields = q('SELECT f.id, f.code, f.name, f.brigadier_id, f.polygon_json, b.name brigadier_name FROM fields f '
                'LEFT JOIN brigadiers b ON b.id=f.brigadier_id WHERE f.active=1'
                + (' AND (f.brigadier_id=? OR f.brigadier_id IS NULL)' if brig else '') + ' ORDER BY f.code',
                (brig,) if brig else ())
@@ -135,6 +152,10 @@ def weigh(load_id):
                             new_worker=request.form.get('new_worker') == '1',
                             combine_id=parse_int(request.form.get('combine_id'), 'Kombayn', required=False),
                             client_uuid=form_uuid(), confirm_duplicate=request.form.get('confirm_duplicate') == '1')
+    gps = _gps()
+    if gps:
+        with tx() as db:
+            db.execute('UPDATE harvests SET lat=?, lon=?, gps_acc=? WHERE id=? AND lat IS NULL', gps + (hid,))
     t = _totals(load_id)
     row = q('''SELECT h.kg, COALESCE(w.full_name, 'Kombayn ' || e.code) name FROM harvests h
                LEFT JOIN workers w ON w.id=h.worker_id LEFT JOIN equipment e ON e.id=h.combine_id WHERE h.id=?''', (hid,), one=True)

@@ -10,7 +10,7 @@ from contextlib import contextmanager
 
 from flask import current_app, g
 
-SCHEMA_VERSION = 9
+SCHEMA_VERSION = 10
 
 SCHEMA = r'''
 CREATE TABLE IF NOT EXISTS brigadiers (
@@ -901,6 +901,11 @@ def migrate(db):
     _add_column(db, 'fields', 'area_source', "TEXT CHECK (area_source IS NULL OR area_source IN ('xarita','qo‘lda','tasdiqlangan'))")
     db.execute('CREATE UNIQUE INDEX IF NOT EXISTS uq_fields_source ON fields(source_id)')
     _add_column(db, 'field_seasons', 'crop', 'TEXT')
+    # v10: where the phone was — each weighing and the opening of a trip (for “which field” and “where was picked today”)
+    for col in ('lat', 'lon', 'gps_acc'):
+        _add_column(db, 'harvests', col, 'REAL')
+    for col in ('open_lat', 'open_lon', 'open_acc'):
+        _add_column(db, 'trailer_loads', col, 'REAL')
     # Future column changes go here as: if version < N: ALTER TABLE ...
     db.execute('UPDATE schema_version SET version=? WHERE version < ?', (SCHEMA_VERSION, SCHEMA_VERSION))
 

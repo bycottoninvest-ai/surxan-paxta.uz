@@ -120,3 +120,24 @@ def test_cancelling_field_waybill_cancels_the_trip_and_old_ones_are_settled(app,
         assert settle_cancelled_field_waybills() == 1 and settle_cancelled_field_waybills() == 0
         assert scalar('SELECT status FROM trailer_loads WHERE id=?', (lid2,)) == 'BEKOR'
         assert queries.day_kpis(2026, today_str())['harvest'] == 0
+
+
+def test_gps_is_saved_with_trip_and_weighings_and_shown_on_map(app, world):
+    admin = world['admin']
+    tally, _ = setup(app, world)
+    r = tally.post('/dala/yangi', {'trailer_id': world['eq']['TL-01'], 'field_id': world['f']['D-04'], 'method': 'hand',
+                                   'brigadier_id': world['b']['Juma ota'], 'rate': '1500', 'client_uuid': uuid4(),
+                                   'lat': '41.2995', 'lon': '69.2401', 'acc': '12'}).get_json()
+    lid = r['load_id']
+    assert tally.post(f'/dala/reys/{lid}/tortish', {'worker_name': 'Ali', 'kg': '80', 'client_uuid': uuid4(),
+                                                   'lat': '41.29961', 'lon': '69.24022', 'acc': '8'}).get_json()['ok']
+    assert tally.post(f'/dala/reys/{lid}/tortish', {'worker_name': 'Vali', 'kg': '70', 'client_uuid': uuid4(),
+                                                   'lat': 'x', 'lon': ''}).get_json()['ok']          # no GPS still saves
+    with app.app_context():
+        assert q('SELECT open_lat, open_acc FROM trailer_loads WHERE id=?', (lid,), one=True)['open_lat'] == 41.2995
+        rows = q('SELECT lat, gps_acc FROM harvests WHERE load_id=? ORDER BY id', (lid,))
+        assert rows[0]['lat'] == 41.29961 and rows[0]['gps_acc'] == 8 and rows[1]['lat'] is None
+    page = admin.get('/?view=full').get_data(as_text=True)
+    assert 'picked-data' in page and '41.29961' in page and 'Terilgan joylar' in page
+    # the field picker page offers the location button
+    assert 'Joylashuvdan aniqlash' in tally.get('/dala/yangi').get_data(as_text=True)

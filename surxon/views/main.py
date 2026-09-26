@@ -119,6 +119,12 @@ def full_dashboard(year, day, brig, kpi):
                       'brigadier': f['brigadier_name'], 'net': f['net_kg'], 'active': f['active_loads'],
                       'poly': json.loads(f['polygon_json']) if f['polygon_json'] else None,
                       'url': url_for('admin.field_detail', field_id=f['id'])} for f in fields],
+        picked_json=[dict(r) for r in q('''SELECT ROUND(h.lat,6) lat, ROUND(h.lon,6) lon, h.kg, substr(h.created_at,12,5) t,
+                                                  tl.trip_no trip, f.code field FROM harvests h
+                                           JOIN trailer_loads tl ON tl.id=h.load_id LEFT JOIN fields f ON f.id=h.field_id
+                                           WHERE h.work_date=? AND h.voided_at IS NULL AND h.lat IS NOT NULL'''
+                                        + (' AND h.brigadier_id=?' if brig else '') + ' ORDER BY h.id LIMIT 3000',
+                                        (day, brig) if brig else (day,))],
         weather={'lat': get_setting('weather_lat'), 'lon': get_setting('weather_lon'), 'place': get_setting('weather_place')})
 
 

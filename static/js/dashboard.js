@@ -74,31 +74,46 @@
     let layer = L.layerGroup().addTo(map);
     let legend;
     function colour(f, mode) {
+      if (mode === 'picked') return '#9aa8b8';
       if (mode === 'brig') return brigColors[brigs.indexOf(f.brigadier) % brigColors.length];
       if (mode === 'state') return f.active ? '#2f80ed' : (f.net ? '#1e9e4a' : '#9aa8b8');
       const y = f.area ? f.net / f.area : 0;
       if (!f.net) return '#9aa8b8';
       return y >= maxY * .9 ? '#1e9e4a' : y >= maxY * .75 ? '#f28b1c' : '#ee2f5b';
     }
+    let labelled = [];
+    const picked = (() => { try { return JSON.parse((document.getElementById('picked-data') || {}).textContent || '[]'); } catch (_) { return []; } })();
+    const syncLabels = () => { const on = map.getZoom() >= 15; labelled.forEach(p => { const t = p.getTooltip(); if (!t) return; on ? p.openTooltip() : p.closeTooltip(); }); };
+    map.on('zoomend', syncLabels);
     function draw(mode) {
-      layer.clearLayers();
+      layer.clearLayers(); labelled = [];
       const bounds = [];
       fields.forEach(f => {
         if (!f.poly) return;
         const col = colour(f, mode);
         const p = L.polygon(f.poly, { color: col, weight: 2, fillColor: col, fillOpacity: .38 }).addTo(layer);
         const y = f.area ? Math.round(f.net / f.area) : 0;
+        // labels only when zoomed in — at field-overview zoom they pile on top of each other
         p.bindTooltip(`<b>${f.name}</b><br>${f.area} ga${f.confirmed === false ? ' (xarita)' : ''}${f.net ? '<br>' + fmt(y) + ' kg/ga' + (f.confirmed === false ? ' ~' : '') : ''}`, { permanent: true, direction: 'center', className: 'map-label' });
+        labelled.push(p);
         p.on('click', () => location.href = f.url);
         bounds.push(...f.poly);
       });
-      if (bounds.length) map.fitBounds(bounds, { padding: [12, 12] });
+      if (mode === 'picked') {
+        // where the cotton was weighed today (phone position of each weighing)
+        picked.forEach(pt => L.circleMarker([pt.lat, pt.lon], { radius: 5, color: '#fff', weight: 1, fillColor: '#ffd23f', fillOpacity: .95 })
+          .bindTooltip(`${window.surxonEsc(pt.field || '')} · ${window.surxonEsc(pt.trip || '')}<br>${fmt(pt.kg)} kg · ${pt.t}`).addTo(layer));
+        const pb = picked.map(pt => [pt.lat, pt.lon]);
+        if (pb.length) { map.fitBounds(pb, { padding: [30, 30], maxZoom: 17 }); }
+      } else if (bounds.length) map.fitBounds(bounds, { padding: [12, 12] });
+      syncLabels();
       if (legend) legend.remove();
       legend = L.control({ position: 'topright' });
       legend.onAdd = () => {
         const d = L.DomUtil.create('div', 'legend map-legend');
         const items = mode === 'brig' ? brigs.map((b, i) => [brigColors[i % brigColors.length], b || '—'])
           : mode === 'state' ? [['#2f80ed', 'Terim davom etmoqda'], ['#1e9e4a', 'Terim bo‘lgan'], ['#9aa8b8', 'Hali boshlanmagan']]
+          : mode === 'picked' ? [['#ffd23f', picked.length ? `Tortish joyi (${picked.length} ta)` : 'Bu kunda joylashuvli tortish yo‘q']]
           : [['#1e9e4a', 'Yuqori hosil'], ['#f28b1c', 'O‘rtacha hosil'], ['#ee2f5b', 'Past hosil'], ['#9aa8b8', 'Ma’lumot yo‘q']];
         d.innerHTML = items.map(([col, t]) => `<div><i style="background:${col}"></i>${window.surxonEsc(t)}</div>`).join('');
         return d;
