@@ -20,7 +20,7 @@
   <div class="rb-sec"><b>Amallar</b></div>
   <div class="hm-ops">{% for o in ops %}<a class="hm-op {{ 'hm-void' if o.voided_at }}" href="{{ url_for('yoqilgi.op_view', op_id=o.id) }}">
       {% if o.thumb_path %}<img class="rb-thumb" src="{{ photo_url(o.thumb_path) }}" alt="">{% else %}<span class="hm-op-ico {{ 'in' if o.kind == 'OLISH' }}">{{ icon('fuel') }}</span>{% endif %}
-      <span class="hm-op-b"><b>{{ o.station_code if o.kind == 'OLISH' else o.equipment_code }}</b><small>{{ 'Olindi' if o.kind == 'OLISH' else 'Berildi' }} · {{ o.created_at[5:16] }} · {{ o.keeper_name }}</small></span>
+      <span class="hm-op-b"><b>{{ o.station_code if o.kind == 'OLISH' else o.equipment_code }}</b><small>{{ 'Olindi' if o.kind == 'OLISH' else 'Berildi' }}{{ ' · ' ~ o.purpose if o.purpose }} · {{ o.created_at[5:16] }} · {{ o.keeper_name }}</small></span>
       <span class="hm-op-s"><b class="num">{{ '+' if o.kind == 'OLISH' else '−' }}{{ o.liters|num }} L</b>{% if o.flag %}<span class="badge b-orange">tekshirish</span>{% endif %}</span></a>
   {% else %}{{ empty('Bu davrda amal yo‘q', 'fuel') }}{% endfor %}</div>
   <div class="tiny muted">Berilgan litr — texnikaga quyilgan miqdor, o‘lchangan sarf emas. QR skan joylashuv (GPS) emas.</div>

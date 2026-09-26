@@ -1,0 +1,61 @@
+{% extends 'base.html' %}
+{% from 'macros.html' import icon, empty with context %}
+{% set page_title = 'Dalalar tarixi' %}
+{% block content %}
+<div class="d-wrap rb">
+  {% with rb_title='Dalalar tarixi', rb_back=url_for('rahbar.home'), rb_no_period=True %}{% include 'partials/rb_head.html' %}{% endwith %}
+  <div class="small muted">{{ year }}-mavsum · dalaga bosing — shu dalada nima qilingani chiqadi</div>
+  <div id="fh-map" class="sm-map fh-map spx-vivid"></div>
+  <div class="fl-legend"><span class="k-pick">Terilgan</span><span class="k-job">Texnika ishlagan</span><span class="k-none">Hali ish yo‘q</span></div>
+  <div id="fh-card" class="fh-card" hidden></div>
+  <div class="hm-ops" id="fh-list">
+    {% for f in fields %}<a class="hm-op" href="#" data-id="{{ f.id }}">
+      <span class="fl-pct fh-k-{{ f.kind or 'none' }}">{{ f.code }}</span>
+      <span class="hm-op-b"><b>{{ f.name }}{% if f.ha %} · {{ f.ha|round(1) }} ga{% endif %}</b><small>{% if f.last %}oxirgi: {{ f.what }} · {{ f.last|d }}{% else %}bu mavsumda ish qayd etilmagan{% endif %}</small></span></a>
+    {% else %}{{ empty('Dalalar konturi hali yuklanmagan.', 'map') }}{% endfor %}
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}<link rel="stylesheet" href="{{ url_for('static', filename='vendor/leaflet/leaflet.css') }}">
+<script src="{{ url_for('static', filename='vendor/leaflet/leaflet.js') }}"></script>
+<script src="{{ url_for('static', filename='js/basemap.js') }}"></script>
+{% include 'partials/rb_poll.html' %}
+<script>
+(function () {
+  const FIELDS = {{ fields|tojson }}, JSONU = '{{ url_for('rahbar.field_json', field_id=0) }}'.replace('/0.json', '/');
+  const OPEN = {{ (open_id or 0)|tojson }};
+  const esc = window.surxonEsc || (s => String(s));
+  const KC = { pick: '#22c55e', job: '#f59e0b', none: '#e2e8f0' };
+  const RC = { 1: '#22c55e', 2: '#0ea5e9', 3: '#a855f7' };
+  const map = L.map('fh-map', { attributionControl: false, maxZoom: 20 });
+  if (window.spxBasemap) spxBasemap(map);
+  map.setView([{{ center[0] }}, {{ center[1] }}], 12);
+  const shapes = {}; let layer = null;
+  FIELDS.forEach(f => {
+    shapes[f.id] = L.polygon(f.poly, { color: KC[f.kind || 'none'], weight: 2, fillOpacity: f.kind ? .25 : .05 })
+      .bindTooltip(f.code, { permanent: false }).on('click', () => open(f.id)).addTo(map);
+  });
+  if (FIELDS.length) map.fitBounds(FIELDS.flatMap(f => f.poly), { padding: [20, 20] });
+  const d = s => s ? s.slice(8, 10) + '.' + s.slice(5, 7) : '';
+  const span = (a, b) => a ? d(a) + (b && b !== a ? '–' + d(b) : '') : '';
+  async function open(id) {
+    const card = document.getElementById('fh-card');
+    card.hidden = false; card.innerHTML = '<div class="small muted">Yuklanmoqda…</div>';
+    const h = await (await fetch(JSONU + id + '.json', { headers: { 'X-Requested-With': 'fetch' } })).json();
+    if (layer) layer.remove();
+    const parts = [], all = [];
+    h.rounds.forEach(r => r.polys.forEach(p => { all.push(...p); parts.push(L.polygon(p, { color: RC[r.round], weight: .5, fillColor: RC[r.round], fillOpacity: .5 })); }));
+    h.works.forEach(w => w.polys.forEach(p => { all.push(...p); parts.push(L.polygon(p, { color: '#f59e0b', weight: .5, fillColor: '#f59e0b', fillOpacity: .3, dashArray: '3 3' })); }));
+    layer = L.layerGroup(parts).addTo(map);
+    if (h.poly) map.fitBounds(h.poly, { padding: [20, 20] });
+    const rows = [];
+    h.rounds.forEach(r => rows.push(`<div class="fh-row"><span class="fh-dot" style="background:${RC[r.round]}"></span><div><b>${r.label}</b> · ${span(r.first, r.last)}<br><small>${r.kg ? r.kg.toLocaleString('ru-RU').replace(/,/g, ' ') + ' kg · ' : ''}${r.trips} reys${r.ha ? ' · ' + r.ha + ' ga (' + r.pct + '%)' : ''}${r.cha ? ' · ' + r.cha + ' s/ga' : ''}</small></div></div>`));
+    h.works.forEach(w => rows.push(`<div class="fh-row"><span class="fh-dot" style="background:#f59e0b"></span><div><b>${esc(w.job)}</b> · ${span(w.first, w.last)}<br><small>≈ ${w.ha} ga (${w.pct}%) · ${w.hours} soat · ${esc(w.machines.join(', '))}</small></div></div>`));
+    card.innerHTML = `<div class="fh-h"><b>${esc(h.code)} · ${esc(h.name || '')}</b><span>${h.area_ha ? h.area_ha.toFixed(1) + ' ga' : ''}</span></div>`
+      + (rows.length ? rows.join('') : '<div class="small muted">Bu mavsumda bu dalada ish qayd etilmagan.</div>');
+    card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+  document.querySelectorAll('#fh-list [data-id]').forEach(a => a.addEventListener('click', e => { e.preventDefault(); open(Number(a.dataset.id)); window.scrollTo(0, 0); }));
+  if (OPEN) open(OPEN);
+})();
+</script>{% endblock %}

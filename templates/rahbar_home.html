@@ -53,6 +53,8 @@
     <span>{% if fleet.n %}{{ fleet.work }} ta ishlayapti / {{ fleet.n }}{% if fleet.alerts %} · ⚠ {{ fleet.alerts }} ta e’tibor{% endif %}{% else %}GPS treker hali ulanmagan{% endif %}</span>{{ icon('chev-right') }}</a>
   {% if fleet.today %}<div class="rb-works"><b>Bugun bajarilgan ishlar</b>
     {% for w in fleet.today %}<div><span>{{ w.code }} · {{ w.job }}</span><span>≈ {{ w.ha }} ga ({{ w.pct }}%) · {{ w.machines|join(', ') }}</span></div>{% endfor %}</div>{% endif %}
+  <a class="rb-staff rb-fields" href="{{ url_for('rahbar.fields_map') }}">🗺 <b>Dalalar tarixi</b>
+    <span>har bir dalada nima qilingan: terimlar, shudgor, lazer…</span>{{ icon('chev-right') }}</a>
   <div class="rb-sec"><b>So‘nggi hodisalar</b></div>
   <div class="hm-ops">
     {% for e in feed %}<a class="hm-op" {% if e.link %}href="{{ url_for(e.link[0], **e.link[1]) }}"{% endif %}>

@@ -104,7 +104,11 @@ def op_view(op_id):
     if not o or (g.user['role'] == 'fuel' and o['keeper_id'] != g.user['id']):
         abort(404)
     cost = F.give_cost(get_db(), o) if o['kind'] == 'BERISH' and not o['voided_at'] and (can('fuel.view') or can('fuel.manage')) else None
-    return render_template('fuel_op.html', o=o, fresh=request.args.get('yangi') == '1', cost=cost,
+    use = None
+    if o['kind'] == 'BERISH' and not o['voided_at'] and (can('fuel.view') or can('fuel.manage')):
+        from ..fleet import fuel_use
+        use = fuel_use(o)
+    return render_template('fuel_op.html', o=o, fresh=request.args.get('yangi') == '1', cost=cost, use=use,
                            have=F.keeper_liters(get_db(), o['keeper_id']))
 
 

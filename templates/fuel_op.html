@@ -13,6 +13,7 @@
     {% else %}
     <div class="hm-rv-row"><span>Texnika</span><b>{{ o.equipment_code }}{{ ' · ' ~ o.equipment_plate if o.equipment_plate }}</b></div>
     {% endif %}
+    {% if o.purpose %}<div class="hm-rv-row"><span>Nima ish uchun</span><b>{{ o.purpose }}</b></div>{% endif %}
     <div class="hm-rv-big {{ 'hm-in' if o.kind == 'OLISH' }}"><span>Miqdor</span><b class="num">{{ o.liters|num }} L</b></div>
     {% if o.kind == 'OLISH' and (can('fuel.view') or can('fuel.manage') or o.keeper_id == current_user['id']) %}
     <div class="hm-rv-row"><span>Narx · summa</span><b class="num">{{ o.price_per_l|num }} × {{ o.liters|num }} = {{ o.amount|num }} so‘m</b></div>{% endif %}
@@ -24,9 +25,35 @@
     {% if o.flag %}<div class="hm-rv-row"><span>Tekshirish belgisi</span><b class="hm-red">{{ o.flag }}</b></div>
     <div class="hm-rv-row"><span>Sabab</span><b>{{ o.reason }}{{ ' — ' ~ o.reason_note if o.reason_note }}</b></div>{% endif %}
   </div>
+  {% if use %}<div class="rb-sec"><b>Bu solyarka qayerda ishlatildi (GPS)</b></div>
+  <div class="small muted">{{ use.from[:10]|d }} {{ use.from[11:16] }} dan {{ 'hozirgacha' if use.open else (use.to[:10]|d ~ ' ' ~ use.to[11:16] ~ ' gacha (keyingi quyish)') }}</div>
+  <div id="fo-map" class="sm-map fo-map spx-vivid"></div>
+  <div class="hm-card">
+    {% for w in use.works %}<div class="hm-rv-row"><span>{{ w.code }} · {{ w.job }}</span><b>{{ w.hours }} soat · ≈ {{ w.ha }} ga · ~{{ w.litres }} L</b></div>{% endfor %}
+    {% if use.road_km %}<div class="hm-rv-row"><span>Yo‘lda</span><b>{{ use.road_km }} km · ~{{ use.road_l }} L</b></div>{% endif %}
+    {% if use.idle_h %}<div class="hm-rv-row"><span>Motor yoniq turdi</span><b>{{ use.idle_h }} soat · ~{{ use.idle_l }} L</b></div>{% endif %}
+    {% if not use.works and not use.road_km and not use.idle_h %}<div class="hm-rv-row"><span>GPS bo‘yicha hali ish qayd etilmagan</span><b>—</b></div>{% endif %}
+    <div class="hm-rv-big"><span>Me’yor bo‘yicha · berildi</span><b class="num">{{ use.expected|num }} L · {{ use.given|num }} L</b></div>
+  </div>
+  <div class="tiny muted">Me’yor taxminiy: ish turi l/soat, yo‘l l/km, turganda l/soat (Sozlamalar va Texnikalar).</div>{% endif %}
   {% if o.photo_path %}<div class="hm-photos"><img src="{{ photo_url(o.thumb_path or o.photo_path) }}" data-full="{{ photo_url(o.photo_path) }}" alt=""></div>{% endif %}
   <div class="fu-have fu-have-s"><span>{{ 'Menda qolgan' if o.keeper_id == current_user['id'] else o.keeper_name ~ 'da qolgan' }}</span><b class="num">{{ have|num }} L</b></div>
   <div class="tiny muted">QR skan joylashuvni (GPS) bildirmaydi — faqat kod o‘qilganini va vaqtini. Berilgan litr — texnikaga quyilgan miqdor, o‘lchangan sarf emas.</div>
   <a class="btn btn-primary btn-block d-big" href="{{ url_for('yoqilgi.home') }}">{{ icon('home','sm') }} Bosh sahifaga</a>
 </div>
 {% endblock %}
+{% block scripts %}{% if use %}<link rel="stylesheet" href="{{ url_for('static', filename='vendor/leaflet/leaflet.css') }}">
+<script src="{{ url_for('static', filename='vendor/leaflet/leaflet.js') }}"></script>
+<script src="{{ url_for('static', filename='js/basemap.js') }}"></script>
+<script>
+(function () {
+  const USE = {{ use|tojson }};
+  const COLOR = { field: '#22c55e', road: '#3b82f6', idle: '#f59e0b' };
+  const map = L.map('fo-map', { attributionControl: false, maxZoom: 20 });
+  if (window.spxBasemap) spxBasemap(map);
+  const all = [];
+  USE.works.forEach(w => w.polys.forEach(p => { all.push(...p); L.polygon(p, { color: '#22c55e', weight: .5, fillColor: '#22c55e', fillOpacity: .45 }).addTo(map); }));
+  USE.runs.forEach(r => { all.push(...r.pts); L.polyline(r.pts, { color: COLOR[r.kind] || '#fff', weight: 3, opacity: .9 }).addTo(map); });
+  if (all.length) map.fitBounds(all, { padding: [20, 20] }); else map.setView([42.3, 59.6], 11);
+})();
+</script>{% endif %}{% endblock %}

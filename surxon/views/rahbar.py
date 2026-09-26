@@ -107,6 +107,27 @@ def fleet_json():
     return jsonify(machines=fleet.live(), at=now_str()[11:19])
 
 
+@bp.get('/rahbar/dalalar')
+@perm_required(VIEW)
+def fields_map():
+    from .. import fleet
+    from ..settings import get_setting
+    year = season_arg()
+    c = (get_setting('map_center') or '42.3,59.6').split(',')
+    return render_template('rahbar_fields.html', **_ctx(fields=fleet.fields_overview(year), center=[float(c[0]), float(c[1])],
+                                                         open_id=request.args.get('dala', type=int)))
+
+
+@bp.get('/rahbar/dala/<int:field_id>.json')
+@perm_required(VIEW)
+def field_json(field_id):
+    from .. import fleet
+    h = fleet.field_history(field_id, season_arg())
+    if not h:
+        abort(404)
+    return jsonify(h)
+
+
 @bp.get('/rahbar/avatar/<path:rel>')
 @perm_required(VIEW)
 def avatar(rel):

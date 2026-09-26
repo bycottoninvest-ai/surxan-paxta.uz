@@ -282,6 +282,12 @@ def expected_l(eq, st):
     return total + st['road_km'] * road + st['idle_h'] * idle
 
 
+def data_days(eid, a, b):
+    """Days in [a, b] on which the machine sent positions (index-only scan)."""
+    return [r['d'] for r in q('''SELECT DISTINCT substr(at,1,10) d FROM vehicle_positions WHERE equipment_id=? AND at BETWEEN ? AND ?
+                                 ORDER BY d''', (eid, a + ' 00:00:00', min(b, today_str()) + ' 23:59:59'))]
+
+
 def _days(a, b):
     d, e = date.fromisoformat(a), date.fromisoformat(min(b, today_str()))
     while d <= e:
@@ -389,7 +395,7 @@ def usage(date_from, date_to):
     out = []
     for e in machines():
         tot = {'engine_h': 0.0, 'field_h': 0.0, 'road_km': 0.0, 'idle_h': 0.0, 'exp': 0.0}
-        for day in _days(date_from, date_to):
+        for day in data_days(e['id'], date_from, date_to):
             st = day_stats(e, day)
             for k in ('engine_h', 'field_h', 'road_km', 'idle_h'):
                 tot[k] += st[k]
@@ -413,7 +419,7 @@ def works(date_from, date_to, field_id=None):
     ncells = {}
     agg = {}
     for e in machines():
-        for day in _days(date_from, date_to):
+        for day in data_days(e['id'], date_from, date_to):
             for (fid, job), w in day_stats(e, day)['works'].items():
                 if field_id and fid != field_id:
                     continue
@@ -497,3 +503,123 @@ def save_machine_gps(actor, eid, *, imei, norm_field='', norm_road='', norm_idle
         if tuple(old) != new:
             db.execute('UPDATE equipment SET norm_field_lph=?, norm_road_lpkm=?, norm_idle_lph=?, work_hours=? WHERE id=?', new + (eid,))
             audit(db, actor, 'UPDATE', 'equipment', eid, old=dict(old), new=dict(zip(old.keys(), new)))
+
+
+
+# ------------------------------------------------------------------ one fuel issue: where was it used
+
+def range_stats(eq, start, end):
+    """Like analyse() but for any time window (may span days); also the path runs for a map."""
+    res = {'engine_h': 0.0, 'field_h': 0.0, 'road_km': 0.0, 'idle_h': 0.0, 'works': {}, 'runs': []}
+    locs = {f[0]: f[4] for f in fields()}
+    for day in data_days(eq['id'], start[:10], end[:10]):
+        for a, b, kind, dt, km, fid, job in segments(eq, day):
+            if not (start <= a['at'] < end):
+                continue
+            h = dt / 3600
+            if kind in ('field', 'road', 'idle'):
+                res['engine_h'] += h
+            if kind == 'idle':
+                res['idle_h'] += h
+            elif kind == 'road':
+                res['road_km'] += km
+            elif kind == 'field':
+                res['field_h'] += h
+                w = res['works'].setdefault((fid, job), {'h': 0.0, 'km': 0.0, 'cells': set()})
+                w['h'] += h
+                w['km'] += km
+                loc, n = locs.get(fid), max(1, int(km * 1000 / 10))
+                for k in range(n + 1):
+                    c = loc(a['lat'] + (b['lat'] - a['lat']) * k / n, a['lon'] + (b['lon'] - a['lon']) * k / n) if loc else None
+                    if c:
+                        w['cells'].add(c)
+            if kind == 'off':
+                continue
+            r = res['runs']
+            if r and r[-1]['kind'] == kind and r[-1]['pts'][-1] == [a['lat'], a['lon']]:
+                r[-1]['pts'].append([b['lat'], b['lon']])
+            else:
+                r.append({'kind': kind, 'pts': [[a['lat'], a['lon']], [b['lat'], b['lon']]]})
+    return res
+
+
+def fuel_use(op):
+    """For a BERISH: from this fill-up until the machine's next one — where it worked, and the expected litres."""
+    if not op or op['kind'] != 'BERISH' or not op['equipment_id']:
+        return None
+    eq = q('SELECT e.*, t.imei FROM equipment e LEFT JOIN trackers t ON t.equipment_id=e.id WHERE e.id=?', (op['equipment_id'],), one=True)
+    if not eq or not eq['imei']:
+        return None
+    nxt = q('''SELECT created_at FROM fuel_ops WHERE equipment_id=? AND kind='BERISH' AND voided_at IS NULL AND created_at>?
+               ORDER BY created_at LIMIT 1''', (eq['id'], op['created_at']), one=True)
+    end = nxt['created_at'] if nxt else now_str()
+    st = range_stats(eq, op['created_at'], end)
+    exp = expected_l(eq, st)
+    names = {r['id']: r['code'] for r in q('SELECT id, code FROM fields')}
+    from . import geo
+    polys = {r['id']: json.loads(r['polygon_json']) for r in q('SELECT id, polygon_json FROM fields WHERE polygon_json IS NOT NULL')}
+    cell_ha = {f[0]: f[5] for f in fields()}
+    works_ = []
+    for (fid, job), w in sorted(st['works'].items(), key=lambda x: -x[1]['h']):
+        if w['h'] < 0.1:
+            continue
+        cells = [c['poly'] for c in geo.field_grid(polys.get(fid))[0] if c['id'] in w['cells']] if polys.get(fid) else []
+        works_.append({'code': names.get(fid, '?'), 'job': job, 'hours': round(w['h'], 1),
+                       'ha': round(len(w['cells']) * cell_ha.get(fid, 0), 1), 'polys': cells,
+                       'litres': round(w['h'] * norms(eq, job)[0])})
+    return {'code': eq['code'], 'from': op['created_at'], 'to': end, 'open': not nxt, 'engine_h': round(st['engine_h'], 1),
+            'field_h': round(st['field_h'], 1), 'road_km': round(st['road_km'], 1), 'idle_h': round(st['idle_h'], 1),
+            'expected': round(exp), 'given': op['liters'], 'works': works_, 'runs': st['runs'],
+            'road_l': round(st['road_km'] * norms(eq)[1]), 'idle_l': round(st['idle_h'] * norms(eq)[2])}
+
+
+# ------------------------------------------------------------------ one field: everything done on it this season
+
+def field_history(fid, year):
+    """Harvest rounds (from trips and the marked picked area) and machine work (GPS + job at the pump)."""
+    from . import geo, picking
+    f = picking.field_row(fid, year)
+    if not f:
+        return None
+    cells, cell_ha = picking.grid(f)
+    by_id = {c['id']: c['poly'] for c in cells}
+    rounds = []
+    rep = next((r for r in picking.season_report(year) if r['id'] == fid), None)
+    for rnd in picking.ROUNDS:
+        t = q('''SELECT COUNT(DISTINCT tl.id) n, MIN(tl.load_date) a, MAX(tl.load_date) b FROM trailer_loads tl
+                 WHERE tl.season_year=? AND tl.status<>'BEKOR' AND COALESCE(tl.harvest_round,1)=? AND
+                 (tl.field_id=? OR tl.picked_split LIKE ?)''', (year, rnd, fid, f'%"{fid}"%'), one=True)
+        marked = picking._marked(year, rnd).get(fid, set())
+        if not t['n'] and not marked:
+            continue
+        rr = next((x for x in (rep or {}).get('rounds', []) if x['round'] == rnd), {})
+        rounds.append({'round': rnd, 'label': f'{rnd}-terim', 'trips': t['n'], 'first': t['a'], 'last': t['b'],
+                       'kg': rr.get('kg', 0), 'ha': rr.get('ha'), 'pct': rr.get('cover'), 'cha': rr.get('cha'),
+                       'polys': [by_id[c] for c in marked if c in by_id]})
+    works_ = works(f'{year}-01-01', f'{year}-12-31', fid)
+    locator = {c['id']: c['poly'] for c in cells}
+    for w in works_:
+        w['polys'] = [locator[c] for c in w.pop('cells') if c in locator]
+    return {'id': f['id'], 'code': f['code'], 'name': f['name'], 'area_ha': f['area_ha'], 'rounds': rounds, 'works': works_,
+            'poly': json.loads(f['polygon_json']) if f['polygon_json'] else None}
+
+
+def fields_overview(year):
+    """Every field with a contour and its latest activity (for the map colours)."""
+    import json as _j
+    from . import picking
+    last = {}
+    for r in q('''SELECT field_id, MAX(load_date) d, MAX(COALESCE(harvest_round,1)) rnd FROM trailer_loads
+                  WHERE season_year=? AND status<>'BEKOR' GROUP BY field_id''', (year,)):
+        last[r['field_id']] = (r['d'], f'{r["rnd"]}-terim', 'pick')
+    for w in works(f'{year}-01-01', f'{year}-12-31'):
+        if w['last'] >= last.get(w['field_id'], ('',))[0]:
+            last[w['field_id']] = (w['last'], w['job'], 'job')
+    out = []
+    for r in q('''SELECT f.id, f.code, f.name, f.polygon_json, COALESCE(fs.area_ha, f.area_ha) ha FROM fields f
+                  LEFT JOIN field_seasons fs ON fs.field_id=f.id AND fs.year=? WHERE f.active=1 AND f.polygon_json IS NOT NULL
+                  ORDER BY f.code''', (year,)):
+        d = last.get(r['id'])
+        out.append({'id': r['id'], 'code': r['code'], 'name': r['name'], 'ha': r['ha'], 'poly': _j.loads(r['polygon_json']),
+                    'last': d[0] if d else None, 'what': d[1] if d else None, 'kind': d[2] if d else None})
+    return sorted(out, key=lambda x: (x['last'] or '', ), reverse=True)

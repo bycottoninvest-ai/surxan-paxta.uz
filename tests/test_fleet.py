@@ -182,3 +182,32 @@ def test_fuel_give_offers_jobs(app, world):
     assert take(yq, zp, 100)['ok'] and give(yq, qr['T-01'], 20, purpose='Lazer (tekislash)')['ok']
     s = yq.post('/yoqilgi/skan', {'payload': qr['T-01'], 'want': 'equipment'}).get_json()
     assert s['machine']['job'] == 'Lazer (tekislash)'                       # the last job is preselected next time
+
+
+def test_field_history_and_where_fuel_was_used(app, world):
+    """Fuel given for “Shudgor” → the GPS work after it is listed on that fuel issue and in the field's history."""
+    imei = '359339075055555'
+    with app.app_context():
+        get_db().execute('UPDATE fields SET polygon_json=? WHERE code=?', (json.dumps(POLY), 'D-04'))
+        fleet.store_event(imei, {'kind': 'login', 'imei': imei})
+    world['admin'].post('/admin/texnikalar', {'id': world['eq']['T-01'], 'kind': 'traktor', 'code': 'T-01', 'active': '1', 'imei': imei})
+    yq, zp, qr = setup(app, world)
+    assert take(yq, zp, 200)['ok']
+    r = give(yq, qr['T-01'], 50, purpose='Shudgor')
+    assert r['ok']
+    with app.app_context():
+        get_db().execute("UPDATE fuel_ops SET created_at=datetime(created_at, '-2 hours') WHERE kind='BERISH'")
+        oid = scalar("SELECT id FROM fuel_ops WHERE kind='BERISH'")
+    t = datetime.now(timezone.utc) - timedelta(minutes=90)
+    feed(app, imei, [{'kind': 'gps', 'lat': 42.3010 + (i // 20) * 0.0008, 'lon': 59.6015 + (i % 20) * 0.0005, 'speed': 8.0,
+                      'course': 0, 'valid': True, 'acc': 1, 'at': t + timedelta(seconds=30 * i)} for i in range(120)])
+    page = world['rahbar'].get(f'/yoqilgi/amal/{oid}').get_data(as_text=True)
+    assert 'Bu solyarka qayerda ishlatildi' in page and 'D-04 · Shudgor' in page and 'Nima ish uchun' in page
+    h = world['rahbar'].get(f'/rahbar/dala/{world["f"]["D-04"]}.json').get_json()
+    assert h['code'] == 'D-04' and h['works'][0]['job'] == 'Shudgor' and h['works'][0]['polys']
+    page = world['rahbar'].get('/rahbar/dalalar').get_data(as_text=True)
+    assert 'Dalalar tarixi' in page and 'Shudgor' in page
+    assert 'Dalalar tarixi' in world['rahbar'].get('/rahbar').get_data(as_text=True)
+    assert world['juma'].get('/rahbar/dalalar').status_code == 302
+    # the keeper sees their own record, but not the GPS analysis
+    assert 'qayerda ishlatildi' not in yq.get(f'/yoqilgi/amal/{oid}').get_data(as_text=True)
