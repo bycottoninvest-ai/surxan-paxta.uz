@@ -15,7 +15,16 @@
   </a>
   {% endfor %}
 
-  <a class="btn btn-primary btn-block d-big" href="{{ url_for('dala.new_trip') }}">{{ icon('plus') }} Yangi telashka</a>
+  <a class="btn btn-primary btn-block d-big" id="d-newbtn" href="{{ url_for('dala.new_trip') }}">{{ icon('plus') }} Yangi telashka</a>
+
+  {% if fields %}
+  <!-- live map: where the tally is now and which field that is -->
+  <div class="d-live">
+    <div id="d-live-st" class="d-live-st">📍 Joylashuv aniqlanmoqda…</div>
+    <div id="d-live-map" class="d-live-map" data-center="{{ map_center }}"></div>
+  </div>
+  <script id="d-home-fields" type="application/json">[{% for f in fields %}{"id": {{ f.id }}, "label": {{ (f.code ~ ' · ' ~ f.name)|tojson }}, "code": {{ f.code|tojson }}, "kg": {{ f.kg or 0 }}, "ha": {{ f.ha or 0 }}, "poly": {{ f.polygon_json|safe }}}{{ ',' if not loop.last }}{% endfor %}]</script>
+  {% endif %}
 
   {% if done_trips %}
   <h3 class="d-h3">Yopilgan telashkalarim (7 kun)</h3>
@@ -26,3 +35,66 @@
   {% endif %}
 </div>
 {% endblock %}
+{% block scripts %}{% if fields %}<link rel="stylesheet" href="{{ url_for('static', filename='vendor/leaflet/leaflet.css') }}">
+<script src="{{ url_for('static', filename='vendor/leaflet/leaflet.js') }}"></script>
+<script src="{{ url_for('static', filename='js/basemap.js') }}"></script>
+<script src="{{ url_for('static', filename='js/fieldgeo.js') }}"></script>
+<script>
+(function () {
+  const el = document.getElementById('d-live-map'), st = document.getElementById('d-live-st'), btn = document.getElementById('d-newbtn');
+  if (!el || !window.L) return;
+  let fields = []; try { fields = JSON.parse(document.getElementById('d-home-fields').textContent || '[]'); } catch (_) {}
+  const base = btn.getAttribute('href');
+  const map = L.map(el, { zoomControl: true, attributionControl: false, scrollWheelZoom: false });
+  if (window.spxBasemap) spxBasemap(map); else L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19 }).addTo(map);
+  const shapes = {}, all = [], byId = {};
+  fields.forEach(f => byId[f.id] = f);
+  const fmt = n => String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+  // fields already picked this season are tinted green; the one the phone is in is bright green
+  const rest = f => f.kg ? { color: '#bbf7d0', weight: 1.5, fillColor: '#22c55e', fillOpacity: .18 } : { color: '#ffffff', weight: 1.5, fillColor: '#ffffff', fillOpacity: .06 };
+  fields.forEach(f => {
+    const t = f.kg >= 1000 ? (f.kg / 1000).toFixed(1).replace('.', ',') + ' t' : Math.round(f.kg) + ' kg';
+    shapes[f.id] = L.polygon(f.poly, rest(f))
+      .bindTooltip(f.kg ? `${f.code}<br>${t}` : f.code, { permanent: true, direction: 'center', className: 'map-label' }).addTo(map);
+    all.push(...f.poly);
+  });
+  if (all.length) map.fitBounds(all, { padding: [10, 10] });
+  let me = null, ring = null, current = null, follow = true;
+  map.on('dragstart', () => { follow = false; });
+  function mark(id) {
+    if (current === id) return;
+    if (current && shapes[current]) shapes[current].setStyle(rest(byId[current]));
+    current = id;
+    if (id && shapes[id]) shapes[id].setStyle({ color: '#22c55e', weight: 3, fillColor: '#22c55e', fillOpacity: .3 });
+  }
+  const season = f => f.kg ? `<div class="d-live-kg">🌱 Bu daladan bu mavsum: <b>${fmt(f.kg)} kg</b>${f.ha ? ` · ${fmt(f.kg / f.ha)} kg/ga` : ''}</div>`
+                              : '<div class="d-live-kg">🌱 Bu daladan bu mavsum hali terim yozilmagan</div>';
+  function update(pos) {
+    const p = [pos.coords.latitude, pos.coords.longitude], acc = Math.round(pos.coords.accuracy || 0);
+    if (!me) {
+      ring = L.circle(p, { radius: Math.max(acc, 5), color: '#3b82f6', weight: 1, fillOpacity: .12 }).addTo(map);
+      me = L.circleMarker(p, { radius: 8, color: '#fff', weight: 3, fillColor: '#2563eb', fillOpacity: 1 }).addTo(map);
+      map.setView(p, 16);
+    } else { me.setLatLng(p); ring.setLatLng(p).setRadius(Math.max(acc, 5)); if (follow) map.panTo(p); }
+    const r = window.spxFieldGeo.locateField(p, fields, 500);
+    mark(r.field ? r.field.id : null);
+    if (r.field && r.metres === 0) {
+      st.innerHTML = `📍 Siz hozir <b>${r.field.label}</b> dalasidasiz <span class="muted">(±${acc} m)</span>${season(r.field)}`; st.className = 'd-live-st ok';
+    } else if (r.field) {
+      st.innerHTML = `📍 <b>${r.field.label}</b> yonidasiz — dala chetidan ${r.metres} m <span class="muted">(±${acc} m)</span>${season(r.field)}`; st.className = 'd-live-st ok';
+    } else {
+      st.innerHTML = r.nearest ? `📍 Dalada emassiz. Eng yaqini <b>${r.nearest.label}</b> — ${(r.metres / 1000).toFixed(1)} km` : '📍 Dalalar xaritada yo‘q'; st.className = 'd-live-st';
+    }
+    btn.setAttribute('href', r.field ? `${base}?field=${r.field.id}` : base);
+  }
+  if (!navigator.geolocation) { st.textContent = '📍 Bu telefonda joylashuv yo‘q'; return; }
+  navigator.geolocation.watchPosition(update, err => {
+    st.textContent = err.code === 1 ? '📍 Joylashuvga ruxsat berilmagan — brauzer sozlamasida ruxsat bering' : '📍 Joylashuv topilmadi — ochiq joyga chiqing';
+    st.className = 'd-live-st warn'; }, { enableHighAccuracy: true, maximumAge: 10000, timeout: 30000 });
+  // tap the blue button on the map to follow the phone again
+  const again = L.control({ position: 'bottomright' });
+  again.onAdd = () => { const b = L.DomUtil.create('button', 'd-live-me'); b.type = 'button'; b.textContent = '◎';
+    L.DomEvent.on(b, 'click', e => { L.DomEvent.stop(e); follow = true; if (me) map.setView(me.getLatLng(), 17); }); return b; };
+  again.addTo(map);
+})();
+</script>{% endif %}{% endblock %}

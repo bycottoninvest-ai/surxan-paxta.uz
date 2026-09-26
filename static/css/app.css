@@ -792,3 +792,11 @@ a.a-tile:active{transform:scale(.98)}
 .picked-strip .pt b{font-size:13px}
 .picked-strip .pt.on{outline:3px solid #f5b400;outline-offset:-3px}
 .picked-strip .empty-note{font-size:13px;color:#8a97aa;padding:8px 2px}
+
+/* tally home: live map of where the phone is and which field that is */
+.d-live{margin-top:14px;background:#fff;border-radius:14px;box-shadow:0 1px 3px rgba(11,37,69,.08);overflow:hidden}
+.d-live-st{padding:10px 14px;font-size:15px;color:#34465f}
+.d-live-st.ok{color:#15803d;background:#ecfdf3}.d-live-st.warn{color:#b45309;background:#fff7e6}
+.d-live-map{height:max(380px, calc(100vh - 330px));background:#dfe6ef}
+.d-live-me{width:40px;height:40px;border-radius:50%;border:0;background:#fff;color:#2563eb;font-size:22px;box-shadow:0 1px 4px rgba(0,0,0,.3)}
+.d-live-kg{font-size:14px;margin-top:4px;color:#166534}

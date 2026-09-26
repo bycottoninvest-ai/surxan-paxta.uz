@@ -80,7 +80,17 @@ def home():
                       ORDER BY tl.id DESC LIMIT 30''', (uid, uid, today_str()))
     today = q('''SELECT COALESCE(SUM(kg),0) kg, COUNT(DISTINCT worker_id) people FROM harvests
                  WHERE entered_by=? AND work_date=? AND voided_at IS NULL''', (uid, today_str()), one=True)
-    return render_template('dala_home.html', open_trips=open_trips, done_trips=done_trips, today=today)
+    brig = scope()
+    from ..db import get_db
+    from ..services import current_season
+    fields = q('''SELECT f.id, f.code, f.name, f.polygon_json, COALESCE(fs.area_ha, f.area_ha) ha,
+                         COALESCE((SELECT SUM(kg) FROM harvests h WHERE h.field_id=f.id AND h.season_year=? AND h.voided_at IS NULL),0) kg
+                  FROM fields f LEFT JOIN field_seasons fs ON fs.field_id=f.id AND fs.year=?
+                  WHERE f.active=1 AND f.polygon_json IS NOT NULL'''
+               + (' AND (f.brigadier_id=? OR f.brigadier_id IS NULL)' if brig else '') + ' ORDER BY f.code',
+               ((current_season(get_db()),) * 2) + ((brig,) if brig else ()))
+    return render_template('dala_home.html', open_trips=open_trips, done_trips=done_trips, today=today, fields=fields,
+                           map_center=get_setting('map_center'))
 
 
 def _gps():
@@ -119,7 +129,7 @@ def new_trip():
                'LEFT JOIN brigadiers b ON b.id=f.brigadier_id WHERE f.active=1'
                + (' AND (f.brigadier_id=? OR f.brigadier_id IS NULL)' if brig else '') + ' ORDER BY f.code',
                (brig,) if brig else ())
-    return render_template('dala_new.html', trailers=trailers, fields=fields,
+    return render_template('dala_new.html', trailers=trailers, fields=fields, preselect=request.args.get('field', type=int),
                            brigadiers=q('SELECT id, name FROM brigadiers WHERE active=1' + (' AND id=?' if brig else '')
                                         + ' ORDER BY name', (brig,) if brig else ()),
                            tractors=q("SELECT id, code FROM equipment WHERE kind='traktor' AND active=1 ORDER BY code"),

@@ -14,7 +14,8 @@
     <div class="d-l" style="display:flex;align-items:center;justify-content:space-between;gap:8px">Dala
       <button type="button" class="btn btn-light btn-sm" id="d-gps">📍 Joylashuvdan aniqlash</button></div>
     <div id="d-gps-msg" class="tiny" hidden></div>
-    <select name="field_id" required id="d-field">{% for f in fields %}<option value="{{ f.id }}" data-brig="{{ f.brigadier_id or '' }}">{{ f.code }} · {{ f.name }}</option>{% endfor %}</select>
+    <div id="d-minimap" style="height:190px;border-radius:12px;overflow:hidden;margin:6px 0 8px;background:#e9eef5" hidden></div>
+    <select name="field_id" required id="d-field">{% for f in fields %}<option value="{{ f.id }}" data-brig="{{ f.brigadier_id or '' }}"{{ ' selected' if preselect == f.id }}>{{ f.code }} · {{ f.name }}</option>{% endfor %}</select>
     <label class="d-l">Telashka</label>
     <select name="trailer_id" required>{% for t in trailers %}<option value="{{ t.id }}">{{ t.code }}{{ ' · ' ~ t.plate if t.plate }}</option>{% endfor %}</select>
     <label class="d-l">Terim turi</label>
@@ -31,7 +32,9 @@
   {% endif %}
 </div>
 {% endblock %}
-{% block scripts %}
+{% block scripts %}<link rel="stylesheet" href="{{ url_for('static', filename='vendor/leaflet/leaflet.css') }}">
+<script src="{{ url_for('static', filename='vendor/leaflet/leaflet.js') }}"></script>
+<script src="{{ url_for('static', filename='js/basemap.js') }}"></script>
 <script id="d-fields" type="application/json">[{% for f in fields if f.polygon_json %}{"id": {{ f.id }}, "label": {{ (f.code ~ ' · ' ~ f.name)|tojson }}, "poly": {{ f.polygon_json|safe }}}{{ ',' if not loop.last }}{% endfor %}]</script>
 <script>
 /* Which field am I in? Phone position → the field contour that contains it, or the nearest one within 500 m.
@@ -60,19 +63,47 @@
     }
     return best;
   }
+  // mini map: the chosen field (green) over satellite imagery + where the phone is (blue) — to see the choice is right
+  let mm = null, mmField = null, mmMe = null;
+  function mini(p, acc) {
+    const el = document.getElementById('d-minimap');
+    if (!window.L || !el) return;
+    const f = fields.find(x => String(x.id) === sel.value);
+    if (!f && !p) { el.hidden = true; return; }
+    el.hidden = false;
+    if (!mm) {
+      mm = L.map(el, { zoomControl: false, attributionControl: false, dragging: true, scrollWheelZoom: false });
+      if (window.spxBasemap) spxBasemap(mm); else L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19 }).addTo(mm);
+      fields.forEach(x => L.polygon(x.poly, { color: '#ffffff', weight: 1, opacity: .6, fillOpacity: 0 }).addTo(mm));
+    }
+    if (mmField) mmField.remove();
+    mmField = f ? L.polygon(f.poly, { color: '#22c55e', weight: 3, fillColor: '#22c55e', fillOpacity: .25 }).addTo(mm)
+      .bindTooltip(f.label, { permanent: true, direction: 'center', className: 'map-label' }) : null;
+    if (p) {
+      if (mmMe) mmMe.forEach(m => m.remove());
+      mmMe = [L.circle(p, { radius: Math.max(acc || 0, 5), color: '#3b82f6', weight: 1, fillOpacity: .15 }).addTo(mm),
+              L.circleMarker(p, { radius: 7, color: '#fff', weight: 2, fillColor: '#2563eb', fillOpacity: 1 }).addTo(mm)];
+    }
+    const pts = (f ? f.poly.slice() : []).concat(mmMe ? [mmMe[1].getLatLng()] : []);
+    if (pts.length) mm.fitBounds(pts, { padding: [18, 18], maxZoom: 17 });
+    setTimeout(() => mm.invalidateSize(), 50);
+  }
+  let last = null;
+  sel.addEventListener('change', () => mini(last && last.p, last && last.acc));
   function say(text, ok) { msg.hidden = false; msg.textContent = text; msg.style.color = ok ? '#15803d' : '#b45309'; }
   function locate(fresh) {
     if (!navigator.geolocation) return say('Bu telefonda joylashuv yo‘q — dalani ro‘yxatdan tanlang.');
     say('Joylashuv aniqlanmoqda…', true);
     navigator.geolocation.getCurrentPosition(pos => {
       const p = [pos.coords.latitude, pos.coords.longitude], acc = Math.round(pos.coords.accuracy || 0);
+      last = { p, acc };
       document.getElementById('d-lat').value = p[0]; document.getElementById('d-lon').value = p[1]; document.getElementById('d-acc').value = acc;
       let hit = fields.find(f => inside(p, f.poly)), d = 0;
       if (!hit) {
         let best = null;
         fields.forEach(f => { const m = dist(p, f.poly); if (!best || m < best.m) best = { f, m }; });
         if (best && best.m <= 500) { hit = best.f; d = Math.round(best.m); }
-        else return say(best ? `Hech qaysi dala ichida emassiz (eng yaqini ${best.f.label}, ${(best.m / 1000).toFixed(1)} km). Ro‘yxatdan tanlang.` : 'Dalalar xaritada chizilmagan — ro‘yxatdan tanlang.');
+        else { mini(p, acc); return say(best ? `Hech qaysi dala ichida emassiz (eng yaqini ${best.f.label}, ${(best.m / 1000).toFixed(1)} km). Ro‘yxatdan tanlang.` : 'Dalalar xaritada chizilmagan — ro‘yxatdan tanlang.'); }
       }
       sel.value = String(hit.id); sel.dispatchEvent(new Event('change'));
       say(d ? `📍 ${hit.label} — dala chetidan ${d} m (±${acc} m). To‘g‘ri bo‘lmasa, ro‘yxatdan o‘zgartiring.` : `📍 Siz ${hit.label} ichidasiz (±${acc} m).`, true);

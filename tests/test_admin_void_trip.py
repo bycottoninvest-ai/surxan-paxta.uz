@@ -141,3 +141,15 @@ def test_gps_is_saved_with_trip_and_weighings_and_shown_on_map(app, world):
     assert 'picked-data' in page and '41.29961' in page and 'Terilgan joylar' in page
     # the field picker page offers the location button
     assert 'Joylashuvdan aniqlash' in tally.get('/dala/yangi').get_data(as_text=True)
+
+
+def test_tally_home_has_live_field_map_and_new_trip_preselects(app, world):
+    import json as _j
+    tally, _ = setup(app, world)
+    with app.app_context():
+        get_db().execute('UPDATE fields SET polygon_json=? WHERE id=?',
+                         (_j.dumps([[41.30, 69.24], [41.30, 69.25], [41.31, 69.25], [41.31, 69.24]]), world['f']['D-04']))
+    home = tally.get('/dala').get_data(as_text=True)
+    assert 'd-live-map' in home and 'fieldgeo.js' in home and '"D-04"' in home
+    page = tally.get(f'/dala/yangi?field={world["f"]["D-04"]}').get_data(as_text=True)
+    assert f'value="{world["f"]["D-04"]}" data-brig' in page and 'selected' in page.split(f'value="{world["f"]["D-04"]}"')[1][:60]

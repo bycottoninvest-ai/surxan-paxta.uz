@@ -19,7 +19,7 @@ Eski yozuvlar o'zgarmaydi. Ilova ishga tushganda migratsiyadan oldin `data/` ich
 ## v2.16.0 da nima o'zgardi
 Sxema v9 → v10 (ishga tushganda `*.oldin-v9-*.bak`): harvests.lat/lon/gps_acc, trailer_loads.open_lat/open_lon/open_acc.
 GPS: hisobchi telashka ochganda telefon joylashuvidan dala avtomatik tanlanadi (kontur ichida yoki 500 m gacha
-eng yaqini); har tortish joyi saqlanadi; bosh sahifa xaritasida "Terilgan joylar" + tagida bugungi reyslarning haqiqiy rasmlari (bosilsa, o'sha reys nuqtalari ajraladi). Xaritada nomlar faqat yaqinlashtirganda.
+eng yaqini); hisobchi bosh sahifasida jonli xarita (qaysi dalada turgani, yurganda nuqta ham yuradi); har tortish joyi saqlanadi; bosh sahifa xaritasida "Terilgan joylar" + tagida bugungi reyslarning haqiqiy rasmlari (bosilsa, o'sha reys nuqtalari ajraladi). Xaritada nomlar faqat yaqinlashtirganda.
 Nakladnoy bekor qilinsa, dala reysi ham bekor bo'ladi; oldin shunday bekor qilinganlar ishga tushganda avtomatik hisobdan
 chiqariladi (punkt qabul qilganlarga tegilmaydi). Bekor reys/nakladnoylar ro'yxatlarda faqat Adminga ko'rinadi.
 
