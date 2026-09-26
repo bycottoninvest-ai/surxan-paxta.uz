@@ -17,7 +17,7 @@
         <div class="f h keep"><label>Farq (kg)</label><input id="diff" disabled class="red" value="{{ '%+.0f'|format(receipt.diff_kg) if receipt else '—' }}"></div>
         <div class="f h keep"><label>Farq sababi</label><select name="diff_reason"><option value="">—</option>{% for r in reasons %}<option {{ 'selected' if receipt and receipt.diff_reason == r }}>{{ r }}</option>{% endfor %}</select></div>
         <div class="f h"><label>Qabul qiluvchi</label><input name="receiver_name" value="{{ receipt.receiver_name if receipt and receipt.receiver_name else '' }}" placeholder="Nayman mas’uli"></div>
-        <div class="f h"><label>Narx, so‘m/kg (ixtiyoriy)</label><input name="price_per_kg" inputmode="decimal" value="{{ receipt.price_per_kg if receipt and receipt.price_per_kg else (default_price|int if default_price else '') }}" placeholder="Kelishilmagan bo‘lsa bo‘sh qoldiring"></div>
+        <div class="f"><div class="small muted">Narx sozlamadan olinadi: qo‘l terimi <b>{{ prices.hand|num if prices.hand else '—' }}</b>, kombayn <b>{{ prices.combine|num if prices.combine else '—' }}</b> so‘m/kg{% if money and money.amount is not none %} · bu reys: <b>{{ money.amount|num }} so‘m</b>{% endif %}. Narx o‘zgarsa hisob o‘zi qayta chiqadi — Buxgalteriya → “Paxta narxi”.</div></div>
         <div class="f"><label>Izoh</label><input name="note" value="{{ receipt.note if receipt and receipt.note else '' }}"></div>
         <div class="f">{{ file_input('photo', 'Nayman hujjati / tarozi rasmi') }}</div>
         {% if receipt %}<div class="f"><label>O‘zgartirish sababi <span class="req">*</span></label><input name="edit_reason" required minlength="3"></div>{% endif %}
@@ -31,7 +31,7 @@
     <dl class="kv">
       <dt>Telashka / dala</dt><dd>{{ wb.trailer_code }} · {{ wb.field_name }}</dd><dt>Brigadir</dt><dd>{{ wb.brigadier_name }}</dd>
       <dt>Jo‘natilgan (tarozi netto)</dt><dd class="num">{{ wb.net_kg|num }} kg</dd>
-      {% if receipt %}<dt>Qabul</dt><dd class="num">{{ receipt.accepted_kg|num }} kg</dd><dt>Summa</dt><dd class="num">{{ receipt.amount|money if receipt.amount else 'Narx kiritilmagan — hisoblanmadi' }}</dd>{% endif %}
+      {% if receipt %}<dt>Qabul</dt><dd class="num">{{ receipt.accepted_kg|num }} kg</dd><dt>Summa</dt><dd class="num">{{ money.amount|money if money and money.amount is not none else 'Narx kiritilmagan — hisoblanmadi' }}</dd>{% endif %}
       {% if expected %}<dt>Kutilayotgan to‘lov ({{ expected.percent|num }}% · {{ expected.days }} kun)</dt><dd class="num">{{ expected.amount|money }} · {{ expected.due_date|d }} gacha</dd>{% endif %}
     </dl>
     <div class="card-b tiny muted">Summa majburiy emas. To‘lov qoidasi (masalan 80% / 5 kun) faqat Sozlamalarda yoqilganda hisoblanadi.</div>

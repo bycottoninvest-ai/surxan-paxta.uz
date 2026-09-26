@@ -33,10 +33,14 @@ def payments():
                           (SELECT COALESCE(SUM(amount),0) FROM payments p WHERE p.waybill_id=wb.id AND p.voided_at IS NULL) paid
                    FROM waybills wb LEFT JOIN nayman_receipts nr ON nr.waybill_id=wb.id
                    WHERE wb.season_year=? AND wb.status<>'BEKOR' ORDER BY wb.seq DESC LIMIT 300''', (year,))
+    from ..pricing import money
+    m = money(year)
     wb_info = []
     for w in open_wb:
-        exp = expected_payment(w['received_date'], w['amount']) if w['amount'] else None
-        wb_info.append({**dict(w), 'expected': exp, 'remaining': (w['amount'] - w['paid']) if w['amount'] else None})
+        amount = m.get(w['id'], {}).get('amount')
+        exp = expected_payment(w['received_date'], amount) if amount else None
+        wb_info.append({**dict(w), 'amount': amount, 'price': m.get(w['id'], {}).get('price'), 'expected': exp,
+                        'remaining': (amount - w['paid']) if amount else None})
     return render_template('payments.html', rows=rows, waybills=wb_info, year=year, rule=payment_rule(),
                            fin=queries.finance_summary(year))
 

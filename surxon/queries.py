@@ -492,10 +492,9 @@ def notifications(user, year):
 def finance_summary(year):
     shipped = q('''SELECT COALESCE(SUM(wb.net_kg),0) kg, COUNT(*) n FROM waybills wb
                    WHERE wb.season_year=? AND wb.status<>'BEKOR' ''', (year,), one=True)
-    acc = q('''SELECT COALESCE(SUM(nr.accepted_kg),0) kg, COALESCE(SUM(nr.amount),0) amount,
-                      SUM(CASE WHEN nr.amount IS NULL THEN 1 ELSE 0 END) unpriced
-               FROM nayman_receipts nr JOIN waybills wb ON wb.id=nr.waybill_id
-               WHERE wb.season_year=? AND wb.status<>'BEKOR' ''', (year,), one=True)
+    from .pricing import totals
+    t = totals(year)            # priced with today's hand / combine prices (Settings), never frozen
+    acc = {'kg': t['accepted_kg'], 'amount': t['amount'], 'unpriced': t['unpriced']}
     received = scalar('SELECT COALESCE(SUM(amount),0) FROM payments WHERE season_year=? AND voided_at IS NULL', (year,))
     expenses = scalar('SELECT COALESCE(SUM(amount),0) FROM expenses WHERE season_year=? AND voided_at IS NULL', (year,))
     cash = q('''SELECT COALESCE(SUM(CASE WHEN direction='IN' THEN amount END),0) inflow,
@@ -505,6 +504,7 @@ def finance_summary(year):
     return {
         'shipped_kg': shipped['kg'], 'waybills': shipped['n'], 'accepted_kg': acc['kg'],
         'receivable': acc['amount'], 'unpriced': acc['unpriced'] or 0, 'received': received,
+        'hand_kg': t['hand_kg'], 'combine_kg': t['combine_kg'],
         'debt': (acc['amount'] or 0) - received if acc['amount'] else None,
         'expenses': expenses, 'cash_in': cash['inflow'], 'cash_out': cash['outflow'], 'cash_opening': cash['opening'],
         'cash_balance': cash['inflow'] - cash['outflow'],

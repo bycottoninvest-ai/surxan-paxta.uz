@@ -47,11 +47,23 @@ def home():
     owed = [w for w in A.worker_balances(year) if w['payable'] > 0]
     combines = A.combine_balances(year)
     items = A.todo(year, t)
+    from ..pricing import prices
     return render_template('acct_home.html', year=year, cot=cot, s=today_money, balance=A.total_balance(),
+                           pk=queries.finance_summary(year), prices=prices(),
                            owed_n=len(owed), owed_sum=sum(w['payable'] for w in owed),
                            combine_balance=sum(c['balance'] for c in combines),
                            combine_worked=[c for c in combines if c['kg'] or c['work_days'] or c['hectares']],
                            problems=sum(1 for i in items if i[0] != 'green'), items=items)
+
+
+@bp.post('/buxgalteriya/narx')
+@perm_required('nayman.write')
+def prices():
+    """Paxta narxi (punkt to‘laydi): qo‘l terimi / kombayn — changed any time, every sum follows."""
+    from ..pricing import set_prices
+    v = set_prices(post_actor(), hand=request.form.get('hand'), combine=request.form.get('combine'))
+    return done('Paxta narxi saqlandi: qo‘l terimi ' + (v['price_hand_kg'] or '—') + ', kombayn '
+                + (v['price_combine_kg'] or '—') + ' so‘m/kg. Punkt bilan hisob qayta hisoblandi.', url_for('acct.home'))
 
 
 # ------------------------------------------------------------------ income

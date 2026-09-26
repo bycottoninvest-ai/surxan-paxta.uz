@@ -47,18 +47,33 @@ def test_full_chain_field_to_payment(app, world):
         w = q('SELECT * FROM weighings WHERE load_id=?', (lid,), one=True)
         assert wb['number'] == 'PA-000001' and wb['net_kg'] == 2050
         assert w['gross_at'] and w['tare_at'] and w['diff_kg'] == 19.5
-    r = bux.post(f'/nayman/{wid}', {'accepted_kg': '2030', 'received_date': '2026-01-01', 'diff_reason': 'Namlik / tabiiy kamayish',
-                                    'price_per_kg': '7800'}).get_json()
+    r = bux.post(f'/nayman/{wid}', {'accepted_kg': '2030', 'received_date': '2026-01-01', 'diff_reason': 'Namlik / tabiiy kamayish'}).get_json()
     assert r['ok'], r
+    assert bux.post('/buxgalteriya/narx', {'hand': '7800', 'combine': '7600'}).get_json()['ok']
     r = bux.post('/tolovlar', {'amount': '12 000 000', 'payment_date': '2026-01-02', 'waybill_id': wid, 'client_uuid': uuid4()}).get_json()
     assert r['ok'], r
     with app.app_context():
         rec = q('SELECT * FROM nayman_receipts WHERE waybill_id=?', (wid,), one=True)
-        assert rec['diff_kg'] == -20 and rec['amount'] == 2030 * 7800
+        from surxon.pricing import money
+        hand = scalar("SELECT SUM(kg) FROM harvests WHERE voided_at IS NULL AND method='hand'")
+        comb = scalar("SELECT COALESCE(SUM(kg),0) FROM harvests WHERE voided_at IS NULL AND method='combine'")
+        expect = round(2030 * (hand * 7800 + comb * 7600) / (hand + comb))     # hand and combine kg share the punkt kg
+        assert rec['diff_kg'] == -20 and money(waybill_ids=[wid])[wid]['amount'] == expect
         from surxon.queries import finance_summary, day_kpis
         year = q('SELECT year FROM seasons LIMIT 1', one=True)['year']
         fin = finance_summary(year)
-        assert fin['debt'] == 2030 * 7800 - 12_000_000
+        assert fin['debt'] == expect - 12_000_000
+    # the accountant changes the price later (final price agreed) → every sum follows, nothing frozen
+    assert bux.post('/buxgalteriya/narx', {'hand': '8000', 'combine': '7600'}).get_json()['ok']
+    with app.app_context():
+        expect2 = round(2030 * (hand * 8000 + comb * 7600) / (hand + comb))
+        assert finance_summary(year)['debt'] == expect2 - 12_000_000
+        assert ('UPDATE', 'setting') in {(a['action'], a['entity_type']) for a in q('SELECT action, entity_type FROM audit_logs')}
+    assert not world['juma'].post('/buxgalteriya/narx', {'hand': '1'}).get_json()['ok']
+    assert 'Punkt bilan hisob' in bux.get('/buxgalteriya').get_data(as_text=True)
+    assert 'Punkt bilan hisob' in world['rahbar'].get('/rahbar').get_data(as_text=True)
+    assert f'{expect2:,}'.replace(',', ' ') in world['rahbar'].get('/rahbar/punkt-hisob').get_data(as_text=True).replace('\u202f', ' ').replace('\xa0', ' ')
+    with app.app_context():
         # the three measures stay separate: field 2030.5, weighbridge 2050, Nayman 2030
         assert scalar('SELECT SUM(kg) FROM harvests WHERE voided_at IS NULL') == 2030.5
         assert scalar('SELECT SUM(net_kg) FROM weighings') == 2050

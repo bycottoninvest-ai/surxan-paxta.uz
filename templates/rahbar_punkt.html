@@ -1,0 +1,24 @@
+{% extends 'base.html' %}
+{% from 'macros.html' import icon, empty with context %}
+{% set page_title = 'Punkt bilan hisob' %}
+{% block content %}
+<div class="d-wrap rb">
+  {% with rb_title='Punkt bilan hisob', rb_back=url_for('rahbar.home'), rb_no_period=True %}{% include 'partials/rb_head.html' %}{% endwith %}
+  <div class="a-pk">
+    <div><span>Punkt qabul qildi</span><b class="num">{{ fin.accepted_kg|num }} kg</b><small>qo‘l {{ fin.hand_kg|num }} · kombayn {{ fin.combine_kg|num }}</small></div>
+    <div><span>Hisoblangan</span><b class="num">{{ fin.receivable|num if fin.receivable is not none else '—' }}</b><small>qo‘l {{ prices.hand|num if prices.hand else '—' }} · kombayn {{ prices.combine|num if prices.combine else '—' }} so‘m/kg</small></div>
+    <div><span>Tushgan pul</span><b class="num">{{ fin.received|num }}</b><small>bank / naqd</small></div>
+    <div class="{{ 'neg' if fin.debt and fin.debt > 0 }}"><span>Qoldiq (punkt qarzi)</span><b class="num">{{ fin.debt|num if fin.debt is not none else '—' }}</b><small>{{ (fin.unpriced ~ ' ta reys narxsiz') if fin.unpriced else 'so‘m' }}</small></div>
+  </div>
+  <div class="tiny muted">Narx hozirgi sozlama bo‘yicha: buxgalter narxni o‘zgartirsa, hamma raqam shu zahoti qayta hisoblanadi.</div>
+  <div class="rb-sec"><b>Qabul qilingan reyslar</b></div>
+  <div class="hm-ops">{% for r in rows %}<div class="hm-op"><span class="hm-op-b"><b>{{ r.trip_no or r.number }} · {{ r.field_code or '' }}</b>
+      <small>{{ r.received_date|d }} · {{ r.accepted_kg|num }} kg (qo‘l {{ r.hand_kg|num }} / kombayn {{ r.combine_kg|num }}){% if r.price %} · {{ r.price|num }} so‘m/kg{% endif %}</small></span>
+      <span class="hm-op-s"><b class="num">{{ r.amount|num if r.amount is not none else 'narxsiz' }}</b>{% if r.paid %}<small>to‘langan {{ r.paid|num }}</small>{% endif %}</span></div>
+    {% else %}{{ empty('Punkt hali qabul qilmagan', 'factory') }}{% endfor %}</div>
+  <div class="rb-sec"><b>Punktdan tushgan pullar</b></div>
+  <div class="hm-ops">{% for p in pays %}<div class="hm-op"><span class="hm-op-b"><b>{{ p.payer or 'Nayman' }}{{ ' · ' ~ p.method if p.method }}</b><small>{{ p.payment_date|d }}{{ ' · ' ~ p.number if p.number }}{{ ' · ' ~ p.note if p.note }}</small></span><span class="hm-op-s"><b class="num">+{{ p.amount|num }}</b></span></div>
+    {% else %}<div class="small muted">Hali pul tushmagan.</div>{% endfor %}</div>
+</div>
+{% endblock %}
+{% block scripts %}{% include 'partials/rb_poll.html' %}{% endblock %}

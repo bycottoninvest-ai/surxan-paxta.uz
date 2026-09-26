@@ -86,11 +86,13 @@ def test_data_filters_pagination_and_updated_since(app, world):
     assert s['finance']['cash_balance']['amount'] is None and s['finance']['cash_balance']['status'] == 'not_calculated'
     rec = api(app, key, '/receivables').get_json()['data']
     assert {x['balance_status'] for x in rec} == {'awaiting_acceptance'}
-    world['bux'].post(f'/nayman/{w1}', {'accepted_kg': '100', 'received_date': '2026-01-01', 'price_per_kg': '7000'})
+    world['bux'].post(f'/nayman/{w1}', {'accepted_kg': '100', 'received_date': '2026-01-01'})
     world['bux'].post(f'/nayman/{w2}', {'accepted_kg': '100', 'received_date': '2026-01-01'})
     rec = {x['waybill_id']: x for x in api(app, key, '/receivables').get_json()['data']}
-    assert rec[w1]['balance'] == 700000 and rec[w1]['balance_status'] == 'calculated'
-    assert rec[w2]['balance'] is None and rec[w2]['balance_status'] == 'price_not_set'
+    assert rec[w2]['balance'] is None and rec[w2]['balance_status'] == 'price_not_set'     # no price agreed yet
+    assert world['bux'].post('/buxgalteriya/narx', {'hand': '7000', 'combine': ''}).get_json()['ok']
+    rec = {x['waybill_id']: x for x in api(app, key, '/receivables').get_json()['data']}
+    assert rec[w1]['balance'] == 700000 and rec[w1]['balance_status'] == 'calculated' and rec[w1]['price_per_kg'] == 7000
     # a correction shows up through updated_since
     import time
     time.sleep(1.1)

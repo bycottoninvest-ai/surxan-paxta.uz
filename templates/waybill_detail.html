@@ -40,7 +40,7 @@
         <div class="mini"><span>Jo‘natilgan</span><b class="num">{{ wb.net_kg|num }}</b></div>
         <div class="mini"><span>Qabul qilingan</span><b class="num" style="color:var(--green)">{{ wb.accepted_kg|num }}</b></div>
         <div class="mini"><span>Farq</span><b class="num" style="color:{{ 'var(--red)' if wb.nayman_diff_kg < 0 else 'var(--green)' }}">{{ '%+.0f'|format(wb.nayman_diff_kg) }}</b></div>
-        <div class="mini"><span>Summa</span><b class="num">{{ wb.receipt_amount|num if wb.receipt_amount else 'narx kiritilmagan' }}</b></div>
+        <div class="mini"><span>Summa{{ ' (' ~ money.price|num ~ ' so‘m/kg)' if money and money.price }}</span><b class="num">{{ money.amount|num if money and money.amount is not none else 'narx kiritilmagan' }}</b></div>
         <div class="mini"><span>To‘langan</span><b class="num">{{ wb.paid|num }}</b></div>
       </div>
       <p class="small muted">Sabab: {{ wb.nayman_diff_reason or '—' }} · Qabul sanasi: {{ wb.received_date|d }}</p>

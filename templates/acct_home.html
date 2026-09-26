@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% from 'macros.html' import icon with context %}
+{% from 'macros.html' import icon, csrf with context %}
 {% from 'acct_macros.html' import tile, som with context %}
 {% set page_title = 'Buxgalteriya' %}
 {% macro act(url, ico, label, cls='') -%}<a class="m-act {{ cls }}" href="{{ url }}">{{ icon(ico, 'lg') }}<span>{{ label }}</span></a>{%- endmacro %}
@@ -16,6 +16,24 @@
   {{ tile('Bugungi xarajat', s.expenses_total|num, 'so‘m', '', 't-orange', url_for('acct.expenses')) }}
   {{ tile('Muammolar', problems, 'ta', 'pastdagi ro‘yxat', 't-red' if problems else '', '#todo') }}
 </div>
+
+<section class="card a-punkt"><div class="card-h"><h3>{{ icon('factory') }} Punkt bilan hisob ({{ year }})</h3><a class="more" href="{{ url_for('finance.payments') }}">Naymandan pul tushdi →</a></div>
+  <div class="card-b">
+    <div class="a-pk">
+      <div><span>Punkt qabul qildi</span><b class="num">{{ pk.accepted_kg|num }} kg</b><small>qo‘l {{ pk.hand_kg|num }} · kombayn {{ pk.combine_kg|num }}</small></div>
+      <div><span>Hisoblangan (hozirgi narxda)</span><b class="num">{{ pk.receivable|num if pk.receivable is not none else '—' }}</b><small>{{ (pk.unpriced ~ ' ta reys narxsiz') if pk.unpriced else 'so‘m' }}</small></div>
+      <div><span>Punktdan tushgan pul</span><b class="num">{{ pk.received|num }}</b><small>bank / naqd</small></div>
+      <div class="{{ 'neg' if pk.debt and pk.debt > 0 }}"><span>Qoldiq (punkt qarzi)</span><b class="num">{{ pk.debt|num if pk.debt is not none else '—' }}</b><small>{{ 'so‘m' if pk.debt is not none else 'narx kiritilmagan' }}</small></div>
+    </div>
+    {% if can('nayman.write') %}
+    <form method="post" action="{{ url_for('acct.prices') }}" class="a-price">{{ csrf() }}
+      <b>Paxta narxi (punkt to‘laydi), so‘m/kg</b>
+      <label>Qo‘l terimi <input name="hand" inputmode="numeric" value="{{ prices.hand|int if prices.hand else '' }}" placeholder="7800"></label>
+      <label>Kombayn <input name="combine" inputmode="numeric" value="{{ prices.combine|int if prices.combine else '' }}" placeholder="7600"></label>
+      <button class="btn btn-primary">Saqlash</button>
+      <span class="tiny muted">Istalgan payt o‘zgartiring — barcha reyslar hisobi yangi narx bilan qayta chiqadi. Kim o‘zgartirgani auditda.</span>
+    </form>{% endif %}
+  </div></section>
 
 <div class="m-actions a-actions">
   {{ act(url_for('acct.income'), 'plus', 'KIRIM', 'green') }}

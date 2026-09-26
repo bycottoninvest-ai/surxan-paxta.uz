@@ -641,7 +641,11 @@ def api_receivables():
               WHERE wb.status<>'BEKOR' '''
     f = Filters('document_date', 'updated_at', 'field_id', 'season_year')
     rows, total, mx = f.run(sel, 'waybill_number')
+    from ..pricing import money
+    m = money(waybill_ids=[r['waybill_id'] for r in rows])
     for r in rows:
+        mm = m.get(r['waybill_id'])
+        r['price_per_kg'], r['accrued'] = (mm['price'], mm['amount']) if mm else (None, None)
         if r['accepted_kg'] is None:
             r['balance'], r['balance_status'] = None, 'awaiting_acceptance'
         elif r['accrued'] is None:

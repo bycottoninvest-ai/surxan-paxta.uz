@@ -37,7 +37,7 @@ def home():
     return render_template('rahbar_home.html', **_ctx(
         cot=D.cotton(year, a, b), now=D.trips_now(), cash=D.cash(a, b), wages=D.wages(year, a, b), fuel=D.fuel(a, b),
         checks=checks, red=sum(1 for c in checks if c['level'] == 'red'), feed=D.feed(8), staff=_staff_count(),
-        fleet=_fleet_count(), live=_live(8)))
+        fleet=_fleet_count(), live=_live(8), pk=__import__('surxon.queries', fromlist=['finance_summary']).finance_summary(year)))
 
 
 def _live(limit):
@@ -149,6 +149,26 @@ def field_json(field_id):
     if not h:
         abort(404)
     return jsonify(h)
+
+
+@bp.get('/rahbar/punkt-hisob')
+@perm_required(VIEW)
+def punkt_money():
+    """Read-only: what the punkt owes for the received cotton (today's prices), what it paid, what is left."""
+    from .. import queries
+    from ..pricing import money, prices
+    year = season_arg()
+    m = money(year)
+    rows = q('''SELECT wb.id, wb.number, tl.trip_no, f.code field_code, nr.received_date, nr.accepted_kg,
+                       (SELECT COALESCE(SUM(amount),0) FROM payments p WHERE p.waybill_id=wb.id AND p.voided_at IS NULL) paid
+                FROM waybills wb JOIN nayman_receipts nr ON nr.waybill_id=wb.id JOIN trailer_loads tl ON tl.id=wb.load_id
+                LEFT JOIN fields f ON f.id=tl.field_id
+                WHERE wb.season_year=? AND wb.status<>'BEKOR' AND tl.status<>'BEKOR' ORDER BY nr.received_date DESC, wb.id DESC''',
+             (year,))
+    pays = q('''SELECT p.*, wb.number FROM payments p LEFT JOIN waybills wb ON wb.id=p.waybill_id
+                WHERE p.season_year=? AND p.voided_at IS NULL ORDER BY p.payment_date DESC, p.id DESC LIMIT 100''', (year,))
+    return render_template('rahbar_punkt.html', **_ctx(fin=queries.finance_summary(year), prices=prices(),
+                                                        rows=[dict(r, **m.get(r['id'], {})) for r in rows], pays=pays))
 
 
 @bp.get('/rahbar/avatar/<path:rel>')

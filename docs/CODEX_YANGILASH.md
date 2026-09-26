@@ -1,13 +1,13 @@
-# Serverni yangilash (Codex uchun) — v2.18.0
+# Serverni yangilash (Codex uchun) — v2.18.1
 
 Serverni qayta qurmang, `.env`, `data/` va Caddy sozlamasiga tegmang. Vaqtinchalik sslip override'ni qayta yoqmang.
 
 ```bash
 cd /opt/surxan-paxta.uz
 docker compose exec -T app flask --app app backup          # yangilashdan oldin izchil zaxira
-git pull --ff-only                                          # kutilgan: v2.18.0 commiti
+git pull --ff-only                                          # kutilgan: v2.18.1 commiti
 docker compose up -d --build
-for i in $(seq 1 40); do curl -fsS https://surxan-paxta.uz/health && break; sleep 3; done   # "version":"2.18.0"
+for i in $(seq 1 40); do curl -fsS https://surxan-paxta.uz/health && break; sleep 3; done   # "version":"2.18.1"
 docker compose exec -T app flask --app app set-webhook      # channel_post + edited_message (Telegram jonli joylashuv) yangilanishlarini yoqadi — v2.17.0 da SHART
 docker compose exec -T app flask --app app smoke-check
 ```
@@ -15,6 +15,12 @@ docker compose exec -T app flask --app app smoke-check
 Baza avtomatik yangilanadi (sxema v9): `field_imports, field_assignments` va `fields.source_id/map_area_ha/area_source`, `field_seasons.crop` (v2.11.0 — dalalar importi); yangi jadvallar `fuel_stations, fuel_tickets, fuel_ticket_funds, fuel_prices, fuel_scans, fuel_ops` va `equipment.fuel_type/fuel_carrier/qr_token` (v2.10.0 — solyarka); `cash_corrections` (v2.9.0 — kassa tuzatishlari); yangi ustunlar `nayman_receipts.station_gross_kg/station_tare_kg` (v2.8.0 — punkt brutto/tara),
 `trailer_loads.method/rate/rate_unit`, `workers.note`, `tg_chats.bot_status` (v2.7.0) qo'shiladi.
 Eski yozuvlar o'zgarmaydi. Ilova ishga tushganda migratsiyadan oldin `data/` ichida `*.oldin-v*` zaxira nusxa oladi.
+
+## v2.18.1 da nima o'zgardi
+Baza o'zgarmaydi. Punkt bilan hisob: paxta narxi qo'l terimi va kombayn uchun alohida (Sozlamalar `price_hand_kg`,
+`price_combine_kg`; Buxgalteriya bosh sahifasida ham o'zgartiriladi). Hech narsa qotmaydi — narx o'zgarsa punkt qarzi,
+nakladnoy summasi, ERP `receivables` hozirgi narx bilan qayta hisoblanadi. Reys narxi uning qo'l/kombayn kg ulushi bo'yicha.
+Direktor paneli: "Punkt bilan hisob" (hisoblangan, tushgan, qoldiq). Nayman qabul formasidan narx maydoni olib tashlandi.
 
 ## v2.18.0 da nima o'zgardi
 Sxema v11 → v13 (v12: GPS; v13: `media_requests.context/event/batch`, `media_items.field_id/equipment_id`).
