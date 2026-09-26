@@ -782,3 +782,13 @@ a.a-tile:active{transform:scale(.98)}
 .rb-chk-red{border-color:#f3b5b5;background:#fff5f5}.rb-chk-red .hm-op-ico{background:#fde8e8;color:#dc2626}
 .rb-chk-yellow .hm-op-ico{background:#fff3d6;color:#8a5a00}
 @media (max-width:340px){.rb-grid{grid-template-columns:minmax(0,1fr)}}
+
+/* “Terilgan joylar”: today's trips with their real trailer photo, under the map (not mixed into the field map) */
+.picked-strip{display:flex;gap:10px;overflow-x:auto;padding:10px 2px 2px;scroll-snap-type:x mandatory}
+.picked-strip .pt{flex:0 0 132px;border:1px solid var(--line-2,#e3e8ef);border-radius:10px;overflow:hidden;background:#fff;cursor:pointer;scroll-snap-align:start;text-align:left;padding:0;font:inherit;color:inherit}
+.picked-strip .pt img,.picked-strip .pt .noimg{display:block;width:100%;height:84px;object-fit:cover;background:#e9eef5}
+.picked-strip .pt .noimg{display:flex;align-items:center;justify-content:center;font-size:12px;color:#8a97aa}
+.picked-strip .pt div.tx{padding:6px 8px;font-size:12px;line-height:1.3}
+.picked-strip .pt b{font-size:13px}
+.picked-strip .pt.on{outline:3px solid #f5b400;outline-offset:-3px}
+.picked-strip .empty-note{font-size:13px;color:#8a97aa;padding:8px 2px}

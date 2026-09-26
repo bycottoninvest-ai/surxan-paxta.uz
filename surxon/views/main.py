@@ -119,8 +119,19 @@ def full_dashboard(year, day, brig, kpi):
                       'brigadier': f['brigadier_name'], 'net': f['net_kg'], 'active': f['active_loads'],
                       'poly': json.loads(f['polygon_json']) if f['polygon_json'] else None,
                       'url': url_for('admin.field_detail', field_id=f['id'])} for f in fields],
+        picked_trips=[dict(r, thumb=url_for('main.media', path=r['thumb']) if r['thumb'] else None,
+                           url=url_for('ops.load_detail', load_id=r['id'])) for r in q('''
+            SELECT tl.id, tl.trip_no trip, t.code trailer, f.code field, tl.status,
+                   (SELECT COALESCE(SUM(kg),0) FROM harvests h WHERE h.load_id=tl.id AND h.voided_at IS NULL) kg,
+                   (SELECT COUNT(*) FROM harvests h WHERE h.load_id=tl.id AND h.voided_at IS NULL AND h.lat IS NOT NULL) pts,
+                   substr(COALESCE(tl.full_at, tl.opened_at),12,5) t,
+                   (SELECT COALESCE(p.thumb_path, p.path) FROM photos p WHERE p.load_id=tl.id AND p.voided_at IS NULL
+                      AND p.category IN ('trailer','field') ORDER BY p.id DESC LIMIT 1) thumb
+            FROM trailer_loads tl JOIN equipment t ON t.id=tl.trailer_id LEFT JOIN fields f ON f.id=tl.field_id
+            WHERE tl.load_date=? AND tl.status<>'BEKOR' ''' + (' AND tl.brigadier_id=?' if brig else '') + ' ORDER BY tl.id',
+            (day, brig) if brig else (day,))],
         picked_json=[dict(r) for r in q('''SELECT ROUND(h.lat,6) lat, ROUND(h.lon,6) lon, h.kg, substr(h.created_at,12,5) t,
-                                                  tl.trip_no trip, f.code field FROM harvests h
+                                                  h.load_id lid, tl.trip_no trip, f.code field FROM harvests h
                                            JOIN trailer_loads tl ON tl.id=h.load_id LEFT JOIN fields f ON f.id=h.field_id
                                            WHERE h.work_date=? AND h.voided_at IS NULL AND h.lat IS NOT NULL'''
                                         + (' AND h.brigadier_id=?' if brig else '') + ' ORDER BY h.id LIMIT 3000',

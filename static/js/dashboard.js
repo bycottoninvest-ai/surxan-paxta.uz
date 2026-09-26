@@ -82,7 +82,8 @@
       return y >= maxY * .9 ? '#1e9e4a' : y >= maxY * .75 ? '#f28b1c' : '#ee2f5b';
     }
     let labelled = [];
-    const picked = (() => { try { return JSON.parse((document.getElementById('picked-data') || {}).textContent || '[]'); } catch (_) { return []; } })();
+    const readJson = id => { try { return JSON.parse((document.getElementById(id) || {}).textContent || '[]'); } catch (_) { return []; } };
+    const picked = readJson('picked-data'), trips = readJson('picked-trips');
     const syncLabels = () => { const on = map.getZoom() >= 15; labelled.forEach(p => { const t = p.getTooltip(); if (!t) return; on ? p.openTooltip() : p.closeTooltip(); }); };
     map.on('zoomend', syncLabels);
     function draw(mode) {
@@ -99,12 +100,27 @@
         p.on('click', () => location.href = f.url);
         bounds.push(...f.poly);
       });
+      const strip = document.getElementById('picked-strip');
+      if (strip) strip.hidden = mode !== 'picked';
       if (mode === 'picked') {
-        // where the cotton was weighed today (phone position of each weighing)
-        picked.forEach(pt => L.circleMarker([pt.lat, pt.lon], { radius: 5, color: '#fff', weight: 1, fillColor: '#ffd23f', fillOpacity: .95 })
-          .bindTooltip(`${window.surxonEsc(pt.field || '')} · ${window.surxonEsc(pt.trip || '')}<br>${fmt(pt.kg)} kg · ${pt.t}`).addTo(layer));
-        const pb = picked.map(pt => [pt.lat, pt.lon]);
-        if (pb.length) { map.fitBounds(pb, { padding: [30, 30], maxZoom: 17 }); }
+        // where the cotton was weighed today (phone position of each weighing) + each trip's real photo under the map
+        const esc = window.surxonEsc, dots = [];
+        const show = lid => {
+          dots.forEach(d => d.m.setStyle(lid && d.lid !== lid ? { radius: 4, fillOpacity: .25 } : { radius: lid ? 7 : 5, fillOpacity: .95 }));
+          const pb = picked.filter(pt => !lid || pt.lid === lid).map(pt => [pt.lat, pt.lon]);
+          if (pb.length) map.fitBounds(pb, { padding: [30, 30], maxZoom: 17 });
+          strip && strip.querySelectorAll('.pt').forEach(b => b.classList.toggle('on', +b.dataset.lid === lid));
+        };
+        picked.forEach(pt => dots.push({ lid: pt.lid, m: L.circleMarker([pt.lat, pt.lon], { radius: 5, color: '#fff', weight: 1, fillColor: '#ffd23f', fillOpacity: .95 })
+          .bindTooltip(`${esc(pt.field || '')} · ${esc(pt.trip || '')}<br>${fmt(pt.kg)} kg · ${pt.t}`).on('click', () => show(pt.lid)).addTo(layer) }));
+        if (strip) {
+          strip.innerHTML = trips.length ? trips.map(t => `<button type="button" class="pt" data-lid="${t.id}">
+              ${t.thumb ? `<img src="${esc(t.thumb)}" alt="" loading="lazy">` : '<span class="noimg">rasm yo‘q</span>'}
+              <div class="tx"><b>${esc(t.trailer)}</b> · ${esc(t.field || '')}<br>${fmt(t.kg)} kg · ${esc(t.t || '')}${t.pts ? '' : '<br><span style="color:#b45309">joylashuv yo‘q</span>'}</div></button>`).join('')
+            : '<div class="empty-note">Bu kunda reys yo‘q.</div>';
+          strip.querySelectorAll('.pt').forEach(b => b.addEventListener('click', () => { const lid = +b.dataset.lid; show(b.classList.contains('on') ? 0 : lid); }));
+        }
+        show(0);
       } else if (bounds.length) map.fitBounds(bounds, { padding: [12, 12] });
       syncLabels();
       if (legend) legend.remove();
