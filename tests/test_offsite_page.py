@@ -51,3 +51,15 @@ def test_only_admin(app, world):
     r = world['bux'].post('/admin/integratsiyalar', {'action': 'offsite_save', 'host': 'u1.your-storagebox.de',
                                                      'user': 'u1', 'password': 'xxxxxxx'})
     assert r.status_code in (302, 403)
+
+
+def test_update_button_requests_server_update(app, world):
+    admin = world['admin']
+    page = admin.get('/admin/zaxira').get_data(as_text=True)
+    assert 'Server yangilanishi' in page and 'Hozir yangilash' in page
+    assert admin.post('/admin/zaxira', {'action': 'update'}).get_json()['ok']
+    cfg = app.config['SURXON']
+    assert (cfg.DATA_DIR / 'deploy_request').exists()
+    (cfg.DATA_DIR / 'deploy_status.json').write_text('{"at":"2026-09-27 10:00:00","ok":true,"message":"Yangilandi: v2.18.1"}')
+    assert 'Yangilandi: v2.18.1' in admin.get('/admin/zaxira').get_data(as_text=True)
+    assert world['bux'].post('/admin/zaxira', {'action': 'update'}).status_code in (302, 403)

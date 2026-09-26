@@ -26,7 +26,7 @@ Foydalanuvchi **“paxta”** desa (yoki shunga o‘xshash: “paxtani och”, �
 - Rol tekshiruvi `services.py` da (`_need`), web va Telegram uchun bir xil.
 - Nayman PDF nusxasida narx/summa yo‘q.
 - Namunaviy ma’lumot faqat `APP_MODE=test` va `data-test/` da.
-- Har o‘zgarishdan keyin: `pytest -q` (hozir 151 test o‘tadi), keyin commit + push (`main`).
+- Har o‘zgarishdan keyin: `pytest -q` (hozir 152 test o‘tadi), keyin commit + push (`main`).
 
 ## Tez buyruqlar
 
@@ -37,3 +37,8 @@ python tools/run_local.py          # test rejimi (data-test/), brauzer ochiladi
 ```
 
 Windows: `start_test.bat`. Agar `python` Microsoft Store yorlig‘iga tushsa — `py -3` ishlating.
+
+## Serverga chiqarish (avtomatik)
+- Server `tools/autodeploy.sh` orqali GitHub'dagi **`production`** tarmog'ini kuzatadi (har 5 daqiqa + Admin → Zaxira → "Hozir yangilash").
+- `main` ga bemalol push qilinadi; **`production` ga faqat egasi "tasdiqlayman" degandan keyin**: `git push origin main:production`.
+- Yangilanish: zaxira → ff-pull → rebuild → health; ishlamasa avtomatik eski versiyaga qaytadi (`data/deploy_status.json`).

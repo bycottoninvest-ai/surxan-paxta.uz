@@ -16,6 +16,10 @@ Baza avtomatik yangilanadi (sxema v9): `field_imports, field_assignments` va `fi
 `trailer_loads.method/rate/rate_unit`, `workers.note`, `tg_chats.bot_status` (v2.7.0) qo'shiladi.
 Eski yozuvlar o'zgarmaydi. Ilova ishga tushganda migratsiyadan oldin `data/` ichida `*.oldin-v*` zaxira nusxa oladi.
 
+## Avtomatik yangilash (bir marta o'rnatiladi)
+`bash tools/install-autodeploy.sh` (root, /opt/surxan-paxta.uz) — systemd timer har 5 daqiqada `origin/production` ni
+tekshiradi; Admin → Zaxira → "Hozir yangilash" darhol boshlaydi. Zaxira → pull → rebuild → health → xato bo'lsa rollback.
+
 ## v2.18.1 da nima o'zgardi
 Baza o'zgarmaydi. Punkt bilan hisob: paxta narxi qo'l terimi va kombayn uchun alohida (Sozlamalar `price_hand_kg`,
 `price_combine_kg`; Buxgalteriya bosh sahifasida ham o'zgartiriladi). Hech narsa qotmaydi — narx o'zgarsa punkt qarzi,

@@ -351,14 +351,30 @@ def seasons():
 def backups():
     cfg = current_app.config['SURXON']
     if request.method == 'POST':
-        post_actor()
+        actor = post_actor()
+        if request.form.get('action') == 'update':
+            # the server's update helper (tools/install-autodeploy.sh) watches this file and starts at once
+            (cfg.DATA_DIR / 'deploy_request').write_text(f'{actor.name} {__import__("surxon.utils", fromlist=["now_str"]).now_str()}\n')
+            from ..db import tx
+            from ..security import audit
+            with tx() as db:
+                audit(db, actor, 'DEPLOY_REQUEST', 'server', None)
+            return done('So‘rov yuborildi: server 1–5 daqiqada yangi versiyani tekshiradi va bo‘lsa yangilanadi. '
+                        'Natija shu sahifada chiqadi.', url_for('admin.backups'))
         from ..backup import run_backup
         return done(run_backup(cfg), url_for('admin.backups'))
     files = sorted((p for p in cfg.BACKUP_DIR.glob('surxon_*') if p.is_file()), key=lambda p: p.name, reverse=True)
     from datetime import datetime
     from ..db import q as _q
     off = _q("SELECT * FROM channel_status WHERE channel='offsite'", one=True)
+    import json as _json
+    try:
+        deploy = _json.loads((cfg.DATA_DIR / 'deploy_status.json').read_text())
+    except (OSError, ValueError):
+        deploy = None
+    from .. import VERSION
     return render_template('admin_backups.html', keep=cfg.BACKUP_KEEP_DAYS, offsite_on=bool(cfg.refresh_offsite()), offsite=off,
+                           deploy=deploy, version=VERSION, pending=(cfg.DATA_DIR / 'deploy_request').exists(),
                            files=[(p.name, p.stat().st_size, datetime.fromtimestamp(p.stat().st_mtime, cfg.TZ).strftime('%d.%m.%Y %H:%M'))
                                   for p in files[:60]])
 

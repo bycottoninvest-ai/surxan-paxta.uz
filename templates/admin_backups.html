@@ -2,6 +2,14 @@
 {% from 'macros.html' import icon, csrf, empty with context %}
 {% set page_title = 'Zaxira nusxa' %}
 {% block content %}
+<section class="card mb"><div class="card-h"><h3>Server yangilanishi (avtomatik)</h3><span class="badge b-blue" style="margin-left:auto">hozir v{{ version }}</span></div>
+  <div class="card-b small">{% if deploy %}
+    <span class="badge {{ 'b-green' if deploy.ok else 'b-red' }}">{{ 'Muvaffaqiyatli' if deploy.ok else 'Xato' }}</span> {{ deploy.at }} — {{ deploy.message }}
+  {% else %}Avtomatik yangilash hali ishlamagan (yoqilmagan yoki yangi versiya chiqmagan).{% endif %}
+  <form method="post" class="mt">{{ csrf() }}<input type="hidden" name="action" value="update"><button class="btn btn-primary btn-sm">⟳ Hozir yangilash</button>
+    {% if pending %}<span class="small muted">so‘rov yuborilgan — kutilmoqda…</span>{% endif %}</form>
+  <div class="tiny muted mt">Server har 5 daqiqada GitHub’dagi tasdiqlangan versiyani tekshiradi: yangisi bo‘lsa zaxira oladi, yangilanadi, tekshiradi; ishlamasa o‘zi eski versiyaga qaytadi.</div></div></section>
+
 <div class="page-h"><h1>{{ icon('database','lg') }} Zaxira nusxalar</h1><span class="sub">Avtomatik har kecha (docker “backup” xizmati) · {{ keep }} kun saqlanadi · haftalik to‘liq foto arxivi</span>
   <span class="spacer"></span><form method="post">{{ csrf() }}<button class="btn btn-primary">{{ icon('refresh','sm') }} Hozir zaxira olish</button></form></div>
 {% if offsite_on %}<div class="notice green mb">{{ icon('shield') }}<div>Har bir zaxira serverdan tashqariga ham (Storage Box) nusxalanadi.{% if offsite and offsite.last_ok_at %} Oxirgi muvaffaqiyatli nusxa: <b>{{ offsite.last_ok_at }}</b>.{% endif %}{% if offsite and offsite.last_error_at and (not offsite.last_ok_at or offsite.last_error_at > offsite.last_ok_at) %} <b style="color:var(--red)">Oxirgi urinishda xato: {{ offsite.last_error }}</b>{% endif %} Tiklash tartibi: <code>docs/TIKLASH.md</code>.</div></div>
