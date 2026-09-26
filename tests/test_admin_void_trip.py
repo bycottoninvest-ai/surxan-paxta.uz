@@ -153,3 +153,91 @@ def test_tally_home_has_live_field_map_and_new_trip_preselects(app, world):
     assert 'd-live-map' in home and 'fieldgeo.js' in home and '"D-04"' in home
     page = tally.get(f'/dala/yangi?field={world["f"]["D-04"]}').get_data(as_text=True)
     assert f'value="{world["f"]["D-04"]}" data-brig' in page and 'selected' in page.split(f'value="{world["f"]["D-04"]}"')[1][:60]
+
+
+def test_rounds_and_picked_area_give_centner_per_hectare(app, world):
+    import json as _j
+    from surxon import picking, geo
+    admin = world['admin']
+    tally, _ = setup(app, world)
+    # a 100 m x 200 m field (≈2 ha) with a real contour
+    poly = [[41.3000, 69.2400], [41.3000, 69.2424], [41.3009, 69.2424], [41.3009, 69.2400]]
+    with app.app_context():
+        get_db().execute('UPDATE fields SET polygon_json=?, area_ha=2 WHERE id=?', (_j.dumps(poly), world['f']['D-04']))
+    cells, size = geo.field_grid(poly)
+    assert 20 <= size <= 60 and len(cells) > 10
+    r = tally.post('/dala/yangi', {'trailer_id': world['eq']['TL-01'], 'field_id': world['f']['D-04'], 'method': 'hand',
+                                   'brigadier_id': world['b']['Juma ota'], 'rate': '1500', 'round': '2', 'client_uuid': uuid4()}).get_json()
+    lid = r['load_id']
+    c0 = cells[0]['poly']
+    lat, lon = sum(p[0] for p in c0) / 4, sum(p[1] for p in c0) / 4
+    for kg in ('150', '150'):
+        assert tally.post(f'/dala/reys/{lid}/tortish', {'worker_name': 'Ali ' + kg, 'kg': kg, 'confirm_duplicate': '1',
+                                                       'client_uuid': uuid4(), 'lat': lat, 'lon': lon, 'acc': 5}).get_json()['ok']
+    close = tally.get(f'/dala/reys/{lid}/yopish').get_data(as_text=True)
+    assert 'Terilgan joyni belgilang' in close and cells[0]['id'] in close.split('"chosen"')[1][:60]     # suggested from GPS
+    half = [c['id'] for c in cells[:len(cells) // 2]]
+    from conftest import jpeg
+    assert tally.post(f'/dala/reys/{lid}/yopish', {'cells': ','.join(half)}, files={'photos': jpeg((1, 2, 3))}).get_json()['ok']
+    with app.app_context():
+        row = q('SELECT harvest_round, picked_ha FROM trailer_loads WHERE id=?', (lid,), one=True)
+        assert row['harvest_round'] == 2 and abs(row['picked_ha'] - 2 * len(half) / len(cells)) < 0.01
+        y = picking.trip_yield(lid)
+        assert y['kg'] == 300 and abs(y['cha'] - 3 / row['picked_ha']) < 0.1
+        rep = {f['code']: f for f in picking.season_report(2026)}
+        assert rep['D-04']['rounds'][1]['kg'] == 300 and rep['D-04']['rounds'][1]['ha'] and rep['D-04']['rounds'][0]['kg'] == 0
+    assert 's/ga' in tally.get(f'/dala/reys/{lid}/hujjatlar').get_data(as_text=True)
+    # the tally corrects it later; the report page and map work
+    assert tally.post(f'/dala/reys/{lid}/joy', {'cells': ','.join(c['id'] for c in cells), 'round': '2'}).get_json()['ok']
+    with app.app_context():
+        assert abs(q('SELECT picked_ha FROM trailer_loads WHERE id=?', (lid,), one=True)['picked_ha'] - 2) < 0.01
+    page = admin.get('/dala-hosil').get_data(as_text=True)
+    assert 'D-04' in page and '2-terim' in page and '"round": 2' in page
+
+
+def test_trip_across_two_fields_splits_kg_by_marked_area(app, world):
+    import json as _j
+    from surxon import picking, geo
+    tally, _ = setup(app, world)
+    a = [[41.3000, 69.2400], [41.3000, 69.2424], [41.3009, 69.2424], [41.3009, 69.2400]]
+    b = [[41.3000, 69.2425], [41.3000, 69.2449], [41.3009, 69.2449], [41.3009, 69.2425]]
+    with app.app_context():
+        get_db().execute('UPDATE fields SET polygon_json=?, area_ha=2 WHERE id=?', (_j.dumps(a), world['f']['D-04']))
+        get_db().execute('UPDATE fields SET polygon_json=?, area_ha=2 WHERE id=?', (_j.dumps(b), world['f']['D-01']))
+    ca, cb = geo.field_grid(a)[0], geo.field_grid(b)[0]
+    r = tally.post('/dala/yangi', {'trailer_id': world['eq']['TL-01'], 'field_id': world['f']['D-04'], 'method': 'hand',
+                                   'brigadier_id': world['b']['Juma ota'], 'rate': '1000', 'client_uuid': uuid4()}).get_json()
+    lid = r['load_id']
+    assert tally.post(f'/dala/reys/{lid}/tortish', {'worker_name': 'Ali', 'kg': '200', 'client_uuid': uuid4()}).get_json()['ok']
+    page = tally.get(f'/dala/reys/{lid}/yopish').get_data(as_text=True)
+    assert '"code": "D-01"' in page                                   # the neighbour is on the marking map
+    keys = [f"{world['f']['D-04']}|{c['id']}" for c in ca[:8]] + [f"{world['f']['D-01']}|{c['id']}" for c in cb[:2]]
+    from conftest import jpeg
+    assert tally.post(f'/dala/reys/{lid}/yopish', {'cells': ','.join(keys)}, files={'photos': jpeg((3, 2, 1))}).get_json()['ok']
+    with app.app_context():
+        y = picking.trip_yield(lid)
+        assert [p['code'] for p in y['parts']] == ['D-04', 'D-01']
+        rep = {f['code']: f for f in picking.season_report(2026, with_money=True)}
+        share_b = 2 * (2 / len(cb)) / (8 * (2 / len(ca)) + 2 * (2 / len(cb)))
+        assert abs(rep['D-01']['kg'] - 200 * share_b) <= 1 and abs(rep['D-04']['kg'] + rep['D-01']['kg'] - 200) <= 1
+        assert abs(rep['D-01']['pay'] - 200 * 1000 * share_b) <= 1000
+
+
+def test_punkt_coordinates_give_estimated_arrival(app, world):
+    from surxon import transit
+    admin = world['admin']
+    tally, punkt = setup(app, world)
+    assert admin.post('/admin/punktlar', {'id': 1, 'name': 'Nayman-1', 'coords': '41.3500, 69.2400', 'active': '1'}).get_json()['ok']
+    assert not admin.post('/admin/punktlar', {'id': 1, 'name': 'Nayman-1', 'coords': 'abc', 'active': '1'}).get_json()['ok']
+    r = tally.post('/dala/yangi', {'trailer_id': world['eq']['TL-01'], 'field_id': world['f']['D-04'], 'method': 'hand',
+                                   'brigadier_id': world['b']['Juma ota'], 'rate': '1500', 'client_uuid': uuid4()}).get_json()
+    lid = r['load_id']
+    assert tally.post(f'/dala/reys/{lid}/tortish', {'worker_name': 'Ali', 'kg': '150', 'client_uuid': uuid4(),
+                                                   'lat': '41.3000', 'lon': '69.2400', 'acc': '5'}).get_json()['ok']
+    from conftest import jpeg
+    assert tally.post(f'/dala/reys/{lid}/yopish', files={'photos': jpeg((9, 9, 9))}).get_json()['ok']
+    with app.app_context():
+        t = transit.on_the_way()
+        assert len(t) == 1 and t[0]['eta'] and 5.5 < t[0]['km'] < 7.5 and 15 <= t[0]['minutes'] <= 25    # 5.56 km × 1.3 at 20 km/h
+    assert '≈' in punkt.get('/punkt').get_data(as_text=True)
+    assert 'transit-data' in admin.get('/?view=full').get_data(as_text=True)

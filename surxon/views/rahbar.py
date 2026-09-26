@@ -60,7 +60,9 @@ def cotton():
 @bp.get('/rahbar/yolda')
 @perm_required(VIEW)
 def moving():
-    return render_template('rahbar_moving.html', **_ctx(rows=D.moving_trips(), now=D.trips_now()))
+    from ..transit import on_the_way
+    return render_template('rahbar_moving.html', **_ctx(rows=D.moving_trips(), now=D.trips_now(),
+                                                        etas={d['lid']: d for d in on_the_way() if d['eta']}))
 
 
 @bp.get('/rahbar/reys/<int:load_id>')

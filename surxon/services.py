@@ -816,9 +816,25 @@ def save_cashbox(actor, cid, *, name, active=True):
             _unique_error(e, 'Bu kassa')
 
 
-def save_station(actor, sid, *, name, address='', active=True):
+def parse_coords(text):
+    """'41.3012, 69.2401' (as copied from Google Maps) → (lat, lon); '' → (None, None)."""
+    import re
+    text = (text or '').strip()
+    if not text:
+        return None, None
+    nums = re.findall(r'-?\d+(?:[.,]\d+)?', text)
+    if len(nums) < 2:
+        raise UserError('Koordinatani “41.3012, 69.2401” ko‘rinishida kiriting (Google Maps’da joyni bosib, raqamlarni nusxalang).')
+    lat, lon = (float(n.replace(',', '.')) for n in nums[:2])
+    if not (-90 <= lat <= 90 and -180 <= lon <= 180):
+        raise UserError('Koordinata noto‘g‘ri.')
+    return round(lat, 7), round(lon, 7)
+
+
+def save_station(actor, sid, *, name, address='', active=True, coords=None):
     _need(actor, 'masterdata.write')
     import sqlite3
+    lat, lon = parse_coords(coords) if coords is not None else (None, None)
     name = clean_text(name, 60)
     if len(name) < 2:
         raise UserError('Punkt nomi kiritilishi shart.')
@@ -828,10 +844,12 @@ def save_station(actor, sid, *, name, address='', active=True):
                 old = db.execute('SELECT * FROM stations WHERE id=?', (sid,)).fetchone()
                 db.execute('UPDATE stations SET name=?, address=?, active=? WHERE id=?',
                            (name, clean_text(address, 200), 1 if active else 0, sid))
+                if coords is not None:
+                    db.execute('UPDATE stations SET lat=?, lon=? WHERE id=?', (lat, lon, sid))
                 audit(db, actor, 'UPDATE', 'station', sid, old=row_dict(old), new={'name': name, 'active': bool(active)})
                 return sid
-            cur = db.execute('INSERT INTO stations(name, address, created_at) VALUES (?,?,?)',
-                             (name, clean_text(address, 200), now_str()))
+            cur = db.execute('INSERT INTO stations(name, address, created_at, lat, lon) VALUES (?,?,?,?,?)',
+                             (name, clean_text(address, 200), now_str(), lat, lon))
             audit(db, actor, 'CREATE', 'station', cur.lastrowid, new={'name': name})
             return cur.lastrowid
         except sqlite3.IntegrityError as e:

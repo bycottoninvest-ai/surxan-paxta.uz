@@ -150,9 +150,17 @@
     entries.forEach(([k, v, name]) => name ? fd.append(k, v, name) : fd.append(k, v));
     return fd;
   }
+  // A weak signal is worse than none: the request hangs. After SEND_TIMEOUT the entry goes to the queue instead
+  // (if the server did get it after all, the replay with the same client_uuid is recognised and not stored twice).
+  const SEND_TIMEOUT = 15000;
   async function send(action, entries) {
-    const r = await fetch(action, { method: 'POST', body: entriesToFD(entries), credentials: 'same-origin',
-      headers: { 'X-Requested-With': 'fetch', 'Accept': 'application/json', 'X-CSRF-Token': csrf() } });
+    const ctl = window.AbortController ? new AbortController() : null;
+    const timer = ctl ? setTimeout(() => ctl.abort(), SEND_TIMEOUT) : null;
+    let r;
+    try {
+      r = await fetch(action, { method: 'POST', body: entriesToFD(entries), credentials: 'same-origin', signal: ctl ? ctl.signal : undefined,
+        headers: { 'X-Requested-With': 'fetch', 'Accept': 'application/json', 'X-CSRF-Token': csrf() } });
+    } finally { if (timer) clearTimeout(timer); }
     let data = {};
     try { data = await r.json(); } catch (_) { }
     return { status: r.status, data };
@@ -164,7 +172,7 @@
     flushing = true;
     let sent = 0, failed = [];
     try {
-      for (const item of await qAll()) {
+      for (const item of (await qAll()).sort((a, b) => a.at - b.at)) {     // in the order they were entered
         if (item.user !== userId) continue;   // never replay another person's entries
         try {
           const { status, data } = await send(item.action, item.entries);
@@ -200,7 +208,11 @@
     const done = () => { delete form.dataset.busy; if (btn) { btn.disabled = false; btn.innerHTML = label; } };
     try {
       const { status, data } = await send(actionUrl, entries);
-      if (status === 401) { alert('Sessiya tugagan. Qayta kiring — yozuv saqlanmadi.'); location.href = '/login'; return; }
+      if (status === 401) {        // logged out: keep the entry, it is sent after logging in again
+        await qPut(item);
+        alert('Sessiya tugagan. Yozuv telefonda saqlandi — qayta kiring, kirgandan keyin o‘zi yuboriladi.');
+        location.href = '/login'; return;
+      }
       if (!data.ok) { toast(data.error || 'Xatolik', 'error'); form.dispatchEvent(new CustomEvent('failed', { detail: data })); done(); return; }
       if (form.dataset.after === 'reset') {
         toast(data.message, 'success');
@@ -211,7 +223,7 @@
     } catch (_) {
       await qPut(item);
       toast('Internet yo‘q — yozuv NAVBATDA: serverga hali yetmagan. Internet kelganda o‘zi yuboriladi.', 'warn');
-      form.reset(); arm(form); form.dispatchEvent(new CustomEvent('queued'));
+      form.reset(); arm(form); form.dispatchEvent(new CustomEvent('queued', { detail: { entries } }));
       $$('.previews', form).forEach(p => p.innerHTML = '');
       done(); showSync();
     }
@@ -228,6 +240,7 @@
     setTimeout(() => el.remove(), kind === 'error' ? 7000 : 4000);
   }
   window.surxonToast = toast;
+  window.surxonQueue = { all: async () => (await qAll()).filter(x => x.user === userId), flush };
 
   // ---- geolocation for photo forms (only if the user allows it)
   $$('form[data-geo]').forEach(f => {

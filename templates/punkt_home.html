@@ -9,7 +9,8 @@
     <span class="small">{{ t.field_name }} · {{ t.brigadier_name }}</span>
     <span class="small">Jo‘natilgan: <b>{{ t.net_kg|num }} kg</b> <span class="muted">({{ 'dala hisobi' if t.basis == 'dala' else 'tarozi netto' }})</span></span>
     <span class="tiny muted">{{ t.trip_no }}{% if not sid and t.station_name %} · {{ t.station_name }}{% endif %}</span>
-    {% if t.arrived_at %}<span class="pk-st pk-q">Punktda navbatda</span>{% else %}<span class="pk-st pk-w">Yo‘lda</span>{% endif %}
+    {% if t.arrived_at %}<span class="pk-st pk-q">Punktda navbatda</span>{% else %}<span class="pk-st pk-w">Yo‘lda</span>
+      {% set e = etas.get(t.id) if etas else none %}{% if e %}<span class="small" style="color:#1d4ed8">🚜 ≈ <b>{{ e.eta }}</b> da keladi{% if e.left %} · {{ e.left }} daq qoldi{% else %} · yetib kelishi kerak{% endif %} · {{ e.km }} km</span>{% endif %}{% endif %}
   </div>
   {% if first %}<span class="btn btn-primary btn-block pk-open">Ochish ›</span>{% else %}<span class="pk-arrow">{{ icon('chev-right') }}</span>{% endif %}
 </a>

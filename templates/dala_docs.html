@@ -8,6 +8,12 @@
   <div class="notice">{{ icon('alert','sm') }} Bu telashka hali yopilmagan. <a href="{{ url_for('dala.trip', load_id=ld.id) }}">Davom ettirish</a></div>
   {% else %}
   <div class="d-ok">{{ icon('check-circle','lg') }}<b>Telashka yopildi</b><span class="small">{{ ld.trip_no }} · {{ totals.kg|num }} kg{% if ld.waybill_number %} · {{ ld.waybill_number }}{% endif %}</span></div>
+  <div class="d-yield">
+    {% if yld and yld.ha %}🌱 {{ rnd }}-terim · terilgan joy <b>{{ '%.2f'|format(yld.ha) }} ga</b> · hosildorlik <b class="big">{{ '%.1f'|format(yld.cha) }} s/ga</b>
+    {% if yld.parts %}<div class="small">Dalalarga bo‘lindi: {% for p in yld.parts %}<b>{{ p.code }}</b> {{ p.share }}% ({{ p.kg|num }} kg){{ ' · ' if not loop.last }}{% endfor %}</div>{% endif %}
+    {% else %}🌱 {{ rnd }}-terim · terilgan joy hali belgilanmagan{% endif %}
+    <div><a class="small" href="{{ url_for('dala.picked_area', load_id=ld.id) }}">{{ 'Terilgan joyni o‘zgartirish' if yld and yld.ha else 'Terilgan joyni belgilash' }} →</a></div>
+  </div>
   {% set doc_url = url_for('dala.workers_pdf', load_id=ld.id) %}{% set doc_file = (ld.trip_no or ld.id)|string ~ '_ishchilar_hisoboti.pdf' %}
   {% set doc_title = 'Kombayn hisoboti (ichki)' if ld.method == 'combine' else 'Ishchilar hisoboti (ichki)' %}{% set doc_sub = 'Ism · kg · narx · summa — punktga berilmaydi' %}
   {% include 'partials/doc_card.html' %}

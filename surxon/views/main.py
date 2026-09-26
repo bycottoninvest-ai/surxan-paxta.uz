@@ -119,6 +119,9 @@ def full_dashboard(year, day, brig, kpi):
                       'brigadier': f['brigadier_name'], 'net': f['net_kg'], 'active': f['active_loads'],
                       'poly': json.loads(f['polygon_json']) if f['polygon_json'] else None,
                       'url': url_for('admin.field_detail', field_id=f['id'])} for f in fields],
+        transit_json=__import__('surxon.transit', fromlist=['on_the_way']).on_the_way(),
+        stations_json=__import__('surxon.transit', fromlist=['stations']).stations(),
+        server_now=__import__('surxon.utils', fromlist=['now_str']).now_str(),
         picked_trips=[dict(r, thumb=url_for('main.media', path=r['thumb']) if r['thumb'] else None,
                            url=url_for('ops.load_detail', load_id=r['id'])) for r in q('''
             SELECT tl.id, tl.trip_no trip, t.code trailer, f.code field, tl.status,
@@ -155,6 +158,10 @@ def search():
 @login_required
 def api_workers():
     term = (request.args.get('q') or '').strip()
+    if request.args.get('all') == '1':
+        # the whole active list, kept on the tally's phone so names can be found without internet
+        return jsonify(workers=[{'id': r['id'], 'name': r['full_name'], 'phone': r['phone']} for r in
+                                q('SELECT id, full_name, phone FROM workers WHERE active=1 ORDER BY full_name LIMIT 20000')])
     from ..utils import name_key
     key = name_key(term)
     if len(key) < 1:

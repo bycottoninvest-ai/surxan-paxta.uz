@@ -7,7 +7,7 @@
   <div class="pk-counts"><div class="pk-c1"><span>Dalada to‘lgan</span><b>{{ now.dalada }}</b></div><div class="pk-c2"><span>Yo‘lda</span><b>{{ now.yolda }}</b></div><div class="pk-c3"><span>Punktda navbatda</span><b>{{ now.navbat }}</b></div></div>
   <div class="hm-ops">
   {% for t in rows %}<a class="hm-op" href="{{ url_for('rahbar.trip', load_id=t.id) }}"><span class="hm-op-b"><b>{{ t.trailer_code }} · {{ t.trip_no }}</b>
-      <small>{{ t.wb_number or 'nakladnoy yo‘q' }} · {{ t.field_name or '' }} → {{ t.station_name or 'punkt' }}{% if t.sent_at %} · jo‘nadi {{ t.sent_at[11:16] }}{% elif t.full_at %} · to‘ldi {{ t.full_at[11:16] }}{% endif %}</small></span>
+      <small>{{ t.wb_number or 'nakladnoy yo‘q' }} · {{ t.field_name or '' }} → {{ t.station_name or 'punkt' }}{% if t.sent_at %} · jo‘nadi {{ t.sent_at[11:16] }}{% elif t.full_at %} · to‘ldi {{ t.full_at[11:16] }}{% endif %}{% set e = etas.get(t.id) %}{% if e and not t.arrived_at %}<br><span style="color:#1d4ed8">🚜 ≈ {{ e.eta }} da punktda{% if e.left %} · {{ e.left }} daq qoldi{% endif %} · {{ e.km }} km</span>{% endif %}</small></span>
     <span class="hm-op-s"><b class="num">{{ (t.sent_kg or t.internal_kg)|num }} kg</b><span class="badge {{ t.badge }}">{{ t.state }}</span></span></a>
   {% else %}{{ empty('Hozir yo‘lda yuk yo‘q', 'truck') }}{% endfor %}
   </div>

@@ -21,7 +21,7 @@
   <!-- live map: where the tally is now and which field that is -->
   <div class="d-live">
     <div id="d-live-st" class="d-live-st">📍 Joylashuv aniqlanmoqda…</div>
-    <div id="d-live-map" class="d-live-map" data-center="{{ map_center }}"></div>
+    <div id="d-live-map" class="d-live-map spx-vivid" data-center="{{ map_center }}"></div>
   </div>
   <script id="d-home-fields" type="application/json">[{% for f in fields %}{"id": {{ f.id }}, "label": {{ (f.code ~ ' · ' ~ f.name)|tojson }}, "code": {{ f.code|tojson }}, "kg": {{ f.kg or 0 }}, "ha": {{ f.ha or 0 }}, "poly": {{ f.polygon_json|safe }}}{{ ',' if not loop.last }}{% endfor %}]</script>
   {% endif %}

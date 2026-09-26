@@ -1,8 +1,10 @@
 /* SURXON PAXTA service worker.
-   Only PUBLIC static assets are cached. Logged-in HTML, API responses and photos are
-   never stored, so one user's data can't be shown to the next person on a shared phone.
+   Public static assets are cached. Of the logged-in pages only the tally's field pages (/dala…) are kept, so the
+   work can go on without internet; they are deleted on logout / login, so the next person on a shared phone never
+   sees them. API responses and photos are never stored.
    Offline data entry is handled by the IndexedDB queue in app.js, not by this cache. */
-const VERSION = 'surxon-static-v3';
+const VERSION = 'surxon-static-v4';
+const PAGES = 'surxon-field-pages';        // the tally's own field pages, so they open without internet
 const ASSETS = [
   '/static/css/app.css', '/static/js/app.js', '/static/icons.svg',
   '/static/img/logo-light.png', '/static/img/logo-dark.png', '/static/img/hero-field.jpg',
@@ -15,7 +17,7 @@ self.addEventListener('install', e => {
 
 self.addEventListener('activate', e => {
   // removes the old v1 cache that stored private pages
-  e.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(k => k !== VERSION).map(k => caches.delete(k))))
+  e.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(k => k !== VERSION && k !== PAGES).map(k => caches.delete(k))))
     .then(() => self.clients.claim()));
 });
 
@@ -34,6 +36,24 @@ self.addEventListener('fetch', e => {
         return res;
       } catch (_) {
         return (await cache.match(req)) || (await cache.match(req, { ignoreSearch: true })) || Response.error();
+      }
+    }));
+    return;
+  }
+  if (req.mode === 'navigate' && (url.pathname === '/logout' || url.pathname === '/login')) {
+    // leaving / changing user: forget the cached field pages of the previous person
+    e.respondWith(caches.delete(PAGES).then(() => fetch(req)).catch(() => caches.match('/offline')));
+    return;
+  }
+  if ((req.mode === 'navigate' || req.headers.get('X-SPX-Prefetch')) && /^\/dala(\/|$)/.test(url.pathname) && !url.pathname.endsWith('.pdf')) {
+    // field pages: network first; the last copy opens when there is no internet (entries go to the offline queue)
+    e.respondWith(caches.open(PAGES).then(async cache => {
+      try {
+        const res = await fetch(req);
+        if (res.ok && !res.redirected) cache.put(url.pathname, res.clone());
+        return res;
+      } catch (_) {
+        return (await cache.match(url.pathname)) || (await caches.match('/offline'));
       }
     }));
     return;

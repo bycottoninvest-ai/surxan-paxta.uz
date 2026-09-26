@@ -1,0 +1,14 @@
+{# The field split into cells over satellite imagery: the tally taps the cells this trip picked (or walks with the phone).
+   Needs `pick` (see views/dala._pick_ctx) and a form containing <input name="cells" id="pk-cells">. #}
+<div class="pk-box">
+  <div class="pk-h"><b>Terilgan joyni belgilang</b> <span class="tiny muted">{{ pick.label }} · {{ pick.round }}-terim</span></div>
+  <div class="pk-legend tiny"><span><i style="background:#22c55e"></i>shu telashka</span><span><i style="background:#facc15"></i>{{ pick.round }}-terimda oldin terilgan</span><span><i style="background:#fff;border:1px solid #94a3b8"></i>terilmagan</span></div>
+  <div id="pk-map" class="pk-map spx-vivid"></div>
+  <div class="pk-bar">
+    <button type="button" class="btn btn-light btn-sm" id="pk-walk">🚶 Yurib belgilash</button>
+    <button type="button" class="btn btn-light btn-sm" id="pk-clear">Tozalash</button>
+  </div>
+  <div class="pk-sum" id="pk-sum"></div>
+  <div class="tiny muted">Qo‘shni dalalar (uzuq chiziq) ham ko‘rinadi — telashka ikki dalada to‘lgan bo‘lsa, ikkalasidan belgilang: tizim kg va xarajatni dalalarga o‘zi bo‘lib yozadi. Katakni bossangiz belgilanadi, yana bossangiz olib tashlanadi. “Yurib belgilash” yoqilsa, telefon o‘tgan kataklar o‘zi belgilanadi. Yashil — tortish joylari bo‘yicha taklif; to‘g‘rilab qo‘ying.</div>
+</div>
+<script id="pk-data" type="application/json">{{ pick|tojson }}</script>

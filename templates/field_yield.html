@@ -1,0 +1,65 @@
+{% extends 'base.html' %}
+{% from 'macros.html' import icon, empty with context %}
+{% set page_title = 'Dala hosili' %}
+{% block content %}
+<div class="page-h"><h1>{{ icon('map','lg') }} Dala hosili — terimlar bo‘yicha</h1><span class="sub">{{ year }} mavsumi · hosildorlik sentner/ga (1 s = 100 kg) · terilgan joy hisobchi belgilagan kataklar bo‘yicha</span></div>
+<div class="grid">
+  <section class="card s12">
+    <div class="card-h"><h3>Xaritada terilgan joylar</h3>
+      <div class="tabs" style="margin-left:auto" data-fy-tabs><button class="on" data-r="0">Hammasi</button><button data-r="1">1-terim</button><button data-r="2">2-terim</button><button data-r="3">3-terim</button><button data-r="today">Bugun</button></div></div>
+    <div class="card-b"><div id="fy-map" class="spx-vivid" style="height:520px;border-radius:12px;background:#1f2937"></div>
+      <div class="small" style="display:flex;gap:16px;flex-wrap:wrap;margin-top:8px">
+        <span><i style="display:inline-block;width:12px;height:12px;background:#22c55e;border-radius:3px"></i> 1-terim</span>
+        <span><i style="display:inline-block;width:12px;height:12px;background:#3b82f6;border-radius:3px"></i> 2-terim</span>
+        <span><i style="display:inline-block;width:12px;height:12px;background:#a855f7;border-radius:3px"></i> 3-terim</span>
+        <span><i style="display:inline-block;width:12px;height:12px;background:#facc15;border-radius:3px"></i> bugun</span></div></div>
+  </section>
+  <section class="card s12">
+    <div class="card-h"><h3>Dalalar jadvali</h3></div>
+    <div class="table-wrap"><table class="t">
+      <thead><tr><th rowspan="2">Dala</th><th rowspan="2" class="num">Maydon, ga</th>
+        {% for r in (1, 2, 3) %}<th colspan="3" style="text-align:center">{{ r }}-terim</th>{% endfor %}
+        <th colspan="{{ 3 if money else 2 }}" style="text-align:center">Mavsum jami</th></tr>
+        <tr>{% for r in (1, 2, 3) %}<th class="num">kg</th><th class="num">terilgan ga</th><th class="num">s/ga</th>{% endfor %}<th class="num">kg</th><th class="num">s/ga</th>{% if money %}<th class="num">Terim haqi, so‘m</th>{% endif %}</tr></thead>
+      <tbody>{% for f in rows %}<tr>
+        <td><a class="link" href="{{ url_for('admin.field_detail', field_id=f.id) }}"><b>{{ f.code }}</b></a> <span class="small muted">{{ f.name }}{% if f.brigadier %} · {{ f.brigadier }}{% endif %}</span></td>
+        <td class="num">{{ f.area_ha|num(2) }}</td>
+        {% for r in f.rounds %}<td class="num">{{ r.kg|num if r.kg else '—' }}</td>
+          <td class="num">{% if r.ha %}{{ r.ha|num(2) }} <span class="tiny muted">({{ r.cover }}%)</span>{% elif r.kg %}<span class="tiny" style="color:#b45309">belgilanmagan</span>{% else %}—{% endif %}</td>
+          <td class="num"><b>{{ r.cha|num(1) if r.cha else '—' }}</b></td>{% endfor %}
+        <td class="num"><b>{{ f.kg|num }}</b></td><td class="num"><b style="color:#15803d">{{ f.cha|num(1) if f.cha else '—' }}</b></td>{% if money %}<td class="num">{{ f.pay|num }}</td>{% endif %}
+      </tr>{% else %}<tr><td colspan="13">{{ empty('Bu mavsumda hali terim yo‘q', 'map') }}</td></tr>{% endfor %}</tbody>
+    </table></div>
+    <div class="card-b small muted">“s/ga” terim ustunida — shu terimda belgilangan joyga nisbatan; “Mavsum jami” — butun dala maydoniga nisbatan (hamma terimlar yig‘indisi). Telashka ikki dalada to‘lgan bo‘lsa, kg va terim haqi belgilangan gektarga qarab dalalarga bo‘lingan. Kelasi yil o‘g‘itlash uchun: past s/ga dalalar va dalaning terilmagan qismlari xaritada ko‘rinadi.</div>
+  </section>
+</div>
+{% endblock %}
+{% block scripts %}<link rel="stylesheet" href="{{ url_for('static', filename='vendor/leaflet/leaflet.css') }}">
+<script src="{{ url_for('static', filename='vendor/leaflet/leaflet.js') }}"></script>
+<script src="{{ url_for('static', filename='js/basemap.js') }}"></script>
+<script id="fy-cells" type="application/json">{{ cells|tojson }}</script>
+<script id="fy-outlines" type="application/json">{{ outlines|tojson }}</script>
+<script>
+(function () {
+  const cells = JSON.parse(document.getElementById('fy-cells').textContent), outlines = JSON.parse(document.getElementById('fy-outlines').textContent);
+  const map = L.map('fy-map', { attributionControl: false, scrollWheelZoom: false });
+  if (window.spxBasemap) spxBasemap(map); else L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19 }).addTo(map);
+  const all = [];
+  const shapes = outlines.map(o => { all.push(...o.poly); return L.polygon(o.poly, { color: '#fff', weight: 1.5, fill: false })
+    .bindTooltip(o.code, { permanent: true, direction: 'center', className: 'map-label' }).addTo(map); });
+  if (all.length) map.fitBounds(all, { padding: [12, 12] });
+  const labels = () => shapes.forEach(p => map.getZoom() >= 15 ? p.openTooltip() : p.closeTooltip());   // no pile of names when zoomed out
+  map.on('zoomend', labels); labels();
+  const col = { 1: '#22c55e', 2: '#3b82f6', 3: '#a855f7' }, layer = L.layerGroup().addTo(map);
+  function draw(r) {
+    layer.clearLayers();
+    // later rounds on top so each cell shows its latest picking
+    cells.filter(c => r === '0' || (r === 'today' ? c.today : String(c.round) === r)).sort((a, b) => a.round - b.round).forEach(c =>
+      L.polygon(c.poly, { color: 'rgba(0,0,0,.35)', weight: .5, fillColor: r === 'today' ? '#facc15' : col[c.round], fillOpacity: .6 })
+        .bindTooltip(`${c.round}-terim · ${c.trip || ''}`).addTo(layer));
+  }
+  draw('0');
+  document.querySelectorAll('[data-fy-tabs] button').forEach(b => b.addEventListener('click', () => {
+    document.querySelectorAll('[data-fy-tabs] button').forEach(x => x.classList.toggle('on', x === b)); draw(b.dataset.r); }));
+})();
+</script>{% endblock %}

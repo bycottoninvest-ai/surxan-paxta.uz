@@ -138,7 +138,7 @@ def stations():
     if request.method == 'POST':
         sid = parse_int(request.form.get('id'), 'ID', required=False)
         save_station(post_actor(), sid, name=request.form.get('name'), address=request.form.get('address', ''),
-                     active=checkbox('active') if sid else True)
+                     active=checkbox('active') if sid else True, coords=request.form.get('coords'))
         return done('Punkt saqlandi.', url_for('admin.stations'))
     rows = q('''SELECT st.*, (SELECT GROUP_CONCAT(u.full_name, ', ') FROM users u WHERE u.station_id=st.id AND u.active=1) operators,
                        (SELECT COUNT(*) FROM trailer_loads tl JOIN waybills wb ON wb.load_id=tl.id

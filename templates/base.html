@@ -70,6 +70,7 @@
       {{ nav('admin.equipment', 'Texnikalar', 'tractor') }}
       {{ nav('admin.fields', 'Dalalar', 'field', 'reports.view', ['admin.fields', 'admin.field_detail']) }}
       {{ nav('reports.index', 'Hisobotlar', 'bars', 'reports.view', ['reports.index', 'reports.report']) }}
+      {{ nav('reports.field_yield', 'Dala hosili (terimlar)', 'map', 'reports.view') }}
       {{ nav('kuzatuv.home', 'Kuzatuv (rasm/video)', 'video', 'kuzatuv.view', ['kuzatuv.home', 'kuzatuv.people', 'kuzatuv.rules']) }}
       {{ nav('main.photos', 'Foto arxiv', 'image') }}
       {% if can('audit.view') or can('users.manage') or can('masterdata.write') %}

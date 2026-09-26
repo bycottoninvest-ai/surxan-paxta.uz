@@ -31,6 +31,8 @@ DEFAULTS = {
     'map_center': ('42.3167,59.6000', 'Xarita markazi (lat,lon)'),
     'daily_target_kg': ('', 'Kunlik terim rejasi, kg (bo‘sh = reja ko‘rsatilmaydi)'),
     'season_target_kg': ('', 'Mavsum terim rejasi, kg — TV’dagi “Reja bajarilishi” (bo‘sh = ko‘rsatilmaydi)'),
+    'tractor_speed_kmh': ('20', 'Telashkali traktor o‘rtacha tezligi, km/soat — punktga yetib borish vaqtini taxmin qilish uchun'),
+    'road_factor': ('1.3', 'Yo‘l to‘g‘ri chiziqdan necha barobar uzun (odatda 1.2–1.5) — punktgacha masofa uchun'),
     'tv_show_workers': ('1', 'TV’da bugungi eng yaxshi 5 terimchi (ism + familiya bosh harfi) ko‘rsatilsinmi (1/0)'),
     'report_feed': ('1', 'Hisobot kanaliga har bir muhim hodisa (reys tugadi, punkt qabul, kassa kirim/chiqim, kuzatuv '
                          'kechikishi) darhol yoziladi (1/0). Kunlik hisobot bundan tashqari keladi'),

@@ -116,10 +116,12 @@ def new_trip():
                         method=request.form.get('method') or 'hand', rate=request.form.get('rate'),
                         client_uuid=form_uuid())
         gps = _gps()
-        if gps:
-            with tx() as db:
+        rnd = request.form.get('round', type=int)
+        with tx() as db:
+            if gps:
                 db.execute('UPDATE trailer_loads SET open_lat=?, open_lon=?, open_acc=? WHERE id=? AND open_lat IS NULL',
                            gps + (lid,))
+            db.execute('UPDATE trailer_loads SET harvest_round=? WHERE id=?', (rnd if rnd in (1, 2, 3) else 1, lid))
         return done('Telashka ochildi.', url_for('dala.trip', load_id=lid), load_id=lid)
     busy = {r['trailer_id'] for r in q("SELECT trailer_id FROM trailer_loads WHERE status IN ('OCHIQ','TOLDI')")}
     trailers = [t for t in q("SELECT id, code, plate FROM equipment WHERE kind='telashka' AND active=1 ORDER BY code")
@@ -129,7 +131,13 @@ def new_trip():
                'LEFT JOIN brigadiers b ON b.id=f.brigadier_id WHERE f.active=1'
                + (' AND (f.brigadier_id=? OR f.brigadier_id IS NULL)' if brig else '') + ' ORDER BY f.code',
                (brig,) if brig else ())
+    from .. import picking
+    from ..db import get_db as _gdb
+    from ..services import current_season as _cs
+    yr = _cs(_gdb())
+    rounds = {f['id']: picking.default_round(f['id'], yr) for f in fields}
     return render_template('dala_new.html', trailers=trailers, fields=fields, preselect=request.args.get('field', type=int),
+                           rounds=rounds,
                            brigadiers=q('SELECT id, name FROM brigadiers WHERE active=1' + (' AND id=?' if brig else '')
                                         + ' ORDER BY name', (brig,) if brig else ()),
                            tractors=q("SELECT id, code FROM equipment WHERE kind='traktor' AND active=1 ORDER BY code"),
@@ -188,6 +196,13 @@ def close(load_id):
     if request.method == 'POST':
         actor = post_actor()
         res = mark_full(actor, load_id, photos=uploads_from_request(request, 'photos'))
+        cells = [c for c in (request.form.get('cells') or '').split(',') if c]
+        from .. import picking
+        if not cells and not res.get('already'):
+            f0 = picking.field_row(ld['field_id'], ld['season_year'])
+            cells = picking.suggested_cells(load_id, picking.neighbours(f0, ld['season_year'])) if f0 and f0['polygon_json'] else []
+        if cells:
+            picking.save_cells(actor, load_id, cells)
         if res.get('waybill_id') and not res['already']:
             after_waybill_change(actor, res['waybill_id'], 'yaratildi')
             from ..telegram_bot import notify_async
@@ -197,14 +212,34 @@ def close(load_id):
         return done('Telashka yopildi. Hujjatlar tayyor.', url_for('dala.docs', load_id=load_id))
     if ld['status'] != 'OCHIQ':
         return redirect(url_for('dala.docs', load_id=load_id))
-    return render_template('dala_close.html', ld=ld, totals=_totals(load_id), lines=_lines(load_id))
+    return render_template('dala_close.html', ld=ld, totals=_totals(load_id), lines=_lines(load_id), pick=_pick_ctx(ld))
+
+
+def _pick_ctx(ld):
+    from .. import picking
+    return picking.pick_context(ld, _totals(ld['id'])['kg'])
+
+
+@bp.route('/dala/reys/<int:load_id>/joy', methods=['GET', 'POST'])
+@perm_required('harvest.write', 'reports.finance')
+def picked_area(load_id):
+    """Mark (or correct) the part of the field this trip picked — after closing too."""
+    ld = _trip(load_id)
+    from .. import picking
+    if request.method == 'POST':
+        rnd = request.form.get('round', type=int)
+        ha = picking.save_cells(post_actor(), load_id, [c for c in (request.form.get('cells') or '').split(',') if c], rnd)
+        return done(f'Terilgan joy saqlandi: {ha:g} ga.' if ha else 'Belgilash olib tashlandi.', url_for('dala.docs', load_id=load_id))
+    return render_template('dala_pick.html', ld=ld, pick=_pick_ctx(ld))
 
 
 @bp.get('/dala/reys/<int:load_id>/hujjatlar')
 @perm_required('harvest.write', 'reports.finance')
 def docs(load_id):
     ld = _trip(load_id)
-    return render_template('dala_docs.html', ld=ld, totals=_totals(load_id))
+    from .. import picking
+    return render_template('dala_docs.html', ld=ld, totals=_totals(load_id), yld=picking.trip_yield(load_id),
+                           rnd=q('SELECT harvest_round FROM trailer_loads WHERE id=?', (load_id,), one=True)[0] or 1)
 
 
 @bp.get('/dala/reys/<int:load_id>/ishchilar.pdf')

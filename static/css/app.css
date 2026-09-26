@@ -586,6 +586,7 @@ a.a-tile:active{transform:scale(.98)}
 .d-l{font-weight:700;font-size:14px;color:var(--text-2);margin-top:4px}
 .d-num{font-size:26px!important;font-weight:800}
 .d-seg{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+#d-round,.d-form .d-seg:has(input[name=round]){grid-template-columns:1fr 1fr 1fr}
 .d-seg label{cursor:pointer;position:relative}.d-seg input{position:absolute;opacity:0;pointer-events:none}
 .d-seg span{display:flex;align-items:center;justify-content:center;min-height:52px;border:1.5px solid var(--line);border-radius:12px;font-weight:800;font-size:16px;background:#fff}
 .d-seg input:checked+span{background:var(--blue);border-color:var(--blue);color:#fff}
@@ -800,3 +801,20 @@ a.a-tile:active{transform:scale(.98)}
 .d-live-map{height:max(380px, calc(100vh - 330px));background:#dfe6ef}
 .d-live-me{width:40px;height:40px;border-radius:50%;border:0;background:#fff;color:#2563eb;font-size:22px;box-shadow:0 1px 4px rgba(0,0,0,.3)}
 .d-live-kg{font-size:14px;margin-top:4px;color:#166534}
+/* marking the picked part of a field */
+.pk-box{background:#fff;border-radius:14px;padding:12px;margin:10px 0;box-shadow:0 1px 3px rgba(11,37,69,.08)}
+.pk-h{margin-bottom:6px}.pk-legend{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:6px;color:#475569}
+.pk-legend i{display:inline-block;width:12px;height:12px;border-radius:3px;margin-right:4px;vertical-align:-2px}
+.pk-map{height:340px;border-radius:10px;background:#1f2937}
+.pk-bar{display:flex;gap:8px;margin:8px 0}
+.pk-sum{font-size:15px;margin:4px 0 6px;color:#14532d}.pk-cha{font-size:18px;color:#15803d}
+.d-yield{background:#ecfdf3;border-radius:12px;padding:12px 14px;margin:10px 0;color:#14532d}
+.d-yield b.big{font-size:22px}
+/* satellite imagery a bit livelier (fields read greener, contours stand out) */
+.spx-vivid .leaflet-tile-pane{filter:saturate(1.45) contrast(1.08) brightness(1.04)}
+.pk-split{margin-top:4px;display:flex;flex-wrap:wrap;gap:6px 12px;font-size:14px;color:#1e3a8a}
+.pk-split span{background:#eff6ff;border-radius:8px;padding:2px 8px}
+.tr-tractor,.tr-punkt{font-size:24px;line-height:30px;text-align:center;filter:drop-shadow(0 1px 2px rgba(0,0,0,.6));background:none;border:0}
+.tr-tractor span{display:block;width:34px;height:34px;line-height:34px;border-radius:50%;background:#fde68a;border:2px solid #f59e0b;font-size:20px}
+.tr-tractor span{animation:trbob 1.2s ease-in-out infinite}
+@keyframes trbob{50%{transform:translateY(-2px)}}

@@ -1,0 +1,24 @@
+{% extends 'base.html' %}
+{% from 'macros.html' import icon, csrf with context %}
+{% set page_title = 'Terilgan joy' %}
+{% block content %}
+<div class="d-wrap">
+  <div class="d-top"><a class="icon-btn" href="{{ url_for('dala.docs', load_id=ld.id) }}">{{ icon('chev-left') }}</a><h1 class="d-h1">Terilgan joy</h1></div>
+  <div class="tiny muted">{{ ld.trip_no }} · {{ ld.field_name }} · {{ ld.trailer_code }}</div>
+  {% if not pick %}
+  <div class="notice">{{ icon('alert','sm') }} Bu dala xaritada chizilmagan — administrator dala chegarasini kiritishi kerak.</div>
+  {% else %}
+  <form method="post" class="d-form">{{ csrf() }}
+    <input type="hidden" name="cells" id="pk-cells">
+    <label class="d-l">Terim</label>
+    <div class="d-seg">{% for r in (1, 2, 3) %}<label><input type="radio" name="round" value="{{ r }}" {{ 'checked' if pick.round == r }}><span>{{ r }}-terim</span></label>{% endfor %}</div>
+    {% include 'partials/pick_map.html' %}
+    <button class="btn btn-green btn-block d-big">{{ icon('check','sm') }} Saqlash</button>
+  </form>
+  {% endif %}
+</div>
+{% endblock %}
+{% block scripts %}{% if pick %}<link rel="stylesheet" href="{{ url_for('static', filename='vendor/leaflet/leaflet.css') }}">
+<script src="{{ url_for('static', filename='vendor/leaflet/leaflet.js') }}"></script>
+<script src="{{ url_for('static', filename='js/basemap.js') }}"></script>
+<script src="{{ url_for('static', filename='js/pickmap.js') }}"></script>{% endif %}{% endblock %}

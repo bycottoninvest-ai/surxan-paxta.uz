@@ -10,7 +10,7 @@ from contextlib import contextmanager
 
 from flask import current_app, g
 
-SCHEMA_VERSION = 10
+SCHEMA_VERSION = 11
 
 SCHEMA = r'''
 CREATE TABLE IF NOT EXISTS brigadiers (
@@ -906,6 +906,14 @@ def migrate(db):
         _add_column(db, 'harvests', col, 'REAL')
     for col in ('open_lat', 'open_lon', 'open_acc'):
         _add_column(db, 'trailer_loads', col, 'REAL')
+    # v11: which harvest round (1st / 2nd / 3rd picking) a trip belongs to and which part of the field it picked
+    # (grid cell ids from geo.field_grid, and the hectares they cover) — for kg and centner per hectare per round
+    _add_column(db, 'trailer_loads', 'harvest_round', 'INTEGER')
+    _add_column(db, 'trailer_loads', 'picked_cells', 'TEXT')
+    _add_column(db, 'trailer_loads', 'picked_ha', 'REAL')
+    _add_column(db, 'trailer_loads', 'picked_split', 'TEXT')
+    _add_column(db, 'stations', 'lat', 'REAL')           # where the punkt is — for “when will the trailer arrive”
+    _add_column(db, 'stations', 'lon', 'REAL')   # {field_id: hectares} when a trip picked across 2+ fields
     # Future column changes go here as: if version < N: ALTER TABLE ...
     db.execute('UPDATE schema_version SET version=? WHERE version < ?', (SCHEMA_VERSION, SCHEMA_VERSION))
 

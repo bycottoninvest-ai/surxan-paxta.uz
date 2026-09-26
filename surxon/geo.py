@@ -152,3 +152,53 @@ def poly_area_ha(poly_latlon):
     if ring[0] != ring[-1]:
         ring.append(ring[0])
     return round(ring_area_m2(ring) / 10000, 4)
+
+
+def field_grid(poly_latlon):
+    """Split a stored [lat, lon] contour into ~60 square cells (20–60 m) used to mark which part of the field a trip
+    picked. Cell ids ("i:j") depend only on the contour, so marks from different trips / rounds line up.
+    Returns (cells, cell_size_m): cells = [{'id', 'poly': [[lat, lon] x4]}] whose centre lies inside the field."""
+    if not poly_latlon or len(poly_latlon) < 3:
+        return [], 0
+    lat0 = sum(p[0] for p in poly_latlon) / len(poly_latlon)
+    kx, ky = 111320 * math.cos(math.radians(lat0)), 110540.0
+    xs = [p[1] * kx for p in poly_latlon]
+    ys = [p[0] * ky for p in poly_latlon]
+    ring = [[p[1], p[0]] for p in poly_latlon]
+    if ring[0] != ring[-1]:
+        ring.append(ring[0])
+    area = ring_area_m2(ring)
+    size = max(20.0, min(60.0, math.sqrt(area / 60))) if area else 50.0
+    size = round(size / 5) * 5
+    x0, y0 = math.floor(min(xs) / size) * size, math.floor(min(ys) / size) * size
+    poly_xy = list(zip(xs, ys))
+
+    def inside(x, y):
+        c = False
+        for k in range(len(poly_xy)):
+            (xi, yi), (xj, yj) = poly_xy[k], poly_xy[k - 1]
+            if (yi > y) != (yj > y) and x < (xj - xi) * (y - yi) / (yj - yi) + xi:
+                c = not c
+        return c
+    cells = []
+    nx, ny = int((max(xs) - x0) // size) + 1, int((max(ys) - y0) // size) + 1
+    for i in range(nx):
+        for j in range(ny):
+            cx, cy = x0 + (i + .5) * size, y0 + (j + .5) * size
+            if inside(cx, cy):
+                a, b = x0 + i * size, y0 + j * size
+                cells.append({'id': f'{i}:{j}', 'poly': [[round(y / ky, 7), round(x / kx, 7)] for x, y in
+                                                         ((a, b), (a + size, b), (a + size, b + size), (a, b + size))]})
+    if not cells:   # a very thin field: one cell = the whole field
+        cells = [{'id': '0:0', 'poly': [[p[0], p[1]] for p in poly_latlon]}]
+    return cells, size
+
+
+def cell_of(poly_latlon, lat, lon):
+    """The grid cell id a point falls in (or None when outside every cell)."""
+    cells, _ = field_grid(poly_latlon)
+    for c in cells:
+        p = c['poly']
+        if len(p) == 4 and min(x[0] for x in p) <= lat <= max(x[0] for x in p) and min(x[1] for x in p) <= lon <= max(x[1] for x in p):
+            return c['id']
+    return None

@@ -14,7 +14,9 @@
   {% else %}
   <details class="d-more"><summary>Kim qancha ({{ lines|length }})</summary>
     {% for l in lines %}<div class="d-line"><span>{{ l.name }}</span><b>{{ l.kg|num(1) if l.kg % 1 else l.kg|num }} kg</b><span class="tiny muted">{{ l.amount|num if l.amount is not none else '—' }}</span></div>{% endfor %}</details>
-  <form method="post" enctype="multipart/form-data" class="d-form" id="d-close">{{ csrf() }}
+  <form method="post" enctype="multipart/form-data" class="d-form" id="d-close" data-offline="Yopish {{ ld.trip_no }}">{{ csrf() }}
+    <input type="hidden" name="cells" id="pk-cells">
+    {% if pick %}{% include 'partials/pick_map.html' %}{% endif %}
     <label class="d-l">Telashka rasmi</label>
     <label class="file-drop d-photo"><input type="file" name="photos" accept="image/*" capture="environment" required data-preview>{{ icon('camera','lg') }}<b>Rasmga olish</b><span class="tiny muted">kamera ochilmasa — galereyadan tanlang</span><div class="previews"></div></label>
     <button class="btn btn-green btn-block d-big">{{ icon('check','sm') }} Tasdiqlash va yopish</button>
@@ -23,8 +25,14 @@
   {% endif %}
 </div>
 {% endblock %}
-{% block scripts %}<script>
-document.getElementById('d-close')?.addEventListener('submit', e => {
-  if (!navigator.onLine) { e.preventDefault(); alert('Internet yo‘q. Telashkani yopish uchun internet kerak — yozilgan kg lar saqlangan, yo‘qolmaydi.'); }
+{% block scripts %}{% if pick %}<link rel="stylesheet" href="{{ url_for('static', filename='vendor/leaflet/leaflet.css') }}">
+<script src="{{ url_for('static', filename='vendor/leaflet/leaflet.js') }}"></script>
+<script src="{{ url_for('static', filename='js/basemap.js') }}"></script>
+<script src="{{ url_for('static', filename='js/pickmap.js') }}"></script>{% endif %}<script>
+// no internet: closing (with the photo and the marked cells) waits in the phone's queue and is sent later
+document.getElementById('d-close')?.addEventListener('queued', () => {
+  const f = document.getElementById('d-close');
+  f.insertAdjacentHTML('beforebegin', '<div class="notice" style="background:#fff7e6">⏳ <b>Telashka yopish telefonda navbatda.</b> Internet kelganda o‘zi yopiladi va hujjatlar chiqadi. Yangi telashka ochish uchun internet kerak bo‘ladi.</div>');
+  f.hidden = true;
 });
 </script>{% endblock %}

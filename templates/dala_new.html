@@ -16,6 +16,9 @@
     <div id="d-gps-msg" class="tiny" hidden></div>
     <div id="d-minimap" style="height:190px;border-radius:12px;overflow:hidden;margin:6px 0 8px;background:#e9eef5" hidden></div>
     <select name="field_id" required id="d-field">{% for f in fields %}<option value="{{ f.id }}" data-brig="{{ f.brigadier_id or '' }}"{{ ' selected' if preselect == f.id }}>{{ f.code }} · {{ f.name }}</option>{% endfor %}</select>
+    <label class="d-l">Terim</label>
+    <div class="d-seg" id="d-round">{% for r in (1, 2, 3) %}<label><input type="radio" name="round" value="{{ r }}" {{ 'checked' if r == 1 }}><span>{{ r }}-terim</span></label>{% endfor %}</div>
+    <script id="d-rounds" type="application/json">{{ rounds|tojson }}</script>
     <label class="d-l">Telashka</label>
     <select name="trailer_id" required>{% for t in trailers %}<option value="{{ t.id }}">{{ t.code }}{{ ' · ' ~ t.plate if t.plate }}</option>{% endfor %}</select>
     <label class="d-l">Terim turi</label>
@@ -118,7 +121,9 @@
 (function(){
   const f = document.getElementById('d-field'), b = document.getElementById('d-brig'), r = document.getElementById('d-rate');
   if (!f) return;
-  const pick = () => { const o = f.selectedOptions[0]; if (o && o.dataset.brig) b.value = o.dataset.brig; };
+  let rounds = {}; try { rounds = JSON.parse(document.getElementById('d-rounds').textContent || '{}'); } catch (_) {}
+  const pick = () => { const o = f.selectedOptions[0]; if (o && o.dataset.brig) b.value = o.dataset.brig;
+    const r = rounds[f.value] || 1, radio = document.querySelector(`#d-round input[value="${r}"]`); if (radio) radio.checked = true; };
   f.addEventListener('change', pick); pick();
   let typed = false; r.addEventListener('input', () => typed = true);
   document.querySelectorAll('input[name=method]').forEach(m => m.addEventListener('change', () => { if (!typed) r.value = m.dataset.rate || ''; }));

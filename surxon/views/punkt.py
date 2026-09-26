@@ -48,7 +48,9 @@ def home():
     station = q('SELECT * FROM stations WHERE id=?', (sid,), one=True) if sid else None
     trips = queries.station_trips(sid, state='open')
     today = today_str()
-    return render_template('punkt_home.html', station=station, stations=_stations(), sid=sid,
+    from ..transit import on_the_way
+    etas = {d['wb_id']: d for d in on_the_way(sid) if d['eta']}
+    return render_template('punkt_home.html', station=station, stations=_stations(), sid=sid, etas=etas,
                            counts=queries.station_counts(sid, today),
                            on_way=[t for t in trips if not t['arrived_at']], arrived=[t for t in trips if t['arrived_at']],
                            received=queries.station_trips(sid, state='received', day=today, limit=50))

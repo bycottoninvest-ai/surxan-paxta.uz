@@ -306,6 +306,20 @@ def report(key):
     return render_template('report.html', spec=spec, key=key, year=year, printing=bool(request.args.get('print')))
 
 
+@bp.get('/dala-hosil')
+@perm_required('reports.view')
+def field_yield():
+    """Per field and harvest round: kg, picked hectares, centner per hectare — and the picked cells on a map."""
+    from .. import picking
+    from ..utils import today_str
+    year = season_arg()
+    import json as _json
+    fields = q('SELECT id, code, name, polygon_json FROM fields WHERE polygon_json IS NOT NULL AND active=1')
+    return render_template('field_yield.html', year=year, rows=picking.season_report(year, with_money=can('reports.finance')), money=can('reports.finance'),
+                           cells=picking.season_cells(year, today_str()),
+                           outlines=[{'code': f['code'], 'poly': _json.loads(f['polygon_json'])} for f in fields])
+
+
 @bp.get('/audit')
 @perm_required('audit.view')
 def audit_log():

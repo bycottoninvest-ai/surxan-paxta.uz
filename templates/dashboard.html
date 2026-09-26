@@ -38,6 +38,7 @@
       <script type="application/json" id="fields-data">{{ fields_json|tojson }}</script>
       <script type="application/json" id="picked-data">{{ picked_json|tojson }}</script>
       <script type="application/json" id="picked-trips">{{ picked_trips|tojson }}</script>
+      <script type="application/json" id="transit-data">{{ {'trips': transit_json, 'stations': stations_json, 'now': server_now}|tojson }}</script>
       <div class="picked-strip" id="picked-strip" hidden></div>
     </div>
   </section>

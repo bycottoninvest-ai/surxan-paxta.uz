@@ -142,6 +142,37 @@
       }
     }
     draw('yield');
+    // trailers on the way to the punkt: an estimated position between where the trip was picked and the punkt
+    (function transit() {
+      const t = readJson('transit-data');
+      if (!t || !t.stations) return;
+      const lay = L.layerGroup().addTo(map), esc = window.surxonEsc;
+      const skew = Date.parse(t.now.replace(' ', 'T')) - Date.now();
+      t.stations.forEach(s => L.marker([s.lat, s.lon], { icon: L.divIcon({ className: 'tr-punkt', html: '🏭', iconSize: [30, 30] }) })
+        .bindTooltip(esc(s.name), { permanent: true, direction: 'bottom', className: 'map-label' }).addTo(lay));
+      const moving = (t.trips || []).filter(x => x.start && x.end && x.minutes);
+      const items = moving.map(x => {
+        L.polyline([x.start, x.end], { color: '#fbbf24', weight: 2.5, dashArray: '6 6', opacity: .9 }).addTo(lay);
+        const m = L.marker(x.start, { zIndexOffset: 1000, icon: L.divIcon({ className: 'tr-tractor', html: '<span>🚜</span>', iconSize: [34, 34] }) })
+          .bindTooltip('', { direction: 'top' }).addTo(lay);
+        return { x, m, sent: Date.parse(x.sent_at.replace(' ', 'T')) };
+      });
+      function tick() {
+        const now = Date.now() + skew;
+        items.forEach(({ x, m, sent }) => {
+          const f = Math.min(.97, Math.max(0, (now - sent) / 60000 / x.minutes));
+          m.setLatLng([x.start[0] + (x.end[0] - x.start[0]) * f, x.start[1] + (x.end[1] - x.start[1]) * f]);
+          const left = Math.max(0, Math.round(x.minutes - (now - sent) / 60000));
+          m.setTooltipContent(`<b>${esc(x.trailer)}</b> · ${esc(x.field || '')} → ${esc(x.station || 'punkt')}<br>${fmt(x.kg)} kg · ≈ ${x.eta} da keladi${left ? ` (${left} daq)` : ''}`);
+        });
+      }
+      tick(); if (items.length) setInterval(tick, 5000);
+      // make sure the punkt and the moving trailers are in view together with the fields
+      const b = map.getBounds();
+      t.stations.forEach(s => b.extend([s.lat, s.lon]));
+      moving.forEach(x => b.extend(x.start));
+      if (t.stations.length) map.fitBounds(b, { padding: [20, 20] });
+    })();
     document.querySelectorAll('[data-map-tabs] button').forEach(b => b.addEventListener('click', () => {
       document.querySelectorAll('[data-map-tabs] button').forEach(x => x.classList.toggle('on', x === b));
       draw(b.dataset.mode);
