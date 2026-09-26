@@ -42,9 +42,11 @@ def home():
 
 def _fleet_count():
     from .. import fleet
+    from ..utils import today_str
     rows = fleet.live()
+    day = today_str()
     return {'n': len(rows), 'work': sum(1 for r in rows if r['state'] in ('field', 'road')),
-            'alerts': sum(1 for r in rows if r['alert'])}
+            'alerts': sum(1 for r in rows if r['alert']), 'today': fleet.works(day, day)[:5] if rows else []}
 
 
 def _staff_count():
