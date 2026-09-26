@@ -1,20 +1,31 @@
-# Serverni yangilash (Codex uchun) — v2.16.0
+# Serverni yangilash (Codex uchun) — v2.17.0
 
 Serverni qayta qurmang, `.env`, `data/` va Caddy sozlamasiga tegmang. Vaqtinchalik sslip override'ni qayta yoqmang.
 
 ```bash
 cd /opt/surxan-paxta.uz
 docker compose exec -T app flask --app app backup          # yangilashdan oldin izchil zaxira
-git pull --ff-only                                          # kutilgan: v2.16.0 commiti
+git pull --ff-only                                          # kutilgan: v2.17.0 commiti
 docker compose up -d --build
-for i in $(seq 1 40); do curl -fsS https://surxan-paxta.uz/health && break; sleep 3; done   # "version":"2.16.0"
-docker compose exec -T app flask --app app set-webhook      # channel_post yangilanishini qo'shadi (kanallarni tanish uchun)
+for i in $(seq 1 40); do curl -fsS https://surxan-paxta.uz/health && break; sleep 3; done   # "version":"2.17.0"
+docker compose exec -T app flask --app app set-webhook      # channel_post + edited_message (Telegram jonli joylashuv) yangilanishlarini yoqadi — v2.17.0 da SHART
 docker compose exec -T app flask --app app smoke-check
 ```
 
 Baza avtomatik yangilanadi (sxema v9): `field_imports, field_assignments` va `fields.source_id/map_area_ha/area_source`, `field_seasons.crop` (v2.11.0 — dalalar importi); yangi jadvallar `fuel_stations, fuel_tickets, fuel_ticket_funds, fuel_prices, fuel_scans, fuel_ops` va `equipment.fuel_type/fuel_carrier/qr_token` (v2.10.0 — solyarka); `cash_corrections` (v2.9.0 — kassa tuzatishlari); yangi ustunlar `nayman_receipts.station_gross_kg/station_tare_kg` (v2.8.0 — punkt brutto/tara),
 `trailer_loads.method/rate/rate_unit`, `workers.note`, `tg_chats.bot_status` (v2.7.0) qo'shiladi.
 Eski yozuvlar o'zgarmaydi. Ilova ishga tushganda migratsiyadan oldin `data/` ichida `*.oldin-v*` zaxira nusxa oladi.
+
+## v2.17.0 da nima o'zgardi
+Sxema v10 → v11 (ishga tushganda `*.oldin-v10-*.bak`): trailer_loads.harvest_round/picked_cells/picked_ha/picked_split,
+stations.lat/lon, users.avatar_path, tg_members.avatar_path, yangi jadval `staff_positions`.
+- 1-, 2-, 3-terim: telashka ochilganda terim tanlanadi (dala bo'yicha avtomatik taklif).
+- Terilgan joy: reys yopilganda dala xaritasidagi kataklar belgilanadi (yoki GPS nuqtalaridan taklif); qo'shni
+  dalaga o'tsa, kg va haq maydon ulushiga qarab bo'linadi. Hisobot "Dala hosili (terimlar)" (`/dala-hosil`).
+- Internetsiz ishlash: tortishlar telefonda navbatda saqlanadi, internet kelganda o'zi yuboriladi.
+- Punkt joylashuvi (Admin → Punktlar, koordinata): punktga yetib kelish vaqti va dashboardda yo'ldagi traktor.
+- Xodimlar xaritada (Direktor paneli): Telegram botga "jonli joylashuv" ulashgan va ilovada ishlayotgan xodimlar
+  profil rasmi bilan; bosilsa bugungi yurgan yo'li. Buning uchun `set-webhook` qayta ishga tushirilishi SHART.
 
 ## v2.16.0 da nima o'zgardi
 Sxema v9 → v10 (ishga tushganda `*.oldin-v9-*.bak`): harvests.lat/lon/gps_acc, trailer_loads.open_lat/open_lon/open_acc.
