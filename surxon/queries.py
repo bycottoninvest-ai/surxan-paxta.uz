@@ -25,7 +25,7 @@ def day_kpis(year, day, brig=None):
 
     def net(d):
         return scalar(f'''SELECT COALESCE(SUM(w.net_kg),0) FROM weighings w JOIN trailer_loads tl ON tl.id=w.load_id
-                          WHERE tl.season_year=? AND w.status='YAKUNLANDI' AND substr(w.tare_at,1,10)=?{lf}''',
+                          WHERE tl.season_year=? AND w.status='YAKUNLANDI' AND tl.status<>'BEKOR' AND substr(w.tare_at,1,10)=?{lf}''',
                       (year, d) + bp)
 
     def sent(d):
@@ -103,7 +103,7 @@ def field_yields(year, brig=None):
     extra = ' AND f.brigadier_id=?' if brig else ''
     return q(f'''SELECT f.id, f.code, f.name, COALESCE(fs.area_ha, f.area_ha) area_ha, f.polygon_json, f.area_source, b.name brigadier_name,
                         COALESCE((SELECT SUM(w.net_kg) FROM weighings w JOIN trailer_loads tl ON tl.id=w.load_id
-                                   WHERE tl.field_id=f.id AND tl.season_year=? AND w.status='YAKUNLANDI'),0) net_kg,
+                                   WHERE tl.field_id=f.id AND tl.season_year=? AND w.status='YAKUNLANDI' AND tl.status<>'BEKOR'),0) net_kg,
                         COALESCE((SELECT SUM(kg) FROM harvests h WHERE h.field_id=f.id AND h.season_year=?
                                    AND h.voided_at IS NULL),0) internal_kg,
                         (SELECT COUNT(*) FROM trailer_loads tl WHERE tl.field_id=f.id AND tl.season_year=?
@@ -119,7 +119,7 @@ def brigadier_results(year):
                        COALESCE((SELECT SUM(area_ha) FROM field_seasons fs WHERE fs.brigadier_id=b.id AND fs.year=?),
                                 (SELECT SUM(area_ha) FROM fields f WHERE f.brigadier_id=b.id AND f.active=1),0) area_ha,
                        COALESCE((SELECT SUM(w.net_kg) FROM weighings w JOIN trailer_loads tl ON tl.id=w.load_id
-                                  WHERE tl.brigadier_id=b.id AND tl.season_year=? AND w.status='YAKUNLANDI'),0) net_kg,
+                                  WHERE tl.brigadier_id=b.id AND tl.season_year=? AND w.status='YAKUNLANDI' AND tl.status<>'BEKOR'),0) net_kg,
                        COALESCE((SELECT SUM(kg) FROM harvests h WHERE h.brigadier_id=b.id AND h.season_year=?
                                   AND h.voided_at IS NULL),0) internal_kg,
                        COALESCE((SELECT SUM(kg) FROM harvests h WHERE h.brigadier_id=b.id AND h.season_year=?
@@ -159,7 +159,7 @@ def harvest_series(year, mode='daily', end_day=None, brig=None):
                  FROM harvests WHERE season_year=? AND voided_at IS NULL{bf} GROUP BY k ORDER BY k''', (year,) + bp)
     nets = {r['k']: r['net'] for r in q(f'''SELECT {nkey} k, SUM(w.net_kg) net FROM weighings w
                                             JOIN trailer_loads tl ON tl.id=w.load_id
-                                            WHERE tl.season_year=? AND w.status='YAKUNLANDI'{lf} GROUP BY k''', (year,) + bp)}
+                                            WHERE tl.season_year=? AND w.status='YAKUNLANDI' AND tl.status<>'BEKOR'{lf} GROUP BY k''', (year,) + bp)}
     data = {r['k']: r for r in rows}
     if mode == 'daily':
         end = date.fromisoformat(end_day)
@@ -441,7 +441,7 @@ def season_comparison():
                        COALESCE((SELECT SUM(area_ha) FROM field_seasons fs WHERE fs.year=s.year),
                                 (SELECT SUM(area_ha) FROM fields WHERE active=1),0) area_now,
                        COALESCE((SELECT SUM(w.net_kg) FROM weighings w JOIN trailer_loads tl ON tl.id=w.load_id
-                                  WHERE tl.season_year=s.year AND w.status='YAKUNLANDI'),0) net_kg,
+                                  WHERE tl.season_year=s.year AND w.status='YAKUNLANDI' AND tl.status<>'BEKOR'),0) net_kg,
                        COALESCE((SELECT SUM(kg) FROM harvests h WHERE h.season_year=s.year AND h.method='hand' AND h.voided_at IS NULL),0) hand_kg,
                        COALESCE((SELECT SUM(kg) FROM harvests h WHERE h.season_year=s.year AND h.method='combine' AND h.voided_at IS NULL),0) combine_kg,
                        COALESCE((SELECT SUM(net_kg) FROM waybills wb WHERE wb.season_year=s.year AND wb.status<>'BEKOR'),0) shipped_kg,

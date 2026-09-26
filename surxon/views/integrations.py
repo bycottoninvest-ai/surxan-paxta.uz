@@ -482,7 +482,7 @@ def api_summary():
     k = queries.day_kpis(year, day)
     fin_allowed = bool({'receivables', 'cash'} & g.erp_scopes)
     season_net = scalar('''SELECT COALESCE(SUM(w.net_kg),0) FROM weighings w JOIN trailer_loads tl ON tl.id=w.load_id
-                           WHERE tl.season_year=? AND w.status='YAKUNLANDI' ''', (year,))
+                           WHERE tl.season_year=? AND w.status='YAKUNLANDI' AND tl.status<>'BEKOR' ''', (year,))
     out = {
         'season': year, 'date': day,
         'day': {'field_kg': k['harvest'], 'field_hand_kg': k['hand'], 'field_combine_kg': k['combine'],

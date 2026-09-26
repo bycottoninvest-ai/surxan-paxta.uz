@@ -426,7 +426,17 @@ def mark_full(actor, load_id, note='', photos=None, source='web'):
             audit(db, actor, 'FIELD_SUM', 'weighing', cur.lastrowid,
                   new={'load_id': load_id, 'trip_no': load['trip_no'], 'net_kg': field_kg, 'basis': 'dala',
                        'status': 'PUNKTGA YO‘LDA'})
-            res['waybill_id'], res['number'] = _issue_waybill(db, actor, load_row(db, load_id), field_kg)
+            prev = db.execute('SELECT id, number FROM waybills WHERE load_id=?', (load_id,)).fetchone()
+            if prev:
+                # the admin reopened this trip earlier: the same PA-number is issued again with the new weight
+                db.execute('''UPDATE waybills SET status='YARATILDI', net_kg=?, void_reason=NULL, voided_by=NULL, voided_at=NULL,
+                                  arrived_at=NULL, arrived_by=NULL, updated_at=? WHERE id=?''', (field_kg, ts, prev['id']))
+                db.execute('UPDATE photos SET waybill_id=? WHERE load_id=?', (prev['id'], load_id))
+                audit(db, actor, 'REISSUE', 'waybill', prev['id'], new={'number': prev['number'], 'net_kg': field_kg})
+                _sheet_waybill(db, prev['id'], 'qayta yopildi')
+                res['waybill_id'], res['number'] = prev['id'], prev['number']
+            else:
+                res['waybill_id'], res['number'] = _issue_waybill(db, actor, load_row(db, load_id), field_kg)
             res['net_kg'] = field_kg
         res['trip_no'] = load['trip_no']
         return res
@@ -1570,3 +1580,42 @@ def admin_void_trip(actor, load_id, reason):
     for wid in wb_ids:
         after_waybill_change(actor, wid, f'bekor: {reason}')
     return plan
+
+
+def admin_reopen_trip(actor, load_id, reason):
+    """Admin only: a trip closed too early (the trailer was not full) goes back to “open” so the tally who ran it
+    continues on the same trip. The waybill is set aside (BEKOR, “qayta ochildi”) and issued again with the SAME number
+    when the trip is closed; the field-sum weighing is removed (kept in full in the audit). Not after the punkt received it."""
+    if actor is None or actor.role != 'admin':
+        raise UserError('Reysni qayta ochishni faqat Admin qila oladi.')
+    reason = _require_reason(reason, 'Qayta ochish')
+    with tx() as db:
+        load = load_row(db, load_id)
+        if load['status'] not in ('TOLDI', 'TORTILDI'):
+            raise UserError('Faqat yopilgan (to‘lgan) reysni qayta ochish mumkin.')
+        w = db.execute('SELECT * FROM weighings WHERE load_id=?', (load_id,)).fetchone()
+        if w and (w['basis'] or '') != 'dala':
+            raise UserError('Bu reys tarozida tortilgan — qayta ochib bo‘lmaydi (tortishni “Tuzatish” orqali to‘g‘rilang).')
+        wb = db.execute("SELECT * FROM waybills WHERE load_id=? AND status<>'BEKOR'", (load_id,)).fetchone()
+        if wb:
+            if db.execute('SELECT 1 FROM nayman_receipts WHERE waybill_id=?', (wb['id'],)).fetchone():
+                raise UserError('Punkt bu reysni qabul qilib bo‘lgan — qayta ochib bo‘lmaydi. Kerak bo‘lsa reysni to‘liq bekor qiling.')
+            if db.execute('SELECT 1 FROM payments WHERE waybill_id=? AND voided_at IS NULL', (wb['id'],)).fetchone():
+                raise UserError('Bu nakladnoyga to‘lov bog‘langan — avval to‘lovni bekor qiling.')
+        busy = db.execute("SELECT trip_no FROM trailer_loads WHERE trailer_id=? AND status IN ('OCHIQ','TOLDI') AND id<>?",
+                          (load['trailer_id'], load_id)).fetchone()
+        if busy:
+            raise UserError(f'Bu telashkada hozir boshqa ochiq reys bor ({busy["trip_no"] or ""}). Avval uni yoping yoki bekor qiling.')
+        now = now_str()
+        if wb:
+            db.execute("UPDATE waybills SET status='BEKOR', void_reason=?, voided_by=?, voided_at=?, updated_at=? WHERE id=?",
+                       (f'Qayta ochildi: {reason}', actor.user_id, now, now, wb['id']))
+            audit(db, actor, 'VOID', 'waybill', wb['id'], old={'status': wb['status']}, new={'status': 'BEKOR', 'reopened': True},
+                  reason=reason)
+            _sheet_waybill(db, wb['id'], 'reys qayta ochildi')
+        if w:
+            db.execute('DELETE FROM weighings WHERE id=?', (w['id'],))
+            audit(db, actor, 'VOID', 'weighing', w['id'], old=row_dict(w), reason=f'reys qayta ochildi: {reason}')
+        db.execute("UPDATE trailer_loads SET status='OCHIQ', full_at=NULL, full_by=NULL, weighed_at=NULL WHERE id=?", (load_id,))
+        audit(db, actor, 'REOPEN', 'trailer_load', load_id, old={'status': load['status']}, new={'status': 'OCHIQ'}, reason=reason)
+        return {'trip_no': load['trip_no'], 'waybill': wb['number'] if wb else None}

@@ -9,7 +9,7 @@ from ..photos import uploads_from_request, read_upload
 from ..security import can, perm_required, require
 from ..services import (NAYMAN_DIFF_REASONS, add_harvest, after_waybill_change, attach_load_photos, correct_weighing, diff_needs_reason,
                         expected_payment, mark_full, open_load, record_gross, record_nayman, record_tare, reopen_load,
-                        void_harvest, void_load, void_waybill, admin_trip_void_plan, admin_void_trip)
+                        void_harvest, void_load, void_waybill, admin_trip_void_plan, admin_void_trip, admin_reopen_trip)
 from ..settings import get_bool, get_float, get_setting
 from ..utils import UserError, parse_date, parse_int, parse_number, today_str
 from . import PER_PAGE, checkbox, done, form_uuid, page_arg, paginate, post_actor, scope, season_arg
@@ -193,6 +193,15 @@ def load_photos(load_id):
 def load_reopen(load_id):
     reopen_load(post_actor(), load_id, request.form.get('reason'))
     return done('Telashka qayta ochildi.', url_for('ops.load_detail', load_id=load_id))
+
+
+@bp.post('/yuk/<int:load_id>/davom')
+@perm_required('records.void')
+def load_admin_reopen(load_id):
+    r = admin_reopen_trip(post_actor(), load_id, request.form.get('reason'))
+    return done(f'{r["trip_no"] or "Reys"} qayta ochildi. Hisobchi o‘z telefonida shu reysni davom ettiradi'
+                + (f'; yopilganda nakladnoy {r["waybill"]} yangi og‘irlik bilan qayta chiqadi.' if r['waybill'] else '.'),
+                url_for('ops.load_detail', load_id=load_id))
 
 
 @bp.post('/yuk/<int:load_id>/admin-bekor')
