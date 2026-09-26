@@ -2,6 +2,21 @@
 
 Oxirgi yangilanish: 2026-09-25 (kech, v2.5.0 — ikki bot). Yozgan: Claude (bulutdagi sessiya “Yangi loya qilash”).
 
+
+## HOLAT 27.09.2026 (eng oxirgi — shu yerdan davom eting)
+
+- GitHub `main` = `production` = v2.18.1 (152 test). Serverda hali v2.14.0 — foydalanuvchi Console’da yangilaydi
+  (Hetzner akkaunt paroli muammosi: 10 daqiqa bloklangan, "Forgot password" tavsiya qilindi).
+- Birinchi yangilashda `bash tools/install-autodeploy.sh` ham ishga tushiriladi → keyin server `production` ni o‘zi kuzatadi.
+  **Qoida:** `production` ga faqat foydalanuvchi “tasdiqlayman” degandan keyin push (`git push origin main:production`).
+- v2.17–2.18.1 da qilinganlar: terimlar 1-2-3, terilgan joy, internetsiz ishlash, punkt ETA, xodimlar xaritada, GT06 GPS
+  (texnika, salarka me’yori, ish turi, dalalar tarixi), jonli kuzatuv (bot orqali guruhlardan rasm/video, eslatma, TV lenta),
+  bekorlar hech qayerda hisoblanmaydi (+ startda himoya), dashboard Bugun/Kecha/Mavsum, reys bo‘yicha kg va pul,
+  planshet, nakladnoy 2 nusxa + punkt to‘ldiradigan joy + tasdiqlangan nakladnoy (elektron muhr, QR /tekshir),
+  punkt bilan hisob (qo‘l 7800 / kombayn 7600 — Buxgalteriyada o‘zgartiriladi, hech narsa qotmaydi).
+- Serverdan keyin foydalanuvchi kiritadi: paxta narxlari, punkt koordinatasi, Google Maps kalit, Google Sheets.
+- Keyingi ish: Dashboard/TV dizayni Codex rasmi bo‘yicha (docs/DIZAYN_MALUMOTLAR.md), GT06 treker sotib olingach SMS sozlash.
+
 ## Foydalanuvchi
 
 - Ism: Azizbek (GitHub: `bycottoninvest-ai`). O‘zbek tilida yozadi, dasturchi emas — oddiy, qadamma-qadam tushuntirish kerak.
