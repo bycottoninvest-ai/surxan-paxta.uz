@@ -12,7 +12,7 @@
 <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}?v={{ version }}">
 {% block head %}{% endblock %}
 </head>
-<body data-user="{{ current_user['id'] }}"{% if gmaps_key %} data-gmaps="{{ gmaps_key }}"{% endif %}>
+<body data-user="{{ current_user['id'] }}"{% if current_user and current_user['role'] in ('tally', 'fuel', 'brigadier', 'driver') %} data-track="1"{% endif %}{% if gmaps_key %} data-gmaps="{{ gmaps_key }}"{% endif %}>
 {% set ep = request.endpoint or '' %}
 {% macro nav(endpoint, label, ico, perm=None, match=None, args={}) -%}
   {% if perm is none or can(perm) %}{% set ep = request.endpoint or '' %}

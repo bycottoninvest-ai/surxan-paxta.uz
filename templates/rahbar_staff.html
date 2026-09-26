@@ -1,0 +1,56 @@
+{% extends 'base.html' %}
+{% from 'macros.html' import icon, empty with context %}
+{% set page_title = 'Xodimlar xaritada' %}
+{% block content %}
+<div class="d-wrap rb">
+  {% with rb_title='Xodimlar xaritada', rb_back=url_for('rahbar.home'), rb_no_period=True %}{% include 'partials/rb_head.html' %}{% endwith %}
+  <div id="sm-map" class="sm-map spx-vivid"></div>
+  <div class="tiny muted" style="margin:6px 2px">Rasmga bosing — bugun qayerlardan yurgani chiziladi. Kulrang — {{ 30 }} daqiqadan beri yangilanmagan. Har 30 soniyada yangilanadi.</div>
+  <div class="hm-ops" id="sm-list">
+    {% for p in people %}<a class="hm-op" href="#" data-key="{{ p.key }}">
+      <span class="sm-av {{ 'stale' if p.stale }}">{% if p.avatar %}<img src="{{ url_for('rahbar.avatar', rel=p.avatar) }}" alt="">{% else %}{{ p.name[:1] }}{% endif %}</span>
+      <span class="hm-op-b"><b>{{ p.name }}</b><small>{{ p.role }}{% if p.field %} · {{ p.field }} dalasida{% endif %} · {{ p.at }}{% if p.age_min > 1 %} ({{ p.age_min }} daq oldin){% endif %} · {{ 'Telegram' if p.source == 'telegram' else 'ilova' }}</small></span></a>
+    {% else %}{{ empty('Hali hech kim joylashuv ulashmagan. Xodim Telegram’da botga: 📎 → Joylashuv → “Jonli joylashuvni ulashish” → “O‘chirmaguncha”.', 'map') }}{% endfor %}
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}<link rel="stylesheet" href="{{ url_for('static', filename='vendor/leaflet/leaflet.css') }}">
+<script src="{{ url_for('static', filename='vendor/leaflet/leaflet.js') }}"></script>
+<script src="{{ url_for('static', filename='js/basemap.js') }}"></script>
+{% include 'partials/rb_poll.html' %}
+<script>
+(function () {
+  const AV = '{{ url_for('rahbar.avatar', rel='') }}', JSONU = '{{ url_for('rahbar.staff_json') }}';
+  const esc = window.surxonEsc || (s => String(s));
+  const map = L.map('sm-map', { attributionControl: false });
+  if (window.spxBasemap) spxBasemap(map); else L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19 }).addTo(map);
+  map.setView([{{ center[0] }}, {{ center[1] }}], 12);
+  const marks = {}; let trackLine = null, fitted = false;
+  const icon = p => L.divIcon({ className: 'sm-pin', iconSize: [46, 46], iconAnchor: [23, 23],
+    html: `<span class="sm-av big ${p.stale ? 'stale' : ''}">${p.avatar ? `<img src="${AV + p.avatar}">` : esc(p.name.slice(0, 1))}</span>` });
+  function draw(people) {
+    const seen = new Set();
+    people.forEach(p => {
+      seen.add(p.key);
+      const tip = `<b>${esc(p.name)}</b><br>${esc(p.role)}${p.field ? ' · ' + esc(p.field) : ''}<br>${p.at}${p.age_min > 1 ? ` (${p.age_min} daq oldin)` : ''}`;
+      if (!marks[p.key]) marks[p.key] = L.marker([p.lat, p.lon], { icon: icon(p) }).bindTooltip(tip, { direction: 'top', offset: [0, -20] })
+        .on('click', () => showTrack(p.key)).addTo(map);
+      else { marks[p.key].setLatLng([p.lat, p.lon]).setIcon(icon(p)).setTooltipContent(tip); }
+    });
+    Object.keys(marks).forEach(k => { if (!seen.has(k)) { marks[k].remove(); delete marks[k]; } });
+    if (!fitted && people.length) { map.fitBounds(people.map(p => [p.lat, p.lon]), { padding: [40, 40], maxZoom: 15 }); fitted = true; }
+  }
+  async function showTrack(key) {
+    const r = await (await fetch(JSONU + '?iz=' + encodeURIComponent(key), { headers: { 'X-Requested-With': 'fetch' } })).json();
+    if (trackLine) trackLine.remove();
+    if (r.track && r.track.length > 1) {
+      trackLine = L.layerGroup([L.polyline(r.track.map(t => [t[0], t[1]]), { color: '#38bdf8', weight: 4, opacity: .9 }),
+        L.circleMarker([r.track[0][0], r.track[0][1]], { radius: 5, color: '#fff', fillColor: '#16a34a', fillOpacity: 1 }).bindTooltip('Boshlandi ' + r.track[0][2])]).addTo(map);
+      map.fitBounds(r.track.map(t => [t[0], t[1]]), { padding: [40, 40] });
+    } else if (marks[key]) map.setView(marks[key].getLatLng(), 16);
+  }
+  document.querySelectorAll('#sm-list [data-key]').forEach(a => a.addEventListener('click', e => { e.preventDefault(); showTrack(a.dataset.key); window.scrollTo(0, 0); }));
+  draw({{ people|tojson }});
+  setInterval(async () => { try { const r = await (await fetch(JSONU, { headers: { 'X-Requested-With': 'fetch' } })).json(); draw(r.people); } catch (_) {} }, 30000);
+})();
+</script>{% endblock %}

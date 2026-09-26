@@ -205,12 +205,12 @@ CASHIER_ENDPOINTS = STATION_ENDPOINTS | {'acct.cashier', 'acct.payout_pay', 'acc
 
 # Field clerk: only the four-step field screens (and the few trip endpoints they use) — no reports, money, staff,
 # equipment/field admin or the general photo archive, whatever URL is typed.
-TALLY_ENDPOINTS = STATION_ENDPOINTS | {'main.api_workers', 'main.media', 'ops.harvest', 'ops.load_open', 'ops.load_full',
+TALLY_ENDPOINTS = STATION_ENDPOINTS | {'main.api_workers', 'main.api_position', 'main.media', 'ops.harvest', 'ops.load_open', 'ops.load_full',
                                        'ops.load_detail', 'ops.harvest_void', 'ops.load_photos', 'ops.waybill_external_pdf'}
 
 
 # Fuel keeper: only the fuel screens (take / give / own history).
-FUEL_ENDPOINTS = STATION_ENDPOINTS | {'main.media'}
+FUEL_ENDPOINTS = STATION_ENDPOINTS | {'main.media', 'main.api_position'}
 
 
 def station_gate():

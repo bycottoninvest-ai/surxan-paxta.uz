@@ -187,6 +187,12 @@ def process_update(update):
         return
     if update.get('my_chat_member') or update.get('chat_member'):
         return _on_member_update(update.get('my_chat_member') or update['chat_member'])
+    # Telegram live location: the first message carries the location, every update after it is an edited_message
+    loc_msg = update.get('edited_message') or update.get('message')
+    if loc_msg and loc_msg.get('location') and (loc_msg.get('chat') or {}).get('type') == 'private':
+        return _on_location(loc_msg, first=bool(update.get('message')))
+    if update.get('edited_message'):
+        return
     if update.get('callback_query'):
         cb = update['callback_query']
         try:
@@ -202,6 +208,27 @@ def process_update(update):
         if ctype != 'private':
             return
         _dispatch(m['chat']['id'], m['from'], message=m, update_id=update.get('update_id'))
+
+
+# ------------------------------------------------------------------ live location (staff map)
+
+def _on_location(m, first):
+    from . import kuzatuv, staffmap
+    sender, loc = m.get('from') or {}, m['location']
+    tid = str(sender.get('id'))
+    with tx() as db:
+        member = kuzatuv.seen(db, sender, private=True)
+    user = q('SELECT id FROM users WHERE telegram_id=? AND active=1', (tid,), one=True)
+    if not user and not member:
+        return
+    staffmap.record(lat=float(loc['latitude']), lon=float(loc['longitude']), acc=loc.get('horizontal_accuracy'),
+                    user_id=user['id'] if user else None, member_id=None if user else member['id'], source='telegram')
+    if first:
+        staffmap.fetch_avatar(member, tid)
+        if loc.get('live_period'):
+            send(m['chat']['id'], '✅ Jonli joylashuv qabul qilindi — ish xaritasida ko‘rinasiz. To‘xtatish: xabardagi “Ulashishni to‘xtatish”.')
+        else:
+            send(m['chat']['id'], 'Bu bir martalik joylashuv. Doimiy ko‘rinish uchun: 📎 → Joylashuv → “Jonli joylashuvni ulashish” → “O‘chirmaguncha”.')
 
 
 # ------------------------------------------------------------------ kuzatuv (work group + photo/video requests)

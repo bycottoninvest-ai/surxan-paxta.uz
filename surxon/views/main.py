@@ -154,6 +154,24 @@ def search():
     return render_template('search.html', term=term, results=results)
 
 
+@bp.post('/api/joy')
+@login_required
+def api_position():
+    """The phone's position while a field page is open (field roles only) — for the staff map."""
+    if g.user['role'] not in TRACK_ROLES:
+        return jsonify(ok=False), 403
+    try:
+        lat, lon = float(request.form.get('lat', '')), float(request.form.get('lon', ''))
+        acc = float(request.form.get('acc') or 0) or None
+    except ValueError:
+        return jsonify(ok=False, error='joylashuv yo‘q'), 422
+    from ..staffmap import record
+    return jsonify(ok=True, stored=record(lat=lat, lon=lon, acc=acc, user_id=g.user['id'], source='ilova'))
+
+
+TRACK_ROLES = ('tally', 'fuel', 'brigadier', 'driver')
+
+
 @bp.get('/api/workers')
 @login_required
 def api_workers():

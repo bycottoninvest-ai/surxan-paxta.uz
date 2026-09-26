@@ -308,7 +308,7 @@ def register_cli(app):
         if not cfg.TELEGRAM_WEBHOOK_SECRET:
             raise click.ClickException('TELEGRAM_WEBHOOK_SECRET o‘rnatilmagan')
         url = f'https://{cfg.DOMAIN}/telegram/webhook/{cfg.TELEGRAM_WEBHOOK_SECRET}'
-        res = tg_api('setWebhook', {'url': url, 'allowed_updates': ['message', 'callback_query', 'my_chat_member', 'chat_member', 'channel_post'],
+        res = tg_api('setWebhook', {'url': url, 'allowed_updates': ['message', 'edited_message', 'callback_query', 'my_chat_member', 'chat_member', 'channel_post'],
                                     'secret_token': cfg.TELEGRAM_WEBHOOK_SECRET, 'drop_pending_updates': False})
         click.echo(json.dumps(res, ensure_ascii=False))
 

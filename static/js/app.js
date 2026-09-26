@@ -240,6 +240,18 @@
     setTimeout(() => el.remove(), kind === 'error' ? 7000 : 4000);
   }
   window.surxonToast = toast;
+  // field staff: while the app is open, the phone's position goes to the staff map every 2 minutes (only admin and
+  // the director see it). Nothing is sent when the page is closed.
+  if (document.body.dataset.track && navigator.geolocation) {
+    let last = 0;
+    navigator.geolocation.watchPosition(pos => {
+      const c = pos.coords;
+      if (c.accuracy > 200 || Date.now() - last < 120000 || !navigator.onLine) return;
+      last = Date.now();
+      const fd = new FormData(); fd.append('lat', c.latitude); fd.append('lon', c.longitude); fd.append('acc', Math.round(c.accuracy));
+      fetch('/api/joy', { method: 'POST', body: fd, credentials: 'same-origin', headers: { 'X-Requested-With': 'fetch', 'X-CSRF-Token': csrf() } }).catch(() => {});
+    }, () => {}, { enableHighAccuracy: true, maximumAge: 60000, timeout: 30000 });
+  }
   window.surxonQueue = { all: async () => (await qAll()).filter(x => x.user === userId), flush };
 
   // ---- geolocation for photo forms (only if the user allows it)

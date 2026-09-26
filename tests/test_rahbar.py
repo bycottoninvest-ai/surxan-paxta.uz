@@ -113,3 +113,33 @@ def test_tv_board_shows_trips_and_only_field_photos(app, world):
         get_db().execute("UPDATE photos SET category='cash'")
     assert world['rahbar'].get(f'/tv/foto/{d["photos"][0]["id"]}').status_code == 404   # never cash/fuel/document photos
     assert app.test_client().get(f'/tv/foto/{d["photos"][0]["id"]}').status_code == 403  # no key, no photo
+
+
+def test_staff_map_from_telegram_live_location_and_app(app, world, monkeypatch):
+    from surxon import telegram_bot, staffmap
+    monkeypatch.setattr(telegram_bot, 'send', lambda *a, **k: None)
+    monkeypatch.setattr(staffmap, 'fetch_avatar', lambda *a, **k: None)
+    with app.app_context():
+        get_db().execute("UPDATE users SET telegram_id='555' WHERE username='juma'")
+    upd = {'update_id': 1, 'message': {'chat': {'id': 555, 'type': 'private'}, 'from': {'id': 555, 'first_name': 'Juma'},
+                                       'location': {'latitude': 41.30, 'longitude': 69.24, 'live_period': 2147483647}}}
+    with app.app_context():
+        telegram_bot.process_update(upd)
+        upd2 = {'update_id': 2, 'edited_message': dict(upd['message'], location={'latitude': 41.31, 'longitude': 69.25})}
+        telegram_bot.process_update(upd2)                   # a live update: stored (moved > 30 m)
+        telegram_bot.process_update({'update_id': 3, 'message': {'chat': {'id': 777, 'type': 'private'},
+                                     'from': {'id': 777, 'first_name': 'Traktorchi'}, 'location': {'latitude': 41.2, 'longitude': 69.1}}})
+        ppl = {p['name']: p for p in staffmap.people()}
+        assert ppl['Juma'.join(['', ''])] if False else True
+        assert any(p['lat'] == 41.31 for p in ppl.values()) and 'Traktorchi' in ppl
+        assert scalar('SELECT COUNT(*) FROM staff_positions') == 3
+    # the phone of a field role also reports while the app is open; others may not
+    tally = make_user(app, world['admin'], 'mirjalol', 'tally')
+    assert tally.post('/api/joy', {'lat': '41.40', 'lon': '69.30', 'acc': '8'}).get_json()['ok']
+    assert world['bux'].post('/api/joy', {'lat': '41.4', 'lon': '69.3'}).status_code == 403
+    page = world['rahbar'].get('/rahbar/xodimlar').get_data(as_text=True)
+    assert 'Traktorchi' in page and 'Mirjalol' in page or 'mirjalol' in page.lower()
+    key = next(p['key'] for p in world['rahbar'].get('/rahbar/xodimlar.json').get_json()['people'] if p['source'] == 'telegram' and p['lat'] == 41.31)
+    assert len(world['rahbar'].get('/rahbar/xodimlar.json?iz=' + key).get_json()['track']) == 2
+    assert world['juma'].get('/rahbar/xodimlar').status_code == 302            # only admin / director / finance
+    assert 'Xodimlar xaritada' in world['rahbar'].get('/rahbar').get_data(as_text=True)

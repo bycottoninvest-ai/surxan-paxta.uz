@@ -36,7 +36,40 @@ def home():
     checks = D.checks(year, a, b)
     return render_template('rahbar_home.html', **_ctx(
         cot=D.cotton(year, a, b), now=D.trips_now(), cash=D.cash(a, b), wages=D.wages(year, a, b), fuel=D.fuel(a, b),
-        checks=checks, red=sum(1 for c in checks if c['level'] == 'red'), feed=D.feed(8)))
+        checks=checks, red=sum(1 for c in checks if c['level'] == 'red'), feed=D.feed(8), staff=_staff_count()))
+
+
+def _staff_count():
+    from .. import staffmap
+    ppl = staffmap.people()
+    return {'n': len(ppl), 'live': sum(1 for x in ppl if not x['stale'])}
+
+
+@bp.get('/rahbar/xodimlar')
+@perm_required(VIEW)
+def staff_map():
+    from .. import staffmap
+    from ..settings import get_setting
+    c = (get_setting('map_center') or '42.3,59.6').split(',')
+    return render_template('rahbar_staff.html', **_ctx(people=staffmap.people(), center=[float(c[0]), float(c[1])]))
+
+
+@bp.get('/rahbar/xodimlar.json')
+@perm_required(VIEW)
+def staff_json():
+    from .. import staffmap
+    if request.args.get('iz'):
+        return jsonify(track=staffmap.track(request.args['iz']))
+    return jsonify(people=staffmap.people(), at=now_str()[11:19])
+
+
+@bp.get('/rahbar/avatar/<path:rel>')
+@perm_required(VIEW)
+def avatar(rel):
+    from flask import current_app, send_from_directory
+    if not rel.startswith('avatars/') or '..' in rel:
+        abort(404)
+    return send_from_directory(current_app.config['SURXON'].UPLOAD_DIR, rel, max_age=86400)
 
 
 @bp.get('/rahbar/holat')

@@ -564,6 +564,18 @@ CREATE TABLE IF NOT EXISTS tg_chats (
   last_seen_at TEXT
 );
 
+-- v11: where staff are (Telegram live location, or the phone while the app is open). Only admin / director see it.
+CREATE TABLE IF NOT EXISTS staff_positions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER REFERENCES users(id),
+  member_id INTEGER REFERENCES tg_members(id),
+  lat REAL NOT NULL, lon REAL NOT NULL, acc REAL,
+  source TEXT NOT NULL,                      -- telegram / ilova
+  at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_staffpos_user ON staff_positions(user_id, at);
+CREATE INDEX IF NOT EXISTS idx_staffpos_member ON staff_positions(member_id, at);
+
 CREATE TABLE IF NOT EXISTS tg_members (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   full_name TEXT NOT NULL,
@@ -912,6 +924,8 @@ def migrate(db):
     _add_column(db, 'trailer_loads', 'picked_cells', 'TEXT')
     _add_column(db, 'trailer_loads', 'picked_ha', 'REAL')
     _add_column(db, 'trailer_loads', 'picked_split', 'TEXT')
+    _add_column(db, 'users', 'avatar_path', 'TEXT')
+    _add_column(db, 'tg_members', 'avatar_path', 'TEXT')
     _add_column(db, 'stations', 'lat', 'REAL')           # where the punkt is — for “when will the trailer arrive”
     _add_column(db, 'stations', 'lon', 'REAL')   # {field_id: hectares} when a trip picked across 2+ fields
     # Future column changes go here as: if version < N: ALTER TABLE ...
