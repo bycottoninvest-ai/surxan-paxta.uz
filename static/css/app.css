@@ -285,6 +285,7 @@ table.t{width:100%;border-collapse:collapse;font-size:13.5px}
 .empty .ico{width:40px;height:40px;color:#b7c6d8;display:block;margin:0 auto 8px}
 .notice{border-radius:10px;padding:12px 14px;background:#fff6e0;border:1px solid #f5e0a8;color:#7a5200;font-size:13.5px;display:flex;gap:10px}
 .notice.blue{background:var(--blue-50);border-color:#cfe0fb;color:#1459b8}
+.notice.green{background:#ecfdf3;border-color:#a7e3bd;color:#15803d}
 .setup-list{margin:0;padding:0;list-style:none}
 .setup-list li{display:flex;gap:10px;align-items:center;padding:8px 0;border-bottom:1px solid var(--line-2)}
 .setup-list li .ico{color:var(--green)}

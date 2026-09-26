@@ -4,10 +4,11 @@
 {% block content %}
 <div class="page-h"><h1>{{ icon('database','lg') }} Zaxira nusxalar</h1><span class="sub">Avtomatik har kecha (docker “backup” xizmati) · {{ keep }} kun saqlanadi · haftalik to‘liq foto arxivi</span>
   <span class="spacer"></span><form method="post">{{ csrf() }}<button class="btn btn-primary">{{ icon('refresh','sm') }} Hozir zaxira olish</button></form></div>
-<div class="notice blue mb">{{ icon('shield') }}<div>Serverdagi nusxa yetarli emas: haftada kamida bir marta oxirgi DB faylini va to‘liq foto arxivini boshqa joyga (kompyuter, bulut) yuklab oling. Tiklash tartibi: <code>docs/TIKLASH.md</code>.</div></div>
+{% if offsite_on %}<div class="notice green mb">{{ icon('shield') }}<div>Har bir zaxira serverdan tashqariga ham (Storage Box) nusxalanadi.{% if offsite and offsite.last_ok_at %} Oxirgi muvaffaqiyatli nusxa: <b>{{ offsite.last_ok_at }}</b>.{% endif %}{% if offsite and offsite.last_error_at and (not offsite.last_ok_at or offsite.last_error_at > offsite.last_ok_at) %} <b style="color:var(--red)">Oxirgi urinishda xato: {{ offsite.last_error }}</b>{% endif %} Tiklash tartibi: <code>docs/TIKLASH.md</code>.</div></div>
+{% else %}<div class="notice blue mb">{{ icon('shield') }}<div>Serverdagi nusxa yetarli emas: Admin → Integratsiyalar’da Storage Box’ni ulang yoki haftada kamida bir marta oxirgi DB faylini va to‘liq foto arxivini boshqa joyga yuklab oling. Tiklash tartibi: <code>docs/TIKLASH.md</code>.</div></div>{% endif %}
 <section class="card"><div class="table-wrap"><table class="t">
   <thead><tr><th>Fayl</th><th class="num">Hajm</th><th>Vaqt</th><th></th></tr></thead>
-  <tbody>{% for name, size, mtime in files %}<tr><td>{{ name }}</td><td class="num">{{ (size / 1024 / 1024)|num(2) }} MB</td><td>{{ mtime|int }}</td><td><a class="btn btn-light btn-sm" href="{{ url_for('admin.backup_download', name=name) }}">{{ icon('download','sm') }} Yuklab olish</a></td></tr>
+  <tbody>{% for name, size, mtime in files %}<tr><td>{{ name }}</td><td class="num">{{ (size / 1024 / 1024)|num(2) }} MB</td><td>{{ mtime }}</td><td><a class="btn btn-light btn-sm" href="{{ url_for('admin.backup_download', name=name) }}">{{ icon('download','sm') }} Yuklab olish</a></td></tr>
   {% else %}<tr><td colspan="4">{{ empty('Hali zaxira yo‘q', 'database') }}</td></tr>{% endfor %}</tbody>
 </table></div></section>
 {% endblock %}

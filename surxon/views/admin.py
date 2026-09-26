@@ -344,8 +344,12 @@ def backups():
         from ..backup import run_backup
         return done(run_backup(cfg), url_for('admin.backups'))
     files = sorted((p for p in cfg.BACKUP_DIR.glob('surxon_*') if p.is_file()), key=lambda p: p.name, reverse=True)
-    return render_template('admin_backups.html', files=[(p.name, p.stat().st_size, p.stat().st_mtime) for p in files[:60]],
-                           keep=cfg.BACKUP_KEEP_DAYS)
+    from datetime import datetime
+    from ..db import q as _q
+    off = _q("SELECT * FROM channel_status WHERE channel='offsite'", one=True)
+    return render_template('admin_backups.html', keep=cfg.BACKUP_KEEP_DAYS, offsite_on=bool(cfg.refresh_offsite()), offsite=off,
+                           files=[(p.name, p.stat().st_size, datetime.fromtimestamp(p.stat().st_mtime, cfg.TZ).strftime('%d.%m.%Y %H:%M'))
+                                  for p in files[:60]])
 
 
 @bp.get('/zaxira/<name>')
