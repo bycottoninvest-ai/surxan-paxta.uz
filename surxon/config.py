@@ -55,6 +55,22 @@ class Config:
             self.TELEGRAM_REPORT_CHAT_ID = self.TELEGRAM_REPORT_BOT_TOKEN = ''
             self.GOOGLE_SHEETS_ID = self.GOOGLE_SERVICE_ACCOUNT_FILE = self.OFFSITE_RCLONE_REMOTE = ''
 
+    OFFSITE_FILE = 'rclone.conf'
+    OFFSITE_LOCAL_REMOTE = 'storagebox:surxon-zaxira'
+
+    def refresh_offsite(self):
+        """Storage Box connected on the admin page lives in DATA_DIR/rclone.conf. A remote set in the server .env wins.
+        Re-checked before every use, so a box connected (or removed) on the page works in every process at once."""
+        if self.APP_MODE == 'test' or os.environ.get('OFFSITE_RCLONE_REMOTE'):
+            return self.OFFSITE_RCLONE_REMOTE
+        f = Path(self.DATA_DIR) / self.OFFSITE_FILE
+        if f.exists() and '[storagebox]' in f.read_text(errors='ignore'):
+            os.environ['RCLONE_CONFIG'] = str(f)
+            self.OFFSITE_RCLONE_REMOTE = self.OFFSITE_LOCAL_REMOTE
+        elif self.OFFSITE_RCLONE_REMOTE == self.OFFSITE_LOCAL_REMOTE:
+            self.OFFSITE_RCLONE_REMOTE = ''
+        return self.OFFSITE_RCLONE_REMOTE
+
     def validate(self):
         if not self.SECRET_KEY:
             if self.DEBUG or self.TESTING:

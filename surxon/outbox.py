@@ -61,7 +61,7 @@ def configured(channel, cfg=None):
     if channel == 'telegram_report':
         return bool((cfg.TELEGRAM_REPORT_BOT_TOKEN or cfg.TELEGRAM_BOT_TOKEN) and chat_id('telegram_report', cfg))
     if channel == 'offsite':
-        return bool(cfg.OFFSITE_RCLONE_REMOTE)
+        return bool(cfg.refresh_offsite())
     return False
 
 

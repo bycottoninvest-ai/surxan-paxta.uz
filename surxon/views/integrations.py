@@ -108,6 +108,8 @@ def index():
                 audit(db, actor, 'UPDATE', 'integration', 'google_maps_key', new={'google_maps_key': ('…' + val[-4:]) if val else ''})
                 msg = 'Google kaliti saqlandi. Xaritani yangilang (Ctrl+Shift+R) → qatlamlar → “Google sun’iy yo‘ldosh”.' if val \
                     else 'Google kaliti o‘chirildi — bepul Esri foni ishlatiladi.'
+            elif action in ('offsite_save', 'offsite_clear'):
+                msg = _offsite_save(db, actor, action)
             elif action in ('sheets_save', 'sheets_clear'):
                 msg = _sheets_save(db, actor, action)
             elif action == 'tg_channel':
@@ -232,6 +234,68 @@ def _sheets_save(db, actor, action):
             'bosing.')
 
 
+def _rclone_obscure(password):
+    """rclone keeps SFTP passwords “obscured” in its config; the password goes through stdin, never the command line."""
+    import subprocess
+    try:
+        r = subprocess.run(['rclone', 'obscure', '-'], input=password, capture_output=True, text=True, timeout=30)
+    except FileNotFoundError:
+        raise UserError('Serverda rclone topilmadi — bu sahifa faqat serverdagi dasturda ishlaydi.')
+    if r.returncode != 0 or not r.stdout.strip():
+        raise UserError('Parolni saqlab bo‘lmadi (rclone). Qayta urinib ko‘ring.')
+    return r.stdout.strip()
+
+
+def _offsite_save(db, actor, action):
+    """Hetzner Storage Box (SFTP) for backups outside this server. The config (with the obscured password) is a private
+    file in DATA_DIR; the page shows only the host and user. A remote set in the server .env takes precedence."""
+    import re as _re
+    cfg = current_app.config['SURXON']
+    path = Path(cfg.DATA_DIR) / cfg.OFFSITE_FILE
+
+    def put(key, val):
+        db.execute('INSERT INTO settings(key, value, updated_at, updated_by) VALUES (?,?,?,?) ON CONFLICT(key) '
+                   'DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at, updated_by=excluded.updated_by',
+                   (key, val, now_str(), actor.user_id))
+    if action == 'offsite_clear':
+        path.unlink(missing_ok=True)
+        put('offsite_host', ''); put('offsite_user', '')
+        cfg.refresh_offsite()
+        audit(db, actor, 'UPDATE', 'integration', 'offsite', new={'offsite': 'uzildi'})
+        return 'Storage Box uzildi. Zaxiralar faqat serverning o‘zida qoladi.'
+    host = (request.form.get('host') or '').strip().lower()
+    user = (request.form.get('user') or '').strip()
+    password = request.form.get('password') or ''
+    port = (request.form.get('port') or '23').strip()
+    if not _re.fullmatch(r'[a-z0-9]([a-z0-9.-]{1,120})[a-z0-9]', host) or '.' not in host:
+        raise UserError('Host noto‘g‘ri. Masalan: u123456.your-storagebox.de')
+    if not _re.fullmatch(r'[A-Za-z0-9._-]{2,64}', user):
+        raise UserError('Foydalanuvchi nomi noto‘g‘ri. Masalan: u123456')
+    if not port.isdigit() or not 1 <= int(port) <= 65535:
+        raise UserError('Port noto‘g‘ri (Storage Box uchun 23).')
+    if len(password) < 6:
+        raise UserError('Storage Box parolini kiriting.')
+    conf = (f'[storagebox]\ntype = sftp\nhost = {host}\nuser = {user}\nport = {int(port)}\n'
+            f'pass = {_rclone_obscure(password)}\nshell_type = unix\nmd5sum_command = none\nsha1sum_command = none\n')
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix('.tmp')
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, 'w') as out:
+        out.write(conf)
+    os.replace(tmp, path)
+    cfg.refresh_offsite()
+    put('offsite_host', host); put('offsite_user', user)
+    audit(db, actor, 'UPDATE', 'integration', 'offsite', new={'host': host, 'user': user, 'port': int(port)})
+    return 'Storage Box saqlandi. Endi “Sinov” tugmasini bosing — u yerga haqiqiy fayl yoziladi.'
+
+
+def _offsite_state():
+    cfg = current_app.config['SURXON']
+    remote = cfg.refresh_offsite()
+    return {'on': bool(remote), 'env': bool(os.environ.get('OFFSITE_RCLONE_REMOTE')),
+            'host': get_setting('offsite_host') or '', 'user': get_setting('offsite_user') or '', 'test': cfg.APP_MODE == 'test'}
+
+
 def _sheets_state():
     from ..outbox import sheets_conf
     cfg = current_app.config['SURXON']
@@ -255,7 +319,7 @@ def render(new_key=None, message=None):
                            channels=q("SELECT * FROM tg_chats WHERE type='channel' ORDER BY last_seen_at DESC"),
                            gmaps_tail=(lambda k: ('…' + k[-4:]) if k else '')(get_setting('google_maps_key') or ''),
                            gmaps_env=bool(current_app.config['SURXON'].GOOGLE_MAPS_KEY),
-                           sheets=_sheets_state(),
+                           sheets=_sheets_state(), offsite=_offsite_state(),
                            chosen={'archive': get_setting('tg_archive_chat_id'), 'report': get_setting('tg_report_chat_id')},
                            bot_user=current_app.config['SURXON'].TELEGRAM_BOT_USERNAME)
 

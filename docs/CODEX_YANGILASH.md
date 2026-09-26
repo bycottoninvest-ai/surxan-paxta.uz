@@ -1,13 +1,13 @@
-# Serverni yangilash (Codex uchun) — v2.13.0
+# Serverni yangilash (Codex uchun) — v2.14.0
 
 Serverni qayta qurmang, `.env`, `data/` va Caddy sozlamasiga tegmang. Vaqtinchalik sslip override'ni qayta yoqmang.
 
 ```bash
 cd /opt/surxan-paxta.uz
 docker compose exec -T app flask --app app backup          # yangilashdan oldin izchil zaxira
-git pull --ff-only                                          # kutilgan: v2.13.0 commiti
+git pull --ff-only                                          # kutilgan: v2.14.0 commiti
 docker compose up -d --build
-for i in $(seq 1 40); do curl -fsS https://surxan-paxta.uz/health && break; sleep 3; done   # "version":"2.13.0"
+for i in $(seq 1 40); do curl -fsS https://surxan-paxta.uz/health && break; sleep 3; done   # "version":"2.14.0"
 docker compose exec -T app flask --app app set-webhook      # channel_post yangilanishini qo'shadi (kanallarni tanish uchun)
 docker compose exec -T app flask --app app smoke-check
 ```
@@ -15,6 +15,12 @@ docker compose exec -T app flask --app app smoke-check
 Baza avtomatik yangilanadi (sxema v9): `field_imports, field_assignments` va `fields.source_id/map_area_ha/area_source`, `field_seasons.crop` (v2.11.0 — dalalar importi); yangi jadvallar `fuel_stations, fuel_tickets, fuel_ticket_funds, fuel_prices, fuel_scans, fuel_ops` va `equipment.fuel_type/fuel_carrier/qr_token` (v2.10.0 — solyarka); `cash_corrections` (v2.9.0 — kassa tuzatishlari); yangi ustunlar `nayman_receipts.station_gross_kg/station_tare_kg` (v2.8.0 — punkt brutto/tara),
 `trailer_loads.method/rate/rate_unit`, `workers.note`, `tg_chats.bot_status` (v2.7.0) qo'shiladi.
 Eski yozuvlar o'zgarmaydi. Ilova ishga tushganda migratsiyadan oldin `data/` ichida `*.oldin-v*` zaxira nusxa oladi.
+
+## v2.14.0 da nima o'zgardi
+Hetzner Storage Box (serverdan tashqari zaxira) Admin → Integratsiyalar'dan ulanadi: host, foydalanuvchi, parol.
+Parol `rclone obscure` bilan `data/rclone.conf` (600) ga yoziladi, ekranda/auditda ko'rinmaydi. Web va `backup`
+konteyneri har safar shu faylni tekshiradi (qayta ishga tushirish shart emas). `.env` dagi OFFSITE_RCLONE_REMOTE bo'lsa,
+u ustun. Baza o'zgarmaydi.
 
 ## v2.13.0 da nima o'zgardi
 Ofis televizori uchun yangi `/tv` (1920×1080, istalgan ekranga moslashadi): bugun/mavsum terim, mavsum rejasi

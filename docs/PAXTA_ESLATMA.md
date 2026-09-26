@@ -106,7 +106,7 @@ Hozir: `restart: unless-stopped` + har kecha zaxira (30 kun) — lekin zaxira O�
 1. Foydalanuvchi Hetzner Console’da: server → **Delete/Rebuild protection** yoqish (bepul).
 2. Hetzner **Backups** (server narxining 20 %, kunlik, 7 kun) — pullik, foydalanuvchi qaror qiladi; tavsiya qilingan.
    Katta yangilanishdan oldin **Snapshot**.
-3. Claude: Storage Box (sotib olingan) ni **Admin → Integratsiyalar** dan ulanadigan qilish (SFTP host/login/parol
+3. ✅ v2.14.0 da qilindi (serverga qo‘yish kerak): Storage Box (sotib olingan) ni **Admin → Integratsiyalar** dan ulanadigan qilish (SFTP host/login/parol
    sahifada, parol faylda 600, ekranda ko‘rinmaydi) → har kecha zaxira serverdan tashqariga. v2.13.0 bilan birga deploy.
 4. UptimeRobot (bepul) → `https://surxan-paxta.uz/health` har 5 daqiqa, Telegram/email ogohlantirish — qadamma-qadam yozib berish.
 Maqsad: ma’lumot 3 joyda — server, Hetzner Backups, Storage Box.

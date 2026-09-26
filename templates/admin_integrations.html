@@ -52,6 +52,29 @@
   </section>
 
   <section class="card s12">
+    <div class="card-h"><h3>{{ icon('shield') }} Serverdan tashqari zaxira (Hetzner Storage Box)</h3>
+      <span class="badge {{ 'b-green' if offsite.on else 'b-orange' }}" style="margin-left:auto">{{ ('Ulangan' ~ (' (server .env)' if offsite.env else (' · ' ~ offsite.host))) if offsite.on else 'Ulanmagan — zaxira faqat serverda' }}</span></div>
+    <div class="card-b">
+      <p class="small">Har kechagi zaxira (baza + rasmlar) serverning o‘zidan tashqari, Storage Box’ga ham nusxalanadi. Server butunlay buzilsa ham ma’lumot saqlanib qoladi. Tizim u yerdan hech narsani o‘chirmaydi — faqat qo‘shadi.</p>
+      <div class="small muted mb">Hetzner → Storage Box → sozlamalarda <b>SSH support</b> va <b>External reachability</b> yoqilgan bo‘lsin. Host va foydalanuvchi Storage Box sahifasida yozilgan; parolni o‘sha yerda “Reset password” bilan yangilash mumkin.</div>
+      {% if offsite.test %}<div class="small" style="color:var(--orange,#b45309)">Test nusxa — tashqi zaxiraga ulanmaydi.</div>{% endif %}
+      {% if not offsite.env %}
+      <form method="post" class="form">{{ csrf() }}<input type="hidden" name="action" value="offsite_save">
+        <div class="f"><label>Host</label><input class="input" name="host" value="{{ offsite.host }}" placeholder="u123456.your-storagebox.de" required autocomplete="off"></div>
+        <div class="f"><label>Foydalanuvchi</label><input class="input" name="user" value="{{ offsite.user }}" placeholder="u123456" required autocomplete="off"></div>
+        <div class="f"><label>Parol</label><input class="input" type="password" name="password" placeholder="Storage Box paroli" required autocomplete="new-password"></div>
+        <div class="f"><label>Port</label><input class="input" name="port" value="23" style="max-width:120px"></div>
+        <div class="f"><div class="tiny muted">Parol serverda yopiq faylda saqlanadi va qayta ko‘rsatilmaydi. Uni chatga yubormang.</div></div>
+        <div class="f"><button class="btn btn-primary" style="width:auto">Saqlash</button></div></form>
+      {% endif %}
+      {% if offsite.on %}<div class="row mt-s" style="gap:8px">
+        <form method="post">{{ csrf() }}<input type="hidden" name="action" value="test_offsite"><button class="btn btn-light btn-sm">Sinov (Storage Box’ga fayl yozish)</button></form>
+        {% if not offsite.env %}<form method="post" data-confirm="Storage Box uzilsinmi? Zaxiralar faqat serverda qoladi.">{{ csrf() }}<input type="hidden" name="action" value="offsite_clear"><button class="btn btn-ghost btn-sm">Uzish</button></form>{% endif %}
+      </div>{% endif %}
+    </div>
+  </section>
+
+  <section class="card s12">
     <div class="card-h"><h3>{{ icon('list') }} Google Sheets (pul yozuvlarining ikkinchi nusxasi)</h3>
       <span class="badge {{ 'b-green' if sheets.on else 'b-gray' }}" style="margin-left:auto">{{ ('Ulangan' ~ (' (server .env)' if sheets.env else '')) if sheets.on else 'Ulanmagan' }}</span></div>
     <div class="card-b">

@@ -46,7 +46,7 @@ def run_backup(cfg):
         old.unlink()
     msg = (f'Zaxira tayyor: {db_out.name} ({db_out.stat().st_size // 1024} KB), {csv_out.name}, '
            f'{photos_out.name} ({count} ta rasm fayli{", to‘liq" if full else ""}). Eski fayllar o‘chirildi: {removed}.')
-    if cfg.OFFSITE_RCLONE_REMOTE:
+    if cfg.refresh_offsite():
         try:
             offsite_copy(cfg)
             _record(cfg, True)
@@ -126,7 +126,7 @@ def verify_restore(cfg, offsite=False):
     work = Path(tempfile.mkdtemp(prefix='tiklash_', dir=str(cfg.BACKUP_DIR)))
     try:
         if offsite:
-            if not cfg.OFFSITE_RCLONE_REMOTE:
+            if not cfg.refresh_offsite():
                 raise RuntimeError('Tashqi zaxira ulanmagan (OFFSITE_RCLONE_REMOTE yo‘q).')
             ls = subprocess.run(['rclone', 'lsf', cfg.OFFSITE_RCLONE_REMOTE, '--include', 'surxon_db_*.sqlite3'],
                                 capture_output=True, text=True, timeout=600)
