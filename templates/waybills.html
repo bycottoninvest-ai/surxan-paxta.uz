@@ -12,6 +12,7 @@
       <a href="{{ url_for('ops.waybills', period='week') }}" class="{{ 'on' if period == 'week' }}">Bu hafta</a>
       <a href="{{ url_for('ops.waybills', status='pending') }}" class="{{ 'on' if request.args.get('status') == 'pending' }}">Yo‘lda</a>
       <a href="{{ url_for('ops.waybills', status='QABUL') }}" class="{{ 'on' if request.args.get('status') == 'QABUL' }}">Qabul qilingan</a>
+      {% if current_user['role'] == 'admin' %}<a href="{{ url_for('ops.waybills', status='BEKOR') }}" class="{{ 'on' if request.args.get('status') == 'BEKOR' }}" title="Bekor qilinganlar hech qayerda hisoblanmaydi">Arxiv: bekor</a>{% endif %}
     </div>
     <form class="search" style="max-width:280px" method="get">{{ icon('search','sm') }}<input name="q" value="{{ request.args.get('q','') }}" placeholder="Raqam, telashka, mashina..."></form>
   </div>

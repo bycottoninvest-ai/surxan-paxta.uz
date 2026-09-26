@@ -856,3 +856,4 @@ a.a-tile:active{transform:scale(.98)}
 .fh-row{display:flex;gap:10px;padding:8px 0;border-top:1px solid var(--line);font-size:14px}.fh-row small{color:var(--muted)}
 .fh-dot{flex:none;width:12px;height:12px;border-radius:50%;margin-top:4px}
 .rb-fields{background:#f0fdf4;color:#14532d}
+.kpi-tabs{display:flex;align-items:center;gap:4px;flex-wrap:wrap;margin:12px 0 -4px}.kpi-tabs .small{margin-left:10px}

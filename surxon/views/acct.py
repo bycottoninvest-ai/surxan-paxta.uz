@@ -300,7 +300,8 @@ def combines():
             ttype = request.form.get('tariff_type') or None
             A.set_combine_tariff(post_actor(), cid, tariff_type=ttype,
                                  tariff_rate=parse_money(request.form.get('tariff_rate'), required=bool(ttype)),
-                                 operator_name=request.form.get('operator_name'))
+                                 operator_name=request.form.get('operator_name'),
+                                 ownership=request.form.get('ownership') or None)
             return done('Tarif saqlandi. U bundan keyingi ishga qo‘llanadi; oldingi hisob o‘zgarmaydi.', url_for('acct.combines'))
         if action == 'work':
             A.add_combine_work(post_actor(), cid, work_date=parse_date(request.form.get('work_date') or today_str(), 'Sana'),
@@ -311,6 +312,11 @@ def combines():
         raise UserError('Noma’lum amal.')
     year = season_arg()
     rows = A.combine_balances(year)
+    fuel = {r['equipment_id']: r['l'] for r in q('''SELECT equipment_id, SUM(liters) l FROM fuel_ops WHERE kind='BERISH'
+                                                   AND voided_at IS NULL AND substr(created_at,1,4)=? GROUP BY equipment_id''',
+                                                 (str(year),))}
+    for r in rows:
+        r['fuel_l'] = fuel.get(r['id'], 0)
     return render_template('acct_combines.html', rows=rows, year=year, tariffs=A.TARIFF_TYPES,
                            fields=q('SELECT id, name FROM fields WHERE active=1 ORDER BY code'),
                            total={k: sum(r[k] for r in rows) for k in ('earned', 'paid', 'balance', 'kg')})
@@ -328,6 +334,9 @@ def cotton():
     p, a, b, label = _period()
     year = season_arg()
     by = request.args.get('by', 'dala')
+    if by == 'reys':
+        return render_template('acct_cotton.html', **_ctx(rows=[], by=by, groups=GROUPS, cot=A.cotton_totals(year, a, b),
+                                                          trips=A.trip_ledger(year, a, b)))
     if by not in GROUPS:
         by = 'dala'
     col = GROUPS[by][1]

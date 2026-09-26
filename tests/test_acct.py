@@ -191,9 +191,9 @@ def test_combine_tariffs_tonne_day_hectare(app, world):
     income(bux, '10 000 000')
     k1, k2 = world['eq']['K-01'], world['eq']['K-02']
     assert bux.post('/buxgalteriya/kombaynlar', {'action': 'tariff', 'combine_id': k1, 'tariff_type': 'tonna',
-                                                 'tariff_rate': '250 000'}).get_json()['ok']
+                                                 'tariff_rate': '250 000', 'ownership': 'external'}).get_json()['ok']
     assert bux.post('/buxgalteriya/kombaynlar', {'action': 'tariff', 'combine_id': k2, 'tariff_type': 'kunlik',
-                                                 'tariff_rate': '800 000'}).get_json()['ok']
+                                                 'tariff_rate': '800 000', 'ownership': 'external'}).get_json()['ok']
     lid = open_load(juma, world)
     for kg in ('9300', '9300'):                                      # 18.6 t × 250 000 = 4 650 000
         assert juma.post('/terim', {'load_id': lid, 'method': 'combine', 'combine_id': k1, 'kg': kg,
@@ -217,6 +217,14 @@ def test_combine_tariffs_tonne_day_hectare(app, world):
     assert bux.post('/buxgalteriya/kombaynlar', {'action': 'work', 'combine_id': k2, 'unit': 'gektar', 'qty': '3.5'}).get_json()['ok']
     with app.app_context():
         assert {x['code']: x for x in combine_balances(year_of(app))}['K-02']['earned'] == 800_000 + 1_750_000
+    # marking a combine as our own changes no money: the combine's pay is still counted (kombaynchi)
+    assert bux.post('/buxgalteriya/kombaynlar', {'action': 'tariff', 'combine_id': k2, 'tariff_type': 'gektar',
+                                                 'tariff_rate': '500 000', 'ownership': 'own'}).get_json()['ok']
+    with app.app_context():
+        c2 = {x['code']: x for x in combine_balances(year_of(app))}['K-02']
+    assert c2['own'] and c2['earned'] == 800_000 + 1_750_000 and c2['kg'] == 3000
+    page = bux.get('/buxgalteriya/kombaynlar').get_data(as_text=True)
+    assert 'O‘zimizniki' in page and 'salarka (mavsum)' in page
 
 
 def test_expense_by_cashier_waits_for_accountant(app, world):

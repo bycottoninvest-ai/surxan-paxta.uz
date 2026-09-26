@@ -241,3 +241,69 @@ def test_punkt_coordinates_give_estimated_arrival(app, world):
         assert len(t) == 1 and t[0]['eta'] and 5.5 < t[0]['km'] < 7.5 and 15 <= t[0]['minutes'] <= 25    # 5.56 km × 1.3 at 20 km/h
     assert '≈' in punkt.get('/punkt').get_data(as_text=True)
     assert 'transit-data' in admin.get('/?view=full').get_data(as_text=True)
+
+
+def test_cancelled_trip_never_counts_in_pay_even_if_left_half_cancelled(app, world):
+    """Safety net: if a trip is BEKOR but its weighings were left live (old data), the next start takes them out of
+    wages, kg and the dashboard — real trips stay exactly as they were."""
+    tally, _ = setup(app, world)
+    rahbar = world['rahbar']
+    from surxon import queries
+    from surxon.utils import today_str
+    wb_real, lid_real = trip(app, world, tally, ['100'])                       # a real trip: 100 kg × 1 500
+    wb_bad, lid_bad = trip(app, world, tally, ['200'], trailer='TL-02')        # a trip that was cancelled
+    with app.app_context():
+        get_db().execute("UPDATE trailer_loads SET status='BEKOR' WHERE id=?", (lid_bad,))   # left half-cancelled
+    wages = rahbar.get('/rahbar/ish-haqi?period=mavsum').get_data(as_text=True)
+    assert '450 000' in wages.replace(' ', ' ').replace('\xa0', ' ')    # before: 300 kg × 1 500 wrongly counted
+    with app.app_context():
+        from surxon.services import settle_cancelled_field_waybills
+        assert settle_cancelled_field_waybills() == 1 and settle_cancelled_field_waybills() == 0
+        assert queries.day_kpis(2026, today_str())['harvest'] == 100
+        assert scalar('SELECT COALESCE(SUM(amount),0) FROM harvests WHERE voided_at IS NULL') == 150000
+    wages = rahbar.get('/rahbar/ish-haqi?period=mavsum').get_data(as_text=True).replace(' ', ' ').replace('\xa0', ' ')
+    assert '150 000' in wages and '450 000' not in wages and '300 000' not in wages
+
+
+def test_dashboard_today_yesterday_season_and_archive_only(app, world):
+    tally, _ = setup(app, world)
+    admin = world['admin']
+    wb1, lid1 = trip(app, world, tally, ['100'])
+    wb2, lid2 = trip(app, world, tally, ['70'], trailer='TL-02')
+    with app.app_context():
+        from surxon.utils import today_str
+        from datetime import date, timedelta
+        y = (date.fromisoformat(today_str()) - timedelta(days=1)).isoformat()
+        get_db().execute('UPDATE harvests SET work_date=? WHERE load_id=?', (y, lid1))       # yesterday's trip
+    assert admin.post(f'/nakladnoy/{wb2}/bekor', {'reason': 'Xato'}).get_json()['ok']       # today's trip cancelled
+    t = flat(admin.get('/?view=full&davr=bugun').get_data(as_text=True))
+    assert 'Bugungi terim (kg) 0' in t
+    t = flat(admin.get('/?view=full&davr=kecha').get_data(as_text=True))
+    assert 'Kechagi terim (kg) 100' in t
+    t = flat(admin.get('/?view=full&davr=mavsum').get_data(as_text=True))
+    assert 'Mavsum terimi (kg) 100' in t                                                    # the cancelled 70 never counts
+    # lists show only real work; the cancelled one is in the admin's archive
+    wbs = admin.get('/nakladnoylar').get_data(as_text=True)
+    with app.app_context():
+        n2 = scalar('SELECT number FROM waybills WHERE id=?', (wb2,))
+        n1 = scalar('SELECT number FROM waybills WHERE id=?', (wb1,))
+    assert n1 in wbs and n2 not in wbs and 'Arxiv: bekor' in wbs
+    assert n2 in admin.get('/nakladnoylar?status=BEKOR').get_data(as_text=True)
+    loads = admin.get('/telashkalar').get_data(as_text=True)
+    with app.app_context():
+        t2 = scalar('SELECT trip_no FROM trailer_loads WHERE id=?', (lid2,))
+    assert t2 not in loads and t2 in admin.get('/telashkalar?status=BEKOR').get_data(as_text=True)
+    assert t2 not in world['rahbar'].get('/telashkalar?status=BEKOR').get_data(as_text=True)   # archive is admin-only
+
+
+def test_trip_ledger_shows_hand_and_combine_kg_and_pay_without_cancelled(app, world):
+    tally, _ = setup(app, world)
+    wb1, lid1 = trip(app, world, tally, ['100', '50'])            # 150 kg × 1 500 = 225 000, 2 people
+    wb2, lid2 = trip(app, world, tally, ['80'], trailer='TL-02')
+    assert world['admin'].post(f'/nakladnoy/{wb2}/bekor', {'reason': 'Xato'}).get_json()['ok']
+    page = flat(world['bux'].get('/buxgalteriya/paxta?by=reys&period=mavsum').get_data(as_text=True))
+    with app.app_context():
+        t1, t2 = (scalar('SELECT trip_no FROM trailer_loads WHERE id=?', (i,)) for i in (lid1, lid2))
+    assert t1 in page and t2 not in page and '1 ta bekor reys' in page
+    assert 'Jami (1 ta reys) 150 2 225 000' in page
+    assert 'Terilgan (dala) 150 kg' in page

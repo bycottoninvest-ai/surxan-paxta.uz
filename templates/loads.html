@@ -43,7 +43,8 @@
     <div class="card-h"><h3>Reyslar ({{ year }})</h3>
       <div class="tabs" style="margin-left:auto">
         <a href="{{ url_for('ops.loads') }}" class="{{ 'on' if not status }}">Barchasi</a>
-        {% for s, l in [('OCHIQ','Ochiq'),('TOLDI','TOLDI'),('TORTILDI','Tortilgan'),('BEKOR','Bekor')] %}<a href="{{ url_for('ops.loads', status=s) }}" class="{{ 'on' if status == s }}">{{ l }}</a>{% endfor %}
+        {% for s, l in [('OCHIQ','Ochiq'),('TOLDI','TOLDI'),('TORTILDI','Tortilgan')] %}<a href="{{ url_for('ops.loads', status=s) }}" class="{{ 'on' if status == s }}">{{ l }}</a>{% endfor %}
+        {% if current_user['role'] == 'admin' %}<a href="{{ url_for('ops.loads', status='BEKOR') }}" class="{{ 'on' if status == 'BEKOR' }}" title="Bekor qilinganlar hech qayerda hisoblanmaydi">Arxiv: bekor</a>{% endif %}
       </div></div>
     <div class="table-wrap"><table class="t">
       <thead><tr><th>№</th><th>Sana</th><th>Telashka</th><th>Traktor</th><th>Dala</th><th>Brigadir</th><th class="num">Ichki kg</th><th class="num">Netto</th><th>Nakladnoy</th><th>Holat</th></tr></thead>

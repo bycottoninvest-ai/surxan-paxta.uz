@@ -27,6 +27,10 @@ vehicle_works`; ustunlar `equipment.norm_field_lph/norm_road_lpkm/norm_idle_lph/
   bir joyda uzoq turish belgisi, bugungi yo'l, salarka me'yor va berilgan, dalalarda bajarilgan ishlar (qamrov %).
 - Direktor paneli → "Dalalar tarixi": dalaga bosilsa mavsumdagi 1-/2-/3-terim va texnika ishlari (xaritada).
 - Solyarka berish sahifasi (buxgalter/direktor uchun): "Bu solyarka qayerda ishlatildi" — keyingi quyishgacha GPS.
+- Bekor qilinganlar: ishga tushganda bekor reysning hisobdan chiqmay qolgan tortishlari ham chiqariladi (ish haqi,
+  kg, kombayn qayta hisoblanadi); ro'yxatlarda bekorlar faqat Admin "Arxiv: bekor" tugmasida.
+- Dashboard: Bugun / Kecha / Mavsum. Buxgalteriya → Paxta → "Reys bo'yicha (kg va pul)": har reys qo'l terimi kg,
+  odam, terimchilar puli, kombayn kg va puli, jami. Kombaynlar sahifasida egalik (o'zimizniki/tashqi) va salarka.
 
 ## v2.17.0 da nima o'zgardi
 Sxema v10 → v11 (ishga tushganda `*.oldin-v10-*.bak`): trailer_loads.harvest_round/picked_cells/picked_ha/picked_split,

@@ -13,6 +13,8 @@
   <div class="row"><b class="a-name">{{ c.code }}</b><span class="small muted">{{ c.operator_name or 'egasi/operator —' }}</span><span class="spacer"></span>
     {% if c.tariff_type %}<span class="badge b-blue">{{ tariffs[c.tariff_type] }}: {{ c.tariff_rate|num }} so‘m</span>{% else %}<span class="badge b-red">Tarif yo‘q</span>{% endif %}</div>
   <div class="small muted">{{ c.fields or 'dala —' }} · {{ c.tonnes|num(2) }} t{% if c.work_days %} · {{ c.work_days|num }} kun{% endif %}{% if c.hectares %} · {{ c.hectares|num(1) }} ga{% endif %}{% if c.uncalc_kg %} · {{ c.uncalc_kg|num }} kg tarifsiz{% endif %}</div>
+  <div class="small"><span class="badge {{ 'b-green' if c.own else 'b-orange' }}">{{ 'O‘zimizniki' if c.own else 'Tashqi (ijaraga / xizmat)' }}</span>
+    · terildi {{ c.kg|num }} kg · salarka (mavsum) {{ c.fuel_l|num }} L</div>
   <div class="a-nums"><div><span>Hisoblangan</span><b class="num">{{ c.earned|num }}</b></div><div><span>To‘langan</span><b class="num">{{ c.paid|num }}</b></div>
     <div><span>Kutilmoqda</span><b class="num">{{ c.pending|num }}</b></div><div class="{{ 'neg' if c.balance < 0 }}"><span>Qoldiq</span><b class="num">{{ c.balance|num }}</b></div></div>
   {% if c.payable > 0 and can('payouts.prepare') %}
@@ -20,11 +22,12 @@
     <input type="hidden" name="kind" value="combine"><input type="hidden" name="target_id" value="{{ c.id }}"><input type="hidden" name="next" value="{{ request.path }}">
     <button class="btn btn-green btn-block btn-lg">{{ c.payable|num }} SO‘M TO‘LASH</button></form>{% endif %}
   {% if can('combine.finance') %}
-  <details class="mt-s"><summary class="small b">Tarif</summary>
+  <details class="mt-s"><summary class="small b">Tarif va egalik</summary>
     <form method="post" class="form mt-s">{{ csrf() }}<input type="hidden" name="action" value="tariff"><input type="hidden" name="combine_id" value="{{ c.id }}">
       <div class="f h"><label>Hisoblash turi</label><select name="tariff_type"><option value="">— (hisoblanmaydi)</option>{% for k, v in tariffs.items() %}<option value="{{ k }}" {{ 'selected' if c.tariff_type == k }}>{{ v }}</option>{% endfor %}</select></div>
       <div class="f h"><label>Tarif (so‘m / tonna, gektar yoki kun)</label><input name="tariff_rate" inputmode="numeric" value="{{ c.tariff_rate or '' }}" data-money></div>
       <div class="f"><label>Egasi / operator</label><input name="operator_name" value="{{ c.operator_name or '' }}"></div>
+      <div class="f"><label>Kimniki</label><select name="ownership"><option value="own" {{ 'selected' if c.own }}>O‘zimizniki</option><option value="external" {{ 'selected' if not c.own }}>Tashqi (ijaraga / xizmat)</option></select></div>
       <div class="f"><button class="btn btn-primary">Saqlash</button></div></form></details>
   {% if c.tariff_type in ('gektar', 'kunlik') %}
   <details class="mt-s"><summary class="small b">Ish hajmi yozish ({{ 'gektar' if c.tariff_type == 'gektar' else 'qo‘shimcha kun' }})</summary>

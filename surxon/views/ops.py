@@ -105,10 +105,13 @@ def loads():
     year = season_arg()
     status = request.args.get('status')
     statuses = (status,) if status in ('OCHIQ', 'TOLDI', 'TORTILDI', 'BEKOR') else None
-    # cancelled trips are the admin's business only; everyone else sees real work
+    # only real work is listed; cancelled trips live in the admin's archive (status=BEKOR)
+    archive = g.user['role'] == 'admin' and status == 'BEKOR'
+    if status == 'BEKOR' and not archive:
+        statuses = None
     rows, has_more = paginate(queries.loads(year, statuses=statuses, brig=scope(), day=request.args.get('date') or None,
                                             limit=PER_PAGE + 1, offset=(page_arg() - 1) * PER_PAGE,
-                                            hide_void=g.user['role'] != 'admin'), page_arg())
+                                            hide_void=not archive), page_arg())
     choices = _choices()
     choices.pop('trailers')
     return render_template('loads.html', trailers=queries.active_trailers(), year=year, status=status, rows=rows,
@@ -285,7 +288,8 @@ def waybills():
     since = (date.fromisoformat(today_str()) - timedelta(days=6)).isoformat() if period == 'week' else None
     rows = queries.waybills(year, day=day, since=since, search=(request.args.get('q') or '').strip(),
                             status=request.args.get('status', ''), brig=scope(),
-                            limit=PER_PAGE + 1, offset=(page_arg() - 1) * PER_PAGE, hide_void=g.user['role'] != 'admin')
+                            limit=PER_PAGE + 1, offset=(page_arg() - 1) * PER_PAGE,
+                            hide_void=not (g.user['role'] == 'admin' and request.args.get('status') == 'BEKOR'))
     rows, has_more = paginate(rows, page_arg())
     totals = {'net': sum(r['net_kg'] for r in rows if r['status'] != 'BEKOR'),
               'accepted': sum(r['accepted_kg'] or 0 for r in rows if r['status'] != 'BEKOR')}

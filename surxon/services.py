@@ -1680,4 +1680,17 @@ def settle_cancelled_field_waybills():
                                 AND NOT EXISTS (SELECT 1 FROM nayman_receipts nr WHERE nr.waybill_id=wb.id)''').fetchall()
         for r in rows:
             _void_field_trip(db, None, r['id'], f'nakladnoy bekor qilingan: {r["void_reason"] or ""}'.strip())
-        return len(rows)
+        # safety net: a cancelled trip must never keep live weighings (they would count in pay, kg and combine totals)
+        orphans = db.execute('''SELECT DISTINCT tl.id, tl.season_year FROM trailer_loads tl JOIN harvests h ON h.load_id=tl.id
+                                WHERE tl.status='BEKOR' AND h.voided_at IS NULL''').fetchall()
+        for o in orphans:
+            workers = [x[0] for x in db.execute('''SELECT DISTINCT worker_id FROM harvests WHERE load_id=? AND voided_at IS NULL
+                                                   AND worker_id IS NOT NULL''', (o['id'],)).fetchall()]
+            n = db.execute('''UPDATE harvests SET voided_at=?, void_reason='reys bekor qilingan' WHERE load_id=? AND voided_at IS NULL''',
+                           (now_str(), o['id'])).rowcount
+            audit(db, None, 'VOID', 'trailer_load', o['id'], new={'harvests_voided': n}, reason='bekor reysning tortishlari hisobdan chiqarildi')
+            if workers:
+                from .accounting import mirror_worker
+                for wid in workers:
+                    mirror_worker(db, wid, o['season_year'])
+        return len(rows) + len(orphans)

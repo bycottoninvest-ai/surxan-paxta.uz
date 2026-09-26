@@ -12,8 +12,15 @@
   <div class="today">{{ icon('sun') }}<small>{{ 'Bugungi sana' if day == today else 'Tanlangan sana' }}</small><b>{{ day|d }}</b><small>{{ day|weekday }}</small></div>
 </section>
 
+{% set dv = g.davr %}
+<div class="kpi-tabs tabs"><a href="{{ url_for('main.dashboard', davr='bugun', view='full') }}" class="{{ 'on' if dv == 'bugun' }}">Bugun</a>
+  <a href="{{ url_for('main.dashboard', davr='kecha', view='full') }}" class="{{ 'on' if dv == 'kecha' }}">Kecha</a>
+  <a href="{{ url_for('main.dashboard', davr='mavsum', view='full') }}" class="{{ 'on' if dv == 'mavsum' }}">Mavsum (barchasi)</a>
+  {% if dv == 'sana' %}<a class="on">{{ day|d }}</a>{% endif %}
+  <span class="small muted">Bekor qilinganlar hech qayerda hisoblanmaydi</span></div>
+{% set lbl = {'bugun': 'Bugungi terim', 'kecha': 'Kechagi terim', 'mavsum': 'Mavsum terimi'}.get(dv, day|d ~ ' terimi') %}
 <div class="kpis">
-  {{ kpi('Bugungi terim (kg)', k.harvest|num, '', 'green', 'cotton', k.harvest_trend) }}
+  {{ kpi(lbl ~ ' (kg)', k.harvest|num, '', 'green', 'cotton', k.harvest_trend) }}
   {{ kpi('Umumiy tarozi (netto)', k.net|num, 'kg', 'blue', 'truck', k.net_trend) }}
   {{ kpi('Naymanga ketgan', k.sent|num, 'kg', 'orange', 'trailer', k.sent_trend) }}
   {{ kpi('Qabul qilingan', k.accepted|num, 'kg', 'purple', 'factory', k.accepted_trend) }}

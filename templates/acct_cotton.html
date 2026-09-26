@@ -11,11 +11,25 @@
   <div class="m-tile a-tile {{ 't-red' if cot.diff_kg < 0 else '' }}"><span>Farq</span><b class="num">{{ '%+.0f'|format(cot.diff_kg) }} <small>kg</small></b><em>{{ ('%+.2f'|format(cot.diff_pct) ~ '%') if cot.diff_pct is not none else '—' }}</em></div>
 </div>
 <div class="small muted mb">Kg lar dala hisobchisi va punkt operatori kiritganidan olinadi — bu yerda qayta yozilmaydi. Farq faqat qabul qilingan telashkalar bo‘yicha.</div>
-{% set qs = {'from': date_from, 'to': date_to} if period == 'custom' else {} %}<div class="a-chips mb">{% for key, (label, _) in groups.items() %}<a class="chip-btn{{ ' on' if by == key }}" href="{{ url_for('acct.cotton', by=key, period=period, **qs) }}">{{ label }} bo‘yicha</a>{% endfor %}</div>
+{% set qs = {'from': date_from, 'to': date_to} if period == 'custom' else {} %}<div class="a-chips mb"><a class="chip-btn{{ ' on' if by == 'reys' }}" href="{{ url_for('acct.cotton', by='reys', period=period, **qs) }}">Reys bo‘yicha (kg va pul)</a>{% for key, (label, _) in groups.items() %}<a class="chip-btn{{ ' on' if by == key }}" href="{{ url_for('acct.cotton', by=key, period=period, **qs) }}">{{ label }} bo‘yicha</a>{% endfor %}</div>
+{% if by == 'reys' %}{% set T = trips.total %}
+<section class="card"><div class="table-wrap"><table class="t">
+  <thead><tr><th>Reys</th><th>Sana</th><th>Dala · telashka</th><th class="num">Qo‘l terimi, kg</th><th class="num">Odam</th><th class="num">Terimchilar puli</th><th class="num">Kombayn, kg</th><th class="num">Kombayn puli</th><th class="num">Jami kg</th><th>Holat</th></tr></thead>
+  <tbody>{% for r in trips.rows %}<tr><td class="b">{{ r.trip_no }}</td><td>{{ r.day|d }}</td><td>{{ r.field or '—' }} · {{ r.trailer or '—' }}</td>
+    <td class="num">{{ r.hand_kg|num }}</td><td class="num">{{ r.people }}</td><td class="num">{{ r.hand_pay|num }}</td>
+    <td class="num">{{ r.combine_kg|num }}</td><td class="num">{{ r.combine_pay|num }}</td><td class="num b">{{ (r.hand_kg + r.combine_kg)|num }}</td>
+    <td>{% if r.accepted_kg is not none %}<span class="badge b-green">Punkt qabul · {{ r.accepted_kg|num }} kg</span>{% elif r.wb_status == 'YARATILDI' %}<span class="badge b-blue">Yo‘lda · {{ r.waybill }}</span>{% elif r.status in ('OCHIQ', 'TOLDI') %}<span class="badge b-orange">Dalada</span>{% else %}<span class="badge b-gray">{{ r.status }}</span>{% endif %}
+      {% if r.unpriced_kg %}<br><small class="t-down">{{ r.unpriced_kg|num }} kg narxsiz</small>{% endif %}</td></tr>
+  {% else %}<tr><td colspan="10">{{ empty('Bu davrda terim yo‘q', 'cotton') }}</td></tr>{% endfor %}</tbody>
+  <tfoot><tr class="b"><td colspan="3">Jami ({{ trips.rows|length }} ta reys)</td><td class="num">{{ T.hand_kg|num }}</td><td class="num">{{ T.people }}</td><td class="num">{{ T.hand_pay|num }}</td>
+    <td class="num">{{ T.combine_kg|num }}</td><td class="num">{{ T.combine_pay|num }}</td><td class="num">{{ (T.hand_kg + T.combine_kg)|num }}</td><td></td></tr></tfoot></table></div></section>
+<div class="small muted mb">Bu — terim hisobchisi yozgani (har bir tortish). Bekor qilingan reyslar hisobga kirmaydi{% if trips.cancelled %} ({{ trips.cancelled }} ta bekor reys — faqat arxivda){% endif %}. “Jami kg” yuqoridagi “Terilgan (dala)” bilan bir xil bo‘lishi kerak.</div>
+{% else %}
 <section class="card"><div class="table-wrap"><table class="t">
   <thead><tr><th>{{ groups[by][0] }}</th><th class="num">Telashka</th><th class="num">Daladan</th><th class="num">Punktda</th><th class="num">Farq</th><th class="num">%</th><th class="num hide-m">Yo‘lda</th></tr></thead>
   <tbody>{% for r in rows %}<tr><td class="b">{{ (r.grp|d) if by == 'kun' else (r.grp or '—') }}</td><td class="num">{{ r.trips }}</td><td class="num">{{ r.field_kg|num }}</td><td class="num">{{ r.punkt_kg|num if r.punkt_kg is not none else '—' }}</td>
     <td class="num b {{ 't-down' if r.diff_kg and r.diff_kg < 0 }}">{{ '%+.0f'|format(r.diff_kg) if r.diff_kg is not none else '—' }}</td><td class="num">{{ '%+.2f'|format(r.pct) if r.pct is not none else '—' }}</td><td class="num hide-m">{{ r.open_n }}</td></tr>
   {% else %}<tr><td colspan="7">{{ empty('Bu davrda telashka yo‘q', 'cotton') }}</td></tr>{% endfor %}</tbody></table></div></section>
+{% endif %}
 <div class="a-links"><a href="{{ url_for('reports.report', key='punktlar') }}">{{ icon('bars','sm') }} Punktlar hisoboti</a><a href="{{ url_for('reports.report', key='farq-sabablari') }}">{{ icon('alert','sm') }} Farq sabablari</a><a href="{{ url_for('punkt.home') }}">{{ icon('building','sm') }} Punkt qabuli</a></div>
 {% endblock %}

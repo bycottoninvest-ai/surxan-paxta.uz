@@ -309,6 +309,7 @@ def combine_balances(year, combine_id=None):
     for r in rows:
         d = dict(r)
         d['earned'] = d['tonnage_amount'] + d['days_amount'] + d['ha_amount']
+        d['own'] = d['ownership'] != 'external'        # shown for information; the combine's pay is counted either way
         d['balance'] = d['earned'] - d['paid']
         d['payable'] = max(0, d['balance'] - d['pending'])
         d['tonnes'] = round(d['kg'] / 1000, 2)
@@ -316,7 +317,7 @@ def combine_balances(year, combine_id=None):
     return out
 
 
-def set_combine_tariff(actor, combine_id, *, tariff_type, tariff_rate, operator_name=None):
+def set_combine_tariff(actor, combine_id, *, tariff_type, tariff_rate, operator_name=None, ownership=None):
     """New tariff applies to work written from now on; already booked work keeps its own rate."""
     _need(actor, 'combine.finance')
     if tariff_type and tariff_type not in TARIFF_TYPES:
@@ -327,12 +328,15 @@ def set_combine_tariff(actor, combine_id, *, tariff_type, tariff_rate, operator_
         old = db.execute("SELECT * FROM equipment WHERE id=? AND kind='kombayn'", (combine_id,)).fetchone()
         if not old:
             raise UserError('Kombayn topilmadi.')
-        db.execute('UPDATE equipment SET tariff_type=?, tariff_rate=?, operator_name=COALESCE(?, operator_name) WHERE id=?',
+        if ownership not in (None, 'own', 'external'):
+            raise UserError('Egalik noto‘g‘ri.')
+        db.execute('''UPDATE equipment SET tariff_type=?, tariff_rate=?, operator_name=COALESCE(?, operator_name),
+                      ownership=COALESCE(?, ownership) WHERE id=?''',
                    (tariff_type or None, tariff_rate if tariff_type else None,
-                    clean_text(operator_name, 80) if operator_name is not None else None, combine_id))
+                    clean_text(operator_name, 80) if operator_name is not None else None, ownership, combine_id))
         audit(db, actor, 'TARIFF', 'equipment', combine_id,
-              old={'tariff_type': old['tariff_type'], 'tariff_rate': old['tariff_rate']},
-              new={'tariff_type': tariff_type, 'tariff_rate': tariff_rate})
+              old={'tariff_type': old['tariff_type'], 'tariff_rate': old['tariff_rate'], 'ownership': old['ownership']},
+              new={'tariff_type': tariff_type, 'tariff_rate': tariff_rate, 'ownership': ownership or old['ownership']})
 
 
 def add_combine_work(actor, combine_id, *, work_date, unit, qty, field_id=None, note=''):
@@ -651,11 +655,41 @@ def cotton_totals(year, date_from=None, date_to=None):
         hw.append('h.work_date>=?'); hp.append(date_from); rw.append('substr(nr.created_at,1,10)>=?'); rp.append(date_from)
     if date_to:
         hw.append('h.work_date<=?'); hp.append(date_to); rw.append('substr(nr.created_at,1,10)<=?'); rp.append(date_to)
-    field = scalar(f'SELECT COALESCE(SUM(h.kg),0) FROM harvests h WHERE {" AND ".join(hw)}', hp)
+    field = scalar(f'''SELECT COALESCE(SUM(h.kg),0) FROM harvests h JOIN trailer_loads tl ON tl.id=h.load_id
+                       WHERE tl.status<>'BEKOR' AND {" AND ".join(hw)}''', hp)
     r = q(f'''SELECT COALESCE(SUM(wb.net_kg),0) sent, COALESCE(SUM(nr.accepted_kg),0) got, COUNT(*) n
               FROM waybills wb JOIN nayman_receipts nr ON nr.waybill_id=wb.id WHERE {" AND ".join(rw)}''', rp, one=True)
     return {'field_kg': field, 'sent_kg': r['sent'], 'punkt_kg': r['got'], 'diff_kg': r['got'] - r['sent'],
             'diff_pct': round((r['got'] - r['sent']) / r['sent'] * 100, 2) if r['sent'] else None, 'received': r['n']}
+
+
+def trip_ledger(year, date_from, date_to):
+    """Every trip with picking in the period, as the field clerk wrote it: hand kg / people / pay and combine kg / pay.
+    Only live (not cancelled) weighings count; the number of cancelled trips is returned apart, never added."""
+    rows = q('''SELECT tl.id, tl.trip_no, tl.status, MIN(h.work_date) day, f.code field, t.code trailer, b.name brigadier,
+                       wb.number waybill, wb.status wb_status, nr.accepted_kg,
+                       COALESCE(SUM(CASE WHEN h.method='hand' THEN h.kg END),0) hand_kg,
+                       COUNT(DISTINCT CASE WHEN h.method='hand' THEN h.worker_id END) people,
+                       COALESCE(SUM(CASE WHEN h.method='hand' THEN h.amount END),0) hand_pay,
+                       COALESCE(SUM(CASE WHEN h.method='combine' THEN h.kg END),0) combine_kg,
+                       COALESCE(SUM(CASE WHEN h.method='combine' THEN h.amount END),0) combine_pay,
+                       SUM(CASE WHEN h.amount IS NULL THEN h.kg ELSE 0 END) unpriced_kg
+                FROM harvests h JOIN trailer_loads tl ON tl.id=h.load_id
+                LEFT JOIN fields f ON f.id=tl.field_id LEFT JOIN equipment t ON t.id=tl.trailer_id
+                LEFT JOIN brigadiers b ON b.id=tl.brigadier_id
+                LEFT JOIN waybills wb ON wb.load_id=tl.id AND wb.status<>'BEKOR'
+                LEFT JOIN nayman_receipts nr ON nr.waybill_id=wb.id
+                WHERE h.season_year=? AND h.voided_at IS NULL AND tl.status<>'BEKOR' AND h.work_date BETWEEN ? AND ?
+                GROUP BY tl.id ORDER BY day, tl.id''', (year, date_from, date_to))
+    out = [dict(r) for r in rows]
+    keys = ('hand_kg', 'people', 'hand_pay', 'combine_kg', 'combine_pay', 'unpriced_kg')
+    total = {k: sum(r[k] or 0 for r in out) for k in keys}
+    total['people'] = scalar('''SELECT COUNT(DISTINCT h.worker_id) FROM harvests h JOIN trailer_loads tl ON tl.id=h.load_id
+                                WHERE h.season_year=? AND h.voided_at IS NULL AND tl.status<>'BEKOR' AND h.method='hand'
+                                AND h.work_date BETWEEN ? AND ?''', (year, date_from, date_to))
+    cancelled = scalar('''SELECT COUNT(*) FROM trailer_loads WHERE season_year=? AND status='BEKOR' AND load_date BETWEEN ? AND ?''',
+                       (year, date_from, date_to))
+    return {'rows': out, 'total': total, 'cancelled': cancelled}
 
 
 def todo(year, today=None):

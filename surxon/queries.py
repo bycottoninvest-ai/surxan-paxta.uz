@@ -11,37 +11,44 @@ from .db import q, scalar
 LIVE_HARVEST = 'h.voided_at IS NULL'
 
 
-def day_kpis(year, day, brig=None):
+def day_kpis(year, day, brig=None, until=None):
+    """KPIs of one day (with the trend against the day before) or, with `until`, of the period day..until (no trend)."""
     bfilter = ' AND h.brigadier_id=?' if brig else ''
     bp = (brig,) if brig else ()
     lf = ' AND tl.brigadier_id=?' if brig else ''
 
-    def harvest(d):
+    def harvest(d, e=None):
         return q(f'''SELECT COALESCE(SUM(CASE WHEN method='hand' THEN kg END),0) hand,
                             COALESCE(SUM(CASE WHEN method='combine' THEN kg END),0) comb,
                             COALESCE(SUM(kg),0) total, COUNT(DISTINCT worker_id) workers
-                     FROM harvests h WHERE season_year=? AND work_date=? AND {LIVE_HARVEST}{bfilter}''',
-                 (year, d) + bp, one=True)
+                     FROM harvests h WHERE season_year=? AND work_date BETWEEN ? AND ? AND {LIVE_HARVEST}{bfilter}''',
+                 (year, d, e or d) + bp, one=True)
 
-    def net(d):
+    def net(d, e=None):
         return scalar(f'''SELECT COALESCE(SUM(w.net_kg),0) FROM weighings w JOIN trailer_loads tl ON tl.id=w.load_id
-                          WHERE tl.season_year=? AND w.status='YAKUNLANDI' AND tl.status<>'BEKOR' AND substr(w.tare_at,1,10)=?{lf}''',
-                      (year, d) + bp)
+                          WHERE tl.season_year=? AND w.status='YAKUNLANDI' AND tl.status<>'BEKOR'
+                          AND substr(w.tare_at,1,10) BETWEEN ? AND ?{lf}''', (year, d, e or d) + bp)
 
-    def sent(d):
+    def sent(d, e=None):
         return scalar(f'''SELECT COALESCE(SUM(wb.net_kg),0) FROM waybills wb JOIN trailer_loads tl ON tl.id=wb.load_id
-                          WHERE wb.season_year=? AND wb.status<>'BEKOR' AND wb.document_date=?{lf}''', (year, d) + bp)
+                          WHERE wb.season_year=? AND wb.status<>'BEKOR' AND wb.document_date BETWEEN ? AND ?{lf}''',
+                      (year, d, e or d) + bp)
 
-    def accepted(d):
+    def accepted(d, e=None):
         return q(f'''SELECT COALESCE(SUM(nr.accepted_kg),0) acc, COALESCE(SUM(nr.diff_kg),0) diff,
                             COALESCE(SUM(wb.net_kg),0) shipped
                      FROM nayman_receipts nr JOIN waybills wb ON wb.id=nr.waybill_id
                      JOIN trailer_loads tl ON tl.id=wb.load_id
-                     WHERE wb.season_year=? AND nr.received_date=? AND wb.status<>'BEKOR'{lf}''', (year, d) + bp, one=True)
+                     WHERE wb.season_year=? AND nr.received_date BETWEEN ? AND ? AND wb.status<>'BEKOR'{lf}''',
+                 (year, d, e or d) + bp, one=True)
 
     prev = (date.fromisoformat(day) - timedelta(days=1)).isoformat()
-    h, hp = harvest(day), harvest(prev)
-    a, ap = accepted(day), accepted(prev)
+    if until:                       # a period: no “vs yesterday” trend
+        h, a = harvest(day, until), accepted(day, until)
+        hp, ap = {'total': 0}, {'acc': 0}
+    else:
+        h, hp = harvest(day), harvest(prev)
+        a, ap = accepted(day), accepted(prev)
     transit = q(f'''SELECT COUNT(*) n, COALESCE(SUM(wb.net_kg),0) kg FROM waybills wb JOIN trailer_loads tl ON tl.id=wb.load_id
                     WHERE wb.season_year=? AND wb.status='YARATILDI'{lf}''', (year,) + bp, one=True)
     trailers_total = scalar("SELECT COUNT(*) FROM equipment WHERE kind='telashka' AND active=1")
@@ -53,8 +60,8 @@ def day_kpis(year, day, brig=None):
             return None
         return round((cur - old) / old * 100, 1)
 
-    n, np_ = net(day), net(prev)
-    s, sp = sent(day), sent(prev)
+    n, np_ = (net(day, until), 0) if until else (net(day), net(prev))
+    s, sp = (sent(day, until), 0) if until else (sent(day), sent(prev))
     return {
         'harvest': h['total'], 'hand': h['hand'], 'combine': h['comb'], 'workers': h['workers'],
         'harvest_trend': trend(h['total'], hp['total']),

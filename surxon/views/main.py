@@ -1,4 +1,5 @@
 import json
+from datetime import date, timedelta
 
 from flask import (Blueprint, abort, current_app, g, jsonify, make_response, redirect, render_template, request,
                    send_from_directory, url_for)
@@ -44,7 +45,16 @@ def dashboard():
     except UserError:
         day = today_str()
     brig = scope()
-    kpi = queries.day_kpis(year, day, brig)
+    davr = request.args.get('davr')
+    if davr == 'kecha':
+        day = (date.fromisoformat(today_str()) - timedelta(days=1)).isoformat()
+    if davr == 'mavsum':
+        kpi = queries.day_kpis(year, f'{year}-01-01', brig, until=today_str() if str(year) == today_str()[:4] else f'{year}-12-31')
+    else:
+        kpi = queries.day_kpis(year, day, brig)
+        davr = 'kecha' if day == (date.fromisoformat(today_str()) - timedelta(days=1)).isoformat() else (
+            'bugun' if day == today_str() else 'sana')
+    g.davr = davr
     view = request.args.get('view') or request.cookies.get('view')
     if view not in ('full', 'mobile'):
         view = 'mobile' if is_phone() else 'full'
