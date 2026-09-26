@@ -33,7 +33,7 @@
       <span class="badge {{ 'b-green' if tv_on else 'b-gray' }}" style="margin-left:auto">{{ 'Yoqilgan' if tv_on else 'O‘chirilgan' }}</span>
       <form method="post">{{ csrf() }}<input type="hidden" name="action" value="{{ 'tv_off' if tv_on else 'tv_on' }}"><button class="btn btn-sm {{ 'btn-light' if tv_on else 'btn-green' }}">{{ 'O‘chirish' if tv_on else 'Yoqish' }}</button></form></div>
     <div class="card-b">
-      <p class="small">TV faqat ishlab chiqarish ko‘rsatkichlarini ko‘radi: terim, tarozi netto, jo‘natilgan/qabul, telashkalar, brigadalar. Pul va ishchi ismlari ko‘rsatilmaydi. Tizimga kirgan foydalanuvchi <a class="link" href="{{ url_for('integrations.tv') }}" target="_blank">/tv</a> ni kalitsiz ochadi.</p>
+      <p class="small">TV faqat ishlab chiqarish ko‘rsatkichlarini ko‘radi: terim, tarozi netto, jo‘natilgan/qabul, telashkalar, brigadalar. Pul hech qachon ko‘rsatilmaydi; ishchilardan faqat bugungi eng yaxshi 5 tasi (ism + familiya bosh harfi) — Sozlamalarda tv_show_workers=0 bilan o‘chadi. Tizimga kirgan foydalanuvchi <a class="link" href="{{ url_for('integrations.tv') }}" target="_blank">/tv</a> ni kalitsiz ochadi.</p>
       <form method="post" class="row">{{ csrf() }}<input type="hidden" name="action" value="create"><input type="hidden" name="kind" value="tv">
         <input class="input" name="name" value="Ofis televizori" style="max-width:240px"><button class="btn btn-primary">{{ icon('plus','sm') }} TV kaliti yaratish</button></form>
     </div>
