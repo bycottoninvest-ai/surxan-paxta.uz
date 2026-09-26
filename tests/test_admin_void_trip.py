@@ -98,3 +98,25 @@ def test_cancelled_trip_leaves_no_weight_on_dashboard(app, world):
     with app.app_context():
         k = queries.day_kpis(2026, today_str())
         assert k['net'] == 0 and k['harvest'] == 0 and k['sent'] == 0
+
+
+def test_cancelling_field_waybill_cancels_the_trip_and_old_ones_are_settled(app, world):
+    admin = world['admin']
+    tally, _ = setup(app, world)
+    from surxon import queries
+    from surxon.utils import today_str
+    wb, lid = trip(app, world, tally, ['100', '120'])
+    assert admin.post(f'/nakladnoy/{wb}/bekor', {'reason': 'Xato yopildi'}).get_json()['ok']
+    with app.app_context():
+        assert scalar('SELECT status FROM trailer_loads WHERE id=?', (lid,)) == 'BEKOR'
+        k = queries.day_kpis(2026, today_str())
+        assert k['harvest'] == 0 and k['net'] == 0
+    # an older trip cancelled the old way (only its waybill) is settled on the next start
+    wb2, lid2 = trip(app, world, tally, ['90'], trailer='TL-02')
+    with app.app_context():
+        get_db().execute("UPDATE waybills SET status='BEKOR', void_reason='eski usul' WHERE id=?", (wb2,))
+        assert queries.day_kpis(2026, today_str())['harvest'] == 90
+        from surxon.services import settle_cancelled_field_waybills
+        assert settle_cancelled_field_waybills() == 1 and settle_cancelled_field_waybills() == 0
+        assert scalar('SELECT status FROM trailer_loads WHERE id=?', (lid2,)) == 'BEKOR'
+        assert queries.day_kpis(2026, today_str())['harvest'] == 0

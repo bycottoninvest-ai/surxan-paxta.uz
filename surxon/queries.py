@@ -213,8 +213,10 @@ WAYBILL_SELECT = '''SELECT wb.*, tl.trip_no, tl.station_id, st.name station_name
                     LEFT JOIN users u ON u.id=wb.created_by'''
 
 
-def waybills(year, *, day=None, since=None, search='', status='', brig=None, limit=500, offset=0):
+def waybills(year, *, day=None, since=None, search='', status='', brig=None, limit=500, offset=0, hide_void=False):
     where, params = ['wb.season_year=?'], [year]
+    if hide_void:
+        where.append("wb.status<>'BEKOR'")
     if day:
         where.append('wb.document_date=?'); params.append(day)
     if since:
@@ -323,8 +325,10 @@ LOAD_SELECT = '''SELECT tl.*, t.code trailer_code, tr.code tractor_code, f.code 
                  LEFT JOIN users uf ON uf.id=tl.full_by'''
 
 
-def loads(year, *, statuses=None, brig=None, day=None, limit=300, offset=0):
+def loads(year, *, statuses=None, brig=None, day=None, limit=300, offset=0, hide_void=False):
     where, params = ['tl.season_year=?'], [year]
+    if hide_void:
+        where.append("tl.status<>'BEKOR'")
     if statuses:
         where.append('tl.status IN (%s)' % ','.join('?' * len(statuses))); params += list(statuses)
     if brig:

@@ -632,6 +632,10 @@ def void_waybill(actor, waybill_id, reason):
                    (now_str(), actor.user_id, reason, now_str(), waybill_id))
         audit(db, actor, 'VOID', 'waybill', waybill_id, old={'status': wb['status']}, new={'status': 'BEKOR'}, reason=reason)
         _sheet_waybill(db, waybill_id, 'bekor qilindi')
+        # a field-closed trip IS its waybill: cancelling the waybill cancels the trip and its weighings too
+        w = db.execute('SELECT basis FROM weighings WHERE load_id=?', (wb['load_id'],)).fetchone()
+        if w and w['basis'] == 'dala':
+            _void_field_trip(db, actor, wb['load_id'], reason)
     after_waybill_change(actor, waybill_id, f'bekor: {reason}')
 
 
@@ -1619,3 +1623,43 @@ def admin_reopen_trip(actor, load_id, reason):
         db.execute("UPDATE trailer_loads SET status='OCHIQ', full_at=NULL, full_by=NULL, weighed_at=NULL WHERE id=?", (load_id,))
         audit(db, actor, 'REOPEN', 'trailer_load', load_id, old={'status': load['status']}, new={'status': 'OCHIQ'}, reason=reason)
         return {'trip_no': load['trip_no'], 'waybill': wb['number'] if wb else None}
+
+
+def _void_field_trip(db, actor, load_id, reason):
+    """Cancel a field-closed trip in place: weighings of the trip, the field-sum record and the trip itself.
+    Nothing is erased except the derived field-sum weighing, which is kept in full in the audit."""
+    load = load_row(db, load_id)
+    if load['status'] == 'BEKOR':
+        return
+    now = now_str()
+    uid = actor.user_id if actor else None
+    workers = [r[0] for r in db.execute('SELECT DISTINCT worker_id FROM harvests WHERE load_id=? AND voided_at IS NULL '
+                                        'AND worker_id IS NOT NULL', (load_id,)).fetchall()]
+    n = db.execute('UPDATE harvests SET voided_at=?, voided_by=?, void_reason=? WHERE load_id=? AND voided_at IS NULL',
+                   (now, uid, f'reys bekor: {reason}', load_id)).rowcount
+    w = db.execute('SELECT * FROM weighings WHERE load_id=?', (load_id,)).fetchone()
+    if w:
+        db.execute('DELETE FROM weighings WHERE id=?', (w['id'],))
+        audit(db, actor, 'VOID', 'weighing', w['id'], old=row_dict(w), reason=f'reys bekor: {reason}')
+    db.execute("UPDATE trailer_loads SET status='BEKOR', voided_at=?, voided_by=?, void_reason=? WHERE id=?",
+               (now, uid, reason, load_id))
+    audit(db, actor, 'VOID', 'trailer_load', load_id, old={'status': load['status']},
+          new={'status': 'BEKOR', 'harvests_voided': n}, reason=reason)
+    if workers:
+        from .accounting import mirror_worker
+        for wid in workers:
+            mirror_worker(db, wid, load['season_year'])
+
+
+def settle_cancelled_field_waybills():
+    """Once per start: trips closed in the field whose waybill was cancelled earlier (before cancelling a waybill also
+    cancelled the trip) are cancelled now, so their kg stop counting anywhere. Trips received at the punkt are never touched."""
+    with tx() as db:
+        rows = db.execute('''SELECT tl.id, wb.void_reason FROM trailer_loads tl JOIN weighings w ON w.load_id=tl.id AND w.basis='dala'
+                              JOIN waybills wb ON wb.load_id=tl.id
+                              WHERE tl.status='TORTILDI' AND wb.status='BEKOR'
+                                AND (wb.void_reason IS NULL OR wb.void_reason NOT LIKE 'Qayta ochildi%')
+                                AND NOT EXISTS (SELECT 1 FROM nayman_receipts nr WHERE nr.waybill_id=wb.id)''').fetchall()
+        for r in rows:
+            _void_field_trip(db, None, r['id'], f'nakladnoy bekor qilingan: {r["void_reason"] or ""}'.strip())
+        return len(rows)

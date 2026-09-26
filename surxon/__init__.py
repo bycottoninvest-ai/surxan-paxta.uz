@@ -57,6 +57,14 @@ def create_app(**overrides):
         app.register_blueprint(bp)
     from .telegram_bot import bp as tg_bp
     app.register_blueprint(tg_bp)
+    with app.app_context():
+        try:
+            from .services import settle_cancelled_field_waybills
+            n = settle_cancelled_field_waybills()
+            if n:
+                app.logger.warning('Nakladnoyi bekor qilingan %s ta dala reysi hisobdan chiqarildi.', n)
+        except Exception as exc:      # never block the start because of this clean-up
+            app.logger.warning('Bekor nakladnoylarni tekshirishda xato: %s', exc)
 
     app.before_request(load_user)
     register_template_helpers(app)
