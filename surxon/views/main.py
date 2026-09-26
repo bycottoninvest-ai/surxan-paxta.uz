@@ -71,7 +71,8 @@ def dashboard():
 
 def is_phone():
     ua = request.user_agent.string or ''
-    return any(k in ua for k in ('Mobi', 'Android', 'iPhone', 'iPod'))
+    # phones only: Android phones say “Mobile”, Android tablets and iPads do not → a tablet gets the full dashboard
+    return any(k in ua for k in ('Mobi', 'iPhone', 'iPod'))
 
 
 def mobile_home(year, day, brig, kpi):

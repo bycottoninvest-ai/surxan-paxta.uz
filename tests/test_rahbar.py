@@ -143,3 +143,12 @@ def test_staff_map_from_telegram_live_location_and_app(app, world, monkeypatch):
     assert len(world['rahbar'].get('/rahbar/xodimlar.json?iz=' + key).get_json()['track']) == 2
     assert world['juma'].get('/rahbar/xodimlar').status_code == 302            # only admin / director / finance
     assert 'Xodimlar xaritada' in world['rahbar'].get('/rahbar').get_data(as_text=True)
+
+
+def test_tablet_gets_full_dashboard_phone_gets_director_panel(app, world):
+    tab = 'Mozilla/5.0 (Linux; Android 13; SM-X200) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36'
+    ipad = 'Mozilla/5.0 (iPad; CPU OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/604.1'
+    for ua in (tab, ipad):
+        r = world['rahbar'].c.get('/', headers={'User-Agent': ua})
+        assert r.status_code == 200 and 'Dalalar xaritasi' in r.get_data(as_text=True)
+    assert world['rahbar'].c.get('/', headers={'User-Agent': PHONE}).status_code == 302      # phone → /rahbar

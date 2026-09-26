@@ -857,3 +857,5 @@ a.a-tile:active{transform:scale(.98)}
 .fh-dot{flex:none;width:12px;height:12px;border-radius:50%;margin-top:4px}
 .rb-fields{background:#f0fdf4;color:#14532d}
 .kpi-tabs{display:flex;align-items:center;gap:4px;flex-wrap:wrap;margin:12px 0 -4px}.kpi-tabs .small{margin-left:10px}
+/* tablet landscape / desktop: the director panel uses the width */
+@media (min-width:1000px){.rb.d-wrap{max-width:1180px}.rb-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
