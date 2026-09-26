@@ -1,5 +1,7 @@
 # SURXON PAXTA HISOB TIZIMI · surxan-paxta.uz
 
+> Istalgan kompyuterdan davom ettirish va hamma narsa qayerda: [docs/DAVOM_ETTIRISH.md](docs/DAVOM_ETTIRISH.md)
+
 SURXON TAXIATOSH TEXTILE uchun paxta mavsumini to‘liq yuritish tizimi: dala → terim → telashka reysi → umumiy tarozi → nakladnoy → Nayman → to‘lov → ishchi haqi, avans, xarajat va kassa → hisobot.
 
 Bitta backend va bitta baza bilan ishlaydi. Uning bir necha xil ko‘rinishi bor:

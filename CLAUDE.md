@@ -1,5 +1,7 @@
 # CLAUDE.md — SURXON PAXTA loyihasi uchun ko‘rsatma
 
+> Yangi kompyuter / yangi sessiya: avval `docs/DAVOM_ETTIRISH.md` va `docs/PAXTA_ESLATMA.md` ni o‘qing.
+
 ## “paxta” kalit so‘zi
 
 Foydalanuvchi **“paxta”** desa (yoki shunga o‘xshash: “paxtani och”, “paxta loyihasi”), bu — **shu loyihani oldingi joyidan davom ettirish** degani. Darhol:
