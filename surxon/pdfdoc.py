@@ -571,7 +571,7 @@ def build_blanks_pdf(blanks, *, company, domain):
     buf = io.BytesIO()
     c = canvas.Canvas(buf, pagesize=A4)
     W, H = A4
-    c.setTitle('Punkt blanklari')
+    c.setTitle('Nakladnoy blanklari')
     c.setAuthor(company)
     logo = Path(current_app.static_folder) / 'img' / 'logo-dark.png'
     x0, x1 = 16 * mm, W - 16 * mm
@@ -595,20 +595,18 @@ def build_blanks_pdf(blanks, *, company, domain):
         y = H - 14 * mm
         if logo.exists():
             c.drawImage(str(logo), x0, y - 16 * mm, width=52 * mm, height=16 * mm, mask='auto', preserveAspectRatio=True, anchor='sw')
-        c.setFont('DejaVu-Bold', 17)
-        c.drawRightString(x1 - 40 * mm, y - 6 * mm, 'PUNKT QABUL BLANKASI')
+        c.setFont('DejaVu-Bold', 13)
+        c.drawRightString(x1 - 40 * mm, y - 5 * mm, 'PAXTA TOPSHIRISH NAKLADNOYI')
         c.setFont('DejaVu-Bold', 26)
-        c.drawRightString(x1 - 40 * mm, y - 16 * mm, b['number'])
+        c.drawRightString(x1 - 40 * mm, y - 16 * mm, '№ ' + b['number'])
         _qr(c, url, x1 - 36 * mm, y - 34 * mm, 36 * mm)
-        c.setFont('DejaVu', 7.5)
-        c.drawCentredString(x1 - 18 * mm, y - 37 * mm, 'Rasmga olishdan oldin skanerlang')
         # ---- top: ours
         y -= 46 * mm
         c.setFillColorRGB(0.04, 0.23, 0.43)
         c.rect(x0, y, x1 - x0, 8 * mm, fill=1, stroke=0)
         c.setFillColorRGB(1, 1, 1)
         c.setFont('DejaVu-Bold', 12)
-        c.drawString(x0 + 3 * mm, y + 2.4 * mm, '1. JO‘NATUVCHI (SURXON) — telefondagi elektron nakladnoydan yoziladi')
+        c.drawString(x0 + 3 * mm, y + 2.4 * mm, f'1. JO‘NATUVCHI: {company}')
         c.setFillColorRGB(0, 0, 0)
         y -= 11 * mm
         line_field(y, 'Reys (telashka) №:', width=85 * mm)
@@ -618,14 +616,14 @@ def build_blanks_pdf(blanks, *, company, domain):
         line_field(y, 'Traktor:', width=45 * mm, x=x0 + 60 * mm)
         line_field(y, 'Dala:', x=x0 + 112 * mm)
         y -= 13 * mm
-        line_field(y, 'Jo‘natilgan paxta (dala tarozisi), kg:', width=120 * mm, big=True)
+        line_field(y, 'Jo‘natilgan paxta, kg:', width=120 * mm, big=True)
         y -= 12 * mm
         c.setFont('DejaVu-Bold', 12)
-        c.drawString(x0, y, 'Paxta turi (belgilang):')
+        c.drawString(x0, y, 'Paxta turi:')
         box(x0 + 55 * mm, y, 'QO‘L TERIMI')
         box(x0 + 110 * mm, y, 'KOMBAYN')
         y -= 11 * mm
-        line_field(y, 'Jo‘natilgan sana va vaqt:', width=100 * mm)
+        line_field(y, 'Jo‘natilgan sana:', width=100 * mm)
         # cut / fold line
         y -= 12 * mm
         c.setDash(4, 3)
@@ -638,10 +636,10 @@ def build_blanks_pdf(blanks, *, company, domain):
         c.rect(x0, y, x1 - x0, 8 * mm, fill=1, stroke=0)
         c.setFillColorRGB(1, 1, 1)
         c.setFont('DejaVu-Bold', 12)
-        c.drawString(x0 + 3 * mm, y + 2.4 * mm, '2. QABUL QILUVCHI (PUNKT / FIRMA) — punkt tarozisi bo‘yicha')
+        c.drawString(x0 + 3 * mm, y + 2.4 * mm, '2. QABUL QILUVCHI')
         c.setFillColorRGB(0, 0, 0)
         y -= 11 * mm
-        line_field(y, 'Punkt / firma nomi:')
+        line_field(y, 'Qabul qiluvchi (punkt / firma):')
         y -= 12 * mm
         line_field(y, 'Brutto, kg:', width=80 * mm, big=True)
         line_field(y, 'Tara, kg:', x=x0 + 90 * mm, big=True)
@@ -651,8 +649,8 @@ def build_blanks_pdf(blanks, *, company, domain):
         c.setFont('DejaVu-Bold', 15)
         c.drawString(x0 + 3 * mm, y + 1.5 * mm, 'QABUL QILINGAN PAXTA (NETTO), kg:')
         y -= 16 * mm
-        line_field(y, 'Qabul sanasi va vaqti:', width=95 * mm)
-        line_field(y, 'Namlik / izoh:', x=x0 + 102 * mm)
+        line_field(y, 'Qabul sanasi:', width=95 * mm)
+        line_field(y, 'Izoh:', x=x0 + 102 * mm)
         y -= 12 * mm
         line_field(y, 'Qabul qiluvchi F.I.Sh.:', width=120 * mm)
         line_field(y, 'Imzo:', x=x0 + 126 * mm)
@@ -665,11 +663,9 @@ def build_blanks_pdf(blanks, *, company, domain):
         c.setDash()
         c.setFont('DejaVu-Bold', 10)
         c.drawCentredString(x0 + 39 * mm, y + 30 * mm, 'PUNKT MUHRI')
-        c.drawCentredString(x1 - 39 * mm, y + 30 * mm, 'JO‘NATUVCHI MUHRI / IMZOSI')
+        c.drawCentredString(x1 - 39 * mm, y + 30 * mm, 'JO‘NATUVCHI IMZOSI')
         c.setFont('DejaVu', 8)
-        c.drawString(x0, 12 * mm, f'{b["number"]} · bitta blank faqat bitta reys uchun. To‘ldirilgach punktda QR skanerlanadi va rasmga olinadi — '
-                                  'tizim uni reysga biriktiradi.')
-        c.drawString(x0, 8.5 * mm, f'Yo‘qolgan yoki buzilgan blank raqamini ofisga ayting. {company}')
+        c.drawString(x0, 10 * mm, f'№ {b["number"]} · ikki tomon imzosi va muhri bilan haqiqiy.')
         c.showPage()
     c.save()
     return buf.getvalue()
