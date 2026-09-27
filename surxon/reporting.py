@@ -195,6 +195,8 @@ def maybe_schedule_daily_report():
 
 
 SUMMARY_HEADER = ['ID', 'Ko‘rsatkich', 'Qiymat', 'Birlik', 'Davr', 'Yangilandi']
+PQ17_HEADER = ['PQ-17', 'Sana', 'Yuk xati', 'Klaster', 'Terim', 'Netto kg', 'Namlik %', 'Ifloslik %', 'Chegirma kg',
+               'Konditsion kg', 'Narx', 'Summa', 'Bizning reys', 'Bizda kg', 'Farq kg', 'Holat']
 WORKERS_HEADER = ['ID', 'Ishchi', 'Brigada', 'Kg', 'Hisoblangan', 'Avans', 'To‘langan', 'Qoldiq', 'Holat', 'Narxsiz kg']
 
 
@@ -238,10 +240,35 @@ def sheet_summary_rows(year=None):
         ('QARZ_OLISHIMIZ', 'Biz olishimiz kerak', sum(x['remaining'] for x in dd if x['direction'] == 'OLISH'), 'so‘m', str(year)),
         ('QARZ_BERISHIMIZ', 'Biz berishimiz kerak', sum(x['remaining'] for x in dd if x['direction'] == 'BERISH'), 'so‘m', str(year)),
     ]
+    from .queries import finance_summary as punkt_summary
+    pk = punkt_summary(year)
+    m += [
+        ('PQ17_SONI', 'PQ-17 lar (klaster qabul varaqalari)', pk['confirmed_n'], 'ta', str(year)),
+        ('PQ17_KONDITSION_KG', 'PQ-17: to‘lanadigan (konditsion) kg', pk['kond_kg'], 'kg', str(year)),
+        ('PQ17_CHEGIRMA_KG', 'PQ-17: namlik / ifloslik chegirmasi', pk['deduction_kg'], 'kg', str(year)),
+        ('PUNKT_HISOBLANGAN', 'Punkt puli hisoblangan (PQ-17 + taxminiy)', pk['receivable'] or 0, 'so‘m', str(year)),
+        ('PUNKT_TOLADI', 'Punktdan tushgan pul', pk['received'], 'so‘m', str(year)),
+        ('PUNKT_QARZ', 'Punkt (klaster) qarzi', pk['debt'] if pk['debt'] is not None else '', 'so‘m', str(year)),
+    ]
     rows = [[k, label, v, unit, period, ''] for k, label, v, unit, period in m]
     wrows = [[f'W-{w["id"]}', w['full_name'], w['brigadier_name'] or '', w['kg'], w['earned'], w['advances'], w['paid'],
               w['balance'], w['status'], w['uncalc_kg']] for w in workers]
     return rows, wrows
+
+
+def sheet_pq17_rows():
+    """PQ-17 sverka for Google Sheets: one row per state receipt, side by side with our trip (upsert on the PQ-17 code)."""
+    out = []
+    for d in q('''SELECT p.*, tl.trip_no, nr.accepted_kg FROM pq17_docs p LEFT JOIN waybills wb ON wb.id=p.waybill_id
+                  LEFT JOIN trailer_loads tl ON tl.id=wb.load_id LEFT JOIN nayman_receipts nr ON nr.waybill_id=wb.id
+                  ORDER BY p.doc_date, p.id'''):
+        diff = round((d['accepted_kg'] or 0) - d['netto'], 1) if d['waybill_id'] else ''
+        state = 'reys topilmadi' if not d['waybill_id'] else ('✓ mos' if abs(diff) < 0.5 else 'FARQ')
+        out.append([d['code'], d['doc_date'] or '', d['load_no'] or '', d['cluster_name'] or '',
+                    {'hand': 'Qo‘l', 'combine': 'Kombayn'}.get(d['method'], d['harvest_raw'] or ''), d['netto'], d['moist_pct'],
+                    d['dirt_pct'], d['deduction_kg'] - (d['bonus_kg'] or 0), d['kond_kg'], d['price'], d['amount'],
+                    d['trip_no'] or '', d['accepted_kg'] if d['accepted_kg'] is not None else '', diff, state])
+    return out
 
 
 def maybe_refresh_sheet_summary(force=False):
@@ -253,7 +280,8 @@ def maybe_refresh_sheet_summary(force=False):
     if not configured('sheets'):
         return False
     rows, wrows = sheet_summary_rows()
-    digest = hashlib.sha256(json.dumps([rows, wrows], default=str).encode()).hexdigest()[:16]
+    prows = sheet_pq17_rows()
+    digest = hashlib.sha256(json.dumps([rows, wrows, prows], default=str).encode()).hexdigest()[:16]
     db = get_db()
     last = db.execute("SELECT value FROM settings WHERE key='sheets_summary_hash'").fetchone()
     if last and last[0] == digest and not force:
@@ -267,6 +295,8 @@ def maybe_refresh_sheet_summary(force=False):
         if wrows:
             enqueue(db, 'sheets', 'upsert_many', f'workers:{digest}:{uniq}',
                     {'sheet': 'TERIMCHILAR', 'header': WORKERS_HEADER, 'rows': wrows})
+        if prows:
+            enqueue(db, 'sheets', 'upsert_many', f'pq17:{digest}:{uniq}', {'sheet': 'PQ-17 SVERKA', 'header': PQ17_HEADER, 'rows': prows})
         db.execute("INSERT INTO settings(key, value, updated_at) VALUES ('sheets_summary_hash', ?, ?) "
                    "ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at", (digest, stamp))
     return True

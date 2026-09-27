@@ -30,7 +30,7 @@
   <td class="num">{{ r.netto|num }} → <b>{{ r.kond_kg|num }}</b><div class="tiny muted">namlik {{ r.moist_pct }}%, ifloslik {{ r.dirt_pct }}% · −{{ (r.deduction_kg - r.bonus_kg)|num }} kg</div></td>
   <td class="num">{{ '%.2f'|format(r.price) }}</td><td class="num b">{{ r.amount|money }}</td>
   <td>{% if r.wb_id %}<a class="link" href="{{ url_for('ops.waybill_detail', waybill_id=r.wb_id) }}">{{ r.trip_no }}</a> · {{ r.accepted_kg|num }} kg{% endif %}
-    {% if r.problems %}<div class="pq-bad">⚠ {{ r.problems|join('; ') }}</div>{% elif r.wb_id %}<div class="pq-ok">✓ mos</div>{% endif %}</td>
+    {% if r.problems %}<div class="pq-bad">⚠ {{ r.problems|join('; ') }}</div>{% if not r.wb_id %}<a class="link small" href="{{ url_for('acct.pq17') }}">→ reysni tanlash</a>{% else %}<a class="link small" href="{{ url_for('ops.waybill_detail', waybill_id=r.wb_id) }}">→ reysni ochish (qabulni tuzatish)</a>{% endif %}{% elif r.wb_id %}<div class="pq-ok">✓ mos</div>{% endif %}</td>
   {% if uses_status %}<td><span class="pq-st st-{{ r.stage[0] }}">{{ r.stage[1] }}</span>{% if r.invoice_no %}<div class="tiny muted">faktura {{ r.invoice_no }}</div>{% endif %}</td>{% endif %}
   <td><a class="link small" href="{{ url_for('acct.pq17_file', doc_id=r.id) }}" target="_blank">{{ r.code }}</a></td>
 </tr>{% else %}<tr><td colspan="12">{{ empty('PQ-17 yo‘q', 'doc') }}</td></tr>{% endfor %}

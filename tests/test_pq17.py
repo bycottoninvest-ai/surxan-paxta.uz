@@ -131,3 +131,17 @@ def test_pq17_by_telegram(app, world, monkeypatch):
         telegram_bot.process_update(dict(upd, update_id=10))
         assert 'avval yuklangan' in sent[-1]
         assert q("SELECT waybill_id FROM pq17_docs", one=True)['waybill_id'] == w1
+
+
+def test_pq17_goes_to_google_sheets(app, world):
+    """The Sheets mirror gets a “PQ-17 SVERKA” tab (one row per receipt beside our trip) and the punkt debt lines."""
+    tally, yunus, ali, st = setup(app, world)
+    received_trip(app, world, tally, yunus, kg='480', load_no='555001')
+    world['bux'].c.post('/buxgalteriya/pq17', data={'files': [(io.BytesIO(pq17_pdf()), 'a.pdf')], '_csrf': world['bux'].csrf()},
+                        content_type='multipart/form-data')
+    with app.app_context():
+        from surxon.reporting import sheet_pq17_rows, sheet_summary_rows
+        rows = sheet_pq17_rows()
+        assert len(rows) == 1 and rows[0][0] == 'XH1000000001' and rows[0][-1] == '✓ mos' and rows[0][13] == 480
+        ids = {r[0] for r in sheet_summary_rows()[0]}
+        assert {'PQ17_KONDITSION_KG', 'PUNKT_QARZ', 'PUNKT_TOLADI'} <= ids
