@@ -1,5 +1,6 @@
 <!doctype html>
-<html lang="uz"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<html lang="uz" translate="no" class="notranslate"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="google" content="notranslate">
 <meta name="robots" content="noindex">
 <title>SURXAN-PAXTA · TV</title>
 <link rel="icon" href="{{ url_for('static', filename='img/favicon.png') }}">
@@ -88,6 +89,7 @@ footer>div{background:linear-gradient(180deg,var(--card2),var(--card));border:1p
 .lh{display:flex;align-items:center;gap:10px;font-weight:800;font-size:22px;color:var(--green);margin-right:18px;flex:none}
 </style></head>
 <body data-gmaps="{{ gmaps_key or '' }}">
+<div id="fs-hint" style="position:fixed;left:50%;bottom:18px;transform:translateX(-50%);z-index:9999;background:rgba(10,36,72,.95);color:#fff;border:2px solid #39d0ff;border-radius:12px;padding:10px 20px;font:700 20px/1.3 Arial,sans-serif;white-space:nowrap">Butun ekranga yoyish: pultda <b>OK</b> ni bosing (yoki ekranga bosing)</div>
 <div id="stage">
   <header>
     <div class="logo"><img src="{{ url_for('static', filename='img/logo-dark.png') }}" alt="SURXON"></div>
@@ -171,8 +173,24 @@ footer>div{background:linear-gradient(180deg,var(--card2),var(--card));border:1p
   const fmt = n => n == null ? '—' : String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
   const kg = n => n == null ? '—' : fmt(n) + ' kg';
   // the 1920×1080 stage fits any screen (Full HD, 4K, a laptop)
-  function fit() { const s = Math.min(innerWidth / 1920, innerHeight / 1080), st = $('stage'); st.style.transform = `scale(${s})`; st.style.left = (innerWidth - 1920 * s) / 2 + 'px'; st.style.top = (innerHeight - 1080 * s) / 2 + 'px'; }
-  addEventListener('resize', fit); fit();
+  // TV browsers report their size in different ways (desktop mode, zoom, the address bar) — take the smallest real one
+  function fit() {
+    const vv = window.visualViewport, de = document.documentElement;
+    const w = Math.min(innerWidth, de.clientWidth || innerWidth, vv ? vv.width : innerWidth);
+    const h = Math.min(innerHeight, de.clientHeight || innerHeight, vv ? vv.height : innerHeight);
+    const s = Math.min(w / 1920, h / 1080), st = $('stage');
+    st.style.transform = `scale(${s})`; st.style.left = Math.max(0, (w - 1920 * s) / 2) + 'px'; st.style.top = Math.max(0, (h - 1080 * s) / 2) + 'px';
+  }
+  addEventListener('resize', fit); if (window.visualViewport) visualViewport.addEventListener('resize', fit); fit(); setInterval(fit, 3000);
+  // full screen with one press of the remote's OK button (or a click) — browsers allow it only after a press
+  const fsHint = $('fs-hint');
+  function goFull() {
+    const el = document.documentElement, rq = el.requestFullscreen || el.webkitRequestFullscreen;
+    if (rq && !(document.fullscreenElement || document.webkitFullscreenElement)) { try { rq.call(el); } catch (_) { } }
+    if (fsHint) fsHint.style.display = 'none'; setTimeout(fit, 400);
+  }
+  addEventListener('keydown', goFull); addEventListener('click', goFull);
+  document.addEventListener('fullscreenchange', () => { setTimeout(fit, 300); if (fsHint && !document.fullscreenElement) fsHint.style.display = ''; });
   // the clock shows the farm's (server) time, whatever time zone the TV itself is set to
   let skew = 0;
   const clock = () => { $('clock').textContent = new Date(Date.now() + skew).toISOString().slice(11, 19); }; clock(); setInterval(clock, 1000);
