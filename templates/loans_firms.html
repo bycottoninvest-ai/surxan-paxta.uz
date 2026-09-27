@@ -1,0 +1,20 @@
+{% extends 'base.html' %}
+{% from 'macros.html' import icon, empty with context %}
+{% from 'loans_macros.html' import firm_list with context %}
+{% set page_title = 'Akt-sverka va firmalar' %}
+{% block content %}
+<div class="page-h"><h1>🧾 Akt-sverka va firmalar</h1><span class="sub"><a class="link" href="{{ url_for('acct.home') }}">‹ Buxgalteriya</a> · <a class="link" href="{{ url_for('loans.home') }}">Qachon qancha to‘lash</a></span></div>
+<div class="fs-top">
+  <div><small>Jami qarz</small><b>{{ s.debt|money }}</b></div>
+  <div class="{{ 'bad' if s.overdue }}"><small>Muddati o‘tgan</small><b>{{ s.overdue_sum|money }}</b></div>
+  <div><small>30 kunda to‘lash</small><b>{{ s.month|money }}</b></div>
+  <a class="fs-in" href="{{ url_for('loans.inbox') }}"><small>📥 Hujjatlar qutisi</small><b>{{ inbox_n }} ta ajratilmagan</b><span>fayllarni shu yerga yuklang</span></a>
+</div>
+<section class="card"><div class="card-b">
+  {% if parties %}{{ firm_list(parties, kinds) }}{% else %}{{ empty('Hali firma yo‘q. “Kreditlar va lizing”da firma qo‘shing yoki “Hujjatlar qutisi”ga shartnomalarni yuklang.', 'building') }}{% endif %}
+</div></section>
+<style>.fs-top{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin-bottom:14px}
+.fs-top>*{background:#fff;border:1px solid var(--line,#e5e7eb);border-radius:12px;padding:10px 14px;color:inherit;text-decoration:none}
+.fs-top small{display:block;color:#64748b}.fs-top b{font-size:20px}.fs-top .bad{background:#fef2f2;border-color:#fca5a5}.fs-top .bad b{color:#b91c1c}
+.fs-in{background:#eff6ff!important;border-color:#bfdbfe!important}.fs-in span{display:block;font-size:12px;color:#1d4ed8}</style>
+{% endblock %}

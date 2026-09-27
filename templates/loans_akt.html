@@ -1,0 +1,35 @@
+{% extends 'base.html' %}
+{% from 'macros.html' import icon, empty with context %}
+{% set page_title = 'Akt-sverka · ' ~ p.name %}
+{% block content %}
+<div class="page-h no-print"><h1>{{ icon('doc','lg') }} Akt-sverka</h1><span class="sub"><a class="link" href="{{ url_for('loans.firms') }}">‹ Akt-sverka va firmalar</a> · <a class="link" href="{{ url_for('loans.party', party_id=p.id) }}">{{ p.name }}</a></span></div>
+<form class="ak-f no-print" method="get">
+  <label>Dan <input class="input" type="date" name="dan" value="{{ a.dan or '' }}"></label>
+  <label>Gacha <input class="input" type="date" name="gacha" value="{{ a.gacha }}"></label>
+  <button class="btn btn-light">Ko‘rsatish</button>
+  <button class="btn btn-primary" type="button" onclick="print()">🖨 Chop etish / PDF</button>
+</form>
+<section class="card ak"><div class="card-b">
+  <h2 class="ak-h">O‘ZARO HISOB-KITOBLARNI SOLISHTIRISH DALOLATNOMASI<br><small>(akt-sverka)</small></h2>
+  <p class="ak-p"><b>{{ company }}</b>{% if company_inn %} (STIR {{ company_inn }}){% endif %} va <b>{{ p.name }}</b>{% if p.inn %} (STIR {{ p.inn }}){% endif %}
+    o‘rtasida {% if a.dan %}{{ a.dan|d }} dan {% endif %}{{ a.gacha|d }} gacha bo‘lgan hisob-kitoblar.</p>
+  <div class="table-wrap"><table class="t ak-t"><thead><tr><th>Sana</th><th>Mazmuni</th><th class="num">To‘lanishi kerak edi</th><th class="num">To‘landi</th><th class="num">Qoldiq (qarz)</th></tr></thead><tbody>
+    {% if a.dan %}<tr class="b"><td>{{ a.dan|d }}</td><td>Boshlang‘ich qoldiq</td><td></td><td></td><td class="num">{{ a.opening|money }}</td></tr>{% endif %}
+    {% for r in a.rows %}{% if r.got %}<tr class="ak-got"><td class="nowrap">{{ r.date|d }}</td><td>{{ r.text }} <span class="tiny muted">(bizga tushdi {{ r.got|money }} — qaytarilishi grafikda)</span></td><td></td><td></td><td class="num">{{ r.saldo|money }}</td></tr>
+    {% else %}<tr><td class="nowrap">{{ r.date|d }}</td><td>{{ r.text }}</td><td class="num">{{ r.due|money if r.due else '' }}</td><td class="num">{{ r.paid|money if r.paid else '' }}</td><td class="num">{{ r.saldo|money }}</td></tr>{% endif %}
+    {% else %}<tr><td colspan="5">{{ empty('Bu davrda yozuv yo‘q', 'doc') }}</td></tr>{% endfor %}
+    <tr class="b"><td colspan="2">Davr bo‘yicha jami</td><td class="num">{{ a.due|money }}</td><td class="num">{{ a.paid|money }}</td><td></td></tr>
+    <tr class="b ak-end"><td colspan="4">{{ a.gacha|d }} holatiga qoldiq: {% if a.closing > 0.5 %}<b>{{ company }}</b> ning qarzi{% elif a.closing < -0.5 %}oldindan to‘langan (ortiqcha){% else %}qarz yo‘q{% endif %}</td><td class="num">{{ a.closing|abs|money }}</td></tr>
+  </tbody></table></div>
+  {% if a.later %}<p class="small muted">Grafik bo‘yicha hali muddati kelmagan to‘lovlar: <b>{{ a.later|money }}</b> (bu akt qoldig‘iga kirmaydi).</p>{% endif %}
+  <div class="ak-sign"><div><b>{{ company }}</b><span>Rahbar: ____________________</span><span>Bosh buxgalter: ____________________</span><span>M.O‘.</span></div>
+    <div><b>{{ p.name }}</b><span>Rahbar: ____________________</span><span>Bosh buxgalter: ____________________</span><span>M.O‘.</span></div></div>
+</div></section>
+<style>
+.ak-f{display:flex;gap:10px;align-items:end;flex-wrap:wrap;margin-bottom:12px}.ak-f label{display:flex;flex-direction:column;font-size:13px;color:#64748b;gap:4px}
+.ak-h{text-align:center;font-size:17px;margin:4px 0 10px}.ak-h small{font-weight:500;color:#64748b}.ak-p{text-align:center;margin:0 0 12px}
+.ak-got td{color:#64748b}.ak-end td{font-size:15px;background:#f8fafc}
+.ak-sign{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-top:28px}.ak-sign div{display:flex;flex-direction:column;gap:14px}
+@media print{.ak{border:none;box-shadow:none}.ak .table-wrap{overflow:visible;max-height:none}}
+</style>
+{% endblock %}

@@ -414,6 +414,7 @@ def parties_overview():
                         overdue=sum(c['st']['overdue'] for c in cs), overdue_sum=sum(c['st']['overdue_sum'] for c in cs),
                         next=min(nexts, key=lambda x: x['date']) if nexts else None,
                         files=q('SELECT COUNT(*) n FROM contract_files WHERE party_id=?', (p['id'],), one=True)['n'],
+                        photo=q("SELECT id FROM contract_files WHERE party_id=? AND kind='rasm' ORDER BY id LIMIT 1", (p['id'],), one=True),
                         loose_paid=loose['paid'], loose_got=loose['got']))
     return out
 
@@ -440,3 +441,47 @@ def summary(today=None):
             'duties': [o for o in obl if o['state'] in ('overdue', 'soon')],
             'overdue': sum(c['st']['overdue'] for c in cs), 'overdue_sum': sum(c['st']['overdue_sum'] for c in cs),
             'month': sum(u['amount'] for u in up), 'next': up[0] if up else None}
+
+
+def akt(party_id, dan=None, gacha=None, today=None):
+    """Akt-sverka with one firm for a period: what fell due by the contracts (schedule lines, the leasing advance) against
+    what we really paid. Saldo > 0 — we owe; < 0 — we paid ahead. Loan money received is listed apart (the schedule
+    already holds its repayment). Lines after the period are summed as “not yet due”."""
+    today = today or today_str()
+    gacha = gacha or today
+    rows, pre = [], 0.0
+    for c in contracts(party_id, today=today):
+        if c['kind'] == 'lizing' and c['advance']:
+            d = c['start_date'] or c['sign_date'] or (c['created_at'] or '')[:10]
+            rows.append({'date': d, 'text': f'{c["title"]}: avans', 'due': c['advance'], 'paid': 0, 'got': 0})
+        for ln in c['st']['lines']:
+            rows.append({'date': ln['due_date'], 'text': f'{c["title"]}: grafik bo‘yicha to‘lov', 'due': ln['amount'], 'paid': 0, 'got': 0})
+    for m in q('''SELECT m.*, c.title ct FROM contract_moves m LEFT JOIN contracts c ON c.id=m.contract_id
+                  WHERE m.party_id=? AND m.voided_at IS NULL''', (party_id,)):
+        text = ' · '.join(x for x in (m['ct'], m['purpose']) if x) or ('to‘lov' if m['direction'] == 'OUT' else 'pul tushdi')
+        rows.append({'date': m['move_date'], 'text': text, 'due': 0, 'paid': m['amount'] if m['direction'] == 'OUT' else 0,
+                     'got': m['amount'] if m['direction'] == 'IN' else 0})
+    rows.sort(key=lambda r: (r['date'], r['due'] == 0))
+    later = sum(r['due'] for r in rows if r['date'] > gacha)
+    body = []
+    for r in rows:
+        if r['date'] > gacha:
+            continue
+        if dan and r['date'] < dan:
+            pre += r['due'] - r['paid']
+            continue
+        body.append(r)
+    saldo = pre
+    for r in body:
+        saldo += r['due'] - r['paid']
+        r['saldo'] = round(saldo, 2)
+    return {'rows': body, 'opening': round(pre, 2), 'closing': round(saldo, 2), 'due': sum(r['due'] for r in body),
+            'paid': sum(r['paid'] for r in body), 'got': sum(r['got'] for r in body), 'later': round(later, 2),
+            'dan': dan, 'gacha': gacha}
+
+
+def photos(party_id=None, contract_id=None):
+    """Machine pictures (files of kind “rasm”) — shown on the contract, the firm and the Buxgalteriya cards."""
+    if contract_id:
+        return q("SELECT * FROM contract_files WHERE contract_id=? AND kind='rasm' ORDER BY id", (contract_id,))
+    return q("SELECT * FROM contract_files WHERE party_id=? AND kind='rasm' ORDER BY id", (party_id,))

@@ -101,3 +101,82 @@ def test_plain_schedule_and_insurance_one_payment(app, world):
         from surxon import loans as L
         rows = L.annuity_schedule(1200000, 12, 12, __import__('datetime').date(2026, 1, 1), every=3)
         assert len(rows) == 4 and rows[0]['due_date'] == '2026-04-30' and rows[0]['interest'] == 36000
+
+
+def docx(text):
+    """A minimal Word file holding `text` (enough for the document reader)."""
+    import zipfile
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, 'w') as z:
+        z.writestr('[Content_Types].xml', '<Types/>')
+        z.writestr('word/document.xml', '<w:document><w:body>' + ''.join(f'<w:p><w:r><w:t>{ln}</w:t></w:r></w:p>'
+                                                                         for ln in text.split('\n')) + '</w:body></w:document>')
+    return buf.getvalue()
+
+
+def test_document_inbox_sorts_by_firm_and_akt_sverka(app, world, monkeypatch):
+    bux = world['bux']
+    bux.post('/kreditlar/firma', {'name': 'Test Agro Lizing', 'inn': '300000001', 'kind': 'lizing'})
+    bux.post('/kreditlar/firma', {'name': 'Boshqa Bank ATB', 'inn': '300000002', 'kind': 'bank'})
+    with app.app_context():
+        pid = q("SELECT id FROM parties WHERE inn='300000001'", one=True)['id']
+    bux.post(f'/kreditlar/firma/{pid}', {'kind': 'lizing', 'title': 'Traktor lizingi', 'number': 'LZ-77/2026', 'amount': '1000',
+                                         'advance': '100', 'start_date': '2026-08-01'})
+    with app.app_context():
+        cid = q('SELECT id FROM contracts', one=True)['id']
+    bux.post(f'/kreditlar/shartnoma/{cid}', {'action': 'schedule_one', 'due_date': '2026-09-30', 'amount': '500'})
+    bux.post(f'/kreditlar/shartnoma/{cid}', {'action': 'schedule_one', 'due_date': '2026-12-31', 'amount': '400'})
+    bux.post(f'/kreditlar/firma/{pid}', {'action': 'move', 'move_date': '2026-08-02', 'direction': 'OUT', 'amount': '100', 'contract_id': cid})
+    bux.post(f'/kreditlar/firma/{pid}', {'action': 'move', 'move_date': '2026-10-01', 'direction': 'OUT', 'amount': '300', 'contract_id': cid})
+
+    def upload(*files):
+        return bux.c.post('/buxgalteriya/hujjatlar', data={'files': [(io.BytesIO(d), n) for n, d in files], '_csrf': bux.csrf()},
+                          content_type='multipart/form-data', headers={'X-Requested-With': 'fetch'}).get_json()
+
+    # an invoice with the firm's STIR → straight into that firm, typed “faktura”; the only contract is taken
+    r = upload(('faktura.docx', docx('СЧЕТ-ФАКТУРА № 15\nПоставщик ИНН 300 000 001\nПокупатель ИНН 311720284')))
+    assert r['ok'] and 'Test Agro Lizing' in r['message'] and 'Faktura' in r['message'], r
+    # by the contract number only; then a paper with no firm → waits in the inbox; the same file again → not stored twice
+    r = upload(('grafik.txt', 'LZ-77/2026 to‘lov grafigi'.encode()), ('nomalum.txt', b'qandaydir hujjat'))
+    r2 = upload(('nomalum.txt', b'qandaydir hujjat'))
+    assert 'avval yuborilgan' in r2['message']
+    with app.app_context():
+        rows = q('SELECT name, status, guess_party_id, guess_contract_id, guess_kind FROM doc_inbox ORDER BY id')
+        assert [(x['status'], x['guess_party_id'], x['guess_kind']) for x in rows] == \
+            [('filed', pid, 'faktura'), ('filed', pid, 'grafik'), ('new', None, None)]
+        assert rows[1]['guess_contract_id'] == cid
+        assert q("SELECT COUNT(*) n FROM contract_files WHERE party_id=?", (pid,), one=True)['n'] == 2
+        iid = q("SELECT id FROM doc_inbox WHERE status='new'", one=True)['id']
+    page = bux.get('/buxgalteriya/hujjatlar').get_data(as_text=True)
+    assert 'nomalum.txt' in page and 'Ajratilmagan (1)' in page
+    assert bux.post('/buxgalteriya/hujjatlar', {'action': 'file', 'inbox_id': iid, 'party_id': pid, 'kind': 'akt'}).get_json()['ok']
+
+    # the bot: a Word file from the accountant is sorted the same way
+    from surxon import telegram_bot
+    sent = []
+    monkeypatch.setattr(telegram_bot, 'send', lambda chat, text, *a, **k: sent.append(text))
+    monkeypatch.setattr(telegram_bot, 'tg_download', lambda fid: docx('Договор № B-1\nБанк ИНН 300000002'))
+    with app.app_context():
+        from surxon.db import get_db
+        get_db().execute("UPDATE users SET telegram_id='8081' WHERE username='buxgalter'")
+        telegram_bot.process_update({'update_id': 31, 'message': {'chat': {'id': 8081, 'type': 'private'}, 'from': {'id': 8081, 'first_name': 'B'},
+                                     'document': {'file_id': 'd1', 'file_name': 'kredit.docx', 'mime_type': 'application/msword'}}})
+    assert '✅ kredit.docx → Boshqa Bank ATB' in sent[-1] and 'Shartnoma' in sent[-1], sent
+
+    # akt-sverka: what fell due (advance 100 + 500 on 30.09) against what we paid (100 + 300) → we owe 200; 400 not due yet
+    with app.app_context():
+        from surxon import loans as L
+        a = L.akt(pid, gacha='2026-10-15', today='2026-10-15')
+        assert (a['due'], a['paid'], a['closing'], a['later']) == (600, 400, 200, 400)
+        b = L.akt(pid, dan='2026-09-01', gacha='2026-10-15', today='2026-10-15')
+        assert b['opening'] == 0 and b['closing'] == 200 and len(b['rows']) == 2
+    page = bux.get(f'/kreditlar/firma/{pid}/akt-sverka?gacha=2026-10-15').get_data(as_text=True)
+    assert 'SOLISHTIRISH DALOLATNOMASI' in page and 'Test Agro Lizing' in page and '300000001' in page
+
+    # Buxgalteriya: one line leads to the section; the section lists firms grouped by type
+    home = bux.get('/buxgalteriya').get_data(as_text=True)
+    assert 'Akt-sverka va firmalar' in home and 'Test Agro Lizing' not in home
+    firms = bux.get('/buxgalteriya/akt-sverka').get_data(as_text=True)
+    assert 'Test Agro Lizing' in firms and 'Boshqa Bank ATB' in firms and 'Lizing kompaniyasi' in firms
+    assert world['juma'].get('/buxgalteriya/akt-sverka').status_code == 302
+    assert world['juma'].get('/buxgalteriya/hujjatlar').status_code == 302

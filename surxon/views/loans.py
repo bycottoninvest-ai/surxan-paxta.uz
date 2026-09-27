@@ -79,7 +79,8 @@ def party(party_id):
                  WHERE f.party_id=? ORDER BY f.id DESC''', (party_id,))
     paid = sum(m['amount'] for m in moves if m['direction'] == 'OUT')
     got = sum(m['amount'] for m in moves if m['direction'] == 'IN')
-    return render_template('loans_party.html', p=p, cs=cs, moves=moves, files=files, paid=paid, got=got, kinds=L.KINDS,
+    from ..docinbox import FILE_KINDS
+    return render_template('loans_party.html', fkinds=FILE_KINDS, p=p, cs=cs, moves=moves, files=files, paid=paid, got=got, kinds=L.KINDS,
                            duties=L.obligations(party_id=party_id),
                            ckinds=L.CONTRACT_KINDS, debt=sum(c['st']['debt'] or 0 for c in cs),
                            equipment=q("SELECT id, code, kind FROM equipment WHERE active=1 AND kind<>'telashka' ORDER BY kind, code"))
@@ -135,6 +136,15 @@ def contract(contract_id):
                             equipment_id=c['equipment_id'], note=c['note'] or '', status=c['status'],
                             end_date=request.form.get('end_date') or c['end_date'] or '', terms=request.form.get('terms', ''))
             return done('Shartlar saqlandi.', url_for('loans.contract', contract_id=contract_id))
+        if act == 'photo':
+            n = 0
+            for f in request.files.getlist('files'):
+                if f and f.filename:
+                    L.add_file(actor, c['party_id'], f.filename, f.read(), contract_id, 'rasm')
+                    n += 1
+            if not n:
+                raise UserError('Rasm tanlang.')
+            return done(f'{n} ta rasm saqlandi.', url_for('loans.contract', contract_id=contract_id))
         if act == 'status':
             L.save_contract(actor, contract_id, party_id=c['party_id'], kind=c['kind'], title=c['title'], number=c['number'] or '',
                             sign_date=c['sign_date'] or '', start_date=c['start_date'] or '', amount=c['amount'] or '',
@@ -147,7 +157,78 @@ def contract(contract_id):
     moves = q('SELECT * FROM contract_moves WHERE contract_id=? AND voided_at IS NULL ORDER BY move_date DESC, id DESC', (contract_id,))
     files = q('SELECT * FROM contract_files WHERE contract_id=? ORDER BY id DESC', (contract_id,))
     return render_template('loans_contract.html', c=c, st=st, moves=moves, files=files, ckinds=L.CONTRACT_KINDS,
-                           duties=L.obligations(contract_id=contract_id))
+                           duties=L.obligations(contract_id=contract_id), photos=L.photos(contract_id=contract_id))
+
+
+@bp.get('/buxgalteriya/akt-sverka')
+@perm_required('loans.view')
+def firms():
+    """Buxgalteriya → Akt-sverka: every firm grouped by type, with its debt, next payment and the akt-sverka button."""
+    return render_template('loans_firms.html', parties=L.parties_overview(), kinds=L.KINDS, s=L.summary(),
+                           inbox_n=q("SELECT COUNT(*) n FROM doc_inbox WHERE status='new'", one=True)['n'])
+
+
+@bp.get('/kreditlar/firma/<int:party_id>/akt-sverka')
+@perm_required('loans.view')
+def akt(party_id):
+    from ..settings import get_setting
+    p = q('SELECT * FROM parties WHERE id=?', (party_id,), one=True)
+    if not p:
+        abort(404)
+    dan = L._date(request.args.get('dan'), 'Boshlanish', True)
+    gacha = L._date(request.args.get('gacha'), 'Tugash', True)
+    return render_template('loans_akt.html', p=p, a=L.akt(party_id, dan, gacha), kinds=L.KINDS,
+                           company=get_setting('company_name') or 'SURXON TAXIATOSH TEXTILE',
+                           company_inn=get_setting('company_inn') or '')
+
+
+@bp.route('/buxgalteriya/hujjatlar', methods=['GET', 'POST'])
+@perm_required('loans.view')
+def inbox():
+    """Send every paper at once: each file is read and put into its firm's folder; unclear ones wait here for one tap."""
+    from .. import docinbox as D
+    if request.method == 'POST':
+        require('loans.write')
+        actor = post_actor()
+        act = request.form.get('action')
+        if act == 'file':
+            D.file_it(actor, parse_int(request.form.get('inbox_id'), 'Hujjat'), parse_int(request.form.get('party_id'), 'Firma'),
+                      request.form.get('kind') or 'boshqa', parse_int(request.form.get('contract_id'), 'Shartnoma', required=False))
+            return done('Hujjat firmaga joylandi.', url_for('loans.inbox'))
+        if act == 'reject':
+            D.reject(actor, parse_int(request.form.get('inbox_id'), 'Hujjat'))
+            return done('Keraksiz deb belgilandi.', url_for('loans.inbox'))
+        lines = []
+        for f in request.files.getlist('files'):
+            if not (f and f.filename):
+                continue
+            data = f.read()
+            try:
+                lines.append(_one_document(actor, f.filename, data, 'web'))
+            except UserError as e:
+                lines.append(f'⚠️ {f.filename}: {e}')
+        if not lines:
+            raise UserError('Fayl tanlang.')
+        from flask import flash
+        for line in lines[:-1]:
+            flash(line, 'error' if line.startswith('⚠') else 'success')
+        return done(lines[-1], url_for('loans.inbox'))
+    parties = q('SELECT id, name FROM parties ORDER BY name')
+    cs = q("SELECT id, party_id, title FROM contracts WHERE status<>'BEKOR' ORDER BY title")
+    return render_template('loans_inbox.html', items=D.pending(), done_items=D.recent(), parties=parties, cs=cs, kinds=D.FILE_KINDS)
+
+
+def _one_document(actor, name, data, source):
+    """A PQ-17 goes to the cotton check; everything else to the firm folders. Returns one line of text."""
+    from .. import docinbox as D, pq17
+    if data[:4] == b'%PDF' and (actor.can('nayman.write') or actor.can('reports.finance')):
+        try:
+            _id, d, already, how = pq17.import_pdf(actor, data, source=source)
+            return f'ℹ️ PQ-17 {d["code"]} avval yuklangan.' if already else f'✅ PQ-17 {d["code"]} → paxta sverkasi'
+        except UserError as e:
+            if 'emas' not in str(e) and 'o‘qib bo‘lmadi —' not in str(e):
+                raise
+    return D.reply_text(D.receive(actor, name, data, source))
 
 
 @bp.get('/kreditlar/fayl/<int:file_id>')
@@ -158,3 +239,12 @@ def file(file_id):
         abort(404)
     return send_from_directory(current_app.config['SURXON'].UPLOAD_DIR, f['path'], download_name=f['name'],
                                as_attachment=request.args.get('download') == '1')
+
+
+@bp.get('/buxgalteriya/hujjatlar/<int:inbox_id>')
+@perm_required('loans.view')
+def inbox_file(inbox_id):
+    r = q('SELECT * FROM doc_inbox WHERE id=?', (inbox_id,), one=True)
+    if not r:
+        abort(404)
+    return send_from_directory(current_app.config['SURXON'].UPLOAD_DIR, r['path'], download_name=r['name'])

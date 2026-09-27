@@ -1,5 +1,6 @@
 {% extends 'base.html' %}
 {% from 'macros.html' import icon, csrf, empty with context %}
+{% from 'loans_macros.html' import firm_list with context %}
 {% set page_title = 'Kreditlar va lizing' %}
 {% macro duty(o, back) %}<div class="ln-d st-{{ o.state }}"><div><b>{{ o.title }}</b><div class="tiny muted">{{ o.due_date|d }}{% if o.party_name %} · {{ o.party_name }}{% endif %}{% if o.equipment_code %} · {{ o.equipment_code }}{% endif %}{% if o.note %} · {{ o.note }}{% endif %}</div></div>
   <div class="nowrap">{% if o.state == 'done' %}<span class="badge b-green">✓ bajarildi</span>{% elif o.state == 'overdue' %}<span class="badge b-red">{{ -o.days_left }} kun o‘tdi</span>{% elif o.state == 'soon' %}<span class="badge b-red">{{ o.days_left }} kun qoldi</span>{% else %}<span class="tiny muted">{{ o.days_left }} kun</span>{% endif %}
@@ -25,11 +26,8 @@
 <section class="card s5"><div class="card-h"><h3>⏰ Muhim muddatlar (60 kun)</h3></div><div class="card-b">
   {% for o in duties %}{{ duty(o) }}{% else %}<span class="tiny muted">Yaqin kunlarda muhim sana yo‘q. Sug‘urta, texnik ko‘rik kabi sanalarni firma sahifasida qo‘shing.</span>{% endfor %}
 </div></section>
-<section class="card s5"><div class="card-h"><h3>Firmalar</h3></div><div class="card-b ln-parties">
-  {% for p in parties %}<a class="ln-p" href="{{ url_for('loans.party', party_id=p.id) }}">
-    <div><b>{{ p.name }}</b><div class="tiny muted">{{ kinds[p.kind] }}{% if p.inn %} · STIR {{ p.inn }}{% endif %} · {{ p.n }} ta shartnoma · {{ p.files }} ta fayl</div></div>
-    <div class="num"><b>{{ p.debt|money }}</b>{% if p.overdue %}<div class="tiny" style="color:var(--red)">⚠ {{ p.overdue }} ta muddati o‘tgan</div>{% elif p.next %}<div class="tiny muted">keyingi: {{ p.next.date|d }}</div>{% endif %}</div></a>
-  {% else %}{{ empty('Hali firma yo‘q — pastdan qo‘shing.', 'building') }}{% endfor %}
+<section class="card s12"><div class="card-h"><h3>Firmalar va akt-sverka</h3><a class="more" href="{{ url_for('loans.inbox') }}">📥 Hujjatlar qutisi — hamma faylni yuklash →</a></div><div class="card-b">
+  {% if parties %}{{ firm_list(parties, kinds) }}{% else %}{{ empty('Hali firma yo‘q — pastdan qo‘shing.', 'building') }}{% endif %}
   {% if can('loans.write') %}
   <details style="margin-top:12px"><summary class="btn btn-light btn-sm">+ Yangi firma</summary>
     <form method="post" action="{{ url_for('loans.party_save') }}" class="form" style="margin-top:8px">{{ csrf() }}

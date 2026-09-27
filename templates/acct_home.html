@@ -35,6 +35,15 @@
     </form>{% endif %}
   </div></section>
 
+{% if firms is not none %}
+<a class="a-akt" id="firmalar" href="{{ url_for('loans.firms') }}">
+  <span class="a-akt-i">🧾</span>
+  <span class="a-akt-t"><b>Akt-sverka va firmalar</b><small>{{ firms }} ta firma · qarz {{ loan_sum.debt|money }}{% if loan_sum.overdue %} · <em>⚠ muddati o‘tgan {{ loan_sum.overdue_sum|money }}</em>{% endif %}{% if inbox_n %} · 📥 {{ inbox_n }} ta hujjat ajratilmagan{% endif %}</small></span>
+  {{ icon('chev-right') }}</a>
+<style>.a-akt{display:flex;align-items:center;gap:14px;margin-top:14px;padding:14px 16px;background:#fff;border:1px solid var(--line,#e5e7eb);border-radius:14px;color:inherit;text-decoration:none}
+.a-akt:hover{background:#f8fafc}.a-akt-i{font-size:28px}.a-akt-t{flex:1;min-width:0}.a-akt-t b{display:block;font-size:17px}.a-akt-t small{color:#64748b}.a-akt-t em{font-style:normal;color:#b91c1c}</style>
+{% endif %}
+
 <div class="m-actions a-actions">
   {{ act(url_for('acct.income'), 'plus', 'KIRIM', 'green') }}
   {{ act(url_for('acct.workers'), 'users', 'ISHCHILARGA TO‘LOV') }}

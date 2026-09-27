@@ -1,0 +1,53 @@
+{% extends 'base.html' %}
+{% from 'macros.html' import icon, csrf, empty with context %}
+{% set page_title = 'Hujjatlar qutisi' %}
+{% block content %}
+<div class="page-h"><h1>📥 Hujjatlar qutisi</h1><span class="sub">Hamma faylni bir joyga tashlang — tizim o‘zi firmasi va turiga ajratadi · <a class="link" href="{{ url_for('loans.firms') }}">‹ Akt-sverka va firmalar</a></span></div>
+<div class="grid">
+<section class="card s5"><div class="card-h"><h3>Fayl yuklash</h3></div><div class="card-b">
+  {% if can('loans.write') %}
+  <form method="post" enctype="multipart/form-data">{{ csrf() }}
+    <input class="input" type="file" name="files" multiple required style="height:auto;padding:10px">
+    <button class="btn btn-primary" style="margin-top:8px;width:100%">Yuklash</button></form>{% endif %}
+  <div class="ib-help">
+    <b>Qanday ajratadi</b>
+    <ol><li>Fayl ichidagi <b>STIR</b>, firma nomi yoki shartnoma raqamini topadi → o‘sha firmaning papkasiga qo‘yadi.</li>
+      <li>So‘zlaridan turini biladi: shartnoma, grafik, faktura, akt-sverka, bank ko‘chirmasi, polis, rasm.</li>
+      <li>PQ-17 (hosil-qabuli.uz) bo‘lsa — paxta sverkasiga o‘tadi.</li>
+      <li>Aniq bo‘lmasa — pastdagi ro‘yxatda qoladi, firmani bir marta tanlaysiz.</li>
+      <li>Bir xil fayl ikki marta saqlanmaydi.</li></ol>
+    <b>📱 Telegram bot orqali ham bo‘ladi:</b> botga (shaxsiy chatda) faylni <b>“fayl / hujjat”</b> sifatida yuboring — shu yerga tushadi.
+  </div>
+</div></section>
+
+<section class="card s7"><div class="card-h"><h3>Ajratilmagan ({{ items|length }})</h3></div><div class="card-b">
+  {% for i in items %}<div class="ib-it">
+    <div class="ib-n"><a class="link b" href="{{ url_for('loans.inbox_file', inbox_id=i.id) }}" target="_blank">{{ i.name }}</a>
+      <span class="tiny muted">{{ i.created_at|d }} · {{ 'bot' if i.source == 'telegram' else 'sayt' }}{% if i.guess_kind %} · {{ kinds[i.guess_kind] }}{% endif %}</span>
+      {% if i.snippet %}<div class="tiny muted ib-s">{{ i.snippet }}</div>{% endif %}</div>
+    {% if can('loans.write') %}<form method="post" class="ib-f">{{ csrf() }}<input type="hidden" name="inbox_id" value="{{ i.id }}">
+      <select class="input" name="party_id" required><option value="">— firma —</option>{% for p in parties %}<option value="{{ p.id }}" {{ 'selected' if p.id == i.guess_party_id }}>{{ p.name }}</option>{% endfor %}</select>
+      <select class="input" name="kind">{% for k, v in kinds.items() %}<option value="{{ k }}" {{ 'selected' if k == (i.guess_kind or 'boshqa') }}>{{ v }}</option>{% endfor %}</select>
+      <select class="input" name="contract_id"><option value="">— shartnoma (ixtiyoriy) —</option>{% for c in cs %}<option value="{{ c.id }}">{{ c.title }}</option>{% endfor %}</select>
+      <div class="row" style="gap:6px"><button class="btn btn-primary btn-sm" name="action" value="file">Joylash</button>
+        <button class="btn btn-ghost btn-sm" name="action" value="reject" formnovalidate>keraksiz</button></div></form>{% endif %}
+  </div>{% else %}{{ empty('Hammasi ajratilgan', 'check-circle') }}{% endfor %}
+  {% if not parties %}<p class="small muted">Firma ro‘yxati bo‘sh. Avval <a class="link" href="{{ url_for('loans.home') }}">Kreditlar va lizing</a>da firma qo‘shing (nomi va STIR) — keyin fayllar o‘zi ajraladi.</p>{% endif %}
+</div></section>
+
+<section class="card s12"><div class="card-h"><h3>Oxirgi joylanganlar</h3></div>
+  <div class="table-wrap"><table class="t"><thead><tr><th>Fayl</th><th>Firma</th><th>Shartnoma</th><th>Turi</th><th>Qachon</th></tr></thead><tbody>
+  {% for i in done_items %}<tr><td>{% if i.file_id %}<a class="link" href="{{ url_for('loans.file', file_id=i.file_id) }}" target="_blank">{{ i.name }}</a>{% else %}{{ i.name }}{% endif %}</td>
+    <td>{% if i.guess_party_id %}<a class="link" href="{{ url_for('loans.party', party_id=i.guess_party_id) }}">{{ i.party_name }}</a>{% endif %}</td>
+    <td class="small">{{ i.contract_title or '—' }}</td><td>{{ kinds.get(i.guess_kind or 'boshqa') }}</td><td class="nowrap small">{{ i.done_at|d }}</td></tr>
+  {% else %}<tr><td colspan="5">{{ empty('Hali yo‘q', 'doc') }}</td></tr>{% endfor %}
+  </tbody></table></div></section>
+</div>
+<style>
+.ib-help{margin-top:14px;background:#f8fafc;border-radius:12px;padding:12px 14px;font-size:14px}.ib-help ol{margin:6px 0 10px;padding-left:20px}
+.ib-it{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:10px 0;border-bottom:1px solid #f1f5f9}
+.ib-n{display:flex;flex-direction:column;gap:2px;min-width:0}.ib-s{overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.ib-f{display:flex;flex-direction:column;gap:6px}.ib-f .input{height:34px}
+@media (max-width:700px){.ib-it{grid-template-columns:1fr}}
+</style>
+{% endblock %}

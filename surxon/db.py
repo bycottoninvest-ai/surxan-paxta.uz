@@ -10,7 +10,7 @@ from contextlib import contextmanager
 
 from flask import current_app, g
 
-SCHEMA_VERSION = 16
+SCHEMA_VERSION = 17
 
 SCHEMA = r'''
 CREATE TABLE IF NOT EXISTS brigadiers (
@@ -621,6 +621,15 @@ CREATE TABLE IF NOT EXISTS contract_files (
   party_id INTEGER NOT NULL REFERENCES parties(id), contract_id INTEGER REFERENCES contracts(id),
   kind TEXT NOT NULL DEFAULT 'boshqa', name TEXT NOT NULL, path TEXT NOT NULL, sha256 TEXT,
   uploaded_by INTEGER REFERENCES users(id), uploaded_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS doc_inbox (        -- v17: any document sent to the bot / uploaded at once — sorted by firm and type
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL, path TEXT NOT NULL, sha256 TEXT NOT NULL UNIQUE, size INTEGER,
+  source TEXT NOT NULL DEFAULT 'web', snippet TEXT,
+  guess_party_id INTEGER REFERENCES parties(id), guess_contract_id INTEGER REFERENCES contracts(id), guess_kind TEXT,
+  status TEXT NOT NULL DEFAULT 'new' CHECK (status IN ('new','filed','rad')),
+  file_id INTEGER REFERENCES contract_files(id), done_by INTEGER REFERENCES users(id), done_at TEXT,
+  created_by INTEGER REFERENCES users(id), created_at TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS pq17_docs (      -- v15: the state's cotton receipt (PQ-17, docs.agro.uz) per load
   id INTEGER PRIMARY KEY AUTOINCREMENT,

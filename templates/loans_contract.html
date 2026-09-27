@@ -26,6 +26,10 @@
   {% if st.lines %}<tr class="b"><td colspan="2">Jami</td><td class="num">{{ st.lines|sum(attribute='principal')|money }}</td><td class="num">{{ st.lines|sum(attribute='interest')|money }}</td><td class="num">{{ st.total|money }}</td><td></td></tr>{% endif %}
   </tbody></table></div></section>
 <section class="card s4"><div class="card-h"><h3>Grafik va fayllar</h3></div><div class="card-b">
+  <div class="ln-ph">{% for f in photos %}<a href="{{ url_for('loans.file', file_id=f.id) }}" target="_blank"><img src="{{ url_for('loans.file', file_id=f.id) }}" alt="" loading="lazy"></a>{% endfor %}
+    {% if can('loans.write') %}<form method="post" enctype="multipart/form-data" class="ln-ph-add">{{ csrf() }}<input type="hidden" name="action" value="photo">
+      <label>📷 {{ 'Yana rasm' if photos else 'Texnika rasmi' }}<input type="file" name="files" accept="image/*" multiple onchange="this.form.submit()" hidden></label></form>{% endif %}</div>
+  <a class="btn btn-light btn-sm" style="width:100%;justify-content:center;margin-bottom:12px" href="{{ url_for('loans.akt', party_id=c.party_id) }}">🧾 Akt-sverka ({{ c.party_name }})</a>
   {% if can('loans.write') %}
   <form method="post" enctype="multipart/form-data">{{ csrf() }}<input type="hidden" name="action" value="schedule_xlsx">
     <b>Grafikni Excel’dan yuklash</b><div class="tiny muted">Lizing / bank bergan grafik (Excel). Eski grafik almashtiriladi.</div>
@@ -62,6 +66,8 @@
 .ln-sum{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-bottom:14px}
 .ln-sum div{background:#fff;border:1px solid var(--line,#e5e7eb);border-radius:14px;padding:12px 14px}.ln-sum small{display:block;color:#64748b}.ln-sum b{display:block;font-size:22px}.ln-sum span{color:#64748b;font-size:13px}
 .ln-d{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:8px 0;border-bottom:1px solid #f1f5f9}.ln-d.st-overdue b,.ln-d.st-soon b{color:#b91c1c}.ln-d.st-done{opacity:.6}
+.ln-ph{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:12px}.ln-ph img{width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:10px;display:block}
+.ln-ph-add label{display:flex;align-items:center;justify-content:center;aspect-ratio:4/3;border:2px dashed #cbd5e1;border-radius:10px;color:#475569;cursor:pointer;font-size:14px;text-align:center;padding:6px}
 .ln-terms{white-space:pre-wrap;background:#fffbeb;border:1px solid #fde68a;border-radius:10px;padding:10px 12px;font-size:14px}
 .ln-sum .bad{border-color:#fca5a5;background:#fef2f2}tr.st-overdue{background:#fef2f2}.st-paid{color:#64748b}
 </style>

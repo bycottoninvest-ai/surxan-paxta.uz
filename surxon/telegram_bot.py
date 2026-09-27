@@ -522,12 +522,33 @@ def _on_callback(chat, user, data, update_id):
 
 # ------------------------------------------------------------------ PQ-17 (state cotton receipt) sent as a PDF
 
-def _on_pq17(chat, actor, doc):
+def _on_document(chat, actor, doc):
+    """Any paper from the accountant / manager: a PQ-17 goes to the cotton check, everything else is read and put into
+    its firm's folder (or waits in “Hujjatlar qutisi” when the firm is not clear)."""
+    from . import docinbox, pq17
+    name = doc.get('file_name') or 'hujjat'
+    if (doc.get('file_size') or 0) > 20 * 1024 * 1024:
+        return send(chat, f'⚠️ {name}: fayl juda katta (20 MB dan ko‘p) — saytdagi “Hujjatlar qutisi” orqali yuklang.')
+    data = tg_download(doc['file_id'])
+    if data[:4] == b'%PDF' and (actor.can('nayman.write') or actor.can('reports.finance')):
+        try:
+            pq17.parse(data)
+            return _on_pq17(chat, actor, doc, data)
+        except UserError as e:
+            if 'emas' not in str(e) and 'o‘qib bo‘lmadi —' not in str(e):
+                return _on_pq17(chat, actor, doc, data)
+    try:
+        return send(chat, docinbox.reply_text(docinbox.receive(actor, name, data, source='telegram')))
+    except UserError as e:
+        return send(chat, f'⚠️ {e}')
+
+
+def _on_pq17(chat, actor, doc, data=None):
     from . import pq17
     if not (actor.can('nayman.write') or actor.can('reports.finance')):
         return send(chat, 'PQ-17 faylini faqat buxgalter, rahbar yoki admin yuboradi.')
     try:
-        _id, d, already, how = pq17.import_pdf(actor, tg_download(doc['file_id']), source='telegram')
+        _id, d, already, how = pq17.import_pdf(actor, data or tg_download(doc['file_id']), source='telegram')
     except UserError as e:
         return send(chat, f'⚠️ {doc.get("file_name") or "Fayl"}: {e}')
     if already:
@@ -570,6 +591,8 @@ def _on_message(chat, user, message, update_id):
     actor = actor_for(user)
 
     doc = message.get('document') or {}
+    if doc and actor.can('loans.write'):
+        return _on_document(chat, actor, doc)
     if doc and (doc.get('mime_type') == 'application/pdf' or (doc.get('file_name') or '').lower().endswith('.pdf')):
         return _on_pq17(chat, actor, doc)
 

@@ -1,0 +1,27 @@
+{# Firms as one tidy list, grouped by type (bank, leasing, insurance …) — stays readable with many firms. #}
+{% macro firm_list(parties, kinds) -%}
+<input class="input fl-q" type="search" placeholder="🔍 Firma qidirish (nomi yoki STIR)…" oninput="spxFirmFilter(this)">
+{% for k, label in kinds.items() %}{% set group = parties|selectattr('kind', 'equalto', k)|list %}{% if group %}
+<div class="fl-g"><h4>{{ {'bank': '🏦', 'lizing': '🚜', 'sugurta': '🛡', 'klaster': '🏭', 'yetkazuvchi': '📦'}.get(k, '📁') }} {{ label }} <span>{{ group|length }}</span></h4>
+  {% for p in group %}<div class="fl-r{{ ' fl-bad' if p.overdue }}" data-q="{{ (p.name ~ ' ' ~ (p.inn or ''))|lower }}">
+    {% if p.photo %}<img src="{{ url_for('loans.file', file_id=p.photo.id) }}" alt="" loading="lazy">{% endif %}
+    <a class="fl-n" href="{{ url_for('loans.party', party_id=p.id) }}"><b>{{ p.name }}</b><small>{% if p.inn %}STIR {{ p.inn }} · {% endif %}{{ p.n }} ta shartnoma · {{ p.files }} ta fayl</small></a>
+    <div class="fl-m"><small>Qarz</small><b>{{ p.debt|money }}</b></div>
+    <div class="fl-m">{% if p.overdue %}<small style="color:#b91c1c">⚠ muddati o‘tgan</small><b style="color:#b91c1c">{{ p.overdue_sum|money }}</b>{% elif p.next %}<small>keyingi · {{ p.next.date|d }}</small><b>{{ p.next.amount|money }}</b>{% else %}<small>keyingi</small><b>—</b>{% endif %}</div>
+    <div class="fl-b"><a class="btn btn-primary btn-sm" href="{{ url_for('loans.akt', party_id=p.id) }}">🧾 Akt-sverka</a>
+      <a class="btn btn-light btn-sm" href="{{ url_for('loans.party', party_id=p.id) }}">📅 Grafik</a></div>
+  </div>{% endfor %}
+</div>{% endif %}{% endfor %}
+<style>
+.fl-q{width:100%;max-width:420px;margin-bottom:10px}
+.fl-g{margin-bottom:14px}.fl-g h4{margin:0 0 6px;font-size:14px;color:#334155;display:flex;gap:6px;align-items:center}.fl-g h4 span{background:#e2e8f0;border-radius:99px;padding:0 8px;font-size:12px}
+.fl-r{display:grid;grid-template-columns:auto minmax(0,2fr) 1fr 1fr auto;gap:12px;align-items:center;padding:8px 10px;border:1px solid var(--line,#e5e7eb);border-radius:12px;margin-bottom:6px;background:#fff}
+.fl-r img{width:56px;height:42px;object-fit:cover;border-radius:8px}.fl-r:not(:has(img)){grid-template-columns:minmax(0,2fr) 1fr 1fr auto}
+.fl-bad{border-color:#fca5a5;background:#fff7f7}
+.fl-n{color:inherit;text-decoration:none;min-width:0}.fl-n b{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.fl-n small,.fl-m small{color:#64748b;font-size:12px;display:block}
+.fl-m b{font-size:15px;white-space:nowrap}.fl-b{display:flex;gap:6px}
+@media (max-width:760px){.fl-r,.fl-r:not(:has(img)){grid-template-columns:1fr 1fr}.fl-r img{display:none}.fl-n,.fl-b{grid-column:1/-1}.fl-b .btn{flex:1;justify-content:center}}
+</style>
+<script>function spxFirmFilter(el){const v=el.value.trim().toLowerCase();el.parentNode.querySelectorAll('.fl-r').forEach(r=>r.style.display=!v||r.dataset.q.includes(v)?'':'none');
+el.parentNode.querySelectorAll('.fl-g').forEach(g=>g.style.display=[...g.querySelectorAll('.fl-r')].some(r=>r.style.display!=='none')?'':'none')}</script>
+{%- endmacro %}

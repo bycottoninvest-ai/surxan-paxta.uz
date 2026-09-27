@@ -55,7 +55,16 @@ def home():
                            owed_n=len(owed), owed_sum=sum(w['payable'] for w in owed),
                            combine_balance=sum(c['balance'] for c in combines),
                            combine_worked=[c for c in combines if c['kg'] or c['work_days'] or c['hectares']],
-                           problems=sum(1 for i in items if i[0] != 'green'), items=items)
+                           problems=sum(1 for i in items if i[0] != 'green'), items=items, **_firms())
+
+
+def _firms():
+    """One line on the Buxgalteriya home leading to the firms / akt-sverka section (the list itself lives there)."""
+    if not can('loans.view'):
+        return {'firms': None}
+    from .. import loans as L
+    return {'firms': scalar('SELECT COUNT(*) FROM parties'), 'loan_sum': L.summary(),
+            'inbox_n': scalar("SELECT COUNT(*) FROM doc_inbox WHERE status='new'")}
 
 
 @bp.route('/buxgalteriya/pq17', methods=['GET', 'POST'])
