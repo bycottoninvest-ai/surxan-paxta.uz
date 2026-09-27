@@ -58,6 +58,11 @@ def combines(day):
 
 def fields_map(year):
     import json
+    from .utils import today_str
+    day = today_str()
+    active = {r['field_id'] for r in q('''SELECT DISTINCT field_id FROM trailer_loads WHERE status IN ('OCHIQ','TOLDI')
+                                           UNION SELECT DISTINCT field_id FROM harvests WHERE work_date=? AND voided_at IS NULL''',
+                                        (day,))}
     out = []
     for r in q('''SELECT f.id, f.code, f.name, COALESCE(fs.area_ha, f.area_ha) area_ha, f.polygon_json,
                          COALESCE((SELECT SUM(kg) FROM harvests h WHERE h.field_id=f.id AND h.season_year=? AND h.voided_at IS NULL),0) kg
@@ -68,7 +73,8 @@ def fields_map(year):
         except ValueError:
             poly = None
         out.append({'code': r['code'], 'name': r['name'], 'ha': r['area_ha'] or 0, 'kg': r['kg'],
-                    'kg_ha': round(r['kg'] / r['area_ha']) if r['area_ha'] and r['kg'] else None, 'poly': poly})
+                    'kg_ha': round(r['kg'] / r['area_ha']) if r['area_ha'] and r['kg'] else None, 'poly': poly,
+                    'active': r['id'] in active})       # work going on there today → the TV map zooms to it
     return out
 
 

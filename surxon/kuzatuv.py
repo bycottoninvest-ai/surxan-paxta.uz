@@ -419,6 +419,60 @@ def auto_idle_requests():
     return len(made)
 
 
+def auto_activity_requests(at=None):
+    """While work is going on, the people at it are asked for a photo / short video every N minutes (setting
+    kuzatuv_auto_active_min, 0 = off), in working hours only: whoever opened a trip that is still on the field, the people
+    tied to that field or standing on it (live location), and the driver of a machine working in a field. One request per
+    person per period, never while an earlier one is still unanswered. The answers appear as “Bugungi real voqealar”."""
+    from . import fleet
+    from .settings import get_float
+    every = int(get_float('kuzatuv_auto_active_min', 0) or 0)
+    if every <= 0:
+        return 0
+    at = at or now()
+    if not fleet.in_hours(None, at.strftime('%H:%M')):
+        return 0
+    slot = f'{at.strftime("%Y-%m-%d")}#{(at.hour * 60 + at.minute) // every}'
+    busy = {r['member_id'] for r in q("SELECT member_id FROM media_requests WHERE status IN ('KUTILMOQDA','KECHIKDI')")}
+    asked = set()
+    jobs = []                     # (members, text, kind, context, event)
+    try:
+        from .staffmap import people as staff_people
+        on_field = {}
+        for p in staff_people(hours=1):
+            if p['field'] and not p['stale'] and p['key'].startswith('m'):
+                on_field.setdefault(p['field'], set()).add(int(p['key'][1:]))
+            elif p['field'] and not p['stale'] and p['key'].startswith('u'):
+                m = q('SELECT id FROM tg_members WHERE user_id=?', (int(p['key'][1:]),), one=True)
+                if m:
+                    on_field.setdefault(p['field'], set()).add(m['id'])
+    except Exception:             # the staff map part must never stop the requests
+        on_field = {}
+    for ld in q('''SELECT tl.id, tl.trip_no, tl.opened_by, tl.field_id, f.code, f.name FROM trailer_loads tl
+                   JOIN fields f ON f.id=tl.field_id WHERE tl.status='OCHIQ' ORDER BY tl.id'''):
+        who = {r['id'] for r in q("SELECT id FROM tg_members WHERE status='FAOL' AND (user_id=? OR field_id=?)",
+                                  (ld['opened_by'], ld['field_id']))} | on_field.get(ld['code'], set())
+        jobs.append((who, f'{ld["code"]} dala ({ld["trip_no"]}): terim ketyapti — dala, terimchilar va telashkadan 1 ta rasm '
+                          'yoki qisqa video yuboring.', 'any', f'active:{ld["id"]}:{slot}', 'Terim ketyapti'))
+    for m in fleet.live():
+        if m['state'] != 'field':
+            continue
+        who = {r['id'] for r in q("SELECT id FROM tg_members WHERE status='FAOL' AND equipment_id=?", (m['id'],))}
+        jobs.append((who, f'{m["code"]} {m["field"] or "dala"}da ishlayapti — ishlayotgan joydan qisqa video yuboring.',
+                     'video', f'work:{m["id"]}:{slot}', 'Texnika ishlayapti'))
+    made = []
+    for who, text, kind, ctx, event in jobs:
+        who = sorted(w for w in who if w not in busy and w not in asked)
+        if not who or q('SELECT 1 FROM media_requests WHERE context=?', (ctx,), one=True):
+            continue
+        with tx() as db:
+            made += create_requests(None, who, text, kind=kind, deadline_min=min(every, 45), db=db, context=ctx, event=event)
+        asked.update(who)
+    for rid in made:
+        deliver(rid)
+    return len(made)
+
+
 # ------------------------------------------------------------------ rules (schedule)
 
 def parse_times(raw):
@@ -498,6 +552,10 @@ def tick():
         made += auto_idle_requests()
     except Exception as exc:      # GPS part must never stop the kuzatuv loop
         current_app.logger.warning('auto idle requests: %s', exc)
+    try:
+        made += auto_activity_requests()
+    except Exception as exc:
+        current_app.logger.warning('auto activity requests: %s', exc)
     sent = deliver_pending()
     late = mark_late()
     try:

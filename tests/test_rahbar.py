@@ -205,3 +205,47 @@ def test_staff_photo_name_on_map_dashboard_card_and_stale_reminder(app, world, m
         get_db().execute("INSERT OR IGNORE INTO settings(key, value, updated_at) VALUES ('staff_live_remind','0',?)", (now_str(),))
         get_db().execute("DELETE FROM settings WHERE key='staff_live_reminded'")
         assert staffmap.remind_stale() == 0                                            # can be switched off
+
+
+def test_car_screen_tv_zooms_to_work_and_bot_asks_the_busy_people(app, world, monkeypatch):
+    """/m — the director's car monitor: one map (busy fields, people, machines), today's numbers, real photos, the feed,
+    no money. The TV map knows which fields are busy. While a trip is on the field, the clerk who opened it is asked
+    for a photo once per period (never twice, not while an earlier request is unanswered, off when set to 0)."""
+    from datetime import datetime
+    from surxon import kuzatuv, telegram_bot
+    monkeypatch.setattr(telegram_bot, 'send', lambda *a, **k: {'result': {'message_id': 1}})
+    admin, rahbar = world['admin'], world['rahbar']
+    admin.post('/admin/sozlamalar', {'set_auto_waybill_hand': '1'})
+    tally = make_user(app, admin, 'mirjalol', 'tally')
+    r = tally.post('/dala/yangi', {'trailer_id': world['eq']['TL-01'], 'field_id': world['f']['D-04'], 'method': 'hand',
+                                   'brigadier_id': world['b']['Juma ota'], 'rate': '1500', 'client_uuid': uuid4()}).get_json()
+    assert tally.post(f'/dala/reys/{r["load_id"]}/tortish', {'worker_name': 'Maxsuda', 'kg': '36', 'client_uuid': uuid4()}).get_json()['ok']
+    world['kassa'].post('/kassa', {'category': 'opening', 'amount': '777777', 'entry_date': '2026-01-01', 'client_uuid': uuid4()})
+
+    page = rahbar.get('/m')
+    assert page.status_code == 200 and 'spxStaffMap' in page.get_data(as_text=True)
+    d = rahbar.get('/m/data.json').get_json()
+    assert d['kpi']['today'] == 36 and d['flow']['dalada'] == 1
+    assert any(f['code'] == 'D-04' and f['active'] for f in d['fields']) or not any(f['poly'] for f in d['fields'])
+    assert '777777' not in str(d) and 'amount' not in str(d)                       # never money on the car screen
+    assert world['juma'].get('/m').status_code == 302                              # director / admin only
+    assert app.test_client().get('/m').status_code == 302                          # login first
+
+    with app.app_context():
+        from surxon import tvboard
+        assert [f for f in tvboard.fields_map(2026) if f['code'] == 'D-04'][0]['active']
+        uid = q("SELECT id FROM users WHERE username='mirjalol'", one=True)['id']
+        get_db().execute("INSERT INTO tg_members(full_name, status, source, user_id, telegram_id, dm_ok, created_at) "
+                         "VALUES ('Mirjalol','FAOL','tizim',?, '4242', 1, 'x')", (uid,))
+        at = datetime(2026, 9, 27, 10, 5)
+        assert kuzatuv.auto_activity_requests(at) == 1
+        req = q("SELECT * FROM media_requests ORDER BY id DESC LIMIT 1", one=True)
+        assert req['event'] == 'Terim ketyapti' and 'D-04' in req['text']
+        assert kuzatuv.auto_activity_requests(at) == 0                           # same period → not again
+        assert kuzatuv.auto_activity_requests(datetime(2026, 9, 27, 11, 10)) == 0  # earlier one still unanswered
+        get_db().execute("UPDATE media_requests SET status='JAVOB'")
+        assert kuzatuv.auto_activity_requests(datetime(2026, 9, 27, 11, 10)) == 1  # next hour → asked again
+        get_db().execute("UPDATE media_requests SET status='JAVOB'")
+        assert kuzatuv.auto_activity_requests(datetime(2026, 9, 27, 22, 10)) == 0  # outside working hours
+        get_db().execute("INSERT OR REPLACE INTO settings(key, value, updated_at) VALUES ('kuzatuv_auto_active_min','0','x')")
+        assert kuzatuv.auto_activity_requests(datetime(2026, 9, 27, 12, 10)) == 0  # switched off

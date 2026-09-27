@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="uz"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#06142b"><title>SURXAN-PAXTA · Mashina</title>
+<link rel="icon" href="{{ url_for('static', filename='img/favicon.png') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}?v={{ version }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='vendor/leaflet/leaflet.css') }}">
+<style>
+html,body{margin:0;height:100%;background:#06142b;color:#e8f0fb;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;overflow:hidden}
+.car{display:grid;grid-template-rows:auto 1fr;height:100vh}
+.car-top{display:flex;align-items:center;gap:22px;padding:10px 18px;background:#0a2248;border-bottom:1px solid #16376a}
+.car-top img{height:38px;background:#fff;border-radius:8px;padding:4px 10px}
+.car-top .t{font:800 22px/1.1 system-ui}.car-top .s{color:#9db6d8;font-size:15px}
+.car-top .clock{margin-left:auto;font:800 40px/1 system-ui;color:#39d0ff;font-variant-numeric:tabular-nums}
+.car-top .live{display:flex;align-items:center;gap:8px;color:#9db6d8;font-size:15px}.car-top .live i{width:11px;height:11px;border-radius:50%;background:#22c55e;box-shadow:0 0 8px #22c55e}
+.car-main{display:grid;grid-template-columns:1fr minmax(420px,34vw);gap:12px;padding:12px;min-height:0}
+.car-map{border-radius:16px;overflow:hidden;min-height:0;position:relative}
+.car-map #cm{position:absolute;inset:0;background:#1f2937}
+.car-side{display:grid;grid-template-rows:auto auto 1fr;gap:12px;min-height:0}
+.kp{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.kp div{background:#0d2a55;border:1px solid #1b3d6b;border-radius:14px;padding:10px 14px}
+.kp small{display:block;color:#9db6d8;font-size:14px;font-weight:700;text-transform:uppercase;letter-spacing:.3px}
+.kp b{font:800 36px/1.15 system-ui;font-variant-numeric:tabular-nums}.kp b em{font-style:normal;font-size:18px;color:#9db6d8;margin-left:4px}
+.kp span{display:block;color:#9db6d8;font-size:14px}
+.box{background:#0d2a55;border:1px solid #1b3d6b;border-radius:14px;padding:10px 12px;min-height:0;overflow:hidden;display:flex;flex-direction:column}
+.box h3{margin:0 0 8px;font-size:17px;text-transform:uppercase;letter-spacing:.3px;display:flex;gap:10px;align-items:center}.box h3 span{color:#9db6d8;font-weight:600;text-transform:none;font-size:14px;margin-left:auto}
+.lv{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.lv a{position:relative;display:block;border-radius:10px;overflow:hidden;aspect-ratio:4/3;background:#132f5c;color:#fff;text-decoration:none}
+.lv img{width:100%;height:100%;object-fit:cover;display:block}
+.lv .cap{position:absolute;left:0;right:0;bottom:0;padding:4px 7px;background:linear-gradient(transparent,rgba(0,0,0,.85));font-size:12.5px;line-height:1.25}
+.lv .cap b{display:block;font-size:13px}.lv .play{position:absolute;top:6px;right:6px;background:rgba(0,0,0,.6);border-radius:50%;width:28px;height:28px;display:flex;align-items:center;justify-content:center;font-size:14px}
+.lv-empty{color:#9db6d8;font-size:16px;padding:18px 4px}
+.fd{list-style:none;margin:0;padding:0;overflow:auto;font-size:15.5px}.fd li{display:flex;gap:10px;padding:6px 2px;border-bottom:1px solid #16376a}.fd time{color:#39d0ff;font-weight:800;font-variant-numeric:tabular-nums}
+.ov{position:fixed;inset:0;background:rgba(0,0,0,.92);display:none;align-items:center;justify-content:center;z-index:2000}.ov.on{display:flex}
+.ov img,.ov video{max-width:96vw;max-height:92vh;border-radius:12px}
+.sm-flbl{background:none;border:none;box-shadow:none;color:#ffd23f;font-weight:800;font-size:15px;text-shadow:0 0 3px #000,0 0 3px #000}.sm-flbl:before{display:none}
+.leaflet-control-layers{font-size:15px}
+@media (orientation:portrait){.car-main{grid-template-columns:1fr;grid-template-rows:55vh auto}.car-side{grid-template-rows:auto auto auto}}
+</style></head>
+<body><div class="car">
+  <div class="car-top"><img src="{{ url_for('static', filename='img/logo-dark.png') }}" alt="">
+    <div><div class="t">SURXAN-PAXTA · jonli</div><div class="s" id="c-date"></div></div>
+    <div class="live"><i></i> <span id="c-at">yangilanmoqda…</span></div>
+    <div class="clock" id="c-clock"></div></div>
+  <div class="car-main">
+    <div class="car-map"><div id="cm"></div></div>
+    <div class="car-side">
+      <div class="kp">
+        <div><small>Bugun terildi</small><b id="k-today">—</b><span id="k-split"></span></div>
+        <div><small>Mavsum jami</small><b id="k-season">—</b><span>&nbsp;</span></div>
+        <div><small>Dalada telashka</small><b id="k-dalada">—</b><span id="k-yolda"></span></div>
+        <div><small>Punkt qabul (bugun)</small><b id="k-rec">—</b><span id="k-rec-n"></span></div>
+      </div>
+      <div class="box"><h3>📷 Bugungi real voqealar <span id="lv-st"></span></h3><div class="lv" id="lv"></div></div>
+      <div class="box"><h3>⚡ Nima bo‘lyapti</h3><ul class="fd" id="fd"></ul></div>
+    </div>
+  </div>
+</div>
+<div class="ov" id="ov"></div>
+<script src="{{ url_for('static', filename='vendor/leaflet/leaflet.js') }}"></script>
+<script src="{{ url_for('static', filename='js/basemap.js') }}?v={{ version }}"></script>
+<script src="{{ url_for('static', filename='js/staffmap.js') }}?v={{ version }}"></script>
+<script>
+(function () {
+  const $ = id => document.getElementById(id);
+  const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const fmt = n => n == null ? '—' : String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+  const DATA = {{ data|tojson }};
+  const first = DATA.people[0] || DATA.machines[0] || { lat: 42.3, lon: 59.6 };
+  const map = spxStaffMap({ el: 'cm', av: '{{ url_for('rahbar.avatar', rel='') }}', json: '{{ url_for('rahbar.staff_json') }}',
+    people: DATA.people, center: [first.lat, first.lon], fields: DATA.fields, noPoll: true,
+    fleet: { json: '{{ url_for('rahbar.fleet_json') }}', machines: DATA.machines } });
+  let skew = 0;
+  const clock = () => { $('c-clock').textContent = new Date(Date.now() + skew).toISOString().slice(11, 16); };
+  function render(d) {
+    const [h, m, s] = d.at.split(':').map(Number), now = new Date(); skew = Date.UTC(1970, 0, 1, h, m, s) - (now.getTime() % 86400000); clock();
+    const dt = d.date.split('-'); $('c-date').textContent = `${dt[2]}.${dt[1]}.${dt[0]} · ${d.weekday}`; $('c-at').textContent = 'yangilandi ' + d.at.slice(0, 5);
+    const k = d.kpi, f = d.flow;
+    $('k-today').innerHTML = fmt(k.today) + '<em>kg</em>'; $('k-split').textContent = `qo‘l ${fmt(k.hand)} · kombayn ${fmt(k.combine)}`;
+    $('k-season').innerHTML = fmt(k.season) + '<em>kg</em>';
+    $('k-dalada').innerHTML = f.dalada + '<em>ta</em>'; $('k-yolda').textContent = `yo‘lda ${f.yolda} · punktda ${f.navbat}`;
+    $('k-rec').innerHTML = fmt(k.received) + '<em>kg</em>'; $('k-rec-n').textContent = `${k.received_n} ta reys`;
+    const st = d.status; $('lv-st').textContent = st.asked ? `so‘raldi ${st.asked} · javob ${st.answered}` : '';
+    $('lv').innerHTML = d.live.length ? d.live.slice(0, 6).map((c, i) => `<a href="#" data-i="${i}"><img src="${c.thumb}" alt="" loading="lazy">${c.video ? '<span class="play">▶</span>' : ''}
+      <span class="cap"><b>${esc(c.title)}</b>${esc(c.place)} · ${c.time}</span></a>`).join('')
+      : '<div class="lv-empty">Bugun hali rasm/video kelmagan. Bot terim ketayotgan joylardan har soatda o‘zi so‘raydi.</div>';
+    $('lv').querySelectorAll('[data-i]').forEach(a => a.onclick = e => { e.preventDefault(); const c = d.live[a.dataset.i];
+      $('ov').innerHTML = c.video ? `<video src="${c.full}" controls autoplay preload="none" playsinline></video>` : `<img src="${c.full}" alt="">`; $('ov').classList.add('on'); });
+    $('fd').innerHTML = d.feed.map(x => `<li><time>${esc(x.time)}</time><span>${esc(x.text)}</span></li>`).join('') || '<li>Hali voqea yo‘q</li>';
+    window.spxDrawFields(d.fields); map._spxDraw(d.people, d.machines); map._spxFit(true);
+  }
+  $('ov').onclick = () => { $('ov').classList.remove('on'); $('ov').innerHTML = ''; };
+  render(DATA); setInterval(clock, 5000);
+  setInterval(async () => {
+    try { render(await (await fetch('{{ url_for('rahbar.car_data') }}', { headers: { 'X-Requested-With': 'fetch' }, cache: 'no-store' })).json()); } catch (_) { }
+  }, 30000);
+})();
+</script></body></html>

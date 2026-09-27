@@ -78,6 +78,40 @@ def _staff_count():
     return {'n': len(ppl), 'live': sum(1 for x in ppl if not x['stale'])}
 
 
+@bp.get('/m')
+@perm_required(VIEW)
+def car():
+    """The director's screen in the car (BYD monitor, tablet, any big screen): one map with the busy fields, people and
+    machines, today's numbers, the real photos/videos and what is happening — big, dark, refreshes itself. No money."""
+    return render_template('car.html', data=_car_data())
+
+
+@bp.get('/m/data.json')
+@perm_required(VIEW)
+def car_data():
+    return jsonify(_car_data())
+
+
+def _car_data():
+    from flask import url_for
+    from .. import fleet, livefeed, staffmap, tvboard
+    from ..services import current_season
+    year = current_season(get_db())
+    tv = tvboard.build(year)
+    live = []
+    for c in livefeed.cards(limit=9):
+        m = c['media'][0]
+        if not m.get('thumb'):
+            continue
+        live.append({'thumb': url_for('main.media', path=m['thumb']), 'full': url_for('main.media', path=m['path'] or m['thumb']),
+                     'video': m['kind'] == 'video', 'title': c['title'], 'place': c['place'], 'time': c['time'],
+                     'who': c['who'], 'n': c['photos'] + c['videos']})
+    return {'at': now_str()[11:19], 'date': tv['date'], 'weekday': tv['weekday'], 'kpi': tv['kpi'], 'flow': tv['flow'],
+            'people': staffmap.people(), 'machines': [m for m in fleet.live() if m['lat'] is not None],
+            'fields': [f for f in tv['fields'] if f['poly']], 'live': live, 'feed': tv['feed'][:8],
+            'status': livefeed.status()}
+
+
 @bp.get('/rahbar/xodimlar')
 @perm_required(VIEW)
 def staff_map():
