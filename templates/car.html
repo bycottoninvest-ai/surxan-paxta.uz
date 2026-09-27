@@ -1,15 +1,17 @@
 <!doctype html>
-<html lang="uz"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<html lang="uz" translate="no" class="notranslate"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="google" content="notranslate">
 <meta name="theme-color" content="#06142b"><title>SURXAN-PAXTA · Mashina</title>
 <link rel="icon" href="{{ url_for('static', filename='img/favicon.png') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}?v={{ version }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='vendor/leaflet/leaflet.css') }}">
 <style>
 html,body{margin:0;height:100%;background:#06142b;color:#e8f0fb;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;overflow:hidden}
-.car{display:grid;grid-template-rows:auto 1fr;height:100vh}
+.car{display:grid;grid-template-rows:auto 1fr;height:100vh;height:100dvh;width:100vw;max-width:100%}
 .car-top{display:flex;align-items:center;gap:22px;padding:10px 18px;background:#0a2248;border-bottom:1px solid #16376a}
 .car-top img{height:38px;background:#fff;border-radius:8px;padding:4px 10px}
 .car-top .t{font:800 22px/1.1 system-ui}.car-top .s{color:#9db6d8;font-size:15px}
+.fs-btn{background:#16376a;color:#fff;border:2px solid #39d0ff;border-radius:12px;font:800 18px/1 system-ui;padding:10px 16px;cursor:pointer}
 .car-top .clock{margin-left:auto;font:800 40px/1 system-ui;color:#39d0ff;font-variant-numeric:tabular-nums}
 .car-top .live{display:flex;align-items:center;gap:8px;color:#9db6d8;font-size:15px}.car-top .live i{width:11px;height:11px;border-radius:50%;background:#22c55e;box-shadow:0 0 8px #22c55e}
 .car-main{display:grid;grid-template-columns:1fr minmax(420px,34vw);gap:12px;padding:12px;min-height:0}
@@ -40,7 +42,7 @@ html,body{margin:0;height:100%;background:#06142b;color:#e8f0fb;font-family:syst
   <div class="car-top"><img src="{{ url_for('static', filename='img/logo-dark.png') }}" alt="">
     <div><div class="t">SURXAN-PAXTA · jonli</div><div class="s" id="c-date"></div></div>
     <div class="live"><i></i> <span id="c-at">yangilanmoqda…</span></div>
-    <div class="clock" id="c-clock"></div></div>
+    <div class="clock" id="c-clock"></div><button class="fs-btn" id="fs-btn" type="button">⛶ Butun ekran</button></div>
   <div class="car-main">
     <div class="car-map"><div id="cm"></div></div>
     <div class="car-side">
@@ -88,6 +90,14 @@ html,body{margin:0;height:100%;background:#06142b;color:#e8f0fb;font-family:syst
     $('fd').innerHTML = d.feed.map(x => `<li><time>${esc(x.time)}</time><span>${esc(x.text)}</span></li>`).join('') || '<li>Hali voqea yo‘q</li>';
     window.spxDrawFields(d.fields); map._spxDraw(d.people, d.machines); map._spxFit(true);
   }
+  // full screen (hides the browser bars) — browsers allow it only after a press
+  function goFull() { const el = document.documentElement, rq = el.requestFullscreen || el.webkitRequestFullscreen;
+    if (rq && !(document.fullscreenElement || document.webkitFullscreenElement)) { try { rq.call(el); } catch (_) { } } }
+  $('fs-btn').onclick = goFull;
+  const fsSync = () => { $('fs-btn').style.display = (document.fullscreenElement || document.webkitFullscreenElement) ? 'none' : '';
+    setTimeout(() => map.invalidateSize(), 300); };
+  document.addEventListener('fullscreenchange', fsSync); document.addEventListener('webkitfullscreenchange', fsSync);
+  addEventListener('resize', () => map.invalidateSize());
   $('ov').onclick = () => { $('ov').classList.remove('on'); $('ov').innerHTML = ''; };
   render(DATA); setInterval(clock, 5000);
   setInterval(async () => {
