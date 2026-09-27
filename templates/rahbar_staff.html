@@ -1,16 +1,20 @@
 {% extends 'base.html' %}
 {% from 'macros.html' import icon, empty with context %}
-{% set page_title = 'Xodimlar xaritada' %}
+{% set page_title = 'Odamlar va texnika xaritada' %}
 {% block content %}
 <div class="d-wrap rb">
-  {% with rb_title='Xodimlar xaritada', rb_back=url_for('rahbar.home'), rb_no_period=True %}{% include 'partials/rb_head.html' %}{% endwith %}
+  {% with rb_title='Odamlar va texnika', rb_back=url_for('rahbar.home'), rb_no_period=True %}{% include 'partials/rb_head.html' %}{% endwith %}
   <div id="sm-map" class="sm-map spx-vivid"></div>
-  <div class="tiny muted" style="margin:6px 2px">Rasmga bosing — bugun qayerlardan yurgani chiziladi. Kulrang — {{ 30 }} daqiqadan beri yangilanmagan. Har 30 soniyada yangilanadi.</div>
+  <div class="tiny muted" style="margin:6px 2px">Odam yoki texnikaga bosing — bugun qayerlardan yurgani chiziladi. Kulrang — joylashuv eskirgan. Chap yuqorida “Odamlar / Texnika”ni yoqib-o‘chirish mumkin. Har 30 soniyada yangilanadi.</div>
   <div class="hm-ops" id="sm-list">
+    {% set kinds = {'traktor': '🚜', 'kombayn': '🌾', 'mashina': '🚚', 'telashka': '🛒'} %}
+    {% for m in machines %}<a class="hm-op" href="#" data-machine="{{ m.id }}">
+      <span class="fl-ico s-{{ m.state }}">{{ kinds.get(m.kind, '🚜') }}</span>
+      <span class="hm-op-b"><b>{{ m.code }}{% if m.operator %} · {{ m.operator }}{% endif %}</b><small>{{ m.label }}{% if m.field %} · {{ m.field }}{% endif %}{% if m.state not in ('none','offline') %} · {{ m.at }}{% endif %}</small></span></a>{% endfor %}
     {% for p in people %}<a class="hm-op" href="#" data-key="{{ p.key }}">
       <span class="sm-av {{ 'stale' if p.stale }}">{% if p.avatar %}<img src="{{ url_for('rahbar.avatar', rel=p.avatar) }}" alt="">{% else %}{{ p.name[:1] }}{% endif %}</span>
       <span class="hm-op-b"><b>{{ p.name }}</b><small>{{ p.role }}{% if p.field %} · {{ p.field }} dalasida{% endif %} · {{ p.at }}{% if p.age_min > 1 %} ({{ p.age_min }} daq oldin){% endif %} · {{ 'Telegram' if p.source == 'telegram' else 'ilova' }}</small></span></a>
-    {% else %}{{ empty('Hali hech kim joylashuv ulashmagan. Xodim Telegram’da botga: 📎 → Joylashuv → “Jonli joylashuvni ulashish” → “O‘chirmaguncha”.', 'map') }}{% endfor %}
+    {% else %}{% if not machines %}{{ empty('Hali hech kim joylashuv ulashmagan. Xodim Telegram’da botga: 📎 → Joylashuv → “Jonli joylashuvni ulashish” → “O‘chirmaguncha”.', 'map') }}{% endif %}{% endfor %}
   </div>
 </div>
 {% endblock %}
@@ -22,5 +26,6 @@
 <script>
 const SM_PEOPLE = {{ people|tojson }};
 spxStaffMap({ el: 'sm-map', av: '{{ url_for('rahbar.avatar', rel='') }}', json: '{{ url_for('rahbar.staff_json') }}',
-              people: SM_PEOPLE, center: [{{ center[0] }}, {{ center[1] }}], list: document.getElementById('sm-list') });
+              people: SM_PEOPLE, center: [{{ center[0] }}, {{ center[1] }}], list: document.getElementById('sm-list'),
+              fleet: { json: '{{ url_for('rahbar.fleet_json') }}', machines: {{ machines|tojson }} } });
 </script>{% endblock %}

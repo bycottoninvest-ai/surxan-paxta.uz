@@ -49,6 +49,13 @@ def _staff():
     return staffmap.people()
 
 
+def _machines():
+    if not can('reports.finance'):
+        return None
+    from .. import fleet
+    return [m for m in fleet.live() if m['lat'] is not None]
+
+
 @bp.get('/tq/<token>')
 @login_required
 def trailer_qr(token):
@@ -179,7 +186,7 @@ def full_dashboard(year, day, brig, kpi):
         photos=q('SELECT * FROM photos WHERE voided_at IS NULL AND (load_id IS NULL OR load_id NOT IN '
                  "(SELECT id FROM trailer_loads WHERE status='BEKOR'))" + ('' if sees_finance_photos() else
                  " AND category NOT IN ('cash','expense','payment')") + ' ORDER BY id DESC LIMIT 6'),
-        seasons_cmp=queries.season_comparison(), fin=fin, setup=setup, kuz=_kuz(day), staff=_staff(),
+        seasons_cmp=queries.season_comparison(), fin=fin, setup=setup, kuz=_kuz(day), staff=_staff(), machines=_machines(),
         target=get_float('daily_target_kg', None), map_center=get_setting('map_center'),
         fields_json=[{'id': f['id'], 'code': f['code'], 'name': f['name'], 'area': f['area_ha'],
                       'confirmed': f['area_source'] != 'xarita',

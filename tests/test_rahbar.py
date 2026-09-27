@@ -142,7 +142,7 @@ def test_staff_map_from_telegram_live_location_and_app(app, world, monkeypatch):
     key = next(p['key'] for p in world['rahbar'].get('/rahbar/xodimlar.json').get_json()['people'] if p['source'] == 'telegram' and p['lat'] == 41.31)
     assert len(world['rahbar'].get('/rahbar/xodimlar.json?iz=' + key).get_json()['track']) == 2
     assert world['juma'].get('/rahbar/xodimlar').status_code == 302            # only admin / director / finance
-    assert 'Xodimlar xaritada' in world['rahbar'].get('/rahbar').get_data(as_text=True)
+    assert 'Odamlar va texnika xaritada' in world['rahbar'].get('/rahbar').get_data(as_text=True)
 
 
 def test_tablet_gets_full_dashboard_phone_gets_director_panel(app, world):
@@ -182,9 +182,17 @@ def test_staff_photo_name_on_map_dashboard_card_and_stale_reminder(app, world, m
     assert world['juma'].post('/kuzatuv/odamlar', {'action': 'photo', 'member_id': mid},
                               files={'photo': jpeg()}).status_code in (302, 403)
 
+    # a machine with a GPS tracker is on the same map as the people (dashboard and director panel)
+    from surxon.utils import now_str as real_now
+    with app.app_context():
+        get_db().execute('''INSERT INTO trackers(imei, equipment_id, first_seen, last_seen, last_lat, last_lon, last_speed, last_fix_at)
+                            SELECT '0359339075012345', id, ?, ?, 42.315, 59.605, 12, ? FROM equipment WHERE code='T-01' ''',
+                         (real_now(), real_now(), real_now()))
     dash = admin.get('/').get_data(as_text=True)
-    assert 'Xodimlar xaritada' in dash and 'spxStaffMap' in dash
-    assert 'Xodimlar xaritada' not in world['juma'].get('/').get_data(as_text=True)     # brigadier: no staff map
+    assert 'Odamlar va texnika xaritada' in dash and 'spxStaffMap' in dash and 'SM_MACHINES' in dash and '"T-01"' in dash
+    assert 'Odamlar va texnika' not in world['juma'].get('/').get_data(as_text=True)    # brigadier: no staff map
+    page = world['rahbar'].get('/rahbar/xodimlar').get_data(as_text=True)
+    assert 'data-machine=' in page and 'Sherzod' in page and 'fleet:' in page
 
     sent.clear()                                                                       # the “location received” reply
     with app.app_context():

@@ -84,7 +84,9 @@ def staff_map():
     from .. import staffmap
     from ..settings import get_setting
     c = (get_setting('map_center') or '42.3,59.6').split(',')
-    return render_template('rahbar_staff.html', **_ctx(people=staffmap.people(), center=[float(c[0]), float(c[1])]))
+    from .. import fleet
+    return render_template('rahbar_staff.html', **_ctx(people=staffmap.people(), machines=fleet.live(),
+                                                        center=[float(c[0]), float(c[1])]))
 
 
 @bp.get('/rahbar/xodimlar.json')

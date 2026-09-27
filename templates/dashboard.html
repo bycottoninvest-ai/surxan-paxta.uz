@@ -181,10 +181,10 @@
   {% if staff is not none %}
   <!-- staff on the map: photo + full name, live from Telegram / the phone app -->
   <section class="card s12">
-    <div class="card-h"><h3>{{ icon('map') }} Xodimlar xaritada</h3>
-      <span class="muted small">{{ staff|rejectattr('stale')|list|length }} kishi hozir ko‘rinmoqda{% if staff|selectattr('stale')|list %} · {{ staff|selectattr('stale')|list|length }} kishida joylashuv o‘chgan{% endif %}</span>
+    <div class="card-h"><h3>{{ icon('map') }} Odamlar va texnika xaritada</h3>
+      <span class="muted small">{{ staff|rejectattr('stale')|list|length }} kishi hozir ko‘rinmoqda{% if staff|selectattr('stale')|list %} · {{ staff|selectattr('stale')|list|length }} kishida joylashuv o‘chgan{% endif %} · {{ machines|length }} ta texnika GPS bilan</span>
       <a class="more" href="{{ url_for('rahbar.staff_map') }}">Katta xarita</a></div>
-    <div class="card-b">{% if staff %}<div id="sm-dash" class="sm-map sm-dash spx-vivid"></div>
+    <div class="card-b">{% if staff or machines %}<div id="sm-dash" class="sm-map sm-dash spx-vivid"></div>
       {% else %}{{ empty('Hali hech kim joylashuv ulashmagan. Xodim Telegram’da @surxan_paxta_bot ga: 📎 → Геопозиция → «Транслировать геопозицию» → «Пока не выключу».', 'map') }}{% endif %}</div>
   </section>
   {% endif %}
@@ -220,10 +220,12 @@
 <script src="{{ url_for('static', filename='js/basemap.js') }}?v={{ version }}"></script>
 <script src="{{ url_for('static', filename='vendor/chart.umd.js') }}"></script>
 <script src="{{ url_for('static', filename='js/dashboard.js') }}?v={{ version }}"></script>
-{% if staff %}<script src="{{ url_for('static', filename='js/staffmap.js') }}?v={{ version }}"></script>
+{% if staff or machines %}<script src="{{ url_for('static', filename='js/staffmap.js') }}?v={{ version }}"></script>
 <script>
-const SM_PEOPLE = {{ staff|tojson }};
+const SM_PEOPLE = {{ staff|tojson }}, SM_MACHINES = {{ machines|tojson }};
+const SM_FIRST = SM_PEOPLE[0] || SM_MACHINES[0];
 spxStaffMap({ el: 'sm-dash', av: '{{ url_for('rahbar.avatar', rel='') }}', json: '{{ url_for('rahbar.staff_json') }}',
-              people: SM_PEOPLE, center: [SM_PEOPLE[0].lat, SM_PEOPLE[0].lon] });
+              people: SM_PEOPLE, center: [SM_FIRST.lat, SM_FIRST.lon],
+              fleet: { json: '{{ url_for('rahbar.fleet_json') }}', machines: SM_MACHINES } });
 </script>{% endif %}
 {% endblock %}
