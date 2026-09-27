@@ -14,7 +14,7 @@ from .config import BASE_DIR, Config
 from .security import (PERMISSIONS, ROLES, brigadier_scope, can, csrf_token, load_user, wants_json)
 from .utils import UserError, fmt_date, fmt_money, fmt_num, now_str, today_str, weekday_name
 
-VERSION = '2.20.0'
+VERSION = '2.21.0'
 
 
 def create_app(**overrides):
@@ -51,9 +51,9 @@ def create_app(**overrides):
         dbmod.migrate(conn)
         seed(conn, cfg)
 
-    from .views import acct, admin, auth, dala, finance, hamyon, integrations, kuzatuv, main, ops, people, punkt, reports, yoqilgi, rahbar
+    from .views import acct, admin, auth, dala, finance, hamyon, integrations, kuzatuv, loans, main, ops, people, punkt, reports, yoqilgi, rahbar
     for bp in (auth.bp, main.bp, ops.bp, people.bp, finance.bp, reports.bp, admin.bp, integrations.bp, punkt.bp, acct.bp,
-               kuzatuv.bp, dala.bp, hamyon.bp, yoqilgi.bp, rahbar.bp):
+               kuzatuv.bp, dala.bp, hamyon.bp, yoqilgi.bp, rahbar.bp, loans.bp):
         app.register_blueprint(bp)
     from .telegram_bot import bp as tg_bp
     app.register_blueprint(tg_bp)

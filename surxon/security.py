@@ -59,6 +59,8 @@ PERMISSIONS = {
     'payouts.pay': {'accountant', 'cashier'},
     'combine.finance': {'accountant'},
     'debts.write': {'accountant'},
+    'loans.view': {'manager', 'accountant'},        # credits, leasing, contracts, schedules
+    'loans.write': {'manager', 'accountant'},
     'dayclose': {'accountant'},
     'reports.view': {'manager', 'accountant', 'brigadier', 'scale', 'tally'},
     'reports.finance': {'manager', 'accountant'},

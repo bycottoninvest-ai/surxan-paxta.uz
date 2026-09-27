@@ -1,0 +1,68 @@
+{% extends 'base.html' %}
+{% from 'macros.html' import icon, csrf, empty with context %}
+{% set page_title = c.title %}
+{% macro duty(o, back) %}<div class="ln-d st-{{ o.state }}"><div><b>{{ o.title }}</b><div class="tiny muted">{{ o.due_date|d }}{% if o.party_name %} · {{ o.party_name }}{% endif %}{% if o.equipment_code %} · {{ o.equipment_code }}{% endif %}{% if o.note %} · {{ o.note }}{% endif %}</div></div>
+  <div class="nowrap">{% if o.state == 'done' %}<span class="badge b-green">✓ bajarildi</span>{% elif o.state == 'overdue' %}<span class="badge b-red">{{ -o.days_left }} kun o‘tdi</span>{% elif o.state == 'soon' %}<span class="badge b-red">{{ o.days_left }} kun qoldi</span>{% else %}<span class="tiny muted">{{ o.days_left }} kun</span>{% endif %}
+  {% if can('loans.write') and o.pid %}<form method="post" action="{{ url_for('loans.party', party_id=o.pid) }}" style="display:inline">{{ csrf() }}<input type="hidden" name="duty_id" value="{{ o.id }}"><button class="btn btn-ghost btn-sm" name="action" value="{{ 'duty_undo' if o.done_at else 'duty_done' }}">{{ 'qaytarish' if o.done_at else '✓ bajardim' }}</button></form>{% endif %}</div></div>{% endmacro %}
+{% block content %}
+<div class="page-h"><h1>{{ icon('doc','lg') }} {{ c.title }}</h1><span class="sub">{{ ckinds[c.kind] }}{% if c.number %} № {{ c.number }}{% endif %} · <a class="link" href="{{ url_for('loans.party', party_id=c.party_id) }}">{{ c.party_name }}</a>{% if c.equipment_code %} · texnika {{ c.equipment_code }}{% endif %}{% if c.status != 'FAOL' %} · <b>{{ c.status }}</b>{% endif %}</span></div>
+<div class="ln-sum">
+  <div><small>Summa</small><b>{{ c.amount|money if c.amount else '—' }}</b><span>{% if c.advance %}avans {{ c.advance|money }}{% endif %}{% if c.rate_pct is not none %} · {{ c.rate_pct }}%{% endif %}{% if c.months %} · {{ c.months }} oy{% endif %}</span></div>
+  <div><small>Grafik bo‘yicha jami</small><b>{{ st.total|money }}</b><span>{{ st.lines|length }} ta to‘lov{% if c.start_date %} · {{ c.start_date|d }} dan{% endif %}</span></div>
+  <div><small>To‘landi</small><b>{{ st.paid|money }}</b><span>{% if st.received %}olindi {{ st.received|money }}{% endif %}</span></div>
+  <div class="{{ 'bad' if st.overdue }}"><small>Qoldi</small><b>{{ st.debt|money if st.debt is not none else '—' }}</b><span>{% if st.overdue %}⚠ {{ st.overdue }} ta muddati o‘tgan: {{ st.overdue_sum|money }}{% elif st.next %}keyingi: {{ st.next.date|d }} · {{ st.next.amount|money }}{% endif %}</span></div>
+</div>
+{% if c.terms or c.end_date or duties %}<section class="card" style="margin-bottom:14px"><div class="card-h"><h3>🛡 Muhim shartlar va sanalar</h3>{% if c.end_date %}<span class="muted small">amal qiladi: {{ c.end_date|d }} gacha</span>{% endif %}</div><div class="card-b">
+  {% if c.terms %}<div class="ln-terms">{{ c.terms }}</div>{% endif %}
+  {% for o in duties %}{{ duty(o) }}{% endfor %}
+  {% if not c.terms and not duties %}<p class="muted small" style="margin:0">Muhim shartlar hali yozilmagan. O‘ngdagi “Muhim shartlarni yozish” orqali qo‘shing: masalan, sug‘urtaga necha kunda xabar berish, jarima, texnika ko‘rigi.</p>{% endif %}
+</div></section>{% endif %}
+<div class="grid">
+<section class="card s8"><div class="card-h"><h3>📅 To‘lov grafigi</h3></div>
+  <div class="table-wrap" style="max-height:620px"><table class="t"><thead><tr><th>#</th><th>Sana</th><th class="num">Asosiy qarz</th><th class="num">Foiz</th><th class="num">To‘lov</th><th>Holat</th></tr></thead><tbody>
+  {% for l in st.lines %}<tr class="st-{{ l.state }}"><td>{{ loop.index }}</td><td class="nowrap">{{ l.due_date|d }}</td><td class="num">{{ l.principal|money }}</td><td class="num">{{ l.interest|money }}</td><td class="num b">{{ l.amount|money }}</td>
+    <td>{% if l.state == 'paid' %}<span class="badge b-green">✓ to‘langan</span>{% elif l.state == 'partly' %}<span class="badge b-gray">qisman · qoldi {{ l.left|money }}</span>{% elif l.state == 'overdue' %}<span class="badge b-red">⚠ muddati o‘tgan · {{ l.left|money }}</span>{% else %}<span class="tiny muted">kutilmoqda</span>{% endif %}</td></tr>
+  {% else %}<tr><td colspan="6">{{ empty('Grafik hali yuklanmagan — o‘ngdan Excel grafikni yuklang.', 'calendar') }}</td></tr>{% endfor %}
+  {% if st.lines %}<tr class="b"><td colspan="2">Jami</td><td class="num">{{ st.lines|sum(attribute='principal')|money }}</td><td class="num">{{ st.lines|sum(attribute='interest')|money }}</td><td class="num">{{ st.total|money }}</td><td></td></tr>{% endif %}
+  </tbody></table></div></section>
+<section class="card s4"><div class="card-h"><h3>Grafik va fayllar</h3></div><div class="card-b">
+  {% if can('loans.write') %}
+  <form method="post" enctype="multipart/form-data">{{ csrf() }}<input type="hidden" name="action" value="schedule_xlsx">
+    <b>Grafikni Excel’dan yuklash</b><div class="tiny muted">Lizing / bank bergan grafik (Excel). Eski grafik almashtiriladi.</div>
+    <input class="input" type="file" name="file" accept=".xlsx,.xls" required style="height:auto;padding:8px;margin:6px 0">
+    <button class="btn btn-primary btn-sm">Yuklash</button></form>
+  <details style="margin-top:12px"><summary class="small link">Bir martalik to‘lov qo‘shish (masalan sug‘urta mukofoti)</summary>
+    <form method="post" class="form" style="margin-top:6px">{{ csrf() }}<input type="hidden" name="action" value="schedule_one">
+      <div class="f h"><label>Sana</label><input name="due_date" type="date" required></div>
+      <div class="f h"><label>Summa</label><input name="amount" inputmode="decimal" required></div>
+      <div class="f"><button class="btn btn-light btn-sm">Qo‘shish</button></div></form></details>
+  <details style="margin-top:8px"><summary class="small link">Muhim shartlarni yozish / tahrirlash</summary>
+    <form method="post" class="form" style="margin-top:6px">{{ csrf() }}<input type="hidden" name="action" value="terms">
+      <div class="f"><label>Amal qilish muddati (tugash)</label><input name="end_date" type="date" value="{{ c.end_date or '' }}"></div>
+      <div class="f"><label>Muhim shartlar</label><textarea name="terms" rows="5">{{ c.terms or '' }}</textarea></div>
+      <div class="f"><button class="btn btn-light btn-sm">Saqlash</button></div></form></details>
+  <details style="margin-top:8px"><summary class="small link">Grafik fayli yo‘qmi? Summa, foiz va muddatdan tuzish</summary>
+    <form method="post" class="form" style="margin-top:6px">{{ csrf() }}<input type="hidden" name="action" value="schedule_auto">
+      <div class="f h"><label>Summa</label><input name="amount" value="{{ c.amount or '' }}"></div>
+      <div class="f h"><label>Foiz %</label><input name="rate_pct" value="{{ c.rate_pct or '' }}"></div>
+      <div class="f h"><label>Muddat (oy)</label><input name="months" value="{{ c.months or '' }}"></div>
+      <div class="f h"><label>Boshlanish</label><input name="start" type="date" value="{{ c.start_date or '' }}"></div>
+      <div class="f h"><label>To‘lov har</label><select name="every"><option value="1">oy</option><option value="3">chorak</option><option value="12">yil</option></select></div>
+      <div class="f"><button class="btn btn-light btn-sm">Tuzish</button></div></form></details>
+  {% endif %}
+  <div style="margin-top:14px"><b>Fayllar</b>{% for f in files %}<div><a class="link small" href="{{ url_for('loans.file', file_id=f.id) }}" target="_blank">{{ f.name }}</a> <span class="tiny muted">{{ f.kind }}</span></div>{% else %}<div class="tiny muted">yo‘q</div>{% endfor %}
+    <div class="tiny muted" style="margin-top:4px">Shartnoma faylini firma sahifasidan yuklang.</div></div>
+  <div style="margin-top:14px"><b>To‘lovlar</b>{% for m in moves %}<div class="small">{{ m.move_date|d }} · {{ 'to‘landi' if m.direction == 'OUT' else 'olindi' }} <b>{{ m.amount|money }}</b></div>{% else %}<div class="tiny muted">yo‘q</div>{% endfor %}
+    <a class="link small" href="{{ url_for('loans.party', party_id=c.party_id) }}">+ to‘lov yozish (firma sahifasida)</a></div>
+  {% if can('loans.write') %}<form method="post" class="row" style="gap:6px;margin-top:14px">{{ csrf() }}<input type="hidden" name="action" value="status">
+    <select class="input" name="status" style="height:34px">{% for s in ('FAOL', 'YOPILGAN', 'BEKOR') %}<option {{ 'selected' if c.status == s }}>{{ s }}</option>{% endfor %}</select><button class="btn btn-ghost btn-sm">Holat</button></form>{% endif %}
+</div></section>
+</div>
+<style>
+.ln-sum{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-bottom:14px}
+.ln-sum div{background:#fff;border:1px solid var(--line,#e5e7eb);border-radius:14px;padding:12px 14px}.ln-sum small{display:block;color:#64748b}.ln-sum b{display:block;font-size:22px}.ln-sum span{color:#64748b;font-size:13px}
+.ln-d{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:8px 0;border-bottom:1px solid #f1f5f9}.ln-d.st-overdue b,.ln-d.st-soon b{color:#b91c1c}.ln-d.st-done{opacity:.6}
+.ln-terms{white-space:pre-wrap;background:#fffbeb;border:1px solid #fde68a;border-radius:10px;padding:10px 12px;font-size:14px}
+.ln-sum .bad{border-color:#fca5a5;background:#fef2f2}tr.st-overdue{background:#fef2f2}.st-paid{color:#64748b}
+</style>
+{% endblock %}

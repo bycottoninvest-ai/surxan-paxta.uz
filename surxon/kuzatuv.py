@@ -559,6 +559,12 @@ def tick():
     sent = deliver_pending()
     late = mark_late()
     try:
+        if now().strftime('%H:%M') >= '08:00':
+            from .loans import remind_due
+            remind_due()
+    except Exception as exc:      # payment reminders must never stop the kuzatuv loop
+        current_app.logger.warning('loan reminders: %s', exc)
+    try:
         from .staffmap import remind_stale
         remind_stale()
     except Exception as exc:      # the staff map reminder must never stop the kuzatuv loop

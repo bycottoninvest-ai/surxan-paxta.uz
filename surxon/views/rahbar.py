@@ -37,7 +37,8 @@ def home():
     return render_template('rahbar_home.html', **_ctx(
         cot=D.cotton(year, a, b), now=D.trips_now(), cash=D.cash(a, b), wages=D.wages(year, a, b), fuel=D.fuel(a, b),
         checks=checks, red=sum(1 for c in checks if c['level'] == 'red'), feed=D.feed(8), staff=_staff_count(),
-        fleet=_fleet_count(), live=_live(8), pk=__import__('surxon.queries', fromlist=['finance_summary']).finance_summary(year)))
+        fleet=_fleet_count(), live=_live(8), pk=__import__('surxon.queries', fromlist=['finance_summary']).finance_summary(year),
+        loans=__import__('surxon.loans', fromlist=['summary']).summary()))
 
 
 def _live(limit):

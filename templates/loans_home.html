@@ -1,0 +1,51 @@
+{% extends 'base.html' %}
+{% from 'macros.html' import icon, csrf, empty with context %}
+{% set page_title = 'Kreditlar va lizing' %}
+{% macro duty(o, back) %}<div class="ln-d st-{{ o.state }}"><div><b>{{ o.title }}</b><div class="tiny muted">{{ o.due_date|d }}{% if o.party_name %} · {{ o.party_name }}{% endif %}{% if o.equipment_code %} · {{ o.equipment_code }}{% endif %}{% if o.note %} · {{ o.note }}{% endif %}</div></div>
+  <div class="nowrap">{% if o.state == 'done' %}<span class="badge b-green">✓ bajarildi</span>{% elif o.state == 'overdue' %}<span class="badge b-red">{{ -o.days_left }} kun o‘tdi</span>{% elif o.state == 'soon' %}<span class="badge b-red">{{ o.days_left }} kun qoldi</span>{% else %}<span class="tiny muted">{{ o.days_left }} kun</span>{% endif %}
+  {% if can('loans.write') and o.pid %}<form method="post" action="{{ url_for('loans.party', party_id=o.pid) }}" style="display:inline">{{ csrf() }}<input type="hidden" name="duty_id" value="{{ o.id }}"><button class="btn btn-ghost btn-sm" name="action" value="{{ 'duty_undo' if o.done_at else 'duty_done' }}">{{ 'qaytarish' if o.done_at else '✓ bajardim' }}</button></form>{% endif %}</div></div>{% endmacro %}
+{% block content %}
+<div class="page-h"><h1>{{ icon('building','lg') }} Kreditlar va lizing</h1><span class="sub">Kimga qancha qarzmiz, qachon qancha to‘lash kerak</span></div>
+<div class="ln-sum">
+  <div><small>Jami qarz (qolgan)</small><b>{{ s.debt|money }}</b><span>{{ s.n }} ta shartnoma</span></div>
+  <div class="{{ 'bad' if s.overdue }}"><small>Muddati o‘tgan</small><b>{{ s.overdue_sum|money }}</b><span>{{ s.overdue }} ta to‘lov</span></div>
+  <div><small>30 kun ichida to‘lash</small><b>{{ s.month|money }}</b><span>&nbsp;</span></div>
+  <div><small>Keyingi to‘lov</small>{% if s.next %}<b>{{ s.next.date|d }}</b><span>{{ s.next.amount|money }} · {{ s.next.party }}</span>{% else %}<b>—</b>{% endif %}</div>
+</div>
+
+<div class="grid">
+<section class="card s7"><div class="card-h"><h3>📅 Qachon, qancha to‘lash kerak (90 kun)</h3></div>
+  <div class="table-wrap"><table class="t"><thead><tr><th>Sana</th><th>Kimga</th><th>Nima uchun</th><th class="num">Summa</th><th></th></tr></thead><tbody>
+  {% for u in up %}<tr class="{{ 'ln-bad' if u.state == 'overdue' }}"><td class="nowrap b">{{ u.date|d }}</td><td><a class="link" href="{{ url_for('loans.party', party_id=u.party_id) }}">{{ u.party }}</a></td>
+    <td><a class="link" href="{{ url_for('loans.contract', contract_id=u.contract_id) }}">{{ u.contract }}</a></td><td class="num b">{{ u.amount|money }}</td>
+    <td>{% if u.state == 'overdue' %}<span class="badge b-red">muddati o‘tgan</span>{% elif u.state == 'partly' %}<span class="badge b-gray">qisman to‘langan</span>{% endif %}</td></tr>
+  {% else %}<tr><td colspan="5">{{ empty('Yaqin 90 kunda to‘lov yo‘q', 'calendar') }}</td></tr>{% endfor %}
+  </tbody></table></div></section>
+
+<section class="card s5"><div class="card-h"><h3>⏰ Muhim muddatlar (60 kun)</h3></div><div class="card-b">
+  {% for o in duties %}{{ duty(o) }}{% else %}<span class="tiny muted">Yaqin kunlarda muhim sana yo‘q. Sug‘urta, texnik ko‘rik kabi sanalarni firma sahifasida qo‘shing.</span>{% endfor %}
+</div></section>
+<section class="card s5"><div class="card-h"><h3>Firmalar</h3></div><div class="card-b ln-parties">
+  {% for p in parties %}<a class="ln-p" href="{{ url_for('loans.party', party_id=p.id) }}">
+    <div><b>{{ p.name }}</b><div class="tiny muted">{{ kinds[p.kind] }}{% if p.inn %} · STIR {{ p.inn }}{% endif %} · {{ p.n }} ta shartnoma · {{ p.files }} ta fayl</div></div>
+    <div class="num"><b>{{ p.debt|money }}</b>{% if p.overdue %}<div class="tiny" style="color:var(--red)">⚠ {{ p.overdue }} ta muddati o‘tgan</div>{% elif p.next %}<div class="tiny muted">keyingi: {{ p.next.date|d }}</div>{% endif %}</div></a>
+  {% else %}{{ empty('Hali firma yo‘q — pastdan qo‘shing.', 'building') }}{% endfor %}
+  {% if can('loans.write') %}
+  <details style="margin-top:12px"><summary class="btn btn-light btn-sm">+ Yangi firma</summary>
+    <form method="post" action="{{ url_for('loans.party_save') }}" class="form" style="margin-top:8px">{{ csrf() }}
+      <div class="f"><label>Nomi</label><input name="name" required placeholder="Agrosanoat Agro Lizing"></div>
+      <div class="f h"><label>STIR</label><input name="inn" inputmode="numeric"></div>
+      <div class="f h"><label>Turi</label><select name="kind">{% for k, v in kinds.items() %}<option value="{{ k }}">{{ v }}</option>{% endfor %}</select></div>
+      <div class="f"><button class="btn btn-primary">Saqlash</button></div></form></details>{% endif %}
+</div></section>
+</div>
+<style>
+.ln-sum{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-bottom:14px}
+.ln-sum div{background:#fff;border:1px solid var(--line,#e5e7eb);border-radius:14px;padding:12px 14px}.ln-sum small{display:block;color:#64748b}.ln-sum b{display:block;font-size:24px}.ln-sum span{color:#64748b;font-size:13px}
+.ln-sum .bad{border-color:#fca5a5;background:#fef2f2}.ln-sum .bad b{color:#b91c1c}
+.ln-bad{background:#fef2f2}
+.ln-d{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:8px 0;border-bottom:1px solid #f1f5f9}.ln-d.st-overdue b,.ln-d.st-soon b{color:#b91c1c}.ln-d.st-done{opacity:.6}
+.ln-terms{white-space:pre-wrap;background:#fffbeb;border:1px solid #fde68a;border-radius:10px;padding:10px 12px;font-size:14px}.ln-parties{display:flex;flex-direction:column;gap:8px}
+.ln-p{display:flex;justify-content:space-between;gap:10px;padding:10px 12px;border:1px solid var(--line,#e5e7eb);border-radius:12px;color:inherit;text-decoration:none}.ln-p:hover{background:#f8fafc}
+</style>
+{% endblock %}

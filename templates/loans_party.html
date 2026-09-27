@@ -1,0 +1,90 @@
+{% extends 'base.html' %}
+{% from 'macros.html' import icon, csrf, empty with context %}
+{% set page_title = p.name %}
+{% macro duty(o, back) %}<div class="ln-d st-{{ o.state }}"><div><b>{{ o.title }}</b><div class="tiny muted">{{ o.due_date|d }}{% if o.party_name %} · {{ o.party_name }}{% endif %}{% if o.equipment_code %} · {{ o.equipment_code }}{% endif %}{% if o.note %} · {{ o.note }}{% endif %}</div></div>
+  <div class="nowrap">{% if o.state == 'done' %}<span class="badge b-green">✓ bajarildi</span>{% elif o.state == 'overdue' %}<span class="badge b-red">{{ -o.days_left }} kun o‘tdi</span>{% elif o.state == 'soon' %}<span class="badge b-red">{{ o.days_left }} kun qoldi</span>{% else %}<span class="tiny muted">{{ o.days_left }} kun</span>{% endif %}
+  {% if can('loans.write') and o.pid %}<form method="post" action="{{ url_for('loans.party', party_id=o.pid) }}" style="display:inline">{{ csrf() }}<input type="hidden" name="duty_id" value="{{ o.id }}"><button class="btn btn-ghost btn-sm" name="action" value="{{ 'duty_undo' if o.done_at else 'duty_done' }}">{{ 'qaytarish' if o.done_at else '✓ bajardim' }}</button></form>{% endif %}</div></div>{% endmacro %}
+{% block content %}
+<div class="page-h"><h1>{{ icon('building','lg') }} {{ p.name }}</h1><span class="sub">{{ kinds[p.kind] }}{% if p.inn %} · STIR {{ p.inn }}{% endif %} · <a class="link" href="{{ url_for('loans.home') }}">‹ barcha firmalar</a></span></div>
+<div class="ln-sum">
+  <div><small>Qolgan qarz</small><b>{{ debt|money }}</b></div>
+  <div><small>Biz to‘ladik</small><b>{{ paid|money }}</b></div>
+  <div><small>Bizga tushdi (kredit)</small><b>{{ got|money }}</b></div>
+  <div><small>Shartnomalar / fayllar</small><b>{{ cs|length }} / {{ files|length }}</b></div>
+</div>
+<div class="grid">
+<section class="card s12"><div class="card-h"><h3>📄 Shartnomalar</h3></div>
+  <div class="table-wrap"><table class="t"><thead><tr><th>Shartnoma</th><th>Turi</th><th>Boshlangan</th><th class="num">Summa</th><th class="num">To‘landi</th><th class="num">Qoldi</th><th>Keyingi to‘lov</th><th></th></tr></thead><tbody>
+  {% for c in cs %}<tr><td><a class="link b" href="{{ url_for('loans.contract', contract_id=c.id) }}">{{ c.title }}</a>{% if c.number %}<div class="tiny muted">№ {{ c.number }}</div>{% endif %}{% if c.equipment_code %}<div class="tiny muted">texnika {{ c.equipment_code }}</div>{% endif %}</td>
+    <td>{{ ckinds[c.kind] }}</td><td>{{ c.start_date|d if c.start_date else '—' }}</td><td class="num">{{ c.amount|money if c.amount else '—' }}</td>
+    <td class="num">{{ c.st.paid|money }}</td><td class="num b">{{ c.st.debt|money if c.st.debt is not none else '—' }}</td>
+    <td>{% if c.st.next %}{{ c.st.next.date|d }} · {{ c.st.next.amount|money }}{% else %}—{% endif %}</td>
+    <td>{% if c.st.overdue %}<span class="badge b-red">⚠ {{ c.st.overdue }} ta muddati o‘tgan</span>{% elif not c.st.lines %}<span class="badge b-gray">grafik yo‘q</span>{% endif %}</td></tr>
+  {% else %}<tr><td colspan="8">{{ empty('Shartnoma yo‘q', 'doc') }}</td></tr>{% endfor %}
+  </tbody></table></div>
+  {% if can('loans.write') %}<details class="card-b"><summary class="btn btn-light btn-sm">+ Shartnoma qo‘shish</summary>
+    <form method="post" class="form" style="margin-top:8px">{{ csrf() }}
+      <div class="f h"><label>Turi</label><select name="kind">{% for k, v in ckinds.items() %}<option value="{{ k }}">{{ v }}</option>{% endfor %}</select></div>
+      <div class="f"><label>Nomi</label><input name="title" required placeholder="TZST CE-220 kombayn lizingi"></div>
+      <div class="f h"><label>Shartnoma №</label><input name="number"></div>
+      <div class="f h"><label>Imzolangan sana</label><input name="sign_date" type="date"></div>
+      <div class="f h"><label>Boshlanish sanasi</label><input name="start_date" type="date"></div>
+      <div class="f h"><label>Summa (so‘m)</label><input name="amount" inputmode="decimal"></div>
+      <div class="f h"><label>Avans (so‘m)</label><input name="advance" inputmode="decimal"></div>
+      <div class="f h"><label>Yillik foiz %</label><input name="rate_pct" inputmode="decimal"></div>
+      <div class="f h"><label>Muddat (oy)</label><input name="months" inputmode="numeric"></div>
+      <div class="f h"><label>Texnika</label><select name="equipment_id"><option value="">—</option>{% for e in equipment %}<option value="{{ e.id }}">{{ e.code }}</option>{% endfor %}</select></div>
+      <div class="f h"><label>Amal qilish muddati (tugash)</label><input name="end_date" type="date"></div>
+      <div class="f"><label>Muhim shartlar (huquq va majburiyatlar)</label><textarea name="terms" rows="3" placeholder="Masalan: zarar bo‘lsa 5 ish kuni ichida xabar berish, 10 ish kuni ichida yozma ariza"></textarea></div>
+      <div class="f"><button class="btn btn-primary">Saqlash</button></div></form></details>{% endif %}
+</section>
+
+<section class="card s12"><div class="card-h"><h3>⏰ Muhim sanalar</h3></div><div class="card-b">
+  {% for o in duties %}{{ duty(o) }}{% else %}<span class="tiny muted">Yo‘q</span>{% endfor %}
+  {% if can('loans.write') %}<details style="margin-top:8px"><summary class="btn btn-light btn-sm">+ Muhim sana qo‘shish</summary>
+    <form method="post" class="form" style="margin-top:8px">{{ csrf() }}<input type="hidden" name="action" value="duty">
+      <div class="f"><label>Nima qilish kerak</label><input name="title" required placeholder="Sug‘urta mukofotini to‘lash / Texnik ko‘rikdan o‘tkazish"></div>
+      <div class="f h"><label>Sana</label><input name="due_date" type="date" required></div>
+      <div class="f h"><label>Necha kun oldin eslatsin</label><input name="remind_days" value="7" inputmode="numeric"></div>
+      <div class="f h"><label>Shartnoma</label><select name="contract_id"><option value="">—</option>{% for c in cs %}<option value="{{ c.id }}">{{ c.title }}</option>{% endfor %}</select></div>
+      <div class="f h"><label>Texnika</label><select name="equipment_id"><option value="">—</option>{% for e in equipment %}<option value="{{ e.id }}">{{ e.code }}</option>{% endfor %}</select></div>
+      <div class="f"><label>Izoh</label><input name="note"></div>
+      <div class="f"><button class="btn btn-primary">Saqlash</button></div></form></details>{% endif %}
+</div></section>
+
+<section class="card s7"><div class="card-h"><h3>💸 Pul harakati (akt-sverka)</h3></div>
+  <div class="table-wrap"><table class="t"><thead><tr><th>Sana</th><th>Shartnoma</th><th>Mazmuni</th><th class="num">Biz to‘ladik</th><th class="num">Bizga tushdi</th><th></th></tr></thead><tbody>
+  {% for m in moves %}<tr><td class="nowrap">{{ m.move_date|d }}</td><td class="small">{{ m.contract_title or '—' }}</td><td class="small">{{ m.purpose or '' }}{% if m.source != 'qo‘lda' %} <span class="tiny muted">({{ m.source }})</span>{% endif %}</td>
+    <td class="num">{{ m.amount|money if m.direction == 'OUT' else '' }}</td><td class="num">{{ m.amount|money if m.direction == 'IN' else '' }}</td>
+    <td>{% if can('loans.write') %}<form method="post" data-confirm="Bu to‘lov bekor qilinsinmi?">{{ csrf() }}<input type="hidden" name="action" value="void_move"><input type="hidden" name="move_id" value="{{ m.id }}"><button class="btn btn-ghost btn-sm">×</button></form>{% endif %}</td></tr>
+  {% else %}<tr><td colspan="6">{{ empty('Hali to‘lov yozilmagan', 'cash') }}</td></tr>{% endfor %}
+  {% if moves %}<tr class="b"><td colspan="3">Jami</td><td class="num">{{ paid|money }}</td><td class="num">{{ got|money }}</td><td></td></tr>{% endif %}
+  </tbody></table></div>
+  {% if can('loans.write') %}<details class="card-b"><summary class="btn btn-light btn-sm">+ To‘lov yozish</summary>
+    <form method="post" class="form" style="margin-top:8px">{{ csrf() }}<input type="hidden" name="action" value="move">
+      <div class="f h"><label>Sana</label><input name="move_date" type="date" required></div>
+      <div class="f h"><label>Yo‘nalish</label><select name="direction"><option value="OUT">Biz to‘ladik</option><option value="IN">Bizga tushdi (kredit berildi)</option></select></div>
+      <div class="f h"><label>Summa (so‘m)</label><input name="amount" inputmode="decimal" required></div>
+      <div class="f h"><label>Shartnoma</label><select name="contract_id"><option value="">—</option>{% for c in cs %}<option value="{{ c.id }}">{{ c.title }}</option>{% endfor %}</select></div>
+      <div class="f"><label>Mazmuni</label><input name="purpose" placeholder="1-chorak lizing to‘lovi"></div>
+      <div class="f"><button class="btn btn-primary">Saqlash</button></div></form></details>{% endif %}
+</section>
+
+<section class="card s5"><div class="card-h"><h3>📎 Fayllar</h3></div><div class="card-b">
+  {% for f in files %}<div class="ln-f"><a class="link" href="{{ url_for('loans.file', file_id=f.id) }}" target="_blank">{{ f.name }}</a><span class="tiny muted">{{ f.kind }}{% if f.contract_title %} · {{ f.contract_title }}{% endif %} · {{ f.uploaded_at|d }}</span></div>
+  {% else %}<span class="tiny muted">Fayl yo‘q</span>{% endfor %}
+  {% if can('loans.write') %}<form method="post" enctype="multipart/form-data" style="margin-top:10px">{{ csrf() }}<input type="hidden" name="action" value="file">
+    <input class="input" type="file" name="files" multiple required style="height:auto;padding:8px">
+    <div class="row" style="gap:6px;margin-top:6px"><select class="input" name="kind" style="height:34px"><option value="shartnoma">Shartnoma</option><option value="grafik">Grafik</option><option value="faktura">Faktura</option><option value="akt">Akt-sverka</option><option value="boshqa">Boshqa</option></select>
+      <select class="input" name="contract_id" style="height:34px"><option value="">— shartnoma —</option>{% for c in cs %}<option value="{{ c.id }}">{{ c.title }}</option>{% endfor %}</select>
+      <button class="btn btn-light btn-sm">Yuklash</button></div></form>{% endif %}
+</div></section>
+</div>
+<style>
+.ln-sum{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:14px}
+.ln-sum div{background:#fff;border:1px solid var(--line,#e5e7eb);border-radius:14px;padding:12px 14px}.ln-sum small{display:block;color:#64748b}.ln-sum b{font-size:22px}
+.ln-d{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:8px 0;border-bottom:1px solid #f1f5f9}.ln-d.st-overdue b,.ln-d.st-soon b{color:#b91c1c}.ln-d.st-done{opacity:.6}
+.ln-terms{white-space:pre-wrap;background:#fffbeb;border:1px solid #fde68a;border-radius:10px;padding:10px 12px;font-size:14px}
+.ln-f{display:flex;flex-direction:column;padding:6px 0;border-bottom:1px solid #f1f5f9}
+</style>
+{% endblock %}

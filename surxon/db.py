@@ -10,7 +10,7 @@ from contextlib import contextmanager
 
 from flask import current_app, g
 
-SCHEMA_VERSION = 15
+SCHEMA_VERSION = 16
 
 SCHEMA = r'''
 CREATE TABLE IF NOT EXISTS brigadiers (
@@ -577,6 +577,51 @@ CREATE INDEX IF NOT EXISTS idx_staffpos_user ON staff_positions(user_id, at);
 CREATE INDEX IF NOT EXISTS idx_staffpos_member ON staff_positions(member_id, at);
 
 -- v12: GPS trackers on machines (GT06). A tracker is known by its IMEI; unknown ones are listed for the admin to assign.
+CREATE TABLE IF NOT EXISTS parties (         -- v16: banks, leasing companies, clusters, suppliers — everyone we owe or who owes us
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL, inn TEXT UNIQUE,
+  kind TEXT NOT NULL DEFAULT 'boshqa' CHECK (kind IN ('bank','lizing','sugurta','klaster','yetkazuvchi','boshqa')),
+  note TEXT, created_by INTEGER REFERENCES users(id), created_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS contracts (        -- a loan, a leasing, a purchase …
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  party_id INTEGER NOT NULL REFERENCES parties(id),
+  kind TEXT NOT NULL CHECK (kind IN ('kredit','lizing','sugurta','xarid','boshqa')),
+  number TEXT, title TEXT NOT NULL, sign_date TEXT, start_date TEXT,
+  amount REAL, advance REAL, rate_pct REAL, months INTEGER,
+  equipment_id INTEGER REFERENCES equipment(id),
+  end_date TEXT, terms TEXT,                  -- valid until; the key rights / duties in plain words
+  note TEXT, status TEXT NOT NULL DEFAULT 'FAOL' CHECK (status IN ('FAOL','YOPILGAN','BEKOR')),
+  created_by INTEGER REFERENCES users(id), created_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS contract_schedule (   -- when and how much is due (principal + interest)
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  contract_id INTEGER NOT NULL REFERENCES contracts(id),
+  due_date TEXT NOT NULL, principal REAL NOT NULL DEFAULT 0, interest REAL NOT NULL DEFAULT 0, amount REAL NOT NULL,
+  note TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_sched_contract ON contract_schedule(contract_id, due_date);
+CREATE TABLE IF NOT EXISTS contract_moves (      -- money that really moved: we paid (OUT) or received a loan (IN)
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  contract_id INTEGER REFERENCES contracts(id),
+  party_id INTEGER NOT NULL REFERENCES parties(id),
+  move_date TEXT NOT NULL, direction TEXT NOT NULL CHECK (direction IN ('IN','OUT')),
+  amount REAL NOT NULL CHECK (amount > 0), purpose TEXT, source TEXT NOT NULL DEFAULT 'qo‘lda', bank_ref TEXT UNIQUE,
+  created_by INTEGER REFERENCES users(id), created_at TEXT NOT NULL, voided_at TEXT, voided_by INTEGER REFERENCES users(id)
+);
+CREATE TABLE IF NOT EXISTS obligations (      -- dates that are not payments: insurance renewal, technical inspection …
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  party_id INTEGER REFERENCES parties(id), contract_id INTEGER REFERENCES contracts(id), equipment_id INTEGER REFERENCES equipment(id),
+  due_date TEXT NOT NULL, title TEXT NOT NULL, note TEXT, remind_days INTEGER NOT NULL DEFAULT 7,
+  done_at TEXT, done_by INTEGER REFERENCES users(id), reminded_at TEXT,
+  created_by INTEGER REFERENCES users(id), created_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS contract_files (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  party_id INTEGER NOT NULL REFERENCES parties(id), contract_id INTEGER REFERENCES contracts(id),
+  kind TEXT NOT NULL DEFAULT 'boshqa', name TEXT NOT NULL, path TEXT NOT NULL, sha256 TEXT,
+  uploaded_by INTEGER REFERENCES users(id), uploaded_at TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS pq17_docs (      -- v15: the state's cotton receipt (PQ-17, docs.agro.uz) per load
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   code TEXT NOT NULL UNIQUE,                -- XH7825975014

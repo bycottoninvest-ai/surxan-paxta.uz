@@ -53,6 +53,8 @@
       <b class="rb-big num">{{ checks|length }} ta</b><span>{{ 'muhim: ' ~ red ~ ' ta' if red else ('hammasi joyida' if not checks else 'e’tibor uchun') }}</span>
       <div class="rb-list">{% for c in checks[:3] %}<div class="{{ c.level }}">• {{ c.title }}</div>{% endfor %}</div></a>
   </div>
+  {% if loans.n %}<a class="rb-staff rb-pk {{ 'rb-pk-debt' if loans.overdue or loans.duties }}" href="{{ url_for('loans.home') }}">🏦 <b>Kreditlar va lizing</b>
+    <span>qarz {{ loans.debt|money }}{% if loans.overdue %} · ⚠ {{ loans.overdue }} ta muddati o‘tgan{% elif loans.next %} · keyingi {{ loans.next.date|d }}: {{ loans.next.amount|money }}{% endif %}{% if loans.duties %} · ⏰ {{ loans.duties|length }} ta muhim sana{% endif %}</span>{{ icon('chev-right') }}</a>{% endif %}
   <a class="rb-staff rb-pk {{ 'rb-pk-debt' if pk.debt and pk.debt > 0 }}" href="{{ url_for('rahbar.punkt_money') }}">🏭 <b>Punkt bilan hisob</b>
     <span>{% if pk.debt is not none %}qoldiq {{ pk.debt|num }} so‘m · tushgan {{ pk.received|num }}{% elif pk.accepted_kg %}narx kiritilmagan{% else %}hali qabul yo‘q{% endif %}</span>{{ icon('chev-right') }}</a>
   <a class="rb-staff" href="{{ url_for('rahbar.car') }}">🚗 <b>Mashina ekrani (katta monitor)</b><span>xarita, raqamlar, real rasmlar — bir ekranda</span>{{ icon('chev-right') }}</a>
