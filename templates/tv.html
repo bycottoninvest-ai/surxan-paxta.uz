@@ -64,7 +64,12 @@ main{display:grid;grid-template-columns:505px 1fr 488px;gap:12px;min-height:0}
 .legend div{display:flex;align-items:center;gap:8px;margin:3px 0}.legend i{width:14px;height:14px;border-radius:50%}
 .mstat{position:absolute;left:20px;bottom:20px;z-index:500;background:rgba(4,20,43,.88);border:1px solid var(--line);border-radius:8px;padding:10px 14px;font-size:19px;line-height:1.5}
 .lbl{background:none;border:none;box-shadow:none;color:#fff;font-weight:700;font-size:11px;text-shadow:0 0 3px #000,0 0 3px #000;padding:0}.lbl:before{display:none}
-.lbl-act{font-size:18px;color:#ffd23f}.tv-active{animation:tvpulse 2s ease-in-out infinite}@keyframes tvpulse{50%{stroke-opacity:.35}}
+.lbl-act{font-size:18px;color:#ffd23f}
+.tour-cap{position:absolute;left:16px;top:48px;max-width:calc(100% - 220px);overflow:hidden;text-overflow:ellipsis;z-index:600;background:rgba(4,20,43,.9);border:2px solid #ffd23f;color:#fff;font-weight:800;font-size:22px;padding:6px 16px;border-radius:10px;white-space:nowrap}
+.tvpin{background:none;border:0;overflow:visible}.tvn{position:absolute;bottom:58px;left:50%;transform:translateX(-50%);white-space:nowrap;background:rgba(4,20,43,.9);color:#fff;font-weight:800;font-size:15px;padding:2px 8px;border-radius:7px}.tvn.old{opacity:.6}
+.tva,.tvm{display:flex;align-items:center;justify-content:center;width:52px;height:52px;border-radius:50%;border:4px solid #2fd26e;background:#1b6fe0;color:#fff;font-weight:900;font-size:22px;overflow:hidden;box-shadow:0 2px 10px rgba(0,0,0,.6)}
+.tva img{width:100%;height:100%;object-fit:cover}.tva.old{border-color:#94a3b8;filter:grayscale(1)}
+.tvm{background:#fff;font-size:26px}.tvm.s-road{border-color:#3aa0ff}.tvm.s-idle{border-color:#ffc53a}.tvm.s-parked,.tvm.s-offline,.tvm.s-none{border-color:#94a3b8;filter:grayscale(1)}.tv-active{animation:tvpulse 2s ease-in-out infinite}@keyframes tvpulse{50%{stroke-opacity:.35}}
 .shots{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;padding:4px 12px 12px;height:calc(100% - 44px)}
 .shots div{border-radius:8px;background:#0b1b30 center/cover;position:relative;border:1px solid #2d5a8f;overflow:hidden}
 .shots div span{position:absolute;left:6px;bottom:6px;background:rgba(0,0,0,.6);padding:2px 8px;border-radius:6px;font-size:14px}
@@ -134,7 +139,7 @@ footer>div{background:linear-gradient(180deg,var(--card2),var(--card));border:1p
 
     <div class="col">
       <div class="card" style="flex:1"><div class="h">Dalalar xaritasi <small>(hosildorlik, kg/ga)</small></div>
-        <div id="map"></div>
+        <div id="map"></div><div id="tour-cap" class="tour-cap" style="display:none"></div>
         <div class="legend"><div style="font-weight:700;margin-bottom:4px">Hosildorlik (kg/ga)</div>
           <div><i style="background:#2fd26e"></i>&gt; 2 500</div><div><i style="background:#a7d948"></i>1 500 – 2 500</div>
           <div><i style="background:#ffc53a"></i>800 – 1 500</div><div><i style="background:#ff4f6d"></i>&lt; 800</div><div><i style="background:#7d8ea5"></i>Terim yo‘q</div></div>
@@ -195,7 +200,21 @@ footer>div{background:linear-gradient(180deg,var(--card2),var(--card));border:1p
   let skew = 0;
   const clock = () => { $('clock').textContent = new Date(Date.now() + skew).toISOString().slice(11, 19); }; clock(); setInterval(clock, 1000);
 
-  let map, layer, fitted = null;
+  let map, layer, marks, fitted = null;
+  const KIND = { traktor: '🚜', kombayn: '🌾', mashina: '🚚' };
+  const tour = { spots: [], all: [], i: -1, every: 15000, timer: null };
+  function tourStep() {
+    if (!map) return;
+    const cap = $('tour-cap');
+    if (!tour.spots.length) { if (tour.all.length) map.flyToBounds(tour.all, { padding: [40, 40], maxZoom: 16, duration: 1.5 }); cap.style.display = 'none'; return; }
+    tour.i = (tour.i + 1) % (tour.spots.length + 1);
+    if (tour.i === tour.spots.length) {                        // one step: the whole picture
+      map.flyToBounds(tour.all, { padding: [40, 40], maxZoom: 15, duration: 1.8 }); cap.textContent = '🗺 Bugun ish ketayotgan joylar'; cap.style.display = ''; return;
+    }
+    const s = tour.spots[tour.i];
+    if (s.b) map.flyToBounds(s.b, { padding: [50, 50], maxZoom: 17, duration: 1.8 }); else map.flyTo(s.p, 17, { duration: 1.8 });
+    cap.textContent = s.t; cap.style.display = '';
+  }
   const colour = f => !f.kg_ha ? '#7d8ea5' : f.kg_ha > 2500 ? '#2fd26e' : f.kg_ha >= 1500 ? '#a7d948' : f.kg_ha >= 800 ? '#ffc53a' : '#ff4f6d';
   function drawMap(d) {
     const s = d.fields_stat;
@@ -205,7 +224,7 @@ footer>div{background:linear-gradient(180deg,var(--card2),var(--card));border:1p
       const c = (d.map_center || '42.3,59.6').split(',').map(Number);
       map = L.map('map', { zoomControl: false, attributionControl: false, dragging: false, scrollWheelZoom: false, doubleClickZoom: false, boxZoom: false, keyboard: false, touchZoom: false, zoomSnap: .25 }).setView(c, 13);
       if (window.spxBasemap) spxBasemap(map); else L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}').addTo(map);
-      layer = L.layerGroup().addTo(map);
+      layer = L.layerGroup().addTo(map); marks = L.layerGroup().addTo(map);
     }
     layer.clearLayers(); const b = [], act = [];
     d.fields.forEach(f => {
@@ -215,9 +234,22 @@ footer>div{background:linear-gradient(180deg,var(--card2),var(--card));border:1p
         .bindTooltip(esc(f.code), { permanent: true, direction: 'center', className: 'lbl' + (f.active ? ' lbl-act' : '') });
       b.push(...f.poly); if (f.active) act.push(...f.poly);
     });
-    // zoom to where work is going on today (the TV hangs far away — the busy fields must be big); none → all fields
-    const key = act.length ? d.fields.filter(f => f.active).map(f => f.code).join(',') : '*';
-    if (b.length && fitted !== key) { map.fitBounds(act.length ? act : b, { padding: act.length ? [60, 60] : [16, 16], maxZoom: 16 }); fitted = key; }
+    // people and machines on the map
+    marks.clearLayers();
+    (d.machines || []).forEach(m => L.marker([m.lat, m.lon], { icon: L.divIcon({ className: 'tvpin', iconSize: [52, 52], iconAnchor: [26, 26],
+      html: `<span class="tvn">${esc(m.code)}${m.operator ? ' · ' + esc(m.operator) : ''}</span><span class="tvm s-${m.state}">${KIND[m.kind] || '🚜'}</span>` }) }).addTo(marks));
+    (d.staff || []).forEach(p => L.marker([p.lat, p.lon], { icon: L.divIcon({ className: 'tvpin', iconSize: [52, 52], iconAnchor: [26, 26],
+      html: `<span class="tvn ${p.stale ? 'old' : ''}">${esc(p.name)}</span><span class="tva ${p.stale ? 'old' : ''}">${p.avatar ? `<img src="${p.avatar}">` : esc(p.name.slice(0, 1))}</span>` }) }).addTo(marks));
+    // the tour: every few seconds fly close to the next place where work goes on (busy field, working machine, a person)
+    const spots = [];
+    d.fields.filter(f => f.active && f.poly && f.poly.length > 2).forEach(f => {
+      const n = (d.staff || []).filter(p => !p.stale && p.field === f.code).length, m = (d.machines || []).filter(x => x.field === f.code).length;
+      spots.push({ b: f.poly, t: `📍 ${f.code} dala — terim ketyapti` + (n ? ` · ${n} kishi` : '') + (m ? ` · ${m} texnika` : '') });
+    });
+    (d.machines || []).filter(m => ['field', 'road', 'idle'].includes(m.state)).forEach(m => spots.push({ p: [m.lat, m.lon], t: `${KIND[m.kind] || '🚜'} ${m.code}${m.operator ? ' · ' + m.operator : ''} — ${m.label}` }));
+    (d.staff || []).filter(p => !p.stale && !d.fields.some(f => f.active && f.code === p.field)).forEach(p => spots.push({ p: [p.lat, p.lon], t: `👤 ${p.name}${p.field ? ' · ' + p.field + ' dala' : ''}` }));
+    tour.spots = spots; tour.all = act.length ? act : b; tour.every = (d.tour_sec || 15) * 1000;
+    if (!tour.timer) { tourStep(); tour.timer = setInterval(tourStep, tour.every); }
   }
   function chart(rows) {
     const W = 470, H = 210, l = 44, r = 8, t = 10, bt = 24;

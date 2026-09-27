@@ -78,6 +78,21 @@ def fields_map(year):
     return out
 
 
+def staff_on_map():
+    """People sharing their live location, for the TV map tour (setting tv_show_staff = 0 hides them from the TV)."""
+    if (get_setting('tv_show_staff') or '1') == '0':
+        return []
+    from . import staffmap
+    return [{'name': p['name'], 'avatar': f'/tv/avatar/{p["avatar"]}' if p['avatar'] else None, 'lat': p['lat'],
+             'lon': p['lon'], 'stale': p['stale'], 'field': p['field'], 'role': p['role']} for p in staffmap.people(hours=3)]
+
+
+def machines_on_map():
+    from . import fleet
+    return [{'code': m['code'], 'kind': m['kind'], 'operator': m['operator'], 'lat': m['lat'], 'lon': m['lon'],
+             'state': m['state'], 'label': m['label'], 'field': m['field']} for m in fleet.live() if m['lat'] is not None]
+
+
 def brigades(day):
     rows = q('''SELECT b.name, SUM(h.kg) kg, COUNT(DISTINCT h.worker_id) people FROM harvests h
                 JOIN brigadiers b ON b.id=h.brigadier_id
@@ -182,6 +197,8 @@ def build(year):
         'brigades': brigades(day), 'hourly': hourly(day),
         'fuel': None if fuel is None else {'taken': fuel['taken_l'], 'given': fuel['given_l'], 'flagged': fuel['flagged']},
         'workers': top_workers(day) if show_workers else None,
+        'staff': staff_on_map(), 'machines': machines_on_map(),
+        'tour_sec': max(8, int(get_setting('tv_tour_sec') or 15)),
         'photos': photos(), 'live': live(), 'feed': feed(),
         'weather': {'lat': get_setting('weather_lat'), 'lon': get_setting('weather_lon'), 'place': get_setting('weather_place')},
     }

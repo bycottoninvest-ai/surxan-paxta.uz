@@ -891,6 +891,18 @@ def tv_kuzatuv(item_id):
     return resp
 
 
+@bp.get('/tv/avatar/<path:rel>')
+def tv_avatar(rel):
+    """A person's small photo for the TV map (only files under avatars/)."""
+    ok, _ = _tv_allowed()
+    if not ok or (get_setting('tv_show_staff') or '1') == '0':
+        abort(403)
+    if not rel.startswith('avatars/') or '..' in rel:
+        abort(404)
+    from flask import send_from_directory
+    return send_from_directory(current_app.config['SURXON'].UPLOAD_DIR, rel, max_age=86400)
+
+
 @bp.get('/tv/foto/<int:photo_id>')
 def tv_photo(photo_id):
     """Thumbnails of field / trailer photos only (never cash, fuel or document photos)."""

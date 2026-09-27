@@ -46,6 +46,8 @@ DEFAULTS = {
     'report_feed': ('1', 'Hisobot kanaliga har bir muhim hodisa (reys tugadi, punkt qabul, kassa kirim/chiqim, kuzatuv '
                          'kechikishi) darhol yoziladi (1/0). Kunlik hisobot bundan tashqari keladi'),
     'kuzatuv_deadline_min': ('120', 'Kuzatuv: rasm/video so‘rovi javobi uchun necha daqiqa beriladi (keyin “KECHIKDI”)'),
+    'tv_show_staff': ('1', 'TV: xaritada odamlar (joylashuvini ulashganlar) ko‘rinsin (1/0)'),
+    'tv_tour_sec': ('15', 'TV: xarita har necha soniyada keyingi ish joyiga yaqinlashib o‘tsin'),
     'kuzatuv_group_all': ('1', 'Kuzatuv: ishchi guruhga tashlangan har bir rasm/video ham saqlansin va ekranlarda ko‘rinsin (1/0)'),
     'kuzatuv_auto_active_min': ('60', 'Kuzatuv: terim/texnika ishlayotganda odamlardan necha daqiqada bir rasm/video so‘rash (0 = o‘chiq)'),
     'staff_live_remind': ('1', 'Xodimlar xaritasi: jonli joylashuv 1 soat kelmasa, bot odamga bir marta eslatsin (1/0)'),

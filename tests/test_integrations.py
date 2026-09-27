@@ -165,3 +165,32 @@ def test_tv_pairs_with_six_digit_code_no_long_key(app, world):
     with app.app_context():
         assert q("SELECT name FROM integration_clients WHERE kind='tv'", one=True)['name'] == 'Ofis TV'
         assert not q("SELECT 1 FROM settings WHERE key LIKE 'tvpair:%' AND value LIKE '%spx_tv_%'")   # no key left behind
+
+
+def test_tv_map_shows_people_and_machines_for_the_tour(app, world):
+    """The TV map flies from one work place to the next: it gets the people sharing their location (with a TV-safe
+    photo link) and the machines — people can be hidden with tv_show_staff = 0."""
+    from surxon.utils import now_str
+    admin = world['admin']
+    admin.post('/admin/integratsiyalar', {'action': 'tv_on'})
+    key = make_key(admin, [], kind='tv')
+    tv = app.test_client()
+    tv.get('/tv?k=' + key)
+    with app.app_context():
+        from surxon.db import get_db
+        db = get_db()
+        mid = db.execute("INSERT INTO tg_members(full_name, status, source, avatar_path, created_at) VALUES ('Rustam','FAOL','bot','avatars/r.jpg','x')").lastrowid
+        db.execute("INSERT INTO staff_positions(member_id, lat, lon, source, at) VALUES (?, 42.31, 59.60, 'telegram', ?)", (mid, now_str()))
+        db.execute('''INSERT INTO trackers(imei, equipment_id, first_seen, last_seen, last_lat, last_lon, last_speed, last_fix_at)
+                      SELECT '0359339075099999', id, ?, ?, 42.32, 59.61, 10, ? FROM equipment WHERE code='T-01' ''', (now_str(),) * 3)
+        (app.config['SURXON'].UPLOAD_DIR / 'avatars').mkdir(parents=True, exist_ok=True)
+        (app.config['SURXON'].UPLOAD_DIR / 'avatars' / 'r.jpg').write_bytes(jpeg())
+    d = tv.get('/tv/data.json').get_json()
+    assert d['tour_sec'] == 15
+    assert [p['name'] for p in d['staff']] == ['Rustam'] and d['staff'][0]['avatar'] == '/tv/avatar/avatars/r.jpg'
+    assert [m['code'] for m in d['machines']] == ['T-01']
+    assert tv.get('/tv/avatar/avatars/r.jpg').status_code == 200
+    assert app.test_client().get('/tv/avatar/avatars/r.jpg').status_code == 403          # no key, no photo
+    assert tv.get('/tv/avatar/../test.sqlite3').status_code in (403, 404)
+    admin.post('/admin/sozlamalar', {'set_tv_show_staff': '0'})
+    assert tv.get('/tv/data.json').get_json()['staff'] == []
