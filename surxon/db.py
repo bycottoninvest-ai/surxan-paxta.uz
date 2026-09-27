@@ -10,7 +10,7 @@ from contextlib import contextmanager
 
 from flask import current_app, g
 
-SCHEMA_VERSION = 13
+SCHEMA_VERSION = 14
 
 SCHEMA = r'''
 CREATE TABLE IF NOT EXISTS brigadiers (
@@ -577,6 +577,19 @@ CREATE INDEX IF NOT EXISTS idx_staffpos_user ON staff_positions(user_id, at);
 CREATE INDEX IF NOT EXISTS idx_staffpos_member ON staff_positions(member_id, at);
 
 -- v12: GPS trackers on machines (GT06). A tracker is known by its IMEI; unknown ones are listed for the admin to assign.
+CREATE TABLE IF NOT EXISTS punkt_blanks (   -- v14: numbered paper forms printed in advance, kept at the punkt
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  number TEXT NOT NULL UNIQUE,              -- PB-0001
+  token TEXT NOT NULL UNIQUE,               -- in the QR: https://domain/punkt/blanka/<token>
+  batch INTEGER NOT NULL,
+  created_by INTEGER REFERENCES users(id),
+  created_at TEXT NOT NULL,
+  waybill_id INTEGER UNIQUE REFERENCES waybills(id),   -- the trip it was filled for (one blank = one trip)
+  used_by INTEGER REFERENCES users(id),
+  used_at TEXT,
+  photo_id INTEGER REFERENCES photos(id),
+  spoiled_reason TEXT                       -- torn / written wrong: kept in the list, never reused
+);
 CREATE TABLE IF NOT EXISTS trackers (
   imei TEXT PRIMARY KEY,
   equipment_id INTEGER REFERENCES equipment(id),

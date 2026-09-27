@@ -264,6 +264,52 @@ def field_detail(field_id):
                            map_center=get_setting('map_center'), audit_rows=queries.history('field', field_id))
 
 
+@bp.route('/blankalar', methods=['GET', 'POST'])
+@perm_required('masterdata.write')
+def blanks():
+    """Punkt blanks: print a numbered batch (a whole season), and check which blank went to which trip."""
+    from .. import blanks as BL
+    if request.method == 'POST':
+        actor = post_actor()
+        if request.form.get('action') == 'spoil':
+            BL.spoil(actor, parse_int(request.form.get('id'), 'Blank'), request.form.get('reason'))
+            return done('Blank buzilgan deb belgilandi.', url_for('admin.blanks'))
+        batch, a, b = BL.create_batch(actor, request.form.get('count'))
+        return done(f'{a} … {b} blanklar tayyor. Endi PDF’ni chop eting.', url_for('admin.blanks', yangi=batch))
+    show = request.args.get('holat', 'hammasi')
+    ov = BL.overview()
+    rows = ov['rows']
+    if show == 'ishlatilgan':
+        rows = [r for r in rows if r['waybill_id']]
+    elif show == 'bosh':
+        rows = [r for r in rows if not r['waybill_id'] and not r['spoiled_reason']]
+    elif show == 'otkazilgan':
+        rows = ov['skipped']
+    return render_template('admin_blanks.html', ov=ov, rows=rows[:1000], show=show, new_batch=request.args.get('yangi', type=int))
+
+
+@bp.get('/blankalar/<int:batch>.pdf')
+@perm_required('masterdata.write')
+def blanks_pdf(batch):
+    from ..pdfdoc import build_blanks_pdf
+    rows = q('SELECT * FROM punkt_blanks WHERE batch=? ORDER BY id', (batch,))
+    if not rows:
+        abort(404)
+    pdf = build_blanks_pdf(rows, company=get_setting('company_name'), domain=current_app.config['SURXON'].DOMAIN)
+    return Response(pdf, mimetype='application/pdf', headers={
+        'Content-Disposition': f'inline; filename="punkt_blanklari_{rows[0]["number"]}_{rows[-1]["number"]}.pdf"',
+        'Cache-Control': 'private, no-store'})
+
+
+@bp.get('/blankalar/rasm/<int:blank_id>')
+@perm_required('masterdata.write', 'waybill.view')
+def blank_photo(blank_id):
+    b = q('SELECT p.path FROM punkt_blanks pb JOIN photos p ON p.id=pb.photo_id WHERE pb.id=?', (blank_id,), one=True)
+    if not b:
+        abort(404)
+    return redirect(url_for('main.media', path=b['path']))
+
+
 @bp.get('/texnikalar/qr.pdf')
 @perm_required('masterdata.write', 'fuel.manage')
 def equipment_qr_pdf():

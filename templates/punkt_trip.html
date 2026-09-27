@@ -1,6 +1,12 @@
 {% extends 'base.html' %}
 {% from 'macros.html' import icon, csrf with context %}
 {% set page_title = wb.number %}
+{% macro blank_form(prefill) %}
+    <form method="post" action="{{ url_for('punkt.blank_attach', waybill_id=wb.id) }}" enctype="multipart/form-data" class="pk-stamp-f">{{ csrf() }}
+      <label class="d-l">Blank raqami</label><input name="blank_code" value="{{ prefill }}" placeholder="PB-0012" class="d-num" style="font-size:22px" required autocomplete="off">
+      <label class="file-drop d-photo"><input type="file" name="blank_photo" accept="image/*" capture="environment" data-preview required>{{ icon('camera','lg') }}<b>To‘ldirilgan blankni rasmga olish</b><div class="previews"></div></label>
+      <button class="btn btn-green btn-block">Blankni biriktirish</button></form>
+{% endmacro %}
 {% block content %}
 <div class="d-wrap">
 {% if wb.receipt_id %}
@@ -15,6 +21,12 @@
   {% set doc_url = url_for('punkt.receipt_pdf', waybill_id=wb.id) %}{% set doc_file = (wb.trip_no or '') ~ '_' ~ wb.number ~ '_tasdiqlangan.pdf' %}
   {% set doc_title = 'Tasdiqlangan nakladnoy (muhrli)' %}{% set doc_sub = 'Punkt kg, farq, elektron muhr va tekshiruv QR' %}
   {% include 'partials/doc_card.html' %}
+  <div class="pk-stamp">
+    <b>Punkt blankasi</b>
+    {% if blank %}<span class="small">✓ <b>{{ blank.number }}</b> shu reysga biriktirilgan{% if blank.used_at %} · {{ blank.used_at[11:16] }}{% endif %}</span>
+    {% elif can('station.receive') %}<span class="tiny muted">Bu reysga hali blank biriktirilmagan. To‘ldirilgan blank raqamini yozing va rasmga oling.</span>{{ blank_form(blank_code) }}
+    {% else %}<span class="tiny muted">Blank biriktirilmagan.</span>{% endif %}
+  </div>
   <div class="pk-stamp">
     <b>Pechatli qog‘oz nakladnoy</b>
     {% if stamps %}<div class="hm-photos">{% for p in stamps %}<img src="{{ photo_url(p.thumb_path) }}" data-full="{{ photo_url(p.path) }}" alt="">{% endfor %}</div>
@@ -61,6 +73,13 @@
         <div class="pk-rs">{% for r in reasons %}<label><input type="radio" name="reason" value="{{ r }}"><span>{{ r }}</span></label>{% endfor %}</div>
         <textarea name="note" id="pk-note" rows="2" placeholder="Sababni qisqa yozing" hidden></textarea>
       </div>
+      {% if blank_required and not blank %}
+      <div class="pk-blank">
+        <label class="d-l"><b>Punkt blankasi</b> — raqami (blankning yuqorisida, masalan PB-0012)</label>
+        <input name="blank_code" value="{{ blank_code }}" placeholder="PB-0012" class="d-num" style="font-size:22px" required autocomplete="off">
+        <label class="file-drop d-photo"><input type="file" name="blank_photo" accept="image/*" capture="environment" data-preview required>{{ icon('camera','lg') }}<b>To‘ldirilgan blankni rasmga olish</b><span class="tiny muted">majburiy — rasmsiz qabul yopilmaydi</span><div class="previews"></div></label>
+      </div>
+      {% elif blank %}<div class="small" style="margin:6px 0">✓ Blank <b>{{ blank.number }}</b> biriktirilgan</div>{% endif %}
       <label class="file-drop d-photo"><input type="file" name="photo" accept="image/*" capture="environment" data-preview>{{ icon('camera','lg') }}<b>Rasmga olish</b><span class="tiny muted">tarozi yoki telashka rasmi (ixtiyoriy)</span><div class="previews"></div></label>
       <button class="btn btn-green btn-block d-big" id="pk-ok">Qabulni tasdiqlash ›</button>
       <button type="button" class="btn btn-ghost btn-block" id="pk-back">‹ Og‘irlikni o‘zgartirish</button>

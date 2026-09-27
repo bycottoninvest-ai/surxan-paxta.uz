@@ -103,7 +103,10 @@ def scanner():
 def trip(waybill_id):
     wb = _trip_or_404(waybill_id)
     level = diff_level(wb['net_kg'], wb['accepted_kg']) if wb['accepted_kg'] is not None else None
+    from .. import blanks as BL
     return render_template('punkt_trip.html', wb=wb, state=queries.trip_state(wb), level=level,
+                           blank=BL.of_waybill(waybill_id), blank_required=BL.required(),
+                           blank_code=request.args.get('blanka', ''),
                            reasons=STATION_DIFF_REASONS, other_reason=OTHER_REASON, warn=get_float('punkt_warn_pct', 1),
                            alert=get_float('punkt_alert_pct', 3), scale=scale_reading(probe=True),
                            timeline=queries.load_timeline(wb['load_id']), event_text=queries.EVENT_TEXT,
@@ -131,6 +134,15 @@ def receive(waybill_id):
         gross = parse_number(request.form.get('gross_kg'), 'Brutto (kg)', max_value=max_kg)
         tare = parse_number(request.form.get('tare_kg'), 'Tara (kg)', max_value=max_kg, allow_zero=True)
         kg = None
+    from .. import blanks as BL
+    if BL.required() and not BL.of_waybill(waybill_id) and not wb['receipt_id']:
+        code = (request.form.get('blank_code') or '').strip()
+        ph = read_upload(request.files.get('blank_photo'))
+        if not code:
+            raise UserError('Punkt blankasi raqamini yozing (masalan PB-0012) yoki blankdagi QR ni skanerlang.')
+        if not ph:
+            raise UserError('To‘ldirilgan blankni rasmga oling — blank rasmisiz qabul yopilmaydi.')
+        BL.attach(actor, waybill_id, code, ph)
     res = receive_at_station(actor, waybill_id, station_kg=kg, gross_kg=gross, tare_kg=tare,
                              reason=request.form.get('reason', ''), note=request.form.get('note', ''),
                              photo=read_upload(request.files.get('photo')))
@@ -141,6 +153,29 @@ def receive(waybill_id):
     after_waybill_change(actor, waybill_id, 'punktda qabul qilindi')
     return done(f'QABUL QILINDI: {wb["trip_no"]} · punkt {kg:g} kg · farq {res["diff_kg"]:+g} kg ({res["diff_pct"]:+.2f}%)',
                 url, diff_kg=res['diff_kg'], diff_pct=res['diff_pct'], level=res['level'])
+
+
+@bp.post('/yuk/<int:waybill_id>/blanka')
+@perm_required('station.receive')
+def blank_attach(waybill_id):
+    """Attach a filled blank (number + photo) — for a trip received before blanks were required, or re-photograph."""
+    _trip_or_404(waybill_id)
+    from .. import blanks as BL
+    n = BL.attach(post_actor(), waybill_id, request.form.get('blank_code'), read_upload(request.files.get('blank_photo')))
+    return done(f'{n} blank shu reysga biriktirildi.', url_for('punkt.trip', waybill_id=waybill_id))
+
+
+@bp.get('/blanka/<token>')
+@perm_required('station.view')
+def blank_scan(token):
+    """Target of the QR on a paper blank: already used → its trip; otherwise pick the trip it is being filled for."""
+    from .. import blanks as BL
+    b = BL.find(token)
+    if not b:
+        raise UserError('Bu QR bo‘yicha blank topilmadi.')
+    if b['waybill_id']:
+        return redirect(url_for('punkt.trip', waybill_id=b['waybill_id']))
+    return render_template('punkt_blank.html', b=b, trips=BL.candidates(my_station()))
 
 
 @bp.get('/yuk/<int:waybill_id>/qabul.pdf')

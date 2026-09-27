@@ -1,0 +1,40 @@
+{% extends 'base.html' %}
+{% from 'macros.html' import icon, csrf, empty with context %}
+{% set page_title = 'Punkt blanklari' %}
+{% block content %}
+<div class="page-h"><h1>{{ icon('doc','lg') }} Punkt blanklari</h1><span class="sub">Oldindan chop etiladigan raqamli (QR) qog‘oz blanklar — dalada printer kerak emas</span></div>
+<div class="grid">
+  <section class="card s4"><div class="card-h"><h3>Yangi blanklar chop etish</h3></div><div class="card-b">
+    <form method="post" class="form">{{ csrf() }}
+      <div class="f"><label>Nechta blank?</label><input class="input" name="count" value="600" inputmode="numeric" style="font-size:20px" required></div>
+      <div class="f"><button class="btn btn-primary btn-block">Blanklarni yaratish</button></div></form>
+    <p class="small">Har bir blank — bitta A4 varaq: <b>tepada</b> bizning qism (reys, nakladnoy, jo‘natilgan kg, qo‘l terimi / kombayn), <b>pastda</b> punkt qismi (brutto, tara, qabul qilingan kg, F.I.Sh., imzo, muhr). Raqamlar oldingisidan davom etadi.</p>
+    <p class="small">Punktda: blank to‘ldiriladi → uning <b>QR</b>i telefon kamerasi bilan skanerlanadi → telashka tanlanadi → blank rasmga olinadi → qabul. <b>Blank rasmisiz qabul yopilmaydi.</b></p>
+    {% if ov.batches %}<div class="table-wrap"><table class="t"><thead><tr><th>To‘plam</th><th>Raqamlar</th><th class="num">Soni</th><th></th></tr></thead><tbody>
+    {% for bt in ov.batches %}<tr {% if new_batch == bt.batch %}style="background:#ecfdf5"{% endif %}><td>{{ bt.batch }}</td><td>{{ bt.a }} … {{ bt.b }}</td><td class="num">{{ bt.n }}</td>
+      <td><a class="btn btn-light btn-sm" href="{{ url_for('admin.blanks_pdf', batch=bt.batch) }}" target="_blank">{{ icon('printer','sm') }} PDF</a></td></tr>{% endfor %}
+    </tbody></table></div>{% endif %}
+  </div></section>
+  <section class="card s8"><div class="card-h"><h3>Sverka: qaysi blank qaysi reysga</h3></div><div class="card-b">
+    <div class="kpis" style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px">
+      <a class="btn btn-sm {{ 'btn-primary' if show == 'hammasi' else 'btn-light' }}" href="{{ url_for('admin.blanks') }}">Hammasi {{ ov.total }}</a>
+      <a class="btn btn-sm {{ 'btn-primary' if show == 'ishlatilgan' else 'btn-light' }}" href="{{ url_for('admin.blanks', holat='ishlatilgan') }}">Reysga biriktirilgan {{ ov.used }}</a>
+      <a class="btn btn-sm {{ 'btn-primary' if show == 'bosh' else 'btn-light' }}" href="{{ url_for('admin.blanks', holat='bosh') }}">Bo‘sh {{ ov.free }}</a>
+      <a class="btn btn-sm {{ 'btn-primary' if show == 'otkazilgan' else 'btn-light' }}" style="{{ 'color:var(--red)' if ov.skipped and show != 'otkazilgan' }}" href="{{ url_for('admin.blanks', holat='otkazilgan') }}">⚠ O‘tkazib yuborilgan {{ ov.skipped|length }}</a>
+      {% if ov.spoiled %}<span class="badge b-gray">Buzilgan {{ ov.spoiled }}</span>{% endif %}
+    </div>
+    <p class="tiny muted">“O‘tkazib yuborilgan” — keyingi raqamli blank ishlatilgan, bu esa ishlatilmagan: yo‘qolganmi yoki boshqa joyga ketganmi, punktdan so‘rang.</p>
+    <div class="table-wrap"><table class="t"><thead><tr><th>Blank</th><th>Reys</th><th>Nakladnoy</th><th class="num">Jo‘natilgan</th><th class="num">Punkt qabul</th><th>Kim / qachon</th><th>Rasm</th><th></th></tr></thead><tbody>
+    {% for r in rows %}<tr>
+      <td class="b">{{ r.number }}</td>
+      <td>{% if r.waybill_id %}<a class="link" href="{{ url_for('ops.waybill_detail', waybill_id=r.waybill_id) }}">{{ r.trip_no }}</a>{% elif r.spoiled_reason %}<span class="muted">buzilgan: {{ r.spoiled_reason }}</span>{% else %}<span class="muted">bo‘sh</span>{% endif %}</td>
+      <td>{{ r.wb_number or '' }}</td><td class="num">{{ r.net_kg|num if r.net_kg is not none else '' }}</td>
+      <td class="num">{{ r.accepted_kg|num if r.accepted_kg is not none else '' }}</td>
+      <td class="small">{{ r.used_name or '' }}{% if r.used_at %} · {{ r.used_at|d }}{% endif %}</td>
+      <td>{% if r.photo_id %}<a class="link" href="{{ url_for('admin.blank_photo', blank_id=r.id) }}" target="_blank">{{ icon('image','sm') }} ko‘rish</a>{% endif %}</td>
+      <td>{% if not r.waybill_id and not r.spoiled_reason %}<details><summary class="tiny muted" style="cursor:pointer">buzilgan?</summary><form method="post" class="row" style="gap:4px;margin-top:4px" data-confirm="{{ r.number }} buzilgan deb belgilansinmi?">{{ csrf() }}<input type="hidden" name="action" value="spoil"><input type="hidden" name="id" value="{{ r.id }}"><input class="input" name="reason" placeholder="sabab" style="height:30px;max-width:110px"><button class="btn btn-ghost btn-sm">Belgilash</button></form></details>{% endif %}</td>
+    </tr>{% else %}<tr><td colspan="8">{{ empty('Hali blank yo‘q — chapdan yarating.', 'doc') }}</td></tr>{% endfor %}
+    </tbody></table></div>
+  </div></section>
+</div>
+{% endblock %}

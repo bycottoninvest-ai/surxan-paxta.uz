@@ -1,0 +1,19 @@
+{% extends 'base.html' %}
+{% from 'macros.html' import icon with context %}
+{% set page_title = b.number %}
+{% block content %}
+<div class="d-wrap">
+  <div class="d-top"><a class="icon-btn" href="{{ url_for('punkt.home') }}">{{ icon('chev-left') }}</a><span class="small">Punkt</span></div>
+  <h1 class="d-h1">Blank {{ b.number }}</h1>
+  {% if b.spoiled_reason %}<div class="note" style="color:var(--red)">Bu blank buzilgan deb belgilangan ({{ b.spoiled_reason }}) — boshqa blank oling.</div>
+  {% else %}
+  <p class="small">Bu blank qaysi telashka uchun to‘ldirilyapti? Bosing — reys ochiladi, blank raqami o‘zi yoziladi, keyin rasmga olasiz.</p>
+  <div class="hm-ops">
+    {% for t in trips %}<a class="hm-op" href="{{ url_for('punkt.trip', waybill_id=t.id, blanka=b.number) }}">
+      <span class="fl-ico">{{ icon('trailer') }}</span>
+      <span class="hm-op-b"><b>{{ t.trip_no }} · {{ t.trailer or '' }}</b><small>{{ t.field_code or '' }} · jo‘natildi {{ t.net_kg|num }} kg · {{ 'kombayn' if t.method == 'combine' else 'qo‘l terimi' }}{% if t.accepted_kg is not none %} · qabul {{ t.accepted_kg|num }} kg{% elif t.arrived_at %} · punktda{% else %} · yo‘lda{% endif %}</small></span></a>
+    {% else %}<div class="note">Blanksiz reys yo‘q. Telashka kelganda uni ro‘yxatdan tanlang.</div>{% endfor %}
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

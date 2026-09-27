@@ -314,6 +314,7 @@ def waybill_detail(waybill_id):
                            timeline=queries.load_timeline(wb['load_id']), company=get_setting('company_name'), docs=docs,
                            payments=q('SELECT * FROM payments WHERE waybill_id=? ORDER BY id', (waybill_id,)),
                            stamps=__import__('surxon.services', fromlist=['stamp_photos']).stamp_photos(waybill_id),
+                           blank=__import__('surxon.blanks', fromlist=['of_waybill']).of_waybill(waybill_id),
                            money=__import__('surxon.pricing', fromlist=['money']).money(waybill_ids=[waybill_id]).get(waybill_id))
 
 

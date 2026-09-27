@@ -46,6 +46,9 @@
       <p class="small muted">Sabab: {{ wb.nayman_diff_reason or '—' }} · Qabul sanasi: {{ wb.received_date|d }}</p>
       {% if can('nayman.write') %}<a class="btn btn-light btn-sm" href="{{ url_for('ops.nayman', waybill_id=wb.id) }}">{{ icon('edit','sm') }} Qabulni ko‘rish / tuzatish</a>{% endif %}
       {% else %}<div class="notice blue">{{ icon('truck') }}<div>Yo‘lda / Nayman qabuli kutilmoqda.</div></div>{% endif %}
+      {% if blank %}<div class="pk-stamp mt"><b>Punkt blankasi: {{ blank.number }}</b>
+        {% if blank.photo_id %}<a class="link small" href="{{ url_for('admin.blank_photo', blank_id=blank.id) }}" target="_blank">{{ icon('image','sm') }} to‘ldirilgan blank rasmini ochish</a>{% endif %}
+        <span class="tiny muted">biriktirildi {{ blank.used_at|d }} {{ (blank.used_at or '')[11:16] }}</span></div>{% endif %}
       {% if wb.status != 'BEKOR' %}<div class="pk-stamp mt"><b>Pechatli qog‘oz nakladnoy (punkt kg yozib, pechat qo‘ygan)</b>
         {% if stamps %}<div class="hm-photos">{% for p in stamps %}<img src="{{ photo_url(p.thumb_path) }}" data-full="{{ photo_url(p.path) }}" alt="">{% endfor %}</div>{% else %}<span class="tiny muted">Hali yuklanmagan.</span>{% endif %}
         {% if can('nayman.write') or can('station.receive') %}<form method="post" action="{{ url_for('ops.waybill_stamp', waybill_id=wb.id) }}" enctype="multipart/form-data" class="pk-stamp-f">{{ csrf() }}
