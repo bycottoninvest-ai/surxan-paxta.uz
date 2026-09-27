@@ -111,7 +111,7 @@ def test_pq17_matches_compares_and_prices_trips(app, world):
         assert q("SELECT waybill_id FROM pq17_docs WHERE code='XH1000000003'", one=True)['waybill_id'] == w3
     assert bux.get(f'/buxgalteriya/pq17/{d1["id"]}.pdf').status_code == 200
     assert world['juma'].get('/buxgalteriya/pq17').status_code == 302            # brigadier: no
-    assert 'PQ-17 sverka' in bux.get('/buxgalteriya').get_data(as_text=True)
+    assert 'Agroklaster sverkasi' in bux.get('/buxgalteriya').get_data(as_text=True)
 
 
 def test_pq17_by_telegram(app, world, monkeypatch):

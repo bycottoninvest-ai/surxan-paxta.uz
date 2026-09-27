@@ -37,6 +37,12 @@ button,input,select,textarea{font:inherit;color:inherit}
 .nav a:hover{background:rgba(255,255,255,.08)}
 .nav a.active{background:var(--blue);color:#fff;box-shadow:0 4px 12px rgba(26,115,232,.35)}
 .nav a .chev{margin-left:auto;opacity:.6}
+.nav-g summary{display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:8px;color:#e8f0fb;font-size:14px;font-weight:700;cursor:pointer;list-style:none;user-select:none}
+.nav-g summary::-webkit-details-marker{display:none}.nav-g summary:hover{background:rgba(255,255,255,.08)}
+.nav-g summary .chev{margin-left:auto;opacity:.6;transition:transform .15s}.nav-g[open] summary .chev{transform:rotate(180deg)}
+.nav-g[open] summary{color:#fff}
+.nav-gb{display:flex;flex-direction:column;gap:2px;margin:2px 0 6px 14px;padding-left:8px;border-left:1px solid rgba(255,255,255,.15)}
+.nav-gb a{padding:8px 10px;font-size:13.5px}
 .nav .section{font-size:10.5px;letter-spacing:1.2px;text-transform:uppercase;color:rgba(255,255,255,.45);padding:12px 12px 4px}
 .side-bottom{position:relative;min-height:150px;background:url('../img/sidebar-cotton.jpg') center/cover;display:flex;align-items:flex-end;justify-content:center}
 .side-bottom::before{content:'';position:absolute;inset:0;background:linear-gradient(180deg,#0a3564 0%,rgba(10,53,100,.15) 45%,rgba(7,31,64,.85) 100%)}

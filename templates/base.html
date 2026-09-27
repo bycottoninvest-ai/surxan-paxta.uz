@@ -19,6 +19,11 @@
   <a href="{{ url_for(endpoint, **args) }}" class="{{ 'active' if (match and ep in match) or (not match and ep == endpoint) }}">{{ icon(ico) }}<span>{{ label }}</span></a>
   {% endif %}
 {%- endmacro %}
+{# a folding group of menu items: hidden when the user sees none of them, open when one of them is the current page #}
+{% macro group(title, ico) -%}{% set body = caller() %}{% if body|trim %}
+  <details class="nav-g"{{ ' open' if 'class="active"' in body }}><summary>{{ icon(ico) }}<span>{{ title }}</span>{{ icon('chev-down', 'chev') }}</summary>
+  <div class="nav-gb">{{ body }}</div></details>{% endif %}
+{%- endmacro %}
 <div class="app">
   <aside class="sidebar" id="sidebar">
     <div class="brand">
@@ -48,12 +53,11 @@
       {{ nav('acct.expense_pick', 'Xarajat yozish', 'receipt', None, ['acct.expense_pick', 'acct.expense_new']) }}
       {% else %}
       {{ nav('main.dashboard', 'Bosh sahifa', 'home') }}
-      {% if current_user['role'] in ('admin', 'manager') %}{{ nav('rahbar.home', 'Direktor paneli (telefon)', 'chart', None, ['rahbar.home', 'rahbar.cotton', 'rahbar.moving', 'rahbar.trip', 'rahbar.cash', 'rahbar.wages', 'rahbar.worker', 'rahbar.checks', 'rahbar.fuel']) }}{% endif %}
-      {% if current_user['role'] in ('admin', 'manager') %}{{ nav('rahbar.car', 'Mashina ekrani', 'map', None, ['rahbar.car']) }}{% endif %}
-      {% if current_user['role'] == 'accountant' %}{{ nav('hamyon.home', 'Mening kassam', 'wallet', None, ['hamyon.home', 'hamyon.pay', 'hamyon.pay_worker', 'hamyon.expense', 'hamyon.income', 'hamyon.entry', 'hamyon.fix']) }}
-      {{ nav('hamyon.today', 'Bugungi amallar', 'list') }}{% endif %}
-      {{ nav('hamyon.fixes', 'Tuzatishlar', 'edit', 'cash.view') }}
-      {{ nav('yoqilgi.manage', 'Solyarka', 'fuel', 'fuel.view') }}
+      {% call group('Rahbar', 'chart') %}
+      {% if current_user['role'] in ('admin', 'manager') %}{{ nav('rahbar.home', 'Direktor paneli (telefon)', 'chart', None, ['rahbar.home', 'rahbar.cotton', 'rahbar.moving', 'rahbar.trip', 'rahbar.cash', 'rahbar.wages', 'rahbar.worker', 'rahbar.checks', 'rahbar.fuel']) }}
+      {{ nav('rahbar.car', 'Mashina ekrani', 'map', None, ['rahbar.car']) }}{% endif %}
+      {% endcall %}
+      {% call group('Dala va paxta', 'cotton') %}
       {{ nav('ops.harvest', 'Terim (Qo‘l terimi)', 'sprout', 'harvest.write') }}
       {{ nav('ops.harvest', 'Kombayn', 'combine', 'harvest.write', match=['__none'], args={'method': 'combine'}) }}
       {{ nav('ops.loads', 'Telashkalar', 'trailer', None, ['ops.loads', 'ops.load_detail']) }}
@@ -61,22 +65,35 @@
       {{ nav('ops.waybills', 'Nakladnoy', 'doc', 'waybill.view', ['ops.waybills', 'ops.waybill_detail']) }}
       {{ nav('ops.nayman_list', 'Nayman', 'factory', 'waybill.view', ['ops.nayman_list', 'ops.nayman']) }}
       {{ nav('punkt.home', 'Punkt qabuli', 'building', 'station.view', ['punkt.home', 'punkt.trip', 'punkt.history', 'punkt.scanner']) }}
-      {{ nav('loans.home', 'Kreditlar va lizing', 'building', 'loans.view', ['loans.home', 'loans.party', 'loans.contract']) }}
-      {{ nav('acct.home', 'Buxgalteriya', 'calc', 'acct.view', ['acct.home', 'acct.income', 'acct.workers', 'acct.worker', 'acct.combines', 'acct.cotton', 'acct.cash', 'acct.day_close', 'acct.debts', 'acct.report', 'acct.expenses', 'acct.pq17', 'loans.firms', 'loans.akt', 'loans.inbox']) }}
+      {{ nav('admin.fields', 'Dalalar', 'field', 'reports.view', ['admin.fields', 'admin.field_detail']) }}
+      {{ nav('reports.field_yield', 'Dala hosili (terimlar)', 'map', 'reports.view') }}
+      {% endcall %}
+      {% call group('Buxgalteriya', 'calc') %}
+      {{ nav('acct.home', 'Buxgalteriya (bosh)', 'calc', 'acct.view', ['acct.home', 'acct.income', 'acct.workers', 'acct.worker', 'acct.combines', 'acct.cotton', 'acct.cash', 'acct.day_close', 'acct.debts', 'acct.report', 'acct.expenses']) }}
+      {% if current_user['role'] == 'accountant' %}{{ nav('hamyon.home', 'Mening kassam', 'wallet', None, ['hamyon.home', 'hamyon.pay', 'hamyon.pay_worker', 'hamyon.expense', 'hamyon.income', 'hamyon.entry', 'hamyon.fix']) }}
+      {{ nav('hamyon.today', 'Bugungi amallar', 'list') }}{% endif %}
       {{ nav('acct.cashier', 'Kassir', 'cash', 'payouts.pay', ['acct.cashier']) }}
       {{ nav('acct.payouts', 'Ishchilarga to‘lovlar', 'card', 'payouts.view', ['acct.payouts']) }}
       {{ nav('finance.payments', 'To‘lovlar', 'card', 'payments.view') }}
       {{ nav('acct.expense_pick', 'Xarajat yozish', 'receipt', 'expenses.write', ['acct.expense_pick', 'acct.expense_new']) }}
       {{ nav('finance.cash', 'Kassa kitobi', 'cash', 'cash.view') }}
-      {{ nav('people.workers', 'Xodimlar', 'users', 'reports.view', ['people.workers', 'people.worker_detail']) }}
+      {{ nav('hamyon.fixes', 'Tuzatishlar', 'edit', 'cash.view') }}
+      {{ nav('acct.pq17', 'Agroklaster sverkasi', 'check-circle', 'nayman.write', ['acct.pq17', 'acct.pq17_cluster']) }}
+      {{ nav('loans.firms', 'Akt-sverka va firmalar', 'doc', 'loans.view', ['loans.firms', 'loans.akt']) }}
+      {{ nav('loans.home', 'Kreditlar va lizing', 'building', 'loans.view', ['loans.home', 'loans.party', 'loans.contract']) }}
+      {{ nav('loans.inbox', 'Hujjatlar qutisi', 'download', 'loans.view', ['loans.inbox']) }}
+      {% endcall %}
+      {% call group('Texnika', 'tractor') %}
       {{ nav('admin.equipment', 'Texnikalar', 'tractor') }}
-      {{ nav('admin.fields', 'Dalalar', 'field', 'reports.view', ['admin.fields', 'admin.field_detail']) }}
+      {{ nav('yoqilgi.manage', 'Solyarka', 'fuel', 'fuel.view') }}
+      {% endcall %}
+      {% call group('Hisobotlar', 'bars') %}
+      {{ nav('people.workers', 'Xodimlar', 'users', 'reports.view', ['people.workers', 'people.worker_detail']) }}
       {{ nav('reports.index', 'Hisobotlar', 'bars', 'reports.view', ['reports.index', 'reports.report']) }}
-      {{ nav('reports.field_yield', 'Dala hosili (terimlar)', 'map', 'reports.view') }}
       {{ nav('kuzatuv.home', 'Kuzatuv (rasm/video)', 'video', 'kuzatuv.view', ['kuzatuv.home', 'kuzatuv.people', 'kuzatuv.rules']) }}
       {{ nav('main.photos', 'Foto arxiv', 'image') }}
-      {% if can('audit.view') or can('users.manage') or can('masterdata.write') %}
-      <div class="section">Boshqaruv</div>
+      {% endcall %}
+      {% call group('Boshqaruv', 'settings') %}
       {{ nav('admin.staff', 'Xodimlar va loginlar', 'users', 'users.manage') }}
       {{ nav('admin.users', 'Foydalanuvchilar', 'user', 'users.manage') }}
       {{ nav('admin.brigadiers', 'Brigadirlar', 'users', 'masterdata.write') }}
@@ -88,7 +105,7 @@
       {{ nav('admin.backups', 'Zaxira nusxa', 'database', 'backup.manage') }}
       {{ nav('admin.settings', 'Sozlamalar', 'settings', 'settings.manage') }}
       {{ nav('integrations.index', 'Integratsiyalar (Telegram, TV, ERP)', 'layers', 'settings.manage') }}
-      {% endif %}
+      {% endcall %}
       {% endif %}
       <a href="{{ url_for('auth.logout') }}" class="only-mobile">{{ icon('logout') }}<span>Chiqish</span></a>
     </nav>

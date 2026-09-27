@@ -565,7 +565,7 @@ def _on_pq17(chat, actor, doc, data=None):
         diff = abs((wb['accepted_kg'] or 0) - d['netto']) >= 0.5
         lines.append(f'Reys: {wb["trip_no"]} ({how})' + (f' — ⚠ FARQ: bizda {fmt_num(wb["accepted_kg"])} kg!' if diff else ' — ✓ mos'))
     else:
-        lines.append('⚠ Reysi topilmadi — saytda Buxgalteriya → PQ-17 sverka sahifasida reysni tanlang.')
+        lines.append('⚠ Reysi topilmadi — saytda Buxgalteriya → Agroklaster sverkasi sahifasida reysni tanlang.')
     return send(chat, '\n'.join(lines))
 
 
