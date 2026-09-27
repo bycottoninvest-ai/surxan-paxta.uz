@@ -49,6 +49,7 @@
       {% else %}
       {{ nav('main.dashboard', 'Bosh sahifa', 'home') }}
       {% if current_user['role'] in ('admin', 'manager') %}{{ nav('rahbar.home', 'Direktor paneli (telefon)', 'chart', None, ['rahbar.home', 'rahbar.cotton', 'rahbar.moving', 'rahbar.trip', 'rahbar.cash', 'rahbar.wages', 'rahbar.worker', 'rahbar.checks', 'rahbar.fuel']) }}{% endif %}
+      {% if current_user['role'] in ('admin', 'manager') %}{{ nav('rahbar.car', 'Mashina ekrani', 'map', None, ['rahbar.car']) }}{% endif %}
       {% if current_user['role'] == 'accountant' %}{{ nav('hamyon.home', 'Mening kassam', 'wallet', None, ['hamyon.home', 'hamyon.pay', 'hamyon.pay_worker', 'hamyon.expense', 'hamyon.income', 'hamyon.entry', 'hamyon.fix']) }}
       {{ nav('hamyon.today', 'Bugungi amallar', 'list') }}{% endif %}
       {{ nav('hamyon.fixes', 'Tuzatishlar', 'edit', 'cash.view') }}

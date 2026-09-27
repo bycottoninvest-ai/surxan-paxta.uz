@@ -249,3 +249,17 @@ def test_car_screen_tv_zooms_to_work_and_bot_asks_the_busy_people(app, world, mo
         assert kuzatuv.auto_activity_requests(datetime(2026, 9, 27, 22, 10)) == 0  # outside working hours
         get_db().execute("INSERT OR REPLACE INTO settings(key, value, updated_at) VALUES ('kuzatuv_auto_active_min','0','x')")
         assert kuzatuv.auto_activity_requests(datetime(2026, 9, 27, 12, 10)) == 0  # switched off
+
+
+def test_car_screen_addresses_and_login_goes_back_to_it(app, world):
+    rahbar = world['rahbar']
+    for url in ('/m', '/m/', '/mashina'):
+        assert rahbar.get(url).status_code == 200
+    assert 'Mashina ekrani' in rahbar.get('/rahbar').get_data(as_text=True)
+    c = Client(app)
+    r = c.get('/mashina')
+    assert r.status_code == 302 and '/login?next=' in r.headers['Location']
+    c.get(r.headers['Location'])
+    nxt = r.headers['Location'].split('next=')[1]
+    r2 = c.c.post('/login?next=' + nxt, data={'username': 'rahbar', 'password': 'Worker2026x', '_csrf': c.csrf()})
+    assert r2.headers['Location'].endswith('/mashina')

@@ -79,6 +79,8 @@ def _staff_count():
 
 
 @bp.get('/m')
+@bp.get('/m/')
+@bp.get('/mashina')
 @perm_required(VIEW)
 def car():
     """The director's screen in the car (BYD monitor, tablet, any big screen): one map with the busy fields, people and
