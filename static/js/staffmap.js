@@ -31,7 +31,11 @@ window.spxStaffMap = function (opts) {
     });
   };
   if (opts.fields) window.spxDrawFields(opts.fields);
-  map._spxFit = fit;
+  map._spxFit = fit; map._spxAutoFit = () => autoFit();
+  // after 2 minutes without anyone touching the map it follows the work again (monitor on the wall / in the car)
+  let touched = 0;
+  map.on('dragstart zoomstart', e => { if (!map._spxAuto) touched = Date.now(); });
+  const autoFit = () => { if (Date.now() - touched > 120000) { map._spxAuto = true; fit(true); setTimeout(() => { map._spxAuto = false; }, 800); } };
   function drawMachines(ms) {
     const seen = new Set(); pts.m = [];
     (ms || []).filter(m => m.lat != null).forEach(m => {
@@ -89,7 +93,7 @@ window.spxStaffMap = function (opts) {
   setInterval(async () => {
     try { const r = await (await fetch(opts.json, { headers: { 'X-Requested-With': 'fetch' } })).json(); draw(r.people); } catch (_) { }
     if (opts.fleet) try { const r = await (await fetch(opts.fleet.json, { headers: { 'X-Requested-With': 'fetch' } })).json(); drawMachines(r.machines); } catch (_) { }
-    fit();
+    autoFit();
   }, 30000);
   return map;
 };

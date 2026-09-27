@@ -36,7 +36,7 @@ def telegram_cards(day, limit=40):
             # a group ask (“Barcha agronomlar”) is not an event — the card then shows what was asked
             title = r['event'] if r['event'] and not (r['context'] or '').startswith(('group:', 'member:')) else None
             c = cards[key] = {'src': 'telegram', 'at': r['created_at'], 'time': r['created_at'][11:16], 'place': place,
-                              'title': title or (r['caption'] or r['request_text'] or 'Kuzatuv')[:60],
+                              'title': title or (r['caption'] or r['request_text'] or 'Guruhdan rasm')[:60],
                               'who': r['full_name'] + (f' · {r["role_label"]}' if r['role_label'] else ''),
                               'photos': 0, 'videos': 0, 'media': []}
         c['photos' if r['kind'] == 'photo' else 'videos'] += 1

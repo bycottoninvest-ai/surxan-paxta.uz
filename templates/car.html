@@ -88,7 +88,7 @@ html,body{margin:0;height:100%;background:#06142b;color:#e8f0fb;font-family:syst
     $('lv').querySelectorAll('[data-i]').forEach(a => a.onclick = e => { e.preventDefault(); const c = d.live[a.dataset.i];
       $('ov').innerHTML = c.video ? `<video src="${c.full}" controls autoplay preload="none" playsinline></video>` : `<img src="${c.full}" alt="">`; $('ov').classList.add('on'); });
     $('fd').innerHTML = d.feed.map(x => `<li><time>${esc(x.time)}</time><span>${esc(x.text)}</span></li>`).join('') || '<li>Hali voqea yo‘q</li>';
-    window.spxDrawFields(d.fields); map._spxDraw(d.people, d.machines); map._spxFit(true);
+    window.spxDrawFields(d.fields); map._spxDraw(d.people, d.machines); map._spxAutoFit();
   }
   // full screen (hides the browser bars) — browsers allow it only after a press
   function goFull() { const el = document.documentElement, rq = el.requestFullscreen || el.webkitRequestFullscreen;

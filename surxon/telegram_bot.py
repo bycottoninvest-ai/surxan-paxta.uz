@@ -276,7 +276,12 @@ def _on_group_message(m):
     reply_to = (m.get('reply_to_message') or {}).get('message_id')
     req = kuzatuv.open_request_for(get_db(), member, chat['id'], reply_to)
     if not req:
-        return  # a photo not asked for, in a busy group: not stored (people send it privately to the bot instead)
+        # a photo/video nobody asked for: kept too (setting kuzatuv_group_all) so the screens show what really happens —
+        # silently, the bot does not answer every picture in a busy group
+        from .settings import get_bool
+        if get_bool('kuzatuv_group_all'):
+            kuzatuv.save_incoming(member, m, None)
+        return
     kuzatuv.save_incoming(member, m, req)
     send(chat['id'], f'✅ Qabul qilindi — {member["full_name"]}, rahmat.', reply_to=m.get('message_id'))
 

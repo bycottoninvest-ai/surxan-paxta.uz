@@ -163,14 +163,26 @@ def test_work_group_auto_registration_and_group_answers(app, world):
     with app.app_context():
         req = q('SELECT * FROM media_requests', one=True)
         assert req['sent_via'] == 'group'
-    # an unrelated photo from someone else in the group is not stored
+    # a photo nobody asked for is not stored when switched off (kuzatuv_group_all=0) …
+    with app.app_context():
+        get_db().execute("INSERT OR REPLACE INTO settings(key, value, updated_at) VALUES ('kuzatuv_group_all','0','x')")
     tg.group(chat, 1, first='Boshqa', **photo('x1'))
+    with app.app_context():
+        assert scalar('SELECT COUNT(*) FROM media_items') == 0
     # her reply in the group is stored
     tg.group(chat, 777, first='Gulbohar', reply_to_message={'message_id': req['tg_message_id']}, **photo('g1'))
     assert 'Qabul qilindi — Gulbohar' in last_text(chat)
     with app.app_context():
         assert scalar('SELECT COUNT(*) FROM media_items') == 1
         assert q('SELECT status FROM media_requests', one=True)['status'] == 'JAVOB'
+        get_db().execute("UPDATE settings SET value='1' WHERE key='kuzatuv_group_all'")
+    # … and by default (on) it is kept silently, so the screens show what the group sends
+    n_before = len(SENT)
+    tg.group(chat, 777, first='Gulbohar', **photo('g2'))
+    with app.app_context():
+        assert scalar('SELECT COUNT(*) FROM media_items') == 2
+        assert q('SELECT request_id FROM media_items ORDER BY id DESC LIMIT 1', one=True)['request_id'] is None
+    assert not [p for m, p in SENT[n_before:] if m == 'sendMessage' and 'Qabul qilindi' in p.get('text', '')]
     # a newcomer joining the confirmed group is active right away; leaving deactivates
     tg.group(chat, 1, new_chat_members=[{'id': 779, 'first_name': 'Yangi', 'is_bot': False}])
     with app.app_context():
