@@ -116,6 +116,10 @@ def dashboard():
         davr = 'kecha' if day == (date.fromisoformat(today_str()) - timedelta(days=1)).isoformat() else (
             'bugun' if day == today_str() else 'sana')
     g.davr = davr
+    if brig is None:            # the clusters' own receipts (PQ-17) for the same period — kg only
+        from ..pq17 import period
+        kpi = dict(kpi, pq=period(f'{year}-01-01', today_str() if str(year) == today_str()[:4] else f'{year}-12-31')
+                   if davr == 'mavsum' else period(day, day))
     view = request.args.get('view') or request.cookies.get('view')
     if view not in ('full', 'mobile'):
         view = 'mobile' if is_phone() else 'full'

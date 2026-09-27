@@ -20,11 +20,28 @@
   {% if dv == 'sana' %}<a class="on">{{ day|d }}</a>{% endif %}
   <span class="small muted">Bekor qilinganlar hech qayerda hisoblanmaydi</span></div>
 {% set lbl = {'bugun': 'Bugungi terim', 'kecha': 'Kechagi terim', 'mavsum': 'Mavsum terimi'}.get(dv, day|d ~ ' terimi') %}
-<div class="kpis">
+<style>.kpis.k7{grid-template-columns:repeat(7,minmax(0,1fr));grid-auto-flow:dense}@media (max-width:1700px){.kpis.k7{grid-template-columns:repeat(4,minmax(0,1fr))}}@media (max-width:1000px){.kpis.k7{grid-template-columns:repeat(2,minmax(0,1fr))}}@media (max-width:700px){.kpis.k7{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.kpi .pq-farq{color:#b91c1c;font-weight:700}.kpi .pq-ok{color:#15803d;font-weight:700}
+.kpi-pq{grid-column:span 2;color:inherit;text-decoration:none}.kpi-pq.bad{border-color:#fca5a5}
+.pq-cols{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px 14px;min-width:0;flex:1}
+.pq-cols .value{font-size:22px}.pq-cols .pq-got{color:#15803d}.pq-note{grid-column:1/-1;font-size:12.5px;color:#64748b}</style>
+<div class="kpis{{ ' k7' if k.pq }}">
   {{ kpi(lbl ~ ' (kg)', k.harvest|num, '', 'green', 'cotton', k.harvest_trend) }}
   {{ kpi('Umumiy tarozi (netto)', k.net|num, 'kg', 'blue', 'truck', k.net_trend) }}
   {{ kpi('Naymanga ketgan', k.sent|num, 'kg', 'orange', 'trailer', k.sent_trend) }}
+  {% if k.pq %}{% set pq = k.pq %}
+  <a class="kpi kpi-pq{{ ' bad' if pq.farq_n or pq.unmatched }}" href="{{ url_for('acct.pq17') if can('nayman.write') else '#' }}">
+    <div class="sq bg-purple">{{ icon('factory') }}</div>
+    <div class="pq-cols">
+      <div><div class="label">Qabul (bizda)</div><div class="value num">{{ k.accepted|num }} <small>kg</small></div></div>
+      <div><div class="label">Klaster (PQ-17)</div><div class="value num">{{ pq.netto|num }} <small>kg</small></div></div>
+      <div><div class="label">Klaster to‘laydi</div><div class="value num pq-got">{{ pq.kond|num }} <small>kg</small></div></div>
+      <div class="pq-note">{% if pq.farq_n %}<span class="pq-farq">⚠ farq {{ '%+.0f'|format(pq.diff) }} kg</span>{% elif pq.unmatched %}<span class="pq-farq">⚠ {{ pq.unmatched }} ta bog‘lanmagan</span>{% else %}<span class="pq-ok">✓ mos</span>{% endif %}
+        · namlik {{ '%.1f'|format(pq.moist or 0) }}% · ifloslik {{ '%.1f'|format(pq.dirt or 0) }}% · <b>−{{ pq.deduction|num }} kg</b></div>
+    </div></a>
+  {% else %}
   {{ kpi('Qabul qilingan', k.accepted|num, 'kg', 'purple', 'factory', k.accepted_trend) }}
+  {% endif %}
   {% set dnote = ('%+.2f%%'|format(k.diff_pct)) if k.diff_pct is not none else ('Yo‘lda: ' ~ k.in_transit ~ ' ta') %}
   {{ kpi('Farq (kg)', ('%+.0f'|format(k.diff)) if k.diff else '0', '', 'red', 'target', None, dnote ~ (' · yo‘lda ' ~ k.in_transit ~ ' ta' if k.diff_pct is not none and k.in_transit else '')) }}
   {{ kpi('Telashkalar (band)', k.trailers_busy ~ ' / ' ~ k.trailers_total, '', 'teal', 'trailer', None,

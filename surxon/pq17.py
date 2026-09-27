@@ -287,3 +287,21 @@ def latest_price(method):
     """The price of the newest PQ-17 of that kind (contract price × grade) — the best estimate for trips still waiting."""
     r = q('SELECT price FROM pq17_docs WHERE method=? ORDER BY doc_date DESC, id DESC LIMIT 1', (method,), one=True)
     return r['price'] if r else None
+
+
+def period(dan, gacha):
+    """What the clusters accepted by PQ-17 in a period (by the document date) beside our punkt kg for the same trips —
+    for the dashboard strip. Only kg (no money). None when no PQ-17 falls in the period."""
+    r = q('''SELECT COUNT(*) n, COALESCE(SUM(p.netto),0) netto, COALESCE(SUM(p.kond_kg),0) kond,
+                    COALESCE(SUM(p.deduction_kg - COALESCE(p.bonus_kg,0)),0) deduction,
+                    SUM(p.netto * COALESCE(p.moist_pct,0)) / NULLIF(SUM(p.netto),0) moist,
+                    SUM(p.netto * COALESCE(p.dirt_pct,0)) / NULLIF(SUM(p.netto),0) dirt,
+                    SUM(p.waybill_id IS NULL) unmatched,
+                    COALESCE(SUM(CASE WHEN p.waybill_id IS NOT NULL THEN nr.accepted_kg END),0) ours,
+                    COALESCE(SUM(CASE WHEN p.waybill_id IS NOT NULL THEN p.netto END),0) matched_netto,
+                    SUM(CASE WHEN p.waybill_id IS NOT NULL AND ABS(COALESCE(nr.accepted_kg,0) - p.netto) >= 0.5 THEN 1 ELSE 0 END) farq_n
+             FROM pq17_docs p LEFT JOIN nayman_receipts nr ON nr.waybill_id=p.waybill_id
+             WHERE p.doc_date BETWEEN ? AND ?''', (dan, gacha), one=True)
+    if not r or not r['n']:
+        return None
+    return dict(r, diff=round(r['ours'] - r['matched_netto'], 1))

@@ -145,3 +145,15 @@ def test_pq17_goes_to_google_sheets(app, world):
         assert len(rows) == 1 and rows[0][0] == 'XH1000000001' and rows[0][-1] == '✓ mos' and rows[0][13] == 480
         ids = {r[0] for r in sheet_summary_rows()[0]}
         assert {'PQ17_KONDITSION_KG', 'PUNKT_QARZ', 'PUNKT_TOLADI'} <= ids
+
+
+def test_pq17_strip_on_dashboard(app, world, admin):
+    tally, yunus, ali, st = setup(app, world)
+    received_trip(app, world, tally, yunus, kg='480', load_no='555001')
+    world['bux'].c.post('/buxgalteriya/pq17', data={'files': [(io.BytesIO(pq17_pdf()), 'a.pdf')], '_csrf': world['bux'].csrf()},
+                        content_type='multipart/form-data')
+    with app.app_context():
+        doc_date = q('SELECT doc_date FROM pq17_docs', one=True)['doc_date']
+    page = admin.get(f'/?view=full&date={doc_date}').get_data(as_text=True).replace(' ', ' ').replace('\xa0', ' ')
+    assert 'Klaster (PQ-17)' in page and 'Klaster to‘laydi' in page and '471' in page and 'namlik ' in page and '✓ mos' in page
+    assert 'so‘m' not in page.split('kpi-pq')[1].split('</a>')[0]          # kg only, no money

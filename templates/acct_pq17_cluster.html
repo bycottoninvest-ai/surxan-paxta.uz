@@ -5,13 +5,27 @@
 <div class="page-h"><h1>{{ icon('factory','lg') }} {{ c.name }}</h1><span class="sub">STIR {{ c.inn }} · PQ-17 bo‘yicha sverka · <a class="link" href="{{ url_for('acct.pq17') }}">‹ barcha klasterlar</a></span></div>
 <div class="pq-sum">
   <div><small>Yuklar</small><b>{{ c.n }} ta</b></div>
-  <div><small>Topshirildi (netto)</small><b>{{ c.netto|num }} kg</b></div>
-  <div><small>Namlik / ifloslik</small><b class="t-down">−{{ c.deduction|num }} kg</b></div>
-  <div><small>To‘lanadigan (konditsion)</small><b>{{ c.kond|num }} kg</b></div>
   <div><small>Summa (QQS bilan)</small><b>{{ c.amount|money }}</b></div>
   {% if c.received is not none %}<div><small>To‘landi</small><b>{{ c.received|money }}</b></div>
   <div><small>Qarz</small><b class="{{ 't-down' if c.amount - c.received > 0 }}">{{ (c.amount - c.received)|money }}</b></div>{% endif %}
 </div>
+<section class="card pq-kg"><div class="card-h"><h3>⚖ Kg bo‘yicha: biz topshirdik → klaster qabul qildi</h3></div><div class="card-b">
+  <div class="pq-path">
+    <div><small>Biz topshirdik (netto)</small><b>{{ kg.netto|num }} kg</b><span>{{ kg.n }} ta yuk</span></div>
+    <i>→</i>
+    <div class="ded"><small>Namlik va ifloslik uchun chegirma</small><b>−{{ kg.deduction|num }} kg</b>
+      <span>namlik {{ '%.1f'|format(kg.moist) if kg.moist is not none else '—' }}% · ifloslik {{ '%.1f'|format(kg.dirt) if kg.dirt is not none else '—' }}%{% if kg.netto %} · {{ '%.1f'|format(kg.deduction / kg.netto * 100) }}%{% endif %}</span></div>
+    <i>→</i>
+    <div class="got"><small>Klaster qabul qildi (to‘lanadi)</small><b>{{ kg.kond|num }} kg</b><span>konditsion og‘irlik</span></div>
+  </div>
+  {% if kg.parts|length > 1 %}<table class="t pq-parts"><thead><tr><th>Terim</th><th class="num">Yuk</th><th class="num">Topshirdik</th><th class="num">Namlik %</th><th class="num">Ifloslik %</th><th class="num">Chegirma</th><th class="num">Qabul qildi</th></tr></thead><tbody>
+    {% for p in kg.parts %}<tr><td class="b">{{ p.label }}</td><td class="num">{{ p.n }}</td><td class="num">{{ p.netto|num }} kg</td><td class="num">{{ '%.1f'|format(p.moist) }}</td><td class="num">{{ '%.1f'|format(p.dirt) }}</td>
+      <td class="num t-down">−{{ p.deduction|num }} kg <span class="tiny muted">({{ '%.1f'|format(p.deduction / p.netto * 100) }}%)</span></td><td class="num b">{{ p.kond|num }} kg</td></tr>{% endfor %}
+  </tbody></table>{% endif %}
+  <div class="pq-ours {{ 'bad' if kg.ours_diff|abs >= 0.5 or kg.unlinked }}">Bizning punkt yozuvi shu yuklar uchun: <b>{{ kg.ours|num }} kg</b>
+    {% if kg.ours_diff|abs >= 0.5 %} — PQ-17 dan <b>{{ '%+.0f'|format(kg.ours_diff) }} kg</b> farq (reysni tuzating){% else %} — ✓ mos{% endif %}
+    {% if kg.unlinked %} · ⚠ {{ kg.unlinked }} ta PQ-17 reysga bog‘lanmagan{% endif %}</div>
+</div></section>
 {% set uses_status = rows|selectattr('farmer_signed_at')|list or rows|selectattr('invoice_status')|list %}
 {% if uses_status %}<div class="pq-flow">
   <span class="{{ 'on' if c.to_sign }}">✍ SURXON imzosi kutilmoqda: <b>{{ c.to_sign }}</b></span>
@@ -52,5 +66,14 @@
 .pq-t tr.bad{background:#fef2f2}.pq-bad{color:#b91c1c;font-size:12.5px;font-weight:700}.pq-ok{color:#15803d;font-size:12.5px;font-weight:700}
 .pq-st{display:inline-block;padding:3px 8px;border-radius:8px;font-size:12.5px;font-weight:700;white-space:nowrap}.st-sign{background:#fee2e2;color:#991b1b}.st-inv0,.st-inv{background:#fef3c7;color:#92400e}.st-done{background:#dcfce7;color:#166534}
 .pq-opt summary{padding:12px 16px;cursor:pointer}.pq-act{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+</style>
+<style>
+.pq-kg{margin-bottom:14px}.pq-path{display:flex;align-items:stretch;gap:10px;flex-wrap:wrap}
+.pq-path>div{flex:1;min-width:200px;background:#f8fafc;border:1px solid var(--line,#e5e7eb);border-radius:12px;padding:10px 14px}
+.pq-path small{display:block;color:#64748b}.pq-path b{display:block;font-size:24px}.pq-path span{color:#64748b;font-size:13px}
+.pq-path i{align-self:center;font-style:normal;font-size:22px;color:#94a3b8}
+.pq-path .ded{background:#fff7ed;border-color:#fed7aa}.pq-path .ded b{color:#c2410c}.pq-path .got{background:#f0fdf4;border-color:#bbf7d0}.pq-path .got b{color:#15803d}
+.pq-parts{margin-top:12px}.pq-ours{margin-top:10px;font-size:14px;color:#15803d}.pq-ours.bad{color:#b91c1c}
+@media (max-width:700px){.pq-path i{display:none}}
 </style>
 {% endblock %}

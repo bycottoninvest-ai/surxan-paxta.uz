@@ -162,7 +162,27 @@ def pq17_cluster(inn):
             if r['method'] and r['our_method'] and r['method'] != r['our_method']:
                 r['problems'].append('terim turi boshqacha: bizda ' + ('kombayn' if r['our_method'] == 'combine' else 'qo‘l'))
         rows.append(r)
-    return render_template('acct_pq17_cluster.html', c=c, rows=rows, year=year)
+    return render_template('acct_pq17_cluster.html', c=c, rows=rows, year=year, kg=_pq_kg(rows))
+
+
+def _pq_kg(rows):
+    """The kg path for the cluster card: what we handed over → moisture / dirt (weighted averages) → what they accept,
+    split hand / combine, and our own punkt kg for the same loads."""
+    def part(rs):
+        netto = sum(r['netto'] for r in rs)
+        return {'n': len(rs), 'netto': netto, 'kond': sum(r['kond_kg'] for r in rs),
+                'deduction': sum(r['deduction_kg'] - (r['bonus_kg'] or 0) for r in rs),
+                'moist': sum(r['netto'] * (r['moist_pct'] or 0) for r in rs) / netto if netto else None,
+                'dirt': sum(r['netto'] * (r['dirt_pct'] or 0) for r in rs) / netto if netto else None}
+    out = part(rows)
+    out['parts'] = [dict(part(rs), label=lbl) for lbl, rs in
+                    (('Qo‘l terimi', [r for r in rows if r['method'] == 'hand']),
+                     ('Kombayn', [r for r in rows if r['method'] == 'combine'])) if rs]
+    linked = [r for r in rows if r['wb_id']]
+    out['ours'] = sum(r['accepted_kg'] or 0 for r in linked)
+    out['ours_diff'] = out['ours'] - sum(r['netto'] for r in linked)
+    out['unlinked'] = len(rows) - len(linked)
+    return out
 
 
 @bp.get('/buxgalteriya/pq17/<int:doc_id>.pdf')
