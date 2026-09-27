@@ -1,7 +1,7 @@
 import json
 from datetime import date, timedelta
 
-from flask import (Blueprint, abort, current_app, g, jsonify, make_response, redirect, render_template, request,
+from flask import (Blueprint, abort, current_app, flash, g, jsonify, make_response, redirect, render_template, request,
                    send_from_directory, url_for)
 
 from .. import queries
@@ -39,6 +39,38 @@ def health():
         ok = False
     from .. import VERSION
     return jsonify(ok=ok, service='surxon-paxta', version=VERSION), (200 if ok else 503)
+
+
+@bp.get('/tq/<token>')
+@login_required
+def trailer_qr(token):
+    """Target of the QR stuck on a trailer: opens that trailer's current trip for whoever scans it — the field clerk
+    gets the field screen, the punkt operator the waybill sent to their punkt, everyone else the trip page."""
+    e = q("SELECT * FROM equipment WHERE qr_token=? AND kind='telashka'", (token,), one=True)
+    role = g.user['role']
+    home = {'station': 'punkt.home', 'tally': 'dala.home', 'cashier': 'hamyon.home', 'fuel': 'yoqilgi.home'}.get(role, 'ops.loads')
+    if not e:
+        flash('Bu QR bo‘yicha pritsep topilmadi.', 'error')
+        return redirect(url_for(home))
+    if role == 'station':
+        from .punkt import my_station
+        w = q("""SELECT wb.id FROM waybills wb JOIN trailer_loads tl ON tl.id=wb.load_id
+                 WHERE tl.trailer_id=? AND tl.station_id=? AND wb.status<>'BEKOR' AND tl.status<>'BEKOR'
+                 ORDER BY (wb.status='YARATILDI') DESC, wb.id DESC LIMIT 1""", (e['id'], my_station()), one=True)
+        if w:
+            return redirect(url_for('punkt.trip', waybill_id=w['id']))
+        flash(f'{e["code"]}: sizning punktingizga jo‘natilgan reys yo‘q.', 'error')
+        return redirect(url_for(home))
+    if role in ('cashier', 'fuel'):
+        return redirect(url_for(home))
+    ld = q("""SELECT id FROM trailer_loads WHERE trailer_id=? AND status<>'BEKOR'
+              ORDER BY (status IN ('OCHIQ','TOLDI')) DESC, id DESC LIMIT 1""", (e['id'],), one=True)
+    if not ld:
+        flash(f'{e["code"]}: hali reys yo‘q — yangi reys oching.', 'info')
+        return redirect(url_for(home))
+    if role == 'tally':
+        return redirect(url_for('dala.trip', load_id=ld['id']))
+    return redirect(url_for('ops.load_detail', load_id=ld['id']))
 
 
 @bp.get('/')

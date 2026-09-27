@@ -1,5 +1,5 @@
 """Master data and administration: users, brigades, fields, equipment, settings, seasons, backups."""
-from flask import (Blueprint, abort, current_app, flash, make_response, redirect, render_template, request,
+from flask import (Blueprint, Response, abort, current_app, flash, make_response, redirect, render_template, request,
                    send_from_directory, url_for)
 
 from .. import queries
@@ -262,6 +262,44 @@ def field_detail(field_id):
                                     (field_id,)),
                            brigadiers=q('SELECT * FROM brigadiers WHERE active=1 ORDER BY name'),
                            map_center=get_setting('map_center'), audit_rows=queries.history('field', field_id))
+
+
+@bp.get('/texnikalar/qr.pdf')
+@perm_required('masterdata.write', 'fuel.manage')
+def equipment_qr_pdf():
+    """A4, one per page: approved fuel stations (solyarka OLISH), tractors and combines (solyarka BERISH) and trailers
+    (a link that opens their current trip on any phone camera). ?turi=zapravka|traktor|kombayn|telashka narrows it,
+    ?id= one machine."""
+    from ..db import tx
+    from ..fuel import equipment_token, qr_text
+    from ..pdfdoc import build_equipment_qr_pdf
+    cfg = current_app.config['SURXON']
+    where, params = ['active=1'], []
+    turi = request.args.get('turi')
+    if turi in ('traktor', 'kombayn', 'telashka', 'mashina'):
+        where.append('kind=?')
+        params.append(request.args['turi'])
+    if request.args.get('id', '').isdigit():
+        where.append('id=?')
+        params.append(int(request.args['id']))
+    rows = q(f"""SELECT * FROM equipment WHERE {' AND '.join(where)}
+                 ORDER BY CASE kind WHEN 'traktor' THEN 1 WHEN 'kombayn' THEN 2 WHEN 'telashka' THEN 3 ELSE 4 END, code""", params)
+    stations = [] if (turi and turi != 'zapravka') or request.args.get('id') else \
+        q('SELECT * FROM fuel_stations WHERE active=1 AND approved=1 ORDER BY code')
+    if turi == 'zapravka':
+        rows = []
+    if not rows and not stations:
+        raise UserError('Chop etish uchun texnika yo‘q.')
+    base = (f'https://{cfg.DOMAIN}' if cfg.DOMAIN else request.url_root.rstrip('/'))
+    items = [(qr_text('Z', st['qr_token']), 'zapravka', st['code'], st['name']) for st in stations]
+    with tx() as db:
+        for e in rows:
+            tok = equipment_token(db, e['id'])
+            text = f'{base}/tq/{tok}' if e['kind'] == 'telashka' else qr_text('T', tok)
+            items.append((text, e['kind'], e['code'], ' · '.join(x for x in (e['plate'], e['operator_name']) if x)))
+    pdf = build_equipment_qr_pdf(items, company=get_setting('company_name'))
+    return Response(pdf, mimetype='application/pdf', headers={'Content-Disposition': 'inline; filename="texnika_qr.pdf"',
+                                                             'Cache-Control': 'private, no-store'})
 
 
 @bp.route('/texnikalar', methods=['GET', 'POST'])

@@ -563,6 +563,53 @@ def build_cash_pdf(e, corrections, *, company, printed_by, printed_at):
     return buf.getvalue()
 
 
+KIND_TITLES = {'zapravka': 'ZAPRAVKA (SOLYARKA)', 'traktor': 'TRAKTOR', 'kombayn': 'KOMBAYN', 'telashka': 'PRITSEP (TELASHKA)', 'mashina': 'MASHINA'}
+KIND_HINTS = {
+    'zapravka': 'Solyarka olishda shu QR skanerlanadi (Solyarka → Olish).',
+    'traktor': 'Solyarka berishda shu QR skanerlanadi (Solyarka → Berish).',
+    'kombayn': 'Solyarka berishda shu QR skanerlanadi (Solyarka → Berish).',
+    'mashina': 'Solyarka berishda shu QR skanerlanadi (Solyarka → Berish).',
+    'telashka': 'Telefon kamerasi bilan skanerlang — shu pritsepning joriy reysi ochiladi.',
+}
+
+
+def build_equipment_qr_pdf(items, *, company):
+    """One A4 page per machine, to stick on it: logo, what it is, a big QR and a big code readable from afar.
+    items: (qr_text, kind, code, subtitle)."""
+    _fonts()
+    buf = io.BytesIO()
+    c = canvas.Canvas(buf, pagesize=A4)
+    W, H = A4
+    c.setTitle('Texnika QR kodlari')
+    c.setAuthor(company)
+    logo = Path(current_app.static_folder) / 'img' / 'logo-dark.png'
+    for text, kind, code, sub in items:
+        c.setLineWidth(1.5)
+        c.roundRect(10 * mm, 10 * mm, W - 20 * mm, H - 20 * mm, 6 * mm)
+        y = H - 20 * mm
+        if logo.exists():
+            c.drawImage(str(logo), W / 2 - 38 * mm, y - 22 * mm, width=76 * mm, height=22 * mm, mask='auto',
+                        preserveAspectRatio=True, anchor='c')
+        y -= 34 * mm
+        c.setFont('DejaVu-Bold', 26)
+        c.drawCentredString(W / 2, y, KIND_TITLES.get(kind, kind.upper()))
+        size = 150 * mm
+        _qr(c, text, (W - size) / 2, y - 8 * mm - size, size)
+        y -= 8 * mm + size + 30 * mm
+        c.setFont('DejaVu-Bold', 76)
+        c.drawCentredString(W / 2, y, code)
+        y -= 12 * mm
+        c.setFont('DejaVu', 14)
+        c.drawCentredString(W / 2, y, (sub or '')[:60])
+        c.setFont('DejaVu', 10)
+        c.drawCentredString(W / 2, 17 * mm, KIND_HINTS.get(kind, ''))
+        c.setFont('DejaVu', 8)
+        c.drawCentredString(W / 2, 13 * mm, f'{company} · shu varaqni texnikaga yopishtiring (shaffof skotch bilan yoping)')
+        c.showPage()
+    c.save()
+    return buf.getvalue()
+
+
 def build_qr_labels_pdf(items, *, company):
     """A4 sheet of QR labels (6 per page): (qr_text, code, subtitle). Stick them on the pump / the machine."""
     _fonts()

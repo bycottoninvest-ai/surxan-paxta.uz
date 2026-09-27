@@ -3,7 +3,8 @@
 {% set page_title = 'Texnikalar' %}
 {% set kinds = {'traktor':'Traktor','telashka':'Telashka','kombayn':'Kombayn','mashina':'Mashina'} %}
 {% block content %}
-<div class="page-h"><h1>{{ icon('tractor','lg') }} Texnikalar</h1><span class="sub">Raqamlar Admin tomonidan kiritiladi; yangi texnika kod o‘zgartirmasdan qo‘shiladi</span></div>
+<div class="page-h"><h1>{{ icon('tractor','lg') }} Texnikalar</h1><span class="sub">Raqamlar Admin tomonidan kiritiladi; yangi texnika kod o‘zgartirmasdan qo‘shiladi</span>
+  {% if can('masterdata.write') %}<span class="spacer"></span><a class="btn btn-primary btn-sm" href="{{ url_for('admin.equipment_qr_pdf') }}" target="_blank">{{ icon('printer','sm') }} QR kodlar (A4, har biri alohida)</a>{% endif %}</div>
 <div class="grid">
   {% if can('masterdata.write') %}
   <section class="card s4"><div class="card-h"><h3>{{ 'Tahrirlash: ' ~ edit.code if edit else 'Yangi texnika' }}</h3>{% if edit %}<a class="more" href="{{ url_for('admin.equipment') }}">Yangi</a>{% endif %}</div>
