@@ -3,6 +3,15 @@
 Oxirgi yangilanish: 2026-09-25 (kech, v2.5.0 — ikki bot). Yozgan: Claude (bulutdagi sessiya “Yangi loya qilash”).
 
 
+## QO‘SHIMCHA 27.09.2026 (kunduzi) — v2.18.3 production’da
+
+- Texnika + zapravka QR: Admin → Texnikalar → “QR kodlar (A4, har biri alohida)” (`/admin/texnikalar/qr.pdf`, ?turi=).
+  Traktor/kombayn = solyarka QR (SPX-YQ:T), zapravka = SPX-YQ:Z, pritsep = `https://domen/tq/<token>` (joriy reysni ochadi).
+- Odamlar va texnika bitta xaritada: dashboard kartasi + `/rahbar/xodimlar` (Odamlar/Texnika qatlamlari, to‘liq ism yorlig‘i).
+- Kuzatuv → Odamlar: admin odamga rasm qo‘yadi (Telegram rasmi o‘rniga). Joylashuv 1 soat kelmasa bot bir marta eslatadi
+  (sozlama `staff_live_remind`).
+- Foydalanuvchi ertaga traktorlarga GT06 o‘rnatadi → Admin → Texnikalar’da IMEI bog‘lash + GT06 SMS sozlash (server IP, port 5023).
+
 ## HOLAT 27.09.2026, 04:40 (ENG OXIRGI — “paxta” deyilsa shu yerdan davom eting)
 
 **Server yangilandi va hammasi ulandi:**
