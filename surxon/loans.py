@@ -456,9 +456,14 @@ def akt(party_id, dan=None, gacha=None, today=None):
             rows.append({'date': d, 'text': f'{c["title"]}: avans', 'due': c['advance'], 'paid': 0, 'got': 0})
         for ln in c['st']['lines']:
             rows.append({'date': ln['due_date'], 'text': f'{c["title"]}: grafik bo‘yicha to‘lov', 'due': ln['amount'], 'paid': 0, 'got': 0})
+    no_sched = {c['id'] for c in contracts(party_id, today=today) if c['kind'] == 'kredit' and not c['st']['lines']}
     for m in q('''SELECT m.*, c.title ct FROM contract_moves m LEFT JOIN contracts c ON c.id=m.contract_id
                   WHERE m.party_id=? AND m.voided_at IS NULL''', (party_id,)):
         text = ' · '.join(x for x in (m['ct'], m['purpose']) if x) or ('to‘lov' if m['direction'] == 'OUT' else 'pul tushdi')
+        if m['direction'] == 'IN' and m['contract_id'] in no_sched:      # loan used, repayment schedule not loaded yet
+            rows.append({'date': m['move_date'], 'text': 'Kreditdan to‘landi: ' + (m['purpose'] or text), 'due': m['amount'],
+                         'paid': 0, 'got': 0})
+            continue
         rows.append({'date': m['move_date'], 'text': text, 'due': 0, 'paid': m['amount'] if m['direction'] == 'OUT' else 0,
                      'got': m['amount'] if m['direction'] == 'IN' else 0})
     rows.sort(key=lambda r: (r['date'], r['due'] == 0))
@@ -485,3 +490,112 @@ def photos(party_id=None, contract_id=None):
     if contract_id:
         return q("SELECT * FROM contract_files WHERE contract_id=? AND kind='rasm' ORDER BY id", (contract_id,))
     return q("SELECT * FROM contract_files WHERE party_id=? AND kind='rasm' ORDER BY id", (party_id,))
+
+
+# ------------------------------------------------------------------ credit-account spending (Agrobank “To‘lovlar hisoboti”)
+
+CREDIT_EXPORT_HEADERS = ('qabul qiluvchi', 'maqsad nomi', 'summa')
+
+
+def parse_credit_export(data):
+    """The bank's export of payments made straight from the credit account (Agrobank farmer platform): one row per
+    payment — date, amount, recipient, purpose. The export repeats every payment several times: identical rows are one
+    payment. Amounts come in tiyin (1/100 so‘m) although the column says so‘m. Returns rows sorted by date, in so‘m."""
+    import openpyxl
+    try:
+        wb = openpyxl.load_workbook(io.BytesIO(data), data_only=True)
+    except Exception:
+        raise UserError('Excel faylni o‘qib bo‘lmadi.')
+    ws = wb.active
+    grid = [list(r) for r in ws.iter_rows(values_only=True)]
+    head_i = next((i for i, r in enumerate(grid[:10])
+                   if all(any(h in str(c or '').lower() for c in r) for h in CREDIT_EXPORT_HEADERS)), None)
+    if head_i is None:
+        raise UserError('Bu bank to‘lovlar hisoboti emas (“Qabul qiluvchi”, “Maqsad nomi”, “Summa” ustunlari kerak).')
+    head = [str(c or '').strip().lower() for c in grid[head_i]]
+
+    def col(*names):
+        return next((i for i, h in enumerate(head) if any(n == h or n in h for n in names)), None)
+    ci = {'date': col('yaratilgan sana', 'sana'), 'amount': col('summa'), 'payer_acc': col('to‘lovchi hisob', "to'lovchi hisob"),
+          'to': col('qabul qiluvchi'), 'inn': col('qabul qiluvchi inn'), 'acc': col('qabul qiluvchi hisob'),
+          'cat': col('maqsad nomi'), 'crop': col('ekin turi'), 'note': col('izoh'), 'bank': col('bank nomi')}
+    seen, out = set(), []
+    for r in grid[head_i + 1:]:
+        if not r or ci['amount'] is None or r[ci['amount']] in (None, ''):
+            continue
+        key = tuple(str(c or '') for c in r[1:])            # the row number differs between the copies
+        if key in seen:
+            continue
+        seen.add(key)
+        raw = str(r[ci['date']] or '').strip()
+        when = None
+        for fmt in ('%d/%m/%Y, %H:%M:%S', '%d.%m.%Y %H:%M:%S', '%d/%m/%Y', '%d.%m.%Y', '%Y-%m-%d %H:%M:%S'):
+            try:
+                when = datetime.strptime(raw, fmt)
+                break
+            except ValueError:
+                pass
+        if isinstance(r[ci['date']], datetime):
+            when = r[ci['date']]
+        amt = _num(r[ci['amount']])
+        if not when or not amt:
+            continue
+        g = lambda k: str(r[ci[k]] or '').strip() if ci[k] is not None else ''
+        mask = lambda t: re.sub(r'\b(\d{4})[ -]?\d{4}[ -]?\d{4}[ -]?(\d{4})\b', r'\1 **** **** \2', t)   # card numbers
+        ref = hashlib.sha1('|'.join(key).encode()).hexdigest()[:20]
+        out.append({'date': when.date().isoformat(), 'time': when.strftime('%H:%M'), 'amount': round(amt / 100, 2),
+                    'to': g('to'), 'inn': re.sub(r'\D', '', g('inn')).strip('0') and re.sub(r'\D', '', g('inn')),
+                    'acc': g('acc'), 'category': g('cat') or 'Boshqa', 'crop': g('crop'), 'note': mask(g('note')), 'ref': ref})
+    if not out:
+        raise UserError('Hisobotda to‘lov qatori topilmadi.')
+    return sorted(out, key=lambda x: (x['date'], x['time']))
+
+
+def _norm_name(s):
+    s = (s or '').lower().replace('ʻ', "'").replace('‘', "'").replace('’', "'")
+    s = re.sub(r'\b(mchj|aj|atb|xk|ooo|ao|llc|kampaniyasi|kompaniyasi)\b|[«»"“”`\']', ' ', s)
+    return re.sub(r'\s+', ' ', s).strip()
+
+
+def import_credit_spend(actor, contract_id, rows):
+    """Each payment from the credit account = loan money used (IN on the credit contract). A payment to a firm we keep
+    (e.g. the leasing company) is also written as our payment (OUT) to that firm. Re-importing never doubles anything."""
+    _need(actor)
+    c = q('SELECT * FROM contracts WHERE id=?', (contract_id,), one=True)
+    if not c:
+        raise UserError('Shartnoma topilmadi.')
+    parties = [p for p in q('SELECT id, name, inn FROM parties') if p['id'] != c['party_id']]
+    new = dup = linked = 0
+    with tx() as db:
+        for r in rows:
+            purpose = ' · '.join(x for x in (r['category'], r['to'], r['note']) if x)[:300]
+            if db.execute('SELECT 1 FROM contract_moves WHERE bank_ref=?', ('KR:' + r['ref'],)).fetchone():
+                dup += 1
+                continue
+            db.execute('''INSERT INTO contract_moves(contract_id, party_id, move_date, direction, amount, purpose, source, bank_ref,
+                          category, counterparty, created_by, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)''',
+                       (contract_id, c['party_id'], r['date'], 'IN', r['amount'], purpose, 'kredit hisobi', 'KR:' + r['ref'],
+                        r['category'], r['to'], actor.user_id, now_str()))
+            new += 1
+            to = _norm_name(r['to'])
+            hit = [p for p in parties if (r['inn'] and p['inn'] == r['inn']) or (len(_norm_name(p['name'])) >= 4 and
+                                                                                 (_norm_name(p['name']) in to or to in _norm_name(p['name'])))]
+            if len(hit) == 1:
+                cs = db.execute("SELECT id FROM contracts WHERE party_id=? AND status<>'BEKOR'", (hit[0]['id'],)).fetchall()
+                db.execute('''INSERT INTO contract_moves(contract_id, party_id, move_date, direction, amount, purpose, source, bank_ref,
+                              category, counterparty, created_by, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)''',
+                           (cs[0]['id'] if len(cs) == 1 else None, hit[0]['id'], r['date'], 'OUT', r['amount'],
+                            f'{r["note"] or r["category"]} (kredit hisobidan)'[:300], 'kredit hisobi', 'KRO:' + r['ref'],
+                            r['category'], r['to'], actor.user_id, now_str()))
+                linked += 1
+        audit(db, actor, 'CREATE', 'credit_import', contract_id, new={'new': new, 'dup': dup, 'linked': linked})
+    return {'new': new, 'dup': dup, 'linked': linked, 'total': sum(r['amount'] for r in rows)}
+
+
+def credit_use(contract_id):
+    """Where the loan went: money used from the credit account by purpose, largest first."""
+    rows = q('''SELECT COALESCE(category, 'Boshqa') category, COUNT(*) n, SUM(amount) s, MIN(move_date) first, MAX(move_date) last
+                FROM contract_moves WHERE contract_id=? AND direction='IN' AND voided_at IS NULL GROUP BY 1 ORDER BY s DESC''',
+             (contract_id,))
+    total = sum(r['s'] for r in rows)
+    return {'rows': [dict(r, pct=r['s'] / total * 100 if total else 0) for r in rows], 'total': total}

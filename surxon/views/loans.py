@@ -136,6 +136,16 @@ def contract(contract_id):
                             equipment_id=c['equipment_id'], note=c['note'] or '', status=c['status'],
                             end_date=request.form.get('end_date') or c['end_date'] or '', terms=request.form.get('terms', ''))
             return done('Shartlar saqlandi.', url_for('loans.contract', contract_id=contract_id))
+        if act == 'credit_xlsx':
+            f = request.files.get('file')
+            if not f or not f.filename:
+                raise UserError('Bankning to‘lovlar hisoboti (Excel) faylini tanlang.')
+            data = f.read()
+            res = L.import_credit_spend(actor, contract_id, L.parse_credit_export(data))
+            L.add_file(actor, c['party_id'], f.filename, data, contract_id, 'kochirma')
+            msg = f'{res["new"]} ta yangi to‘lov yozildi' + (f', {res["dup"]} tasi avval bor edi' if res['dup'] else '') + \
+                  (f', {res["linked"]} tasi boshqa firmaga to‘lov sifatida ham yozildi' if res['linked'] else '') + '.'
+            return done(msg, url_for('loans.contract', contract_id=contract_id))
         if act == 'photo':
             n = 0
             for f in request.files.getlist('files'):
@@ -157,7 +167,8 @@ def contract(contract_id):
     moves = q('SELECT * FROM contract_moves WHERE contract_id=? AND voided_at IS NULL ORDER BY move_date DESC, id DESC', (contract_id,))
     files = q('SELECT * FROM contract_files WHERE contract_id=? ORDER BY id DESC', (contract_id,))
     return render_template('loans_contract.html', c=c, st=st, moves=moves, files=files, ckinds=L.CONTRACT_KINDS,
-                           duties=L.obligations(contract_id=contract_id), photos=L.photos(contract_id=contract_id))
+                           duties=L.obligations(contract_id=contract_id), photos=L.photos(contract_id=contract_id),
+                           use=L.credit_use(contract_id))
 
 
 @bp.get('/buxgalteriya/akt-sverka')

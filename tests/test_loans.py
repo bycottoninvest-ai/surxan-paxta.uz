@@ -180,3 +180,57 @@ def test_document_inbox_sorts_by_firm_and_akt_sverka(app, world, monkeypatch):
     assert 'Test Agro Lizing' in firms and 'Boshqa Bank ATB' in firms and 'Lizing kompaniyasi' in firms
     assert world['juma'].get('/buxgalteriya/akt-sverka').status_code == 302
     assert world['juma'].get('/buxgalteriya/hujjatlar').status_code == 302
+
+
+def credit_export():
+    """Same layout as the bank's “To‘lovlar hisoboti” (made-up payments): every payment repeated 3 times, amounts in tiyin."""
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.append(['№', 'Yaratilgan sana', 'Bank nomi', "Summa (so'm)", "To'lovchi", "To'lovchi hisob", 'Qabul qiluvchi',
+               'Qabul qiluvchi INN', 'Qabul qiluvchi hisob', 'Qabul qiluvchi bank MFO', 'Qabul qiluvchi bank', 'Maqsad nomi',
+               'Ekin turi', 'Izoh'])
+    pays = [('24/04/2026, 15:15:04', '10000000000', 'Birja', "Yo'qilg'i va moylash materiallari (YOMM)", 'Dizel'),
+            ('01/05/2026, 15:29:54', '5500000000', 'Birja', "Mineral o'g'itlar", "Mineral o'g'it"),
+            ('06/05/2026, 12:39:40', '1234567800', 'Test Leasing', "Lizing to'lovlari", 'Kultivator uchun')]
+    n = 0
+    for p in pays:
+        for _ in range(3):
+            n += 1
+            ws.append([n, p[0], 'AGRO_BANK', p[1], 'SURXON', '14301000000000000001', p[2], '000000000', '20208000000000000001',
+                       '00491', 'BANK', p[3], 'Paxta', p[4]])
+    buf = io.BytesIO()
+    wb.save(buf)
+    return buf.getvalue()
+
+
+def test_credit_account_spending_from_bank_export(app, world):
+    bux = world['bux']
+    bux.post('/kreditlar/firma', {'name': 'Namuna Agrobank', 'inn': '300000009', 'kind': 'bank'})
+    bux.post('/kreditlar/firma', {'name': 'Test Leasing', 'kind': 'lizing'})
+    with app.app_context():
+        bank = q("SELECT id FROM parties WHERE kind='bank'", one=True)['id']
+        lz = q("SELECT id FROM parties WHERE kind='lizing'", one=True)['id']
+    bux.post(f'/kreditlar/firma/{bank}', {'kind': 'kredit', 'title': 'Paxta krediti 2026'})
+    bux.post(f'/kreditlar/firma/{lz}', {'kind': 'lizing', 'title': 'Kultivator lizingi'})
+    with app.app_context():
+        cid = q("SELECT id FROM contracts WHERE kind='kredit'", one=True)['id']
+        lcid = q("SELECT id FROM contracts WHERE kind='lizing'", one=True)['id']
+
+    def up():
+        return bux.c.post(f'/kreditlar/shartnoma/{cid}', data={'action': 'credit_xlsx', 'file': (io.BytesIO(credit_export()), 'tolovlar.xlsx'),
+                                                              '_csrf': bux.csrf()}, content_type='multipart/form-data',
+                          headers={'X-Requested-With': 'fetch'}).get_json()
+    r = up()
+    assert r['ok'] and '3 ta yangi' in r['message'] and '1 tasi boshqa firmaga' in r['message'], r
+    assert '0 ta yangi' in up()['message']                                   # same file again: nothing doubled
+    with app.app_context():
+        from surxon import loans as L
+        u = L.credit_use(cid)
+        assert u['total'] == 100000000 + 55000000 + 12345678                 # tiyin → so‘m, 3 copies → 1
+        assert u['rows'][0]['category'].startswith("Yo'qilg'i") and len(u['rows']) == 3
+        paid = q("SELECT contract_id, amount FROM contract_moves WHERE party_id=? AND direction='OUT'", (lz,), one=True)
+        assert (paid['contract_id'], paid['amount']) == (lcid, 12345678)     # the leasing firm sees it as paid
+        a = L.akt(bank, gacha='2026-12-31', today='2026-12-31')
+        assert a['closing'] == u['total']                                    # no repayment schedule yet: used = owed
+    page = bux.get(f'/kreditlar/shartnoma/{cid}').get_data(as_text=True).replace(' ', ' ').replace('\xa0', ' ')
+    assert 'Kredit qayerga sarflandi' in page and 'Mineral o&#39;g&#39;itlar' in page and '167 345 678' in page

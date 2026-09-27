@@ -17,6 +17,15 @@
   {% for o in duties %}{{ duty(o) }}{% endfor %}
   {% if not c.terms and not duties %}<p class="muted small" style="margin:0">Muhim shartlar hali yozilmagan. O‘ngdagi “Muhim shartlarni yozish” orqali qo‘shing: masalan, sug‘urtaga necha kunda xabar berish, jarima, texnika ko‘rigi.</p>{% endif %}
 </div></section>{% endif %}
+{% if use.rows or c.kind == 'kredit' %}<section class="card" style="margin-bottom:14px"><div class="card-h"><h3>💳 Kredit qayerga sarflandi</h3><span class="muted small">kredit hisobidan to‘g‘ridan-to‘g‘ri to‘langan</span></div><div class="card-b">
+  {% if use.rows %}<div class="cu">{% for r in use.rows %}<div class="cu-r"><span class="cu-n">{{ r.category }}</span><span class="cu-bar"><i style="width:{{ '%.1f'|format(r.pct) }}%"></i></span>
+    <b class="num">{{ r.s|money }}</b><span class="tiny muted">{{ '%.0f'|format(r.pct) }}% · {{ r.n }} ta</span></div>{% endfor %}
+    <div class="cu-r cu-t"><span class="cu-n">Jami ishlatilgan</span><span></span><b class="num">{{ use.total|money }}</b><span></span></div></div>
+  {% else %}<p class="small muted" style="margin:0">Hali yo‘q. Bankning “To‘lovlar hisoboti” Excel faylini yuklang — har to‘lov maqsadi bo‘yicha ajraladi.</p>{% endif %}
+  {% if can('loans.write') %}<form method="post" enctype="multipart/form-data" class="row" style="gap:8px;margin-top:10px;flex-wrap:wrap">{{ csrf() }}<input type="hidden" name="action" value="credit_xlsx">
+    <input class="input" type="file" name="file" accept=".xlsx,.xls" required style="height:auto;padding:6px;max-width:360px">
+    <button class="btn btn-light btn-sm">Bank to‘lovlar hisobotini yuklash</button><span class="tiny muted">Qayta yuklasangiz, eski to‘lovlar ikki marta yozilmaydi.</span></form>{% endif %}
+</div></section>{% endif %}
 <div class="grid">
 <section class="card s8"><div class="card-h"><h3>📅 To‘lov grafigi</h3></div>
   <div class="table-wrap" style="max-height:620px"><table class="t"><thead><tr><th>#</th><th>Sana</th><th class="num">Asosiy qarz</th><th class="num">Foiz</th><th class="num">To‘lov</th><th>Holat</th></tr></thead><tbody>
@@ -56,7 +65,7 @@
   {% endif %}
   <div style="margin-top:14px"><b>Fayllar</b>{% for f in files %}<div><a class="link small" href="{{ url_for('loans.file', file_id=f.id) }}" target="_blank">{{ f.name }}</a> <span class="tiny muted">{{ f.kind }}</span></div>{% else %}<div class="tiny muted">yo‘q</div>{% endfor %}
     <div class="tiny muted" style="margin-top:4px">Shartnoma faylini firma sahifasidan yuklang.</div></div>
-  <div style="margin-top:14px"><b>To‘lovlar</b>{% for m in moves %}<div class="small">{{ m.move_date|d }} · {{ 'to‘landi' if m.direction == 'OUT' else 'olindi' }} <b>{{ m.amount|money }}</b></div>{% else %}<div class="tiny muted">yo‘q</div>{% endfor %}
+  <div style="margin-top:14px"><b>To‘lovlar</b>{% for m in moves %}<div class="small">{{ m.move_date|d }} · {{ 'to‘landi' if m.direction == 'OUT' else ('kreditdan: ' ~ (m.counterparty or '') if m.category else 'olindi') }} <b>{{ m.amount|money }}</b></div>{% else %}<div class="tiny muted">yo‘q</div>{% endfor %}
     <a class="link small" href="{{ url_for('loans.party', party_id=c.party_id) }}">+ to‘lov yozish (firma sahifasida)</a></div>
   {% if can('loans.write') %}<form method="post" class="row" style="gap:6px;margin-top:14px">{{ csrf() }}<input type="hidden" name="action" value="status">
     <select class="input" name="status" style="height:34px">{% for s in ('FAOL', 'YOPILGAN', 'BEKOR') %}<option {{ 'selected' if c.status == s }}>{{ s }}</option>{% endfor %}</select><button class="btn btn-ghost btn-sm">Holat</button></form>{% endif %}
@@ -68,6 +77,9 @@
 .ln-d{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:8px 0;border-bottom:1px solid #f1f5f9}.ln-d.st-overdue b,.ln-d.st-soon b{color:#b91c1c}.ln-d.st-done{opacity:.6}
 .ln-ph{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:12px}.ln-ph img{width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:10px;display:block}
 .ln-ph-add label{display:flex;align-items:center;justify-content:center;aspect-ratio:4/3;border:2px dashed #cbd5e1;border-radius:10px;color:#475569;cursor:pointer;font-size:14px;text-align:center;padding:6px}
+.cu{display:flex;flex-direction:column;gap:6px}.cu-r{display:grid;grid-template-columns:minmax(160px,1.3fr) 2fr auto 90px;gap:12px;align-items:center}
+.cu-bar{height:10px;background:#f1f5f9;border-radius:99px;overflow:hidden}.cu-bar i{display:block;height:100%;background:#2563eb;border-radius:99px}
+.cu-t{border-top:1px solid #e5e7eb;padding-top:6px;font-weight:700}@media (max-width:700px){.cu-r{grid-template-columns:1fr auto}.cu-bar{display:none}}
 .ln-terms{white-space:pre-wrap;background:#fffbeb;border:1px solid #fde68a;border-radius:10px;padding:10px 12px;font-size:14px}
 .ln-sum .bad{border-color:#fca5a5;background:#fef2f2}tr.st-overdue{background:#fef2f2}.st-paid{color:#64748b}
 </style>

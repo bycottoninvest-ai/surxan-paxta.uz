@@ -27,7 +27,7 @@ KIND_WORDS = [
     ('akt', ('акт сверки', 'акт-сверк', 'akt-sverka', 'akt sverka', 'солиштириш далолатнома', 'solishtirish dalolatnoma',
              'o‘zaro hisob', 'ўзаро ҳисоб')),
     ('faktura', ('счет-фактура', 'счёт-фактура', 'hisob-faktura', 'ҳисоб-фактура', 'invoice', 'faktura')),
-    ('kochirma', ('выписка', 'ko‘chirma', 'кўчирма', 'hisobvaraqdan ko', 'остаток на начало', 'қолдиқ кун бошига')),
+    ('kochirma', ('maqsad nomi', 'выписка', 'ko‘chirma', 'кўчирма', 'hisobvaraqdan ko', 'остаток на начало', 'қолдиқ кун бошига')),
     ('grafik', ('график', 'grafik', 'тўлов жадвали', 'to‘lov jadvali', 'погашени')),
     ('polis', ('полис', 'polis')),
     ('shartnoma', ('шартнома', 'shartnoma', 'договор', 'contract')),
@@ -88,6 +88,8 @@ def guess(name, text):
             core = re.sub(r'[«»"“”]', '', core).strip(' .,-')
             if len(core) >= 5 and core in t:
                 hit.add(p['id'])
+    if not hit and 'agro_bank' in t:                          # Agrobank platform export names the bank only this way
+        hit = {p['id'] for p in parties if 'agro' in _norm(p['name']) and 'bank' in _norm(p['name'])}
     party_id = next(iter(hit)) if len(hit) == 1 else None
     contract_id = None
     cq = q("SELECT id, party_id, number FROM contracts WHERE status<>'BEKOR' AND number IS NOT NULL AND length(number)>=3")
@@ -155,6 +157,14 @@ def file_it(actor, inbox_id, party_id, kind, contract_id=None):
         contract_id = None
     data = (Path(current_app.config['SURXON'].UPLOAD_DIR) / r['path']).read_bytes()
     fid = L.add_file(actor, party_id, r['name'], data, contract_id, kind)
+    if kind == 'kochirma':               # the bank's “payments from the credit account” export → loan use on the credit
+        cid = contract_id or next((c['id'] for c in q("SELECT id FROM contracts WHERE party_id=? AND kind='kredit' AND status<>'BEKOR'",
+                                                       (party_id,))), None)
+        if cid and q("SELECT kind FROM contracts WHERE id=?", (cid,), one=True)['kind'] == 'kredit':
+            try:
+                L.import_credit_spend(actor, cid, L.parse_credit_export(data))
+            except UserError:
+                pass
     with tx() as db:
         db.execute('''UPDATE doc_inbox SET status='filed', file_id=?, guess_party_id=?, guess_contract_id=?, guess_kind=?,
                       done_by=?, done_at=? WHERE id=?''', (fid, party_id, contract_id, kind, actor.user_id, now_str(), inbox_id))
