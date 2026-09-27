@@ -29,9 +29,10 @@
     {% if c.received is not none %}<div class="pq-line"><span>To‘landi</span><b>{{ c.received|money }}</b></div>
     <div class="pq-line"><span>Qarz</span><b class="{{ 't-down' if c.amount - c.received > 0 }}">{{ (c.amount - c.received)|money }}</b></div>{% endif %}
     <div class="pq-badges">
-      {% if c.to_sign %}<span class="badge b-red">✍ {{ c.to_sign }} ta PQ-17 SURXON imzosini kutyapti</span>{% endif %}
+      {% if c.invoices or c.to_invoice or c.to_sign < c.n %}
+      {% if c.to_sign %}<span class="badge b-gray">✍ {{ c.to_sign }} ta imzo kutilmoqda</span>{% endif %}
       {% if c.to_invoice %}<span class="badge b-gray">🧾 {{ c.to_invoice }} ta faktura kutilmoqda</span>{% endif %}
-      {% if c.invoices %}<span class="badge b-green">✓ {{ c.invoices }} ta faktura imzolangan</span>{% endif %}
+      {% if c.invoices %}<span class="badge b-green">✓ {{ c.invoices }} ta faktura imzolangan</span>{% endif %}{% endif %}
       {% if c.unmatched %}<span class="badge b-red">? {{ c.unmatched }} ta reysi topilmagan</span>{% endif %}
     </div>
     <div class="more">Batafsil sverka ›</div>

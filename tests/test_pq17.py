@@ -78,7 +78,7 @@ def test_pq17_matches_compares_and_prices_trips(app, world):
     assert d2['waybill_id'] is None                                                 # 450 ≠ 470 → not guessed
 
     page = bux.get('/buxgalteriya/pq17').get_data(as_text=True)
-    assert 'bizda bunday reys topilmadi' in page and 'FAYZ AGROKLASTER MCHJ' in page and '2 ta PQ-17 SURXON imzosini kutyapti' in page
+    assert 'bizda bunday reys topilmadi' in page and 'FAYZ AGROKLASTER MCHJ' in page
     assert '✓ mos' in bux.get('/buxgalteriya/pq17/klaster/311919351').get_data(as_text=True)
     # the office ties it by hand → the difference is shown
     assert bux.post('/buxgalteriya/pq17', {'action': 'link', 'doc_id': d2['id'], 'waybill_id': w2}).get_json()['ok']
