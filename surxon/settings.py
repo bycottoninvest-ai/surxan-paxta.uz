@@ -3,6 +3,7 @@ from .db import get_db
 
 DEFAULTS = {
     'company_name': ('SURXON TAXIATOSH TEXTILE', 'Kompaniya nomi (nakladnoyda chiqadi)'),
+    'company_inn': ('311720284', 'Kompaniya STIR — PQ-17 faqat shu STIR li xo‘jalikniki bo‘lsa qabul qilinadi'),
     'current_season': ('', 'Joriy mavsum yili (bo‘sh = joriy yil)'),
     'destination_name': ('Nayman paxta qabul punkti', 'Qabul qiluvchi (nakladnoyda)'),
     'price_hand_kg': ('', 'Punkt to‘laydigan narx: QO‘L TERIMI paxtasi, so‘m/kg (istalgan payt o‘zgartiriladi — hisob qayta chiqadi)'),

@@ -47,13 +47,124 @@ def home():
     owed = [w for w in A.worker_balances(year) if w['payable'] > 0]
     combines = A.combine_balances(year)
     items = A.todo(year, t)
-    from ..pricing import prices
+    from ..pricing import KEYS
+    from ..settings import get_float
+    prices = {k: get_float(v, None) for k, v in KEYS.items()}
     return render_template('acct_home.html', year=year, cot=cot, s=today_money, balance=A.total_balance(),
-                           pk=queries.finance_summary(year), prices=prices(),
+                           pk=queries.finance_summary(year), prices=prices,
                            owed_n=len(owed), owed_sum=sum(w['payable'] for w in owed),
                            combine_balance=sum(c['balance'] for c in combines),
                            combine_worked=[c for c in combines if c['kg'] or c['work_days'] or c['hectares']],
                            problems=sum(1 for i in items if i[0] != 'green'), items=items)
+
+
+@bp.route('/buxgalteriya/pq17', methods=['GET', 'POST'])
+@perm_required('nayman.write', 'reports.finance')
+def pq17():
+    """PQ-17 check: upload the state's receipts (PDF from hosil-qabuli.uz) — each is read, tied to its trip and
+    compared: kg, hand / combine, moisture and dirt, the real price and sum."""
+    from .. import pq17 as P
+    if request.method == 'POST':
+        actor = post_actor()
+        if request.form.get('action') == 'link':
+            P.link(actor, parse_int(request.form.get('doc_id'), 'PQ-17'),
+                   parse_int(request.form.get('waybill_id'), 'Reys', required=False))
+            return done('Saqlandi.', url_for('acct.pq17'))
+        files = [f for f in request.files.getlist('files') if f and f.filename]
+        if not files:
+            raise UserError('PQ-17 PDF fayl(lar)ini tanlang.')
+        ok, again, bad = [], [], []
+        for f in files[:60]:
+            try:
+                _id, d, already, how = P.import_pdf(actor, f.read(), source='web')
+                (again if already else ok).append(f'{d["code"]} (yuk xati {d["load_no"]}, {d["netto"]:g} kg'
+                                                  + ('' if already else ', reysga ' + (how or 'biriktirilmadi — qo‘lda tanlang')) + ')')
+            except UserError as e:
+                bad.append(f'{f.filename}: {e}')
+        msg = (f'{len(ok)} ta PQ-17 qabul qilindi. ' if ok else '') + (f'{len(again)} tasi avval yuklangan. ' if again else '') + \
+              (f'{len(bad)} ta fayl o‘qilmadi: ' + '; '.join(bad) if bad else '')
+        if not ok and not again:
+            raise UserError(msg.strip())
+        return done(msg.strip(), url_for('acct.pq17'))
+    year = season_arg()
+    ov = P.overview(year)
+    fin = queries.finance_summary(year)
+    cl = P.clusters()
+    for c in cl:        # payments are not split by buyer yet: with one cluster every payment is theirs
+        c['received'] = fin['received'] if len(cl) == 1 else None
+    return render_template('acct_pq17.html', ov=ov, tot=ov['tot'], clusters=cl, year=year, fin=fin,
+                           farq=[r for r in ov['rows'] if r['state'] == 'farq'], guess=_pq_guess(ov, _free_trips(year)),
+                           free=_free_trips(year))
+
+
+def _free_trips(year):
+    return q("""SELECT wb.id, tl.trip_no, nr.accepted_kg, nr.received_date FROM waybills wb JOIN trailer_loads tl ON tl.id=wb.load_id
+                JOIN nayman_receipts nr ON nr.waybill_id=wb.id WHERE wb.status<>'BEKOR' AND wb.season_year=?
+                AND NOT EXISTS (SELECT 1 FROM pq17_docs p WHERE p.waybill_id=wb.id) ORDER BY nr.received_date DESC""", (year,))
+
+
+def _pq_guess(ov, free):
+    """An unmatched PQ-17 → the free trip received within a day with the closest weight (only a suggestion)."""
+    from datetime import date as _d
+    guess = {}
+    for d in ov['orphans']:
+        near = [w for w in free if d['doc_date'] and w['received_date']
+                and abs((_d.fromisoformat(w['received_date']) - _d.fromisoformat(d['doc_date'])).days) <= 1]
+        if near:
+            guess[d['id']] = min(near, key=lambda w: abs((w['accepted_kg'] or 0) - d['netto']))['id']
+    return guess
+
+
+@bp.route('/buxgalteriya/pq17/klaster/<inn>', methods=['GET', 'POST'])
+@perm_required('nayman.write', 'reports.finance')
+def pq17_cluster(inn):
+    """One buyer: every PQ-17 in date order with its trip, kg check, our signature and the invoice."""
+    from .. import pq17 as P
+    if request.method == 'POST':
+        require('nayman.write')
+        act = request.form.get('action')
+        ids = request.form.getlist('ids')
+        kw = {'sign': {'signed': True}, 'unsign': {'signed': False}, 'inv_made': {'invoice': 'yaratildi'},
+              'inv_signed': {'invoice': 'imzolandi'}, 'inv_none': {'invoice': ''}}.get(act)
+        if not kw:
+            raise UserError('Noma’lum amal.')
+        n = P.set_status(post_actor(), ids, invoice_no=request.form.get('invoice_no') if act.startswith('inv_') else None, **kw)
+        return done(f'{n} ta PQ-17 holati saqlandi.', url_for('acct.pq17_cluster', inn=inn))
+    year = season_arg()
+    c = next((x for x in P.clusters() if x['inn'] == inn), None)
+    if not c:
+        abort(404)
+    fin = queries.finance_summary(year)
+    c['received'] = fin['received'] if len(P.clusters()) == 1 else None
+    docs = q("""SELECT p.*, tl.trip_no, nr.accepted_kg, tl.method our_method, wb.id wb_id FROM pq17_docs p
+                LEFT JOIN waybills wb ON wb.id=p.waybill_id LEFT JOIN trailer_loads tl ON tl.id=wb.load_id
+                LEFT JOIN nayman_receipts nr ON nr.waybill_id=wb.id
+                WHERE COALESCE(p.cluster_inn, p.cluster_name, '?')=? ORDER BY p.doc_date DESC, p.id DESC""", (inn,))
+    rows = []
+    for d in docs:
+        r = dict(d)
+        r['stage'] = P.stage(d)
+        r['problems'] = []
+        if r['wb_id'] is None:
+            r['problems'].append('bizning reys topilmadi')
+        else:
+            if abs((r['accepted_kg'] or 0) - r['netto']) >= 0.5:
+                r['problems'].append(f'kg: bizda {r["accepted_kg"]:g}, PQ-17 da {r["netto"]:g}')
+            if r['method'] and r['our_method'] and r['method'] != r['our_method']:
+                r['problems'].append('terim turi boshqacha: bizda ' + ('kombayn' if r['our_method'] == 'combine' else 'qo‘l'))
+        rows.append(r)
+    return render_template('acct_pq17_cluster.html', c=c, rows=rows, year=year)
+
+
+@bp.get('/buxgalteriya/pq17/<int:doc_id>.pdf')
+@perm_required('nayman.write', 'reports.finance')
+def pq17_file(doc_id):
+    from flask import current_app, send_from_directory
+    d = q('SELECT file_path, code FROM pq17_docs WHERE id=?', (doc_id,), one=True)
+    if not d or not d['file_path']:
+        abort(404)
+    return send_from_directory(current_app.config['SURXON'].UPLOAD_DIR, d['file_path'], mimetype='application/pdf',
+                               download_name=f'{d["code"]}.pdf')
 
 
 @bp.post('/buxgalteriya/narx')

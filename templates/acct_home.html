@@ -17,21 +17,21 @@
   {{ tile('Muammolar', problems, 'ta', 'pastdagi ro‘yxat', 't-red' if problems else '', '#todo') }}
 </div>
 
-<section class="card a-punkt"><div class="card-h"><h3>{{ icon('factory') }} Punkt bilan hisob ({{ year }})</h3><a class="more" href="{{ url_for('finance.payments') }}">Naymandan pul tushdi →</a></div>
+<section class="card a-punkt"><div class="card-h"><h3>{{ icon('factory') }} Punkt bilan hisob ({{ year }})</h3><a class="more" href="{{ url_for('acct.pq17') }}">PQ-17 sverka →</a><a class="more" href="{{ url_for('finance.payments') }}">Naymandan pul tushdi →</a></div>
   <div class="card-b">
     <div class="a-pk">
       <div><span>Punkt qabul qildi</span><b class="num">{{ pk.accepted_kg|num }} kg</b><small>qo‘l {{ pk.hand_kg|num }} · kombayn {{ pk.combine_kg|num }}</small></div>
-      <div><span>Hisoblangan (hozirgi narxda)</span><b class="num">{{ pk.receivable|num if pk.receivable is not none else '—' }}</b><small>{{ (pk.unpriced ~ ' ta reys narxsiz') if pk.unpriced else 'so‘m' }}</small></div>
+      <div><span>Hisoblangan</span><b class="num">{{ pk.receivable|num if pk.receivable is not none else '—' }}</b><small>{% if pk.confirmed_n %}PQ-17 bo‘yicha {{ pk.confirmed_amount|num }}{% if pk.estimated_amount %} + taxminiy {{ pk.estimated_amount|num }}{% endif %}{% else %}{{ (pk.unpriced ~ ' ta reys narxsiz') if pk.unpriced else 'taxminiy (PQ-17 hali yo‘q)' }}{% endif %}</small></div>
       <div><span>Punktdan tushgan pul</span><b class="num">{{ pk.received|num }}</b><small>bank / naqd</small></div>
       <div class="{{ 'neg' if pk.debt and pk.debt > 0 }}"><span>Qoldiq (punkt qarzi)</span><b class="num">{{ pk.debt|num if pk.debt is not none else '—' }}</b><small>{{ 'so‘m' if pk.debt is not none else 'narx kiritilmagan' }}</small></div>
     </div>
     {% if can('nayman.write') %}
     <form method="post" action="{{ url_for('acct.prices') }}" class="a-price">{{ csrf() }}
-      <b>Paxta narxi (punkt to‘laydi), so‘m/kg</b>
+      <b>Taxminiy narx (PQ-17 kelmagan reyslar uchun), so‘m/kg</b>
       <label>Qo‘l terimi <input name="hand" inputmode="numeric" value="{{ prices.hand|int if prices.hand else '' }}" placeholder="7800"></label>
       <label>Kombayn <input name="combine" inputmode="numeric" value="{{ prices.combine|int if prices.combine else '' }}" placeholder="7600"></label>
       <button class="btn btn-primary">Saqlash</button>
-      <span class="tiny muted">Istalgan payt o‘zgartiring — barcha reyslar hisobi yangi narx bilan qayta chiqadi. Kim o‘zgartirgani auditda.</span>
+      <span class="tiny muted">PQ-17 kelgan reyslar hujjatdagi aniq narx va summa bilan hisoblanadi (sort koeffitsienti bilan). PQ-17 bor bo‘lsa, taxminiy narx ham oxirgi PQ-17 dan olinadi; yo‘q bo‘lsa — shu yerdagi narx.</span>
     </form>{% endif %}
   </div></section>
 

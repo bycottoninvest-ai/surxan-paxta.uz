@@ -13,8 +13,12 @@ KEYS = {'hand': 'price_hand_kg', 'combine': 'price_combine_kg'}
 
 
 def prices(db=None):
+    """Estimate prices for trips still without a PQ-17: the newest PQ-17 price of that kind (contract price × grade),
+    else what the accountant typed in the settings."""
+    from .pq17 import latest_price
     base = get_float('price_per_kg', None, db)
-    return {'hand': get_float(KEYS['hand'], None, db) or base, 'combine': get_float(KEYS['combine'], None, db) or base}
+    return {'hand': latest_price('hand') or get_float(KEYS['hand'], None, db) or base,
+            'combine': latest_price('combine') or get_float(KEYS['combine'], None, db) or base}
 
 
 def money(year=None, waybill_ids=None):
@@ -36,8 +40,18 @@ def money(year=None, waybill_ids=None):
                                   AND h.method='combine'),0) comb
                  FROM waybills wb JOIN nayman_receipts nr ON nr.waybill_id=wb.id JOIN trailer_loads tl ON tl.id=wb.load_id
                  WHERE {" AND ".join(where)}''', params)
+    from .pq17 import by_waybill
+    pqs = by_waybill()
     out = {}
     for r in rows:
+        pq = pqs.get(r['id'])
+        if pq:       # the state's receipt: the real price (with grade) and the sum for the conditioned weight
+            m = pq['method']
+            out[r['id']] = {'accepted_kg': pq['netto'], 'kond_kg': pq['kond_kg'], 'deduction_kg': pq['deduction_kg'] - pq['bonus_kg'],
+                            'hand_kg': pq['netto'] if m == 'hand' else 0, 'combine_kg': pq['netto'] if m == 'combine' else 0,
+                            'price': round(pq['price'], 2), 'amount': int(round(pq['amount'])), 'confirmed': True,
+                            'pq17': pq['code'], 'moist_pct': pq['moist_pct'], 'dirt_pct': pq['dirt_pct']}
+            continue
         hand, comb = r['hand'], r['comb']
         if not hand and not comb:                        # weighbridge-only trip: its method decides
             hand, comb = (0, 1) if r['method'] == 'combine' else (1, 0)
@@ -47,14 +61,19 @@ def money(year=None, waybill_ids=None):
         price = None if missing else (hand * (p['hand'] or 0) + comb * (p['combine'] or 0)) / tot
         out[r['id']] = {'accepted_kg': acc, 'hand_kg': round(acc * hand / tot), 'combine_kg': round(acc * comb / tot),
                         'price': round(price) if price is not None else None,
-                        'amount': int(round(acc * price)) if price is not None else None}
+                        'amount': int(round(acc * price)) if price is not None else None, 'confirmed': False,
+                        'kond_kg': None, 'deduction_kg': None, 'pq17': None}
     return out
 
 
 def totals(year):
     m = money(year)
     priced = [v for v in m.values() if v['amount'] is not None]
+    conf = [v for v in m.values() if v['confirmed']]
     return {'accepted_kg': sum(v['accepted_kg'] for v in m.values()),
+            'confirmed_n': len(conf), 'confirmed_amount': sum(v['amount'] for v in conf),
+            'kond_kg': sum(v['kond_kg'] for v in conf), 'deduction_kg': sum(v['deduction_kg'] for v in conf),
+            'estimated_amount': sum(v['amount'] for v in priced if not v['confirmed']),
             'hand_kg': sum(v['hand_kg'] for v in m.values()), 'combine_kg': sum(v['combine_kg'] for v in m.values()),
             'amount': sum(v['amount'] for v in priced) if priced else None,
             'unpriced': len(m) - len(priced), 'n': len(m)}

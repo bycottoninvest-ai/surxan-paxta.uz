@@ -147,6 +147,16 @@ def receive(waybill_id):
                              reason=request.form.get('reason', ''), note=request.form.get('note', ''),
                              photo=read_upload(request.files.get('photo')))
     kg = res['station_kg']
+    load_no = ''.join(ch for ch in (request.form.get('load_no') or '') if ch.isdigit())[:12]
+    if load_no:        # the punkt scale's load number (hosil-qabuli.uz yuk xati) — ties the PQ-17 to this trip exactly
+        from ..db import tx
+        with tx() as db:
+            db.execute('UPDATE nayman_receipts SET load_no=? WHERE waybill_id=?', (load_no, waybill_id))
+    try:
+        from ..pq17 import rematch
+        rematch()
+    except Exception as exc:
+        current_app.logger.warning('pq17 rematch: %s', exc)
     url = url_for('punkt.trip', waybill_id=waybill_id)
     if res['already']:
         return done(f'{wb["trip_no"]} allaqachon qabul qilingan — ikkinchi marta yozilmadi.', url, already=True)

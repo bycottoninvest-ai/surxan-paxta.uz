@@ -10,7 +10,7 @@ from contextlib import contextmanager
 
 from flask import current_app, g
 
-SCHEMA_VERSION = 14
+SCHEMA_VERSION = 15
 
 SCHEMA = r'''
 CREATE TABLE IF NOT EXISTS brigadiers (
@@ -577,6 +577,18 @@ CREATE INDEX IF NOT EXISTS idx_staffpos_user ON staff_positions(user_id, at);
 CREATE INDEX IF NOT EXISTS idx_staffpos_member ON staff_positions(member_id, at);
 
 -- v12: GPS trackers on machines (GT06). A tracker is known by its IMEI; unknown ones are listed for the admin to assign.
+CREATE TABLE IF NOT EXISTS pq17_docs (      -- v15: the state's cotton receipt (PQ-17, docs.agro.uz) per load
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  code TEXT NOT NULL UNIQUE,                -- XH7825975014
+  doc_date TEXT, load_no TEXT NOT NULL,     -- yuk xati (the punkt scale's load number)
+  method TEXT, harvest_raw TEXT, lot TEXT, variety TEXT, grade INTEGER, klass INTEGER,
+  netto REAL NOT NULL, dirt_pct REAL, moist_pct REAL, deduction_kg REAL NOT NULL DEFAULT 0, bonus_kg REAL NOT NULL DEFAULT 0,
+  kond_kg REAL NOT NULL, base_price REAL, coef REAL, price REAL NOT NULL, amount REAL NOT NULL, vat REAL,
+  farmer_name TEXT, farmer_inn TEXT, cluster_name TEXT, cluster_inn TEXT,
+  file_path TEXT, sha256 TEXT, source TEXT,
+  waybill_id INTEGER UNIQUE REFERENCES waybills(id), match_how TEXT,
+  uploaded_by INTEGER REFERENCES users(id), uploaded_at TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS punkt_blanks (   -- v14: numbered paper forms printed in advance, kept at the punkt
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   number TEXT NOT NULL UNIQUE,              -- PB-0001
@@ -993,6 +1005,14 @@ def migrate(db):
     _add_column(db, 'media_items', 'equipment_id', 'INTEGER REFERENCES equipment(id)')
     db.execute('CREATE INDEX IF NOT EXISTS idx_media_req_context ON media_requests(context)')
     db.execute('CREATE UNIQUE INDEX IF NOT EXISTS uq_trackers_eq ON trackers(equipment_id) WHERE equipment_id IS NOT NULL')
+    # v15: the punkt scale's load number (yuk xati, hosil-qabuli.uz) typed at the receipt — ties the PQ-17 to the trip
+    _add_column(db, 'nayman_receipts', 'load_no', 'TEXT')
+    # v15: who still has to sign — the PQ-17 arrives signed by the cluster; our (farmer's) signature and the invoice follow
+    _add_column(db, 'pq17_docs', 'farmer_signed_at', 'TEXT')
+    _add_column(db, 'pq17_docs', 'invoice_status', 'TEXT')       # NULL = not made yet · yaratildi · imzolandi
+    _add_column(db, 'pq17_docs', 'invoice_no', 'TEXT')
+    _add_column(db, 'pq17_docs', 'status_by', 'INTEGER REFERENCES users(id)')
+    _add_column(db, 'pq17_docs', 'status_at', 'TEXT')
     # Future column changes go here as: if version < N: ALTER TABLE ...
     db.execute('UPDATE schema_version SET version=? WHERE version < ?', (SCHEMA_VERSION, SCHEMA_VERSION))
 

@@ -1,0 +1,55 @@
+{% extends 'base.html' %}
+{% from 'macros.html' import icon, csrf, empty with context %}
+{% set page_title = c.name %}
+{% block content %}
+<div class="page-h"><h1>{{ icon('factory','lg') }} {{ c.name }}</h1><span class="sub">STIR {{ c.inn }} · PQ-17 bo‘yicha sverka · <a class="link" href="{{ url_for('acct.pq17') }}">‹ barcha klasterlar</a></span></div>
+<div class="pq-sum">
+  <div><small>Yuklar</small><b>{{ c.n }} ta</b></div>
+  <div><small>Topshirildi (netto)</small><b>{{ c.netto|num }} kg</b></div>
+  <div><small>Namlik / ifloslik</small><b class="t-down">−{{ c.deduction|num }} kg</b></div>
+  <div><small>To‘lanadigan (konditsion)</small><b>{{ c.kond|num }} kg</b></div>
+  <div><small>Summa (QQS bilan)</small><b>{{ c.amount|money }}</b></div>
+  {% if c.received is not none %}<div><small>To‘landi</small><b>{{ c.received|money }}</b></div>
+  <div><small>Qarz</small><b class="{{ 't-down' if c.amount - c.received > 0 }}">{{ (c.amount - c.received)|money }}</b></div>{% endif %}
+</div>
+<div class="pq-flow">
+  <span class="{{ 'on' if c.to_sign }}">✍ SURXON imzosi kutilmoqda: <b>{{ c.to_sign }}</b></span>
+  <span class="{{ 'on2' if c.to_invoice }}">🧾 Faktura kutilmoqda: <b>{{ c.to_invoice }}</b></span>
+  <span class="ok">✓ Faktura imzolangan: <b>{{ c.invoices }}</b></span>
+</div>
+
+<form method="post" id="pqf">{{ csrf() }}
+<section class="card"><div class="table-wrap"><table class="t pq-t"><thead><tr>
+  <th><input type="checkbox" onclick="document.querySelectorAll('.pq-ck').forEach(x => x.checked = this.checked)"></th>
+  <th>Sana</th><th>Yuk xati</th><th>Terim</th><th class="num">Netto</th><th class="num">Namlik · ifloslik</th><th class="num">To‘lanadigan kg</th><th class="num">Narx</th><th class="num">Summa</th><th>Bizning reys</th><th>Holat</th><th>PQ-17</th></tr></thead><tbody>
+{% for r in rows %}<tr class="{{ 'bad' if r.problems }}">
+  <td><input class="pq-ck" type="checkbox" name="ids" value="{{ r.id }}"></td>
+  <td class="nowrap">{{ r.doc_date|d }}</td><td class="b">{{ r.load_no }}</td>
+  <td>{{ 'Kombayn' if r.method == 'combine' else 'Qo‘l' if r.method == 'hand' else r.harvest_raw }}<div class="tiny muted">{{ r.grade }}-sort {{ r.klass }}-sinf</div></td>
+  <td class="num">{{ r.netto|num }}</td><td class="num">{{ r.moist_pct }}% · {{ r.dirt_pct }}%<div class="tiny muted">−{{ (r.deduction_kg - r.bonus_kg)|num }} kg</div></td>
+  <td class="num b">{{ r.kond_kg|num }}</td><td class="num">{{ '%.2f'|format(r.price) }}</td><td class="num b">{{ r.amount|money }}</td>
+  <td>{% if r.wb_id %}<a class="link" href="{{ url_for('ops.waybill_detail', waybill_id=r.wb_id) }}">{{ r.trip_no }}</a> · {{ r.accepted_kg|num }} kg{% endif %}
+    {% if r.problems %}<div class="pq-bad">⚠ {{ r.problems|join('; ') }}</div>{% elif r.wb_id %}<div class="pq-ok">✓ mos</div>{% endif %}</td>
+  <td><span class="pq-st st-{{ r.stage[0] }}">{{ r.stage[1] }}</span>{% if r.invoice_no %}<div class="tiny muted">faktura {{ r.invoice_no }}</div>{% endif %}</td>
+  <td><a class="link small" href="{{ url_for('acct.pq17_file', doc_id=r.id) }}" target="_blank">{{ r.code }}</a></td>
+</tr>{% else %}<tr><td colspan="12">{{ empty('PQ-17 yo‘q', 'doc') }}</td></tr>{% endfor %}
+</tbody></table></div></section>
+{% if can('nayman.write') and rows %}
+<section class="card"><div class="card-b pq-act">
+  <b>Belgilanganlar uchun:</b>
+  <button class="btn btn-green btn-sm" name="action" value="sign">✍ SURXON imzoladi</button>
+  <input class="input" name="invoice_no" placeholder="faktura № (ixtiyoriy)" style="max-width:180px;height:34px">
+  <button class="btn btn-light btn-sm" name="action" value="inv_made">🧾 Faktura yaratildi</button>
+  <button class="btn btn-light btn-sm" name="action" value="inv_signed">✓ Faktura imzolandi</button>
+  <button class="btn btn-ghost btn-sm" name="action" value="unsign">imzoni bekor qilish</button>
+  <div class="tiny muted">hosil-qabuli.uz da PQ-17 ni imzolagach yoki faktura chiqqach shu yerda belgilang — sverkada kim nimani kutayotgani ko‘rinib turadi.</div>
+</div></section>{% endif %}
+</form>
+<style>
+.pq-sum{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:12px}.pq-sum div{background:#fff;border:1px solid var(--line,#e5e7eb);border-radius:12px;padding:10px 12px}.pq-sum small{display:block;color:#64748b}.pq-sum b{font-size:21px}
+.pq-flow{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px}.pq-flow span{padding:8px 12px;border-radius:10px;background:#f1f5f9}.pq-flow .on{background:#fee2e2;color:#991b1b}.pq-flow .on2{background:#fef3c7;color:#92400e}.pq-flow .ok{background:#dcfce7;color:#166534}
+.pq-t tr.bad{background:#fef2f2}.pq-bad{color:#b91c1c;font-size:12.5px;font-weight:700}.pq-ok{color:#15803d;font-size:12.5px;font-weight:700}
+.pq-st{display:inline-block;padding:3px 8px;border-radius:8px;font-size:12.5px;font-weight:700;white-space:nowrap}.st-sign{background:#fee2e2;color:#991b1b}.st-inv0,.st-inv{background:#fef3c7;color:#92400e}.st-done{background:#dcfce7;color:#166534}
+.pq-act{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+</style>
+{% endblock %}

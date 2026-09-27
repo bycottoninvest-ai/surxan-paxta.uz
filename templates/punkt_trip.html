@@ -60,6 +60,7 @@
         <label class="d-l">Brutto (kg)</label><input name="gross_kg" id="pk-g" inputmode="decimal" class="d-num" placeholder="0" autocomplete="off">
         <label class="d-l">Tara (kg)</label><input name="tare_kg" id="pk-t" inputmode="decimal" class="d-num" placeholder="0" autocomplete="off">
       </div>
+      <label class="d-l">Yuk xati № <span class="tiny muted">(punkt tarozisi chekidagi raqam, masalan 199045)</span></label><input name="load_no" inputmode="numeric" class="d-num" placeholder="199045" autocomplete="off">
       <div id="pk-nt" hidden><label class="d-l">Netto (kg) — tarozi ko‘rsatgani</label><input name="station_kg" id="pk-n" inputmode="decimal" class="d-num" placeholder="0" autocomplete="off"></div>
       {% if scale.connected %}<button type="button" class="btn btn-light" id="scale-read">{{ icon('download','sm') }} Tarozidan olish</button>{% endif %}
       <div class="pk-net" id="pk-net">Netto: <b>—</b></div>

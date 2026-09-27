@@ -505,6 +505,8 @@ def finance_summary(year):
         'shipped_kg': shipped['kg'], 'waybills': shipped['n'], 'accepted_kg': acc['kg'],
         'receivable': acc['amount'], 'unpriced': acc['unpriced'] or 0, 'received': received,
         'hand_kg': t['hand_kg'], 'combine_kg': t['combine_kg'],
+        'confirmed_n': t['confirmed_n'], 'confirmed_amount': t['confirmed_amount'], 'estimated_amount': t['estimated_amount'],
+        'kond_kg': t['kond_kg'], 'deduction_kg': t['deduction_kg'], 'priced_n': t['n'],
         'debt': (acc['amount'] or 0) - received if acc['amount'] else None,
         'expenses': expenses, 'cash_in': cash['inflow'], 'cash_out': cash['outflow'], 'cash_opening': cash['opening'],
         'cash_balance': cash['inflow'] - cash['outflow'],

@@ -1,0 +1,51 @@
+{% extends 'base.html' %}
+{% from 'macros.html' import icon, csrf, empty with context %}
+{% set page_title = 'PQ-17 sverka' %}
+{% block content %}
+<div class="page-h"><h1>{{ icon('doc','lg') }} PQ-17 sverka</h1><span class="sub">Klaster qabul varaqalari (hosil-qabuli.uz) bizning reyslar bilan</span></div>
+
+<section class="card pq-up"><div class="card-b">
+  <form method="post" enctype="multipart/form-data" class="pq-upf">{{ csrf() }}
+    <div><b>PQ-17 PDF yuklash</b><div class="tiny muted">hosil-qabuli.uz → yuk xati → “PDF yuklash”. Bir nechtasini birdan tanlash mumkin. Yoki PDF ni Telegram’da @surxan_paxta_bot ga yuboring.</div></div>
+    <input class="input" type="file" name="files" accept="application/pdf,.pdf" multiple required>
+    <button class="btn btn-primary">Yuklash</button></form>
+</div></section>
+
+{% if ov.orphans or farq %}
+<section class="card pq-warn"><div class="card-h"><h3>⚠ E’tibor bering</h3></div><div class="card-b">
+  {% for r in farq %}<div class="pq-w"><b>{{ r.trip_no }}</b> (yuk xati {{ r.pq_load }}): {{ r.problems|join('; ') }} — <a class="link" href="{{ url_for('ops.waybill_detail', waybill_id=r.id) }}">reysni ochish</a></div>{% endfor %}
+  {% for d in ov.orphans %}
+  <form method="post" class="pq-w">{{ csrf() }}<input type="hidden" name="action" value="link"><input type="hidden" name="doc_id" value="{{ d.id }}">
+    <span>PQ-17 <b>{{ d.code }}</b> · yuk xati {{ d.load_no }} · {{ d.doc_date|d }} · {{ d.netto|num }} kg — bizda bunday reys topilmadi. Qaysi reys?</span>
+    <select class="input" name="waybill_id" required style="height:34px;max-width:320px"><option value="">— reysni tanlang —</option>{% for w in free %}<option value="{{ w.id }}" {{ 'selected' if guess.get(d.id) == w.id }}>{{ w.trip_no }} · {{ w.received_date|d }} · punkt {{ w.accepted_kg|num }} kg</option>{% endfor %}</select>
+    <button class="btn btn-light btn-sm">Biriktirish</button></form>{% endfor %}
+</div></section>{% endif %}
+
+<div class="pq-cards">
+{% for c in clusters %}
+  <a class="card pq-card" href="{{ url_for('acct.pq17_cluster', inn=c.inn) }}"><div class="card-b">
+    <div class="pq-name">{{ c.name }}</div><div class="tiny muted">STIR {{ c.inn }} · {{ c.n }} ta yuk · {{ c.first|d }} — {{ c.last|d }}</div>
+    <div class="pq-big">{{ c.amount|money }}</div><div class="small muted">{{ c.kond|num }} kg uchun (netto {{ c.netto|num }} kg, namlik/ifloslik −{{ c.deduction|num }} kg)</div>
+    {% if c.received is not none %}<div class="pq-line"><span>To‘landi</span><b>{{ c.received|money }}</b></div>
+    <div class="pq-line"><span>Qarz</span><b class="{{ 't-down' if c.amount - c.received > 0 }}">{{ (c.amount - c.received)|money }}</b></div>{% endif %}
+    <div class="pq-badges">
+      {% if c.to_sign %}<span class="badge b-red">✍ {{ c.to_sign }} ta PQ-17 SURXON imzosini kutyapti</span>{% endif %}
+      {% if c.to_invoice %}<span class="badge b-gray">🧾 {{ c.to_invoice }} ta faktura kutilmoqda</span>{% endif %}
+      {% if c.invoices %}<span class="badge b-green">✓ {{ c.invoices }} ta faktura imzolangan</span>{% endif %}
+      {% if c.unmatched %}<span class="badge b-red">? {{ c.unmatched }} ta reysi topilmagan</span>{% endif %}
+    </div>
+    <div class="more">Batafsil sverka ›</div>
+  </div></a>
+{% else %}<section class="card"><div class="card-b">{{ empty('Hali PQ-17 yuklanmagan. Yuqoridan PDF ni tanlang.', 'doc') }}</div></section>{% endfor %}
+</div>
+{% if tot.kutilmoqda %}<p class="small muted">⏳ {{ tot.kutilmoqda }} ta reys punktda qabul qilingan, lekin PQ-17 hali kelmagan — ularning puli taxminiy narxda hisoblanyapti.</p>{% endif %}
+<style>
+.pq-up .card-b{padding:14px 16px}.pq-upf{display:flex;gap:12px;align-items:center;flex-wrap:wrap}.pq-upf>div{flex:1;min-width:240px}.pq-upf .input{max-width:340px;height:auto;padding:8px}
+.pq-warn{border:2px solid #fca5a5}.pq-w{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:8px 0;border-bottom:1px solid #fee2e2}
+.pq-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(360px,1fr));gap:14px;margin-top:14px}
+.pq-card{display:block;color:inherit;text-decoration:none}.pq-card:hover{box-shadow:0 6px 18px rgba(0,0,0,.12)}
+.pq-name{font-size:20px;font-weight:800}.pq-big{font-size:32px;font-weight:800;margin-top:10px}
+.pq-line{display:flex;justify-content:space-between;font-size:16px;margin-top:6px}.pq-badges{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
+.pq-card .more{margin-top:10px;color:var(--blue);font-weight:700}
+</style>
+{% endblock %}

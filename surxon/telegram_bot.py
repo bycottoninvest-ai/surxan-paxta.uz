@@ -520,6 +520,34 @@ def _on_callback(chat, user, data, update_id):
     return show_menu(chat, user)
 
 
+# ------------------------------------------------------------------ PQ-17 (state cotton receipt) sent as a PDF
+
+def _on_pq17(chat, actor, doc):
+    from . import pq17
+    if not (actor.can('nayman.write') or actor.can('reports.finance')):
+        return send(chat, 'PQ-17 faylini faqat buxgalter, rahbar yoki admin yuboradi.')
+    try:
+        _id, d, already, how = pq17.import_pdf(actor, tg_download(doc['file_id']), source='telegram')
+    except UserError as e:
+        return send(chat, f'⚠️ {doc.get("file_name") or "Fayl"}: {e}')
+    if already:
+        return send(chat, f'ℹ️ {d["code"]} avval yuklangan — ikkinchi marta yozilmadi.')
+    kind = {'hand': 'qo‘l terimi', 'combine': 'kombayn'}.get(d['method'], d['harvest_raw'])
+    lines = [f'✅ PQ-17 {d["code"]} qabul qilindi', f'Yuk xati {d["load_no"]} · {kind}',
+             f'Netto {fmt_num(d["netto"])} kg → konditsion {fmt_num(d["kond_kg"])} kg (chegirma {fmt_num(d["deduction_kg"])} kg)',
+             f'Namlik {d["moist_pct"]}% · ifloslik {d["dirt_pct"]}%',
+             f'Narx {d["price"]:,.2f} · summa {d["amount"]:,.0f} so‘m'.replace(',', ' ')]
+    if how:
+        wb = q('''SELECT tl.trip_no, nr.accepted_kg FROM pq17_docs p JOIN waybills wb ON wb.id=p.waybill_id
+                  JOIN trailer_loads tl ON tl.id=wb.load_id JOIN nayman_receipts nr ON nr.waybill_id=wb.id WHERE p.code=?''',
+               (d['code'],), one=True)
+        diff = abs((wb['accepted_kg'] or 0) - d['netto']) >= 0.5
+        lines.append(f'Reys: {wb["trip_no"]} ({how})' + (f' — ⚠ FARQ: bizda {fmt_num(wb["accepted_kg"])} kg!' if diff else ' — ✓ mos'))
+    else:
+        lines.append('⚠ Reysi topilmadi — saytda Buxgalteriya → PQ-17 sverka sahifasida reysni tanlang.')
+    return send(chat, '\n'.join(lines))
+
+
 # ------------------------------------------------------------------ messages
 
 def _parse_line(line):
@@ -540,6 +568,10 @@ def _on_message(chat, user, message, update_id):
     text = (message.get('text') or '').strip()
     photo = message.get('photo')
     actor = actor_for(user)
+
+    doc = message.get('document') or {}
+    if doc and (doc.get('mime_type') == 'application/pdf' or (doc.get('file_name') or '').lower().endswith('.pdf')):
+        return _on_pq17(chat, actor, doc)
 
     if photo:
         best = photo[-1]
