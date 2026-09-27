@@ -500,6 +500,11 @@ def tick():
         current_app.logger.warning('auto idle requests: %s', exc)
     sent = deliver_pending()
     late = mark_late()
+    try:
+        from .staffmap import remind_stale
+        remind_stale()
+    except Exception as exc:      # the staff map reminder must never stop the kuzatuv loop
+        current_app.logger.warning('staff location reminder: %s', exc)
     return {'rule_requests': made, 'delivered': sent, 'late': late}
 
 

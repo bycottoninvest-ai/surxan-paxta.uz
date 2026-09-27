@@ -88,6 +88,12 @@ def people():
         if action == 'group':
             n = K.set_work_group(post_actor(), request.form.get('chat_id'), request.form.get('on') == '1')
             return done('Guruh holati saqlandi.' + (f' {n} ta odam faollashdi.' if n else ''), url_for('kuzatuv.people'))
+        if action == 'photo':
+            from ..staffmap import set_photo
+            mid = parse_int(request.form.get('member_id'), 'Odam')
+            f = request.files.get('photo')
+            set_photo(post_actor(), mid, f.read() if f else None)
+            return done('Rasm saqlandi — xaritada shu rasm ko‘rinadi.', url_for('kuzatuv.people', _anchor=f'm{mid}'))
         if action == 'link':
             K.new_link_code(post_actor(), parse_int(request.form.get('member_id'), 'Odam'))
             return done('Yangi taklif havolasi tayyor.', url_for('kuzatuv.people'))

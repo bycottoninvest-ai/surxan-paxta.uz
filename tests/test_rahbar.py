@@ -152,3 +152,48 @@ def test_tablet_gets_full_dashboard_phone_gets_director_panel(app, world):
         r = world['rahbar'].c.get('/', headers={'User-Agent': ua})
         assert r.status_code == 200 and 'Dalalar xaritasi' in r.get_data(as_text=True)
     assert world['rahbar'].c.get('/', headers={'User-Agent': PHONE}).status_code == 302      # phone → /rahbar
+
+
+def test_staff_photo_name_on_map_dashboard_card_and_stale_reminder(app, world, monkeypatch):
+    """The admin puts a person's photo (used instead of the Telegram one), the dashboard shows the staff map, and a
+    person whose live location stopped for an hour gets one reminder from the bot — not a second one."""
+    from conftest import jpeg
+    from surxon import staffmap, telegram_bot
+    from surxon.utils import now_str
+    sent = []
+    monkeypatch.setattr(telegram_bot, 'send', lambda chat, text, *a, **k: sent.append((str(chat), text)))
+    monkeypatch.setattr(staffmap, 'fetch_avatar', lambda *a, **k: None)
+    monkeypatch.setattr(staffmap, 'now_str', lambda: '2026-09-27 12:00:00')
+    with app.app_context():
+        telegram_bot.process_update({'update_id': 5, 'message': {'chat': {'id': 901, 'type': 'private'},
+                                     'from': {'id': 901, 'first_name': 'Sherzod', 'last_name': 'Karimov'},
+                                     'location': {'latitude': 42.31, 'longitude': 59.60, 'live_period': 2147483647}}})
+        mid = q("SELECT id FROM tg_members WHERE telegram_id='901'", one=True)['id']
+    admin = world['admin']
+    r = admin.post('/kuzatuv/odamlar', {'action': 'photo', 'member_id': mid}, files={'photo': jpeg((10, 120, 200), (300, 400))})
+    assert r.get_json()['ok'], r.get_data(as_text=True)
+    with app.app_context():
+        av = q('SELECT avatar_path FROM tg_members WHERE id=?', (mid,), one=True)['avatar_path']
+        assert av and av.startswith('avatars/m')
+        assert next(p for p in staffmap.people() if p['name'].startswith('Sherzod'))['avatar'] == av
+    assert admin.get('/rahbar/avatar/' + av).status_code == 200
+    assert admin.post('/kuzatuv/odamlar', {'action': 'photo', 'member_id': mid},
+                      files={'photo': b'not an image'}).get_json()['ok'] is False
+    assert world['juma'].post('/kuzatuv/odamlar', {'action': 'photo', 'member_id': mid},
+                              files={'photo': jpeg()}).status_code in (302, 403)
+
+    dash = admin.get('/').get_data(as_text=True)
+    assert 'Xodimlar xaritada' in dash and 'spxStaffMap' in dash
+    assert 'Xodimlar xaritada' not in world['juma'].get('/').get_data(as_text=True)     # brigadier: no staff map
+
+    sent.clear()                                                                       # the “location received” reply
+    with app.app_context():
+        get_db().execute("UPDATE staff_positions SET at='2026-09-27 11:30:00'")
+        assert staffmap.remind_stale() == 0 and not sent                               # 30 min — not yet
+        get_db().execute("UPDATE staff_positions SET at='2026-09-27 10:40:00'")
+        assert staffmap.remind_stale() == 1 and sent[0][0] == '901' and 'Геопозиция' in sent[0][1]
+        assert staffmap.remind_stale() == 0 and len(sent) == 1                        # once per stop
+        get_db().execute("UPDATE settings SET value='0' WHERE key='staff_live_remind'")
+        get_db().execute("INSERT OR IGNORE INTO settings(key, value, updated_at) VALUES ('staff_live_remind','0',?)", (now_str(),))
+        get_db().execute("DELETE FROM settings WHERE key='staff_live_reminded'")
+        assert staffmap.remind_stale() == 0                                            # can be switched off

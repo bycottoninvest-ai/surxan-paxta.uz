@@ -5,6 +5,7 @@ time. Only admin and the director see the map. Positions are kept at most once a
 person; the map shows the last one (grey when older than STALE_MIN) and today's track on demand.
 """
 import io
+import json
 import math
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -12,7 +13,7 @@ from pathlib import Path
 from flask import current_app
 
 from .db import get_db, q, tx
-from .utils import now_str
+from .utils import UserError, now_str
 
 STALE_MIN = 30
 KEEP_SEC, KEEP_M = 60, 30
@@ -65,6 +66,86 @@ def fetch_avatar(member, telegram_id):
             db.execute('UPDATE users SET avatar_path=COALESCE(avatar_path, ?) WHERE telegram_id=?', (rel, str(telegram_id)))
     except Exception as exc:          # no photo / privacy settings / network — the initial letter is shown instead
         current_app.logger.info('avatar not fetched for %s: %s', telegram_id, exc)
+
+
+def set_photo(actor, member_id, data):
+    """Admin puts a person's photo (Kuzatuv → Odamlar): cropped square, used on the map instead of the Telegram one."""
+    from PIL import Image, ImageOps, UnidentifiedImageError
+    from .security import audit
+    if not actor or not actor.can('kuzatuv.manage'):
+        raise UserError('Bu amal uchun huquqingiz yo‘q.')
+    if not data:
+        raise UserError('Rasm tanlanmagan.')
+    try:
+        im = ImageOps.exif_transpose(Image.open(io.BytesIO(data))).convert('RGB')
+    except (UnidentifiedImageError, OSError):
+        raise UserError('Bu rasm emas (JPG yoki PNG tanlang).')
+    side = min(im.size)
+    im = im.crop(((im.width - side) // 2, (im.height - side) // 3, (im.width + side) // 2, (im.height - side) // 3 + side))
+    im = im.resize((256, 256))
+    with tx() as db:
+        m = db.execute('SELECT * FROM tg_members WHERE id=?', (member_id,)).fetchone()
+        if not m:
+            raise UserError('Odam topilmadi.')
+        rel = f'avatars/m{member_id}_{now_str().replace(" ", "").replace(":", "").replace("-", "")}.jpg'
+        path = Path(current_app.config['SURXON'].UPLOAD_DIR) / rel
+        path.parent.mkdir(parents=True, exist_ok=True)
+        im.save(path, 'JPEG', quality=86)
+        db.execute('UPDATE tg_members SET avatar_path=? WHERE id=?', (rel, member_id))
+        if m['user_id']:
+            db.execute('UPDATE users SET avatar_path=? WHERE id=?', (rel, m['user_id']))
+        audit(db, actor, 'UPDATE', 'tg_member', member_id, old={'avatar': m['avatar_path']}, new={'avatar': rel},
+              reason='xodim rasmi')
+    return rel
+
+
+REMIND_AFTER_MIN = 60
+REMIND_TEXT = ('📍 Joylashuvingiz {mins} daqiqadan beri kelmayapti — ish xaritasida ko‘rinmayapsiz.\n'
+               'Qayta yoqing: 📎 → Геопозиция → «Транслировать геопозицию» → «Пока не выключу».\n'
+               'Maslahat: telefon sozlamalarida Telegram uchun “Batareyani tejash”ni o‘chiring — shunda o‘zi o‘chib qolmaydi.')
+
+
+def remind_stale():
+    """Someone who shared the live location earlier today but whose phone stopped sending it for an hour gets one
+    private reminder from the bot (once per stop, only in working hours). Returns how many were sent."""
+    from .fleet import in_hours
+    from .settings import get_bool, get_setting
+    from .telegram_bot import send
+    if not get_bool('staff_live_remind'):
+        return 0
+    now = datetime.strptime(now_str(), '%Y-%m-%d %H:%M:%S')
+    if not in_hours(None, now.strftime('%H:%M')):
+        return 0
+    try:
+        done = json.loads(get_setting('staff_live_reminded') or '{}')
+    except ValueError:
+        done = {}
+    since = (now - timedelta(hours=14)).strftime('%Y-%m-%d %H:%M:%S')
+    rows = q("""SELECT p.* FROM staff_positions p JOIN (
+                    SELECT COALESCE('u' || user_id, 'm' || member_id) k, MAX(id) mid FROM staff_positions
+                    WHERE at>=? AND source='telegram' GROUP BY k) x ON x.mid=p.id""", (since,))
+    sent = 0
+    for r in rows:
+        key = f'u{r["user_id"]}' if r['user_id'] else f'm{r["member_id"]}'
+        mins = int((now - datetime.strptime(r['at'], '%Y-%m-%d %H:%M:%S')).total_seconds() // 60)
+        if mins < REMIND_AFTER_MIN or done.get(key) == r['id']:
+            continue
+        # a newer position from the phone app counts as “seen” too
+        if q('SELECT 1 FROM staff_positions WHERE id>? AND ' + ('user_id=?' if r['user_id'] else 'member_id=?'),
+             (r['id'], r['user_id'] or r['member_id']), one=True):
+            continue
+        row = (q('SELECT telegram_id FROM users WHERE id=? AND active=1', (r['user_id'],), one=True) if r['user_id'] else
+               q("SELECT telegram_id FROM tg_members WHERE id=? AND status<>'NOFAOL'", (r['member_id'],), one=True))
+        if row and row['telegram_id']:
+            send(row['telegram_id'], REMIND_TEXT.format(mins=mins))
+            sent += 1
+        done[key] = r['id']
+    keep = {f'u{r["user_id"]}' if r['user_id'] else f'm{r["member_id"]}' for r in rows}
+    with tx() as db:
+        db.execute('''INSERT INTO settings(key, value, updated_at) VALUES ('staff_live_reminded', ?, ?)
+                      ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at''',
+                   (json.dumps({k: v for k, v in done.items() if k in keep}), now_str()))
+    return sent
 
 
 def people(hours=12):

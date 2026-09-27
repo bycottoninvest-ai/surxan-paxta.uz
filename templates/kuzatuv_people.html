@@ -27,7 +27,7 @@
 
 {% for m in rows %}
 <div class="m-card" id="m{{ m.id }}">
-  <div class="row"><b>{{ m.full_name }}</b>{% if m.role_label %}<span class="muted small">{{ m.role_label }}</span>{% endif %}<span class="spacer"></span>
+  <div class="row">{% if can('reports.finance') %}<span class="sm-av">{% if m.avatar_path %}<img src="{{ url_for('rahbar.avatar', rel=m.avatar_path) }}" alt="">{% else %}{{ m.full_name[:1] }}{% endif %}</span>{% endif %}<b>{{ m.full_name }}</b>{% if m.role_label %}<span class="muted small">{{ m.role_label }}</span>{% endif %}<span class="spacer"></span>
     <span class="badge {{ st_badge[m.status] }}">{{ st_label[m.status] }}</span></div>
   <div class="tiny muted">{{ src_label.get(m.source, m.source) }}
     {% if m.telegram_id %} · Telegram ulangan{% if m.username %} (@{{ m.username }}){% endif %}{% if m.dm_ok %} · botni ochgan{% else %} · faqat guruhda{% endif %}{% else %} · <span style="color:var(--red)">Telegram hali ulanmagan</span>{% endif %}
@@ -49,6 +49,9 @@
       <div class="f row"><button class="btn btn-primary btn-sm">Saqlash</button>
         {% if m.status == 'YANGI' %}<button class="btn btn-green btn-sm" name="status" value="FAOL">Tasdiqlash</button>{% endif %}</div>
     </form>
+    <form method="post" enctype="multipart/form-data" class="row" style="margin-top:8px;gap:8px">{{ csrf() }}<input type="hidden" name="action" value="photo"><input type="hidden" name="member_id" value="{{ m.id }}">
+      <label class="small">Rasmi (xaritada ko‘rinadi):</label><input type="file" name="photo" accept="image/*" required style="max-width:220px">
+      <button class="btn btn-light btn-sm">{{ icon('camera','sm') }} Rasmni saqlash</button></form>
     {% if not m.telegram_id %}<form method="post">{{ csrf() }}<input type="hidden" name="action" value="link"><input type="hidden" name="member_id" value="{{ m.id }}"><button class="btn btn-ghost btn-sm">Yangi havola</button></form>{% endif %}
   </details>
   {% endif %}
