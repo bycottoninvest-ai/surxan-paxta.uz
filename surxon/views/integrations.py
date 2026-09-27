@@ -14,7 +14,7 @@ import secrets
 import time
 from pathlib import Path
 
-from flask import (Blueprint, abort, current_app, g, jsonify, make_response, render_template, request, url_for)
+from flask import (Blueprint, abort, current_app, g, jsonify, make_response, redirect, render_template, request, url_for)
 
 from .. import queries
 from ..db import get_db, q, scalar, tx
@@ -129,6 +129,20 @@ def index():
                 audit(db, actor, 'UPDATE', 'integration', key, new={key: ch['chat_id'], 'title': ch['title']})
                 msg = (f'“{ch["title"]}” — {"arxiv" if role == "archive" else "hisobot"} kanali qilib tanlandi. '
                        'Endi “Sinov” tugmasi bilan haqiqiy xabar yuboring.')
+            elif action == 'tv_pair':
+                code = ''.join(ch for ch in (request.form.get('code') or '') if ch.isdigit())
+                row = db.execute('SELECT value FROM settings WHERE key=?', (f'tvpair:{code}',)).fetchone() if len(code) == 6 else None
+                pair = json.loads(row['value']) if row else None
+                if not pair or pair.get('key') or time.time() - pair['at'] > PAIR_TTL:
+                    raise UserError('Bunday kod yo‘q yoki eskirgan. Televizorda surxan-paxta.uz/tv ni qayta oching va yangi kodni yozing.')
+                name = clean_text(request.form.get('name'), 60) or 'TV ekran'
+                prefix, key = _new_key('tv')
+                cur = db.execute('''INSERT INTO integration_clients(kind, name, key_prefix, key_hash, scopes, created_by, created_at)
+                                    VALUES ('tv',?,?,?,?,?,?)''', (name, prefix, _hash(key), json.dumps(['tv']), actor.user_id, now_str()))
+                pair['key'] = key            # handed to that TV on its next check (≤ 3 s), then deleted
+                db.execute('UPDATE settings SET value=? WHERE key=?', (json.dumps(pair), f'tvpair:{code}'))
+                audit(db, actor, 'CREATE', 'integration_client', cur.lastrowid, new={'kind': 'tv', 'name': name, 'paired': True})
+                msg = f'“{name}” ulandi — televizor bir necha soniyada o‘zi ochiladi.'
             else:
                 cid = int(request.form.get('id') or 0)
                 c = db.execute('SELECT * FROM integration_clients WHERE id=?', (cid,)).fetchone()
@@ -780,11 +794,63 @@ def _tv_allowed():
     return (c is not None), (c, key)
 
 
+PAIR_TTL = 600      # a TV pairing code lives 10 minutes
+
+
+@bp.get('/tv1')
+@bp.get('/televizor')
+def tv_short():
+    return redirect(url_for('integrations.tv'))
+
+
+def _pair_new():
+    """A fresh 6-digit code for this TV, tied to a secret kept in the TV's own cookie (only that TV can collect the key)."""
+    with tx() as db:
+        now = time.time()
+        for r in db.execute("SELECT key, value FROM settings WHERE key LIKE 'tvpair:%'").fetchall():
+            if now - json.loads(r['value'])['at'] > PAIR_TTL:
+                db.execute('DELETE FROM settings WHERE key=?', (r['key'],))
+        while True:
+            code = f'{secrets.randbelow(900000) + 100000}'
+            if not db.execute('SELECT 1 FROM settings WHERE key=?', (f'tvpair:{code}',)).fetchone():
+                break
+        secret = secrets.token_urlsafe(24)
+        db.execute('INSERT INTO settings(key, value, updated_at) VALUES (?,?,?)',
+                   (f'tvpair:{code}', json.dumps({'at': now, 'dev': _hash(secret)}), now_str()))
+    return code, secret
+
+
+@bp.get('/tv/juftlash')
+def tv_pair_state():
+    """The pairing screen asks every 3 s: has the admin typed my code yet? Then the key goes into this TV's cookie."""
+    code, secret = request.args.get('kod', ''), request.cookies.get('surxon_tv_pair', '')
+    with tx() as db:
+        row = db.execute('SELECT value FROM settings WHERE key=?', (f'tvpair:{code}',)).fetchone()
+        pair = json.loads(row['value']) if row else None
+        if not pair or not secret or pair['dev'] != _hash(secret) or time.time() - pair['at'] > PAIR_TTL:
+            return jsonify(ok=False, expired=True)
+        if not pair.get('key'):
+            return jsonify(ok=True, ready=False)
+        db.execute('DELETE FROM settings WHERE key=?', (f'tvpair:{code}',))
+    resp = jsonify(ok=True, ready=True)
+    resp.set_cookie('surxon_tv', pair['key'], max_age=3600 * 24 * 365 * 3, httponly=True, samesite='Lax',
+                    secure=current_app.config['SURXON'].COOKIE_SECURE)
+    resp.delete_cookie('surxon_tv_pair')
+    return resp
+
+
 @bp.get('/tv')
 def tv():
     ok, info = _tv_allowed()
     if not ok:
-        return render_template('tv_denied.html'), 403
+        if not get_bool('tv_enabled'):
+            return render_template('tv_denied.html'), 403
+        code, secret = _pair_new()
+        resp = make_response(render_template('tv_pair.html', code=code), 403)
+        resp.set_cookie('surxon_tv_pair', secret, max_age=PAIR_TTL, httponly=True, samesite='Lax',
+                        secure=current_app.config['SURXON'].COOKIE_SECURE)
+        resp.headers['Cache-Control'] = 'no-store'
+        return resp
     gkey = current_app.config['SURXON'].GOOGLE_MAPS_KEY or (get_setting('google_maps_key') or '').strip()
     resp = make_response(render_template('tv.html', gmaps_key=gkey))
     if info and request.args.get('k'):

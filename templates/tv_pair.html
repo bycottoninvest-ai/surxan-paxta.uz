@@ -1,0 +1,23 @@
+{% extends 'bare.html' %}
+{% block content %}
+<section class="card tv-pair" style="max-width:760px;margin:6vh auto;text-align:center"><div class="card-b" style="padding:40px 30px">
+  <img src="{{ url_for('static', filename='img/logo-dark.png') }}" alt="" style="width:240px">
+  <h2 style="font-size:30px;margin:18px 0 6px">Televizorni ulash</h2>
+  <p style="font-size:20px;margin:0 0 18px">Telefonda: <b>Admin → Integratsiyalar → TV ekran</b> → shu kodni yozing va “Ulash”ni bosing</p>
+  <div id="pair-code" style="font:900 96px/1.1 system-ui;letter-spacing:14px;color:#0b3a6e">{{ code[:3] }} {{ code[3:] }}</div>
+  <p class="muted" style="font-size:17px;margin-top:18px">Kod 10 daqiqa amal qiladi. Ulangandan keyin bu televizor doim o‘zi ochiladi — boshqa hech narsa yozish shart emas.</p>
+</div></section>
+<script>
+(function () {
+  const code = '{{ code }}';
+  async function check() {
+    try {
+      const r = await (await fetch('{{ url_for('integrations.tv_pair_state') }}?kod=' + code, { cache: 'no-store' })).json();
+      if (r.ready || r.expired) { location.replace('{{ url_for('integrations.tv') }}'); return; }
+    } catch (_) { }
+    setTimeout(check, 3000);
+  }
+  setTimeout(check, 3000);
+})();
+</script>
+{% endblock %}

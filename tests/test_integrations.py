@@ -137,3 +137,31 @@ def test_tv_access_and_no_private_data(app, world):
     assert world['juma'].get('/tv/data.json').status_code == 200   # logged-in users need no key
     world['admin'].post('/admin/integratsiyalar', {'action': 'tv_off'})
     assert tv.get('/tv/data.json').status_code == 403
+
+
+def test_tv_pairs_with_six_digit_code_no_long_key(app, world):
+    """On the TV only surxan-paxta.uz/tv is typed: it shows 6 digits, the admin types them on the phone, the TV opens by
+    itself and stays open. Only the TV that showed the code can collect the key; codes expire; /tv1 is a shortcut."""
+    import re
+    admin = world['admin']
+    tvc = app.test_client()
+    assert tvc.get('/tv').status_code == 403                                      # TV switched off → plain refusal
+    admin.post('/admin/integratsiyalar', {'action': 'tv_on'})
+    assert tvc.get('/tv1').headers['Location'].endswith('/tv')
+    page = tvc.get('/tv')
+    assert page.status_code == 403
+    code = re.search(r'const code = \'(\d{6})\'', page.get_data(as_text=True)).group(1)
+    assert tvc.get(f'/tv/juftlash?kod={code}').get_json() == {'ok': True, 'ready': False}
+    thief = app.test_client()                                                     # someone else polling the same code
+    assert thief.get(f'/tv/juftlash?kod={code}').get_json()['expired']
+    assert admin.post('/admin/integratsiyalar', {'action': 'tv_pair', 'code': '000000'}).get_json()['ok'] is False
+    r = admin.post('/admin/integratsiyalar', {'action': 'tv_pair', 'code': f'{code[:3]} {code[3:]}', 'name': 'Ofis TV'})
+    assert r.get_json()['ok'], r.get_data(as_text=True)
+    assert thief.get(f'/tv/juftlash?kod={code}').get_json()['expired']           # the key goes only to that TV
+    assert tvc.get(f'/tv/juftlash?kod={code}').get_json()['ready']
+    assert tvc.get('/tv').status_code == 200 and tvc.get('/tv/data.json').status_code == 200
+    assert tvc.get(f'/tv/juftlash?kod={code}').get_json()['expired']             # used once
+    assert admin.post('/admin/integratsiyalar', {'action': 'tv_pair', 'code': code}).get_json()['ok'] is False
+    with app.app_context():
+        assert q("SELECT name FROM integration_clients WHERE kind='tv'", one=True)['name'] == 'Ofis TV'
+        assert not q("SELECT 1 FROM settings WHERE key LIKE 'tvpair:%' AND value LIKE '%spx_tv_%'")   # no key left behind
