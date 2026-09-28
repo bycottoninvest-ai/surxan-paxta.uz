@@ -62,8 +62,12 @@ def day_kpis(year, day, brig=None, until=None):
 
     n, np_ = (net(day, until), 0) if until else (net(day), net(prev))
     s, sp = (sent(day, until), 0) if until else (sent(day), sent(prev))
+    # harvest written down on trailers that are still in the field (not weighed yet) — part of the harvest total
+    in_field = scalar(f'''SELECT COALESCE(SUM(h.kg),0) FROM harvests h JOIN trailer_loads tl ON tl.id=h.load_id
+                          WHERE h.season_year=? AND h.work_date BETWEEN ? AND ? AND {LIVE_HARVEST}{bfilter}
+                          AND tl.status IN ('OCHIQ','TOLDI')''', (year, day, until or day) + bp)
     return {
-        'harvest': h['total'], 'hand': h['hand'], 'combine': h['comb'], 'workers': h['workers'],
+        'harvest': h['total'], 'hand': h['hand'], 'combine': h['comb'], 'workers': h['workers'], 'in_field': in_field,
         'harvest_trend': trend(h['total'], hp['total']),
         'net': n, 'net_trend': trend(n, np_),
         'sent': s, 'sent_trend': trend(s, sp),

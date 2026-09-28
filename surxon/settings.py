@@ -47,6 +47,7 @@ DEFAULTS = {
     'report_feed': ('1', 'Hisobot kanaliga har bir muhim hodisa (reys tugadi, punkt qabul, kassa kirim/chiqim, kuzatuv '
                          'kechikishi) darhol yoziladi (1/0). Kunlik hisobot bundan tashqari keladi'),
     'kuzatuv_deadline_min': ('120', 'Kuzatuv: rasm/video so‘rovi javobi uchun necha daqiqa beriladi (keyin “KECHIKDI”)'),
+    'blank_receiver': ('', 'Blank: qabul qiluvchi firma (masalan “FAYZ AGROKLASTER MCHJ (STIR 311919351)”). Bo‘sh bo‘lsa — oxirgi PQ-17 dagi klaster'),
     'punkt_blank_required': ('1', 'Punkt: blank chop etilgan bo‘lsa, to‘ldirilgan blank (raqami + rasmi) biriktirilmaguncha qabul yopilmaydi (1/0)'),
     'tv_show_staff': ('1', 'TV: xaritada odamlar (joylashuvini ulashganlar) ko‘rinsin (1/0)'),
     'tv_tour_sec': ('15', 'TV: xarita har necha soniyada keyingi ish joyiga yaqinlashib o‘tsin'),

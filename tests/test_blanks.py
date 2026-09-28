@@ -30,10 +30,15 @@ def test_blanks_print_attach_required_once_and_office_check(app, world):
     r = admin.post('/admin/blankalar', {'count': '600'})
     assert r.get_json()['ok'], r.get_data(as_text=True)
     pdf = admin.get('/admin/blankalar/1.pdf')
-    assert pdf.status_code == 200 and len(re.findall(rb'/Type\s*/Page[^s]', pdf.data)) == 600
+    assert pdf.status_code == 200 and len(re.findall(rb'/Type\s*/Page[^s]', pdf.data)) == 1200      # 2 copies of each number
+    one = admin.get('/admin/blankalar/1.pdf?nusxa=1')
+    assert len(re.findall(rb'/Type\s*/Page[^s]', one.data)) == 600
     first = pdf_text(pdf.data[:]).split('\n')
     text = pdf_text(pdf.data)
     assert 'PB-0001' in text and 'PB-0600' in text and 'QABUL QILINGAN PAXTA (NETTO)' in text and 'KOMBAYN' in text
+    assert '1-NUSXA' in text and '2-NUSXA' in text and 'JO‘NATILGAN PAXTA (NETTO)' in text
+    assert admin.post('/admin/blankalar', {'action': 'receiver', 'receiver': 'NAMUNA KLASTER MCHJ (STIR 300000000)'}).get_json()['ok']
+    assert 'QABUL QILUVCHI: NAMUNA KLASTER MCHJ' in pdf_text(admin.get('/admin/blankalar/1.pdf?nusxa=1').data)
     assert admin.post('/admin/blankalar', {'count': '5000'}).get_json()['ok'] is False
     with app.app_context():
         b3 = q("SELECT * FROM punkt_blanks WHERE number='PB-0003'", one=True)

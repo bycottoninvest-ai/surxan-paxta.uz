@@ -26,7 +26,9 @@
 .pq-cols{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px 14px;min-width:0;flex:1}
 .pq-cols .value{font-size:22px}.pq-cols .pq-got{color:#15803d}.pq-note{grid-column:1/-1;font-size:12.5px;color:#64748b}</style>
 <div class="kpis{{ ' k7' if k.pq }}">
-  {{ kpi(lbl ~ ' (kg)', k.harvest|num, '', 'green', 'cotton', k.harvest_trend) }}
+  {% if k.in_field %}{{ kpi(lbl ~ ' (kg)', k.harvest|num, '', 'green', 'cotton', None,
+      'tortildi <b>' ~ ((k.harvest - k.in_field)|num) ~ '</b> · dalada, hali tortilmagan <b>' ~ (k.in_field|num) ~ '</b>') }}
+  {% else %}  {{ kpi(lbl ~ ' (kg)', k.harvest|num, '', 'green', 'cotton', k.harvest_trend) }}{% endif %}
   {{ kpi('Umumiy tarozi (netto)', k.net|num, 'kg', 'blue', 'truck', k.net_trend) }}
   {{ kpi('Naymanga ketgan', k.sent|num, 'kg', 'orange', 'trailer', k.sent_trend) }}
   {% if k.pq %}{% set pq = k.pq %}

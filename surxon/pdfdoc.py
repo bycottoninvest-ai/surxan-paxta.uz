@@ -563,10 +563,11 @@ def build_cash_pdf(e, corrections, *, company, printed_by, printed_at):
     return buf.getvalue()
 
 
-def build_blanks_pdf(blanks, *, company, domain):
-    """Punkt blanks, one A4 page each: TOP — our part (trip, waybill, trailer, field, sent kg, hand / combine), copied by
-    the receiver from the phone; BOTTOM — the punkt's part (brutto, tara, ACCEPTED kg, date, name, signature, stamp).
-    The number and QR tie the paper to the trip when it is photographed at the punkt."""
+def build_blanks_pdf(blanks, *, company, domain, receiver='', copies=2):
+    """Punkt blanks, one A4 page each, every number printed `copies` times (1st copy stays with the receiver, 2nd with us):
+    TOP — our part (trip, waybill, trailer, field, our brutto / tara / SENT netto, hand / combine); BOTTOM — the receiver
+    (named in advance) fills brutto, tara, ACCEPTED netto, date, name, signature, stamp. The number and QR tie the paper
+    to the trip when it is photographed at the punkt."""
     _fonts()
     buf = io.BytesIO()
     c = canvas.Canvas(buf, pagesize=A4)
@@ -575,6 +576,7 @@ def build_blanks_pdf(blanks, *, company, domain):
     c.setAuthor(company)
     logo = Path(current_app.static_folder) / 'img' / 'logo-dark.png'
     x0, x1 = 16 * mm, W - 16 * mm
+    copy_names = {1: '1-NUSXA — QABUL QILUVCHIDA QOLADI', 2: '2-NUSXA — JO‘NATUVCHIDA QOLADI'}
 
     def line_field(y, label, width=None, x=None, big=False):
         x = x or x0
@@ -590,83 +592,85 @@ def build_blanks_pdf(blanks, *, company, domain):
         c.setFont('DejaVu-Bold', 12)
         c.drawString(x + 8 * mm, y, label)
 
-    for b in blanks:
-        url = f'https://{domain}/punkt/blanka/{b["token"]}'
-        y = H - 14 * mm
-        if logo.exists():
-            c.drawImage(str(logo), x0, y - 16 * mm, width=52 * mm, height=16 * mm, mask='auto', preserveAspectRatio=True, anchor='sw')
-        c.setFont('DejaVu-Bold', 13)
-        c.drawRightString(x1 - 40 * mm, y - 5 * mm, 'PAXTA TOPSHIRISH NAKLADNOYI')
-        c.setFont('DejaVu-Bold', 26)
-        c.drawRightString(x1 - 40 * mm, y - 16 * mm, '№ ' + b['number'])
-        _qr(c, url, x1 - 36 * mm, y - 34 * mm, 36 * mm)
-        # ---- top: ours
-        y -= 46 * mm
-        c.setFillColorRGB(0.04, 0.23, 0.43)
+    def banner(y, text, rgb):
+        c.setFillColorRGB(*rgb)
         c.rect(x0, y, x1 - x0, 8 * mm, fill=1, stroke=0)
         c.setFillColorRGB(1, 1, 1)
-        c.setFont('DejaVu-Bold', 12)
-        c.drawString(x0 + 3 * mm, y + 2.4 * mm, f'1. JO‘NATUVCHI: {company}')
+        size = 12
+        while size > 8 and c.stringWidth(text, 'DejaVu-Bold', size) > x1 - x0 - 6 * mm:
+            size -= 0.5
+        c.setFont('DejaVu-Bold', size)
+        c.drawString(x0 + 3 * mm, y + 2.4 * mm, text)
         c.setFillColorRGB(0, 0, 0)
-        y -= 11 * mm
-        line_field(y, 'Reys (telashka) №:', width=85 * mm)
-        line_field(y, 'Nakladnoy №:', x=x0 + 92 * mm)
-        y -= 11 * mm
-        line_field(y, 'Telashka:', width=55 * mm)
-        line_field(y, 'Traktor:', width=45 * mm, x=x0 + 60 * mm)
-        line_field(y, 'Dala:', x=x0 + 112 * mm)
-        y -= 13 * mm
-        line_field(y, 'Jo‘natilgan paxta, kg:', width=120 * mm, big=True)
-        y -= 12 * mm
-        c.setFont('DejaVu-Bold', 12)
-        c.drawString(x0, y, 'Paxta turi:')
-        box(x0 + 55 * mm, y, 'QO‘L TERIMI')
-        box(x0 + 110 * mm, y, 'KOMBAYN')
-        y -= 11 * mm
-        line_field(y, 'Jo‘natilgan sana:', width=100 * mm)
-        # cut / fold line
-        y -= 12 * mm
-        c.setDash(4, 3)
-        c.setLineWidth(0.6)
-        c.line(x0, y, x1, y)
-        c.setDash()
-        # ---- bottom: the punkt
-        y -= 12 * mm
-        c.setFillColorRGB(0.09, 0.45, 0.24)
-        c.rect(x0, y, x1 - x0, 8 * mm, fill=1, stroke=0)
-        c.setFillColorRGB(1, 1, 1)
-        c.setFont('DejaVu-Bold', 12)
-        c.drawString(x0 + 3 * mm, y + 2.4 * mm, '2. QABUL QILUVCHI')
-        c.setFillColorRGB(0, 0, 0)
-        y -= 11 * mm
-        line_field(y, 'Qabul qiluvchi (punkt / firma):')
-        y -= 12 * mm
-        line_field(y, 'Brutto, kg:', width=80 * mm, big=True)
-        line_field(y, 'Tara, kg:', x=x0 + 90 * mm, big=True)
-        y -= 16 * mm
+
+    def big_box(y, text):
         c.setLineWidth(1.6)
         c.rect(x0, y - 4 * mm, x1 - x0, 13 * mm)
         c.setFont('DejaVu-Bold', 15)
-        c.drawString(x0 + 3 * mm, y + 1.5 * mm, 'QABUL QILINGAN PAXTA (NETTO), kg:')
-        y -= 16 * mm
-        line_field(y, 'Qabul sanasi:', width=95 * mm)
-        line_field(y, 'Izoh:', x=x0 + 102 * mm)
-        y -= 12 * mm
-        line_field(y, 'Qabul qiluvchi F.I.Sh.:', width=120 * mm)
-        line_field(y, 'Imzo:', x=x0 + 126 * mm)
-        # stamp boxes
-        y -= 42 * mm
-        c.setLineWidth(1)
-        c.setDash(3, 3)
-        c.roundRect(x0, y, 78 * mm, 34 * mm, 3 * mm)
-        c.roundRect(x1 - 78 * mm, y, 78 * mm, 34 * mm, 3 * mm)
-        c.setDash()
-        c.setFont('DejaVu-Bold', 10)
-        c.drawCentredString(x0 + 39 * mm, y + 30 * mm, 'PUNKT MUHRI')
-        c.drawCentredString(x1 - 39 * mm, y + 30 * mm, 'JO‘NATUVCHI IMZOSI')
-        c.setFont('DejaVu', 8)
-        c.drawString(x0, 10 * mm, f'№ {b["number"]} · ikki tomon imzosi va muhri bilan haqiqiy.')
-        c.showPage()
+        c.drawString(x0 + 3 * mm, y + 1.5 * mm, text)
+
+    for b in blanks:
+        url = f'https://{domain}/punkt/blanka/{b["token"]}'
+        for copy in range(1, copies + 1):
+            y = H - 14 * mm
+            if copies > 1:
+                c.setFont('DejaVu-Bold', 9)
+                c.drawString(x0, H - 8 * mm, copy_names.get(copy, f'{copy}-NUSXA'))
+            if logo.exists():
+                c.drawImage(str(logo), x0, y - 16 * mm, width=52 * mm, height=16 * mm, mask='auto', preserveAspectRatio=True, anchor='sw')
+            c.setFont('DejaVu-Bold', 13)
+            c.drawRightString(x1 - 40 * mm, y - 5 * mm, 'PAXTA TOPSHIRISH NAKLADNOYI')
+            c.setFont('DejaVu-Bold', 26)
+            c.drawRightString(x1 - 40 * mm, y - 16 * mm, '№ ' + b['number'])
+            _qr(c, url, x1 - 36 * mm, y - 34 * mm, 36 * mm)
+            # ---- top: ours
+            y -= 46 * mm
+            banner(y, f'1. JO‘NATUVCHI: {company}', (0.04, 0.23, 0.43))
+            y -= 11 * mm
+            line_field(y, 'Reys (telashka) №:', width=85 * mm)
+            line_field(y, 'Nakladnoy №:', x=x0 + 92 * mm)
+            y -= 11 * mm
+            line_field(y, 'Telashka:', width=55 * mm)
+            line_field(y, 'Traktor:', width=45 * mm, x=x0 + 60 * mm)
+            line_field(y, 'Dala:', x=x0 + 112 * mm)
+            y -= 12 * mm
+            line_field(y, 'Brutto, kg:', width=80 * mm, big=True)
+            line_field(y, 'Tara, kg:', x=x0 + 90 * mm, big=True)
+            y -= 16 * mm
+            big_box(y, 'JO‘NATILGAN PAXTA (NETTO), kg:')
+            y -= 14 * mm
+            c.setFont('DejaVu-Bold', 12)
+            c.drawString(x0, y, 'Paxta turi:')
+            box(x0 + 55 * mm, y, 'QO‘L TERIMI')
+            box(x0 + 110 * mm, y, 'KOMBAYN')
+            y -= 11 * mm
+            line_field(y, 'Jo‘natilgan sana:', width=100 * mm)
+            # cut / fold line
+            y -= 9 * mm
+            c.setDash(4, 3)
+            c.setLineWidth(0.6)
+            c.line(x0, y, x1, y)
+            c.setDash()
+            # ---- bottom: the receiver
+            y -= 12 * mm
+            banner(y, '2. QABUL QILUVCHI' + (f': {receiver}' if receiver else ''), (0.09, 0.45, 0.24))
+            y -= 11 * mm
+            line_field(y, 'Punkt:' if receiver else 'Qabul qiluvchi (punkt / firma):')
+            y -= 12 * mm
+            line_field(y, 'Brutto, kg:', width=80 * mm, big=True)
+            line_field(y, 'Tara, kg:', x=x0 + 90 * mm, big=True)
+            y -= 16 * mm
+            big_box(y, 'QABUL QILINGAN PAXTA (NETTO), kg:')
+            y -= 16 * mm
+            line_field(y, 'Qabul sanasi:', width=95 * mm)
+            line_field(y, 'Izoh:', x=x0 + 102 * mm)
+            y -= 12 * mm
+            line_field(y, 'Qabul qiluvchi F.I.Sh.:', width=120 * mm)
+            line_field(y, 'Imzo:', x=x0 + 126 * mm)
+            # left empty on purpose: room for the stamps (nothing printed there)
+            c.setFont('DejaVu', 8)
+            c.drawString(x0, 10 * mm, f'№ {b["number"]} · ikki nusxada · ikki tomon imzosi va muhri bilan haqiqiy.')
+            c.showPage()
     c.save()
     return buf.getvalue()
 

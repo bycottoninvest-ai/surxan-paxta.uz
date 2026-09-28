@@ -274,6 +274,9 @@ def blanks():
         if request.form.get('action') == 'spoil':
             BL.spoil(actor, parse_int(request.form.get('id'), 'Blank'), request.form.get('reason'))
             return done('Blank buzilgan deb belgilandi.', url_for('admin.blanks'))
+        if request.form.get('action') == 'receiver':
+            save_settings(actor, {'blank_receiver': (request.form.get('receiver') or '').strip()[:120]})
+            return done('Qabul qiluvchi saqlandi — PDF’ni qayta oching.', url_for('admin.blanks'))
         batch, a, b = BL.create_batch(actor, request.form.get('count'))
         return done(f'{a} … {b} blanklar tayyor. Endi PDF’ni chop eting.', url_for('admin.blanks', yangi=batch))
     show = request.args.get('holat', 'hammasi')
@@ -285,7 +288,17 @@ def blanks():
         rows = [r for r in rows if not r['waybill_id'] and not r['spoiled_reason']]
     elif show == 'otkazilgan':
         rows = ov['skipped']
-    return render_template('admin_blanks.html', ov=ov, rows=rows[:1000], show=show, new_batch=request.args.get('yangi', type=int))
+    return render_template('admin_blanks.html', ov=ov, rows=rows[:1000], show=show, new_batch=request.args.get('yangi', type=int),
+                           receiver=_blank_receiver(), receiver_set=bool(get_setting('blank_receiver')))
+
+
+def _blank_receiver():
+    """Who receives the cotton, printed on the blank: the setting, else the cluster of the latest PQ-17."""
+    own = (get_setting('blank_receiver') or '').strip()
+    if own:
+        return own
+    r = q('SELECT cluster_name, cluster_inn FROM pq17_docs WHERE cluster_name IS NOT NULL ORDER BY doc_date DESC, id DESC LIMIT 1', one=True)
+    return (r['cluster_name'] + (f' (STIR {r["cluster_inn"]})' if r['cluster_inn'] else '')) if r else ''
 
 
 @bp.get('/blankalar/<int:batch>.pdf')
@@ -295,7 +308,8 @@ def blanks_pdf(batch):
     rows = q('SELECT * FROM punkt_blanks WHERE batch=? ORDER BY id', (batch,))
     if not rows:
         abort(404)
-    pdf = build_blanks_pdf(rows, company=get_setting('company_name'), domain=current_app.config['SURXON'].DOMAIN)
+    pdf = build_blanks_pdf(rows, company=get_setting('company_name'), domain=current_app.config['SURXON'].DOMAIN,
+                           receiver=_blank_receiver(), copies=1 if request.args.get('nusxa') == '1' else 2)
     return Response(pdf, mimetype='application/pdf', headers={
         'Content-Disposition': f'inline; filename="punkt_blanklari_{rows[0]["number"]}_{rows[-1]["number"]}.pdf"',
         'Cache-Control': 'private, no-store'})
