@@ -194,3 +194,17 @@ Maqsad: ma’lumot 3 joyda — server, Hetzner Backups, Storage Box.
 - Yopilgan mavsum maydonlari `field_seasons` da qotiriladi.
 - Rasmlar yopiq (`/media`, login + brigada tekshiruvi), service worker faqat `/static/` ni keshlaydi.
 - Telefon tezligi o‘lchangan: Slow 3G’da brigadir bosh sahifasi 33 KB, ~1.5 s.
+
+## Holat — 28.09.2026 (v2.22.1 saytda)
+Qo‘llanmalar: `docs/qollanmalar/Qollanma_Punkt.pdf`, `docs/qollanmalar/Qollanma_Dala_hisobchisi.pdf` (namunaviy ma’lumot bilan).
+
+Foydalanuvchi qilishi kerak:
+- PA-000009: punkt kg 1 330 → 1 130 (Nakladnoy → “Qabulni ko‘rish / tuzatish”, sabab “PQ-17 bo‘yicha”).
+- Blanklar: 600 ta yaratilgan (PB-0001…). Punkt endi blank raqami + rasmisiz qabulni yopmaydi
+  (vaqtincha o‘chirish: Sozlamalar → punkt_blank_required = 0). Eski reyslar tartib bilan: PB-0001 → PA-000003,
+  PB-0002 → PA-000007, PB-0003 → PA-000008, PB-0004 → PA-000009, PB-0005 → PA-000010, PB-0006 → PA-000011.
+- Buxgalter: Agrobank (kredit + “To‘lovlar hisoboti” Excel, jami 1 395 234 357 so‘m bo‘lishi kerak), MK Leasing firmalari.
+- Google Sheets “Umumiy hisob” varag‘iga SPXUMUMIY dan VLOOKUP formulalar (chatda berilgan).
+
+Keyingi ishlar: Agrobank grafigi, MK Leasing shartnomalari, bank ko‘chirmasi importi, fakturalar, “Umumiy hisob” formulalari,
+blank PDF ni 50 tadan bo‘lish (foydalanuvchi hozircha kerak emas dedi), TZST CE-220 qaysi kombayn (K-01/K-02).
