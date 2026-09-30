@@ -114,6 +114,7 @@ def new_trip():
                         brigadier_id=parse_int(request.form.get('brigadier_id'), 'Brigada', required=False),
                         tractor_id=parse_int(request.form.get('tractor_id'), 'Traktor', required=False),
                         method=request.form.get('method') or 'hand', rate=request.form.get('rate'),
+                        station_id=parse_int(request.form.get('station_id'), 'Punkt', required=False),
                         client_uuid=form_uuid())
         gps = _gps()
         rnd = request.form.get('round', type=int)
@@ -141,7 +142,8 @@ def new_trip():
                            brigadiers=q('SELECT id, name FROM brigadiers WHERE active=1' + (' AND id=?' if brig else '')
                                         + ' ORDER BY name', (brig,) if brig else ()),
                            tractors=q("SELECT id, code FROM equipment WHERE kind='traktor' AND active=1 ORDER BY code"),
-                           rate_hand=get_setting('worker_rate_hand'), rate_combine=get_setting('combine_rate_kg'))
+                           rate_hand=get_setting('worker_rate_hand'), rate_combine=get_setting('combine_rate_kg'),
+                           stations=q('SELECT id, name FROM stations WHERE active=1 ORDER BY id'))
 
 
 @bp.get('/dala/reys/<int:load_id>')

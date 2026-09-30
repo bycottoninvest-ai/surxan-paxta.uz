@@ -21,6 +21,8 @@
     <script id="d-rounds" type="application/json">{{ rounds|tojson }}</script>
     <label class="d-l">Telashka</label>
     <select name="trailer_id" required>{% for t in trailers %}<option value="{{ t.id }}">{{ t.code }}{{ ' · ' ~ t.plate if t.plate }}</option>{% endfor %}</select>
+    {% if stations|length > 1 %}<label class="d-l">Qaysi punktga?</label>
+    <select name="station_id" required>{% for st in stations %}<option value="{{ st.id }}">{{ st.name }}</option>{% endfor %}</select>{% endif %}
     <label class="d-l">Terim turi</label>
     <div class="d-seg"><label><input type="radio" name="method" value="hand" checked data-rate="{{ rate_hand }}"><span>Qo‘l terimi</span></label>
       <label><input type="radio" name="method" value="combine" data-rate="{{ rate_combine }}"><span>Kombayn</span></label></div>

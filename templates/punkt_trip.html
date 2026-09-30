@@ -82,7 +82,10 @@
         <input name="blank_code" value="{{ blank_code }}" placeholder="PB-0012" class="d-num" style="font-size:22px" required autocomplete="off">
         <label class="file-drop d-photo"><input type="file" name="blank_photo" accept="image/*" capture="environment" data-preview required>{{ icon('camera','lg') }}<b>To‘ldirilgan blankni rasmga olish</b><span class="tiny muted">majburiy — rasmsiz qabul yopilmaydi</span><div class="previews"></div></label>
       </div>
-      {% elif blank %}<div class="small" style="margin:6px 0">✓ Blank <b>{{ blank.number }}</b> biriktirilgan</div>{% endif %}
+      {% elif blank %}<div class="small" style="margin:6px 0">✓ Blank <b>{{ blank.number }}</b> biriktirilgan</div>
+      {% if blank_required and not blank.photo_id %}
+      <label class="file-drop d-photo"><input type="file" name="blank_photo" accept="image/*" capture="environment" data-preview required>{{ icon('camera','lg') }}<b>Blankni rasmga olish</b><span class="tiny muted">majburiy — rasmsiz qabul yopilmaydi</span><div class="previews"></div></label>
+      {% endif %}{% endif %}
       <label class="file-drop d-photo"><input type="file" name="photo" accept="image/*" capture="environment" data-preview>{{ icon('camera','lg') }}<b>Rasmga olish</b><span class="tiny muted">tarozi yoki telashka rasmi (ixtiyoriy)</span><div class="previews"></div></label>
       <button class="btn btn-green btn-block d-big" id="pk-ok">Qabulni tasdiqlash ›</button>
       <button type="button" class="btn btn-ghost btn-block" id="pk-back">‹ Og‘irlikni o‘zgartirish</button>

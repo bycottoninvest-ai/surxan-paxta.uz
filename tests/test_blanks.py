@@ -124,6 +124,8 @@ def test_clerk_scans_blank_when_closing_and_punkt_only_photographs(app, world):
     with app.app_context():
         assert q('SELECT status FROM trailer_loads WHERE id=?', (l2,), one=True)['status'] == 'OCHIQ'
     # the punkt: the blank is known, only its photo is asked
+    pk = yunus.get(f'/punkt/yuk/{w1}').get_data(as_text=True)
+    assert 'Blank <b>PB-0002</b> biriktirilgan' in pk and 'name="blank_photo"' in pk       # the photo box is there
     no_photo = yunus.post(f'/punkt/yuk/{w1}/qabul', {'station_kg': '298'}).get_json()
     assert no_photo['ok'] is False and 'rasm' in no_photo['error'].lower()
     ok = yunus.post(f'/punkt/yuk/{w1}/qabul', {'station_kg': '298'}, files={'blank_photo': jpeg()}).get_json()

@@ -246,3 +246,21 @@ def test_clerk_continues_a_trailer_closed_for_lunch(app, world):
         get_db().execute("UPDATE waybills SET arrived_at='2026-09-30 12:00:00' WHERE load_id=?", (lid,))
     r = c.post(f'/dala/reys/{lid}/davom', {}).get_json()
     assert r['ok'] is False and 'punktga' in r['error']
+
+
+def test_punkt_choice_appears_only_with_two_punkts(app, world):
+    """One punkt: nothing to choose (it is set by itself). A second punkt added: the clerk picks where the trailer goes."""
+    from test_punkt import setup
+    tally, yunus, ali, st = setup(app, world)        # setup adds Nayman-2 → two punkts
+    page = tally.get('/dala/yangi').get_data(as_text=True)
+    assert 'Qaysi punktga?' in page and 'Nayman-2' in page
+    r = tally.post('/dala/yangi', {'field_id': world['f']['D-04'], 'trailer_id': world['eq']['TL-01'], 'method': 'hand',
+                                   'brigadier_id': world['b']['Juma ota'], 'rate': '1500', 'station_id': st['Nayman-2'],
+                                   'client_uuid': uuid4()}).get_json()
+    assert r['ok'], r
+    with app.app_context():
+        assert q('SELECT station_id FROM trailer_loads WHERE id=?', (r['load_id'],), one=True)['station_id'] == st['Nayman-2']
+    with app.app_context():
+        from surxon.db import get_db
+        get_db().execute("UPDATE stations SET active=0 WHERE name='Nayman-2'")
+    assert 'Qaysi punktga?' not in tally.get('/dala/yangi').get_data(as_text=True)
