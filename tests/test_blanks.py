@@ -76,11 +76,14 @@ def test_blanks_print_attach_required_once_and_office_check(app, world):
     # another punkt cannot attach to this punkt's trip
     assert ali.post(f'/punkt/yuk/{w2}/blanka', {'blank_code': 'PB-0005'}, files={'blank_photo': jpeg()}).status_code in (302, 403)
 
-    # the office check: 1 used, PB-0001 and PB-0002 skipped (a later one was used), the rest blank
     body = admin.get('/admin/blankalar').get_data(as_text=True)
-    assert 'Reysga biriktirilgan 1' in body and 'O‘tkazib yuborilgan 2' in body
-    skipped = admin.get('/admin/blankalar?holat=otkazilgan').get_data(as_text=True)
-    assert 'PB-0001' in skipped and 'PB-0002' in skipped and 'PB-0004' not in skipped
+    # the office check: only the blanks on trailers are listed (numbers are not followed — blanks go out mixed)
+    assert 'Telashkaga biriktirilgan 1' in body and 'Bo‘sh 599' in body and 'O‘tkazib' not in body
+    assert '>PB-0003<' in body and '>PB-0001<' not in body
+    assert '>PB-0001<' in admin.get('/admin/blankalar?holat=bosh').get_data(as_text=True)
+    # the waybill list: the blank of each trip, or a button to attach one to a trip still on the way
+    wl = admin.get('/nakladnoylar').get_data(as_text=True)
+    assert 'PB-0003' in wl and '🧾 biriktirish' in wl
     assert admin.post('/admin/blankalar', {'action': 'spoil', 'id': b1['id'], 'reason': 'yirtilgan'}).get_json()['ok']
     assert yunus.post(f'/punkt/yuk/{w2}/qabul', {'station_kg': '480', 'blank_code': 'PB-0001'},
                       files={'blank_photo': jpeg()}).get_json()['ok'] is False            # spoiled blank never reused

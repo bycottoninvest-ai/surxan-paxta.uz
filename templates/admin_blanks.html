@@ -51,13 +51,10 @@
   </div></section>
   <section class="card s8"><div class="card-h"><h3>Sverka: qaysi blank qaysi reysga</h3></div><div class="card-b">
     <div class="kpis" style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px">
-      <a class="btn btn-sm {{ 'btn-primary' if show == 'hammasi' else 'btn-light' }}" href="{{ url_for('admin.blanks') }}">Hammasi {{ ov.total }}</a>
-      <a class="btn btn-sm {{ 'btn-primary' if show == 'ishlatilgan' else 'btn-light' }}" href="{{ url_for('admin.blanks', holat='ishlatilgan') }}">Reysga biriktirilgan {{ ov.used }}</a>
+      <a class="btn btn-sm {{ 'btn-primary' if show in ('asosiy', 'ishlatilgan') else 'btn-light' }}" href="{{ url_for('admin.blanks') }}">Telashkaga biriktirilgan {{ ov.used }}</a>
       <a class="btn btn-sm {{ 'btn-primary' if show == 'bosh' else 'btn-light' }}" href="{{ url_for('admin.blanks', holat='bosh') }}">Bo‘sh {{ ov.free }}</a>
-      <a class="btn btn-sm {{ 'btn-primary' if show == 'otkazilgan' else 'btn-light' }}" style="{{ 'color:var(--red)' if ov.skipped and show != 'otkazilgan' }}" href="{{ url_for('admin.blanks', holat='otkazilgan') }}">⚠ O‘tkazib yuborilgan {{ ov.skipped|length }}</a>
       {% if ov.spoiled %}<span class="badge b-gray">Buzilgan {{ ov.spoiled }}</span>{% endif %}
     </div>
-    <p class="tiny muted">“O‘tkazib yuborilgan” — keyingi raqamli blank ishlatilgan, bu esa ishlatilmagan: yo‘qolganmi yoki boshqa joyga ketganmi, punktdan so‘rang.</p>
     <div class="table-wrap"><table class="t"><thead><tr><th>Blank</th><th>Reys</th><th>Nakladnoy</th><th class="num">Jo‘natilgan</th><th class="num">Punkt qabul</th><th>Kim / qachon</th><th>Rasm</th><th></th></tr></thead><tbody>
     {% for r in rows %}<tr>
       <td class="b">{{ r.number }}</td>
@@ -67,7 +64,7 @@
       <td class="small">{{ r.used_name or '' }}{% if r.used_at %} · {{ r.used_at|d }}{% endif %}</td>
       <td>{% if r.photo_id %}<a class="link" href="{{ url_for('admin.blank_photo', blank_id=r.id) }}" target="_blank">{{ icon('image','sm') }} ko‘rish</a>{% endif %}</td>
       <td>{% if not r.waybill_id and not r.spoiled_reason %}<details><summary class="tiny muted" style="cursor:pointer">buzilgan?</summary><form method="post" class="row" style="gap:4px;margin-top:4px" data-confirm="{{ r.number }} buzilgan deb belgilansinmi?">{{ csrf() }}<input type="hidden" name="action" value="spoil"><input type="hidden" name="id" value="{{ r.id }}"><input class="input" name="reason" placeholder="sabab" style="height:30px;max-width:110px"><button class="btn btn-ghost btn-sm">Belgilash</button></form></details>{% endif %}</td>
-    </tr>{% else %}<tr><td colspan="8">{{ empty('Hali blank yo‘q — chapdan yarating.', 'doc') }}</td></tr>{% endfor %}
+    </tr>{% else %}<tr><td colspan="8">{{ empty('Hali ishlatilgan blank yo‘q — bo‘shlarini ko‘rish uchun “Bo‘sh” ni bosing.', 'doc') }}</td></tr>{% endfor %}
     </tbody></table></div>
   </div></section>
 </div>

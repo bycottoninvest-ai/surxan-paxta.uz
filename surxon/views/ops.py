@@ -293,8 +293,11 @@ def waybills():
     rows, has_more = paginate(rows, page_arg())
     totals = {'net': sum(r['net_kg'] for r in rows if r['status'] != 'BEKOR'),
               'accepted': sum(r['accepted_kg'] or 0 for r in rows if r['status'] != 'BEKOR')}
+    ids = [r['id'] for r in rows]
+    blanks = {b['waybill_id']: b['number'] for b in q(
+        f"SELECT waybill_id, number FROM punkt_blanks WHERE waybill_id IN ({','.join('?' * len(ids))})", ids)} if ids else {}
     return render_template('waybills.html', rows=rows, year=year, period=period, totals=totals,
-                           page=page_arg(), has_more=has_more)
+                           page=page_arg(), has_more=has_more, blanks=blanks)
 
 
 @bp.get('/nakladnoy/<int:waybill_id>')

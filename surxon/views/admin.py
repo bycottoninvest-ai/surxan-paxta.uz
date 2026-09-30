@@ -279,15 +279,14 @@ def blanks():
             return done('Qabul qiluvchi saqlandi — PDF’ni qayta oching.', url_for('admin.blanks'))
         batch, a, b = BL.create_batch(actor, request.form.get('count'))
         return done(f'{a} … {b} blanklar tayyor. Endi PDF’ni chop eting.', url_for('admin.blanks', yangi=batch))
-    show = request.args.get('holat', 'hammasi')
+    show = request.args.get('holat', 'asosiy')
     ov = BL.overview()
     rows = ov['rows']
-    if show == 'ishlatilgan':
-        rows = [r for r in rows if r['waybill_id']]
-    elif show == 'bosh':
+    # which blank went on which trailer; the hundreds of empty ones only on a tap (numbers are not followed — the QR is)
+    if show == 'bosh':
         rows = [r for r in rows if not r['waybill_id'] and not r['spoiled_reason']]
-    elif show == 'otkazilgan':
-        rows = ov['skipped']
+    elif show != 'hammasi':
+        rows = [r for r in rows if r['waybill_id'] or r['spoiled_reason']]
     first_free = next((int(r['number'][3:]) for r in ov['rows'] if not r['waybill_id'] and not r['spoiled_reason']), 1)
     uy_free = q("SELECT MIN(CAST(substr(number, 4) AS INTEGER)) m FROM load_groups WHERE status='BOSH'", one=True)['m'] or 8
     return render_template('admin_blanks.html', ov=ov, rows=rows[:1000], show=show, new_batch=request.args.get('yangi', type=int),
