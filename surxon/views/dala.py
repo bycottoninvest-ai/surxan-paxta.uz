@@ -269,8 +269,12 @@ def attach_blank(load_id):
     code = (request.form.get('blank_code') or '').strip()
     if not code:
         raise UserError('Blank QR ini skanerlang yoki raqamini yozing (masalan PB-0012).')
-    if not ld['waybill_id'] or ld['waybill_status'] != 'YARATILDI':
-        raise UserError('Bu telashka punktda allaqachon qabul qilingan yoki nakladnoyi yo‘q.')
+    if not ld['waybill_id']:
+        raise UserError(f'{ld["trip_no"]}: nakladnoyi yo‘q — avval telashkani yoping.')
+    if ld['waybill_status'] == 'QABUL':
+        raise UserError(f'{ld["trip_no"]} ({ld["waybill_number"]}) punktda allaqachon qabul qilingan — blank punktda biriktiriladi.')
+    if ld['waybill_status'] != 'YARATILDI':
+        raise UserError(f'{ld["trip_no"]} ({ld["waybill_number"]}) nakladnoyi bekor qilingan.')
     num = BL.attach(actor, ld['waybill_id'], code, field=True)
     after_waybill_change(actor, ld['waybill_id'], f'blank {num} biriktirildi')
     return done(f'✓ {num} {ld["trip_no"]} ga biriktirildi. Blankni haydovchiga bering — punktda skanerlanadi.',

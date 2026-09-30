@@ -172,4 +172,4 @@ def test_clerk_attaches_a_blank_to_a_trailer_closed_before(app, world):
     ok = yunus.post(f'/punkt/yuk/{w1}/qabul', {'station_kg': '308'}, files={'blank_photo': jpeg()}).get_json()
     assert ok['ok'], ok
     late = tally.post(f'/dala/reys/{l1}/blanka', {'blank_code': 'PB-0003'}).get_json()
-    assert late['ok'] is False
+    assert late['ok'] is False and 'punktda allaqachon qabul qilingan' in late['error'] and 'TL-' in late['error']
