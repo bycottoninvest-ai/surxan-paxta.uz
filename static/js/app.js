@@ -137,11 +137,25 @@
     else syncEl.classList.remove('show');
   }
 
-  function formToEntries(form) {
+  // a camera photo (4–8 MB) is shrunk on the phone to ~1600 px JPEG before it goes out on a weak field signal;
+  // anything that cannot be decoded is sent as it is
+  async function shrink(file) {
+    if (!file.type || !/^image\/(jpeg|png|webp|heic|heif)/i.test(file.type) || file.size < 400 * 1024 || !window.createImageBitmap) return file;
+    try {
+      const bmp = await createImageBitmap(file);
+      const k = Math.min(1, 1600 / Math.max(bmp.width, bmp.height));
+      const c = document.createElement('canvas'); c.width = Math.round(bmp.width * k); c.height = Math.round(bmp.height * k);
+      c.getContext('2d').drawImage(bmp, 0, 0, c.width, c.height);
+      const blob = await new Promise(res => c.toBlob(res, 'image/jpeg', 0.8));
+      if (!blob || blob.size >= file.size) return file;
+      return new File([blob], (file.name || 'rasm').replace(/\.\w+$/, '') + '.jpg', { type: 'image/jpeg' });
+    } catch (_) { return file; }
+  }
+  async function formToEntries(form) {
     const fd = new FormData(form);
     const entries = [];
     for (const [k, v] of fd.entries()) {
-      if (v instanceof File) { if (v.size) entries.push([k, v, v.name]); } else entries.push([k, v]);
+      if (v instanceof File) { if (v.size) { const f = await shrink(v); entries.push([k, f, f.name]); } } else entries.push([k, v]);
     }
     return entries;
   }
@@ -166,27 +180,31 @@
     return { status: r.status, data };
   }
 
-  let flushing = false;
+  let flushing = false, again = false;
   async function flush() {
-    if (flushing || !navigator.onLine) return showSync();
-    flushing = true;
-    let sent = 0, failed = [];
+    if (flushing) { again = true; return; }
+    if (!navigator.onLine) return showSync();
+    flushing = true; again = false;
+    let sent = 0, failed = [], expired = false;
     try {
       for (const item of (await qAll()).sort((a, b) => a.at - b.at)) {     // in the order they were entered
         if (item.user !== userId) continue;   // never replay another person's entries
         try {
           const { status, data } = await send(item.action, item.entries);
-          if (status === 401) break;             // session expired: keep items, ask to log in
+          if (status === 401) { expired = true; break; }   // session expired: keep items, ask to log in
           if (data.ok || status === 422 || status === 403 || status === 400) {
             await qDel(item.id);
             if (data.ok) sent++; else failed.push(`${item.label}: ${data.error || status}`);
+            window.dispatchEvent(new CustomEvent(data.ok ? 'spx-sent' : 'spx-refused', { detail: { item, data } }));
           }
         } catch (_) { break; }                   // still offline
       }
     } finally { flushing = false; }
-    if (failed.length) alert('Navbatdagi ayrim yozuvlar saqlanmadi:\n' + failed.join('\n'));
+    if (failed.length) alert('Bu yozuvlar SAQLANMADI (qaytadan kiriting):\n' + failed.join('\n'));
+    if (expired) toast('Sessiya tugagan — qayta kiring. Yozuvlar telefonda saqlanib turibdi.', 'error');
     showSync(sent ? `${sent} ta yozuv yuborildi ✓` : '');
     if (sent && document.querySelector('[data-refresh-on-sync]')) setTimeout(() => location.reload(), 800);
+    if (again && !expired) setTimeout(flush, 50);
   }
   window.addEventListener('online', flush);
   window.addEventListener('offline', () => showSync());
@@ -202,10 +220,19 @@
     const btn = form.querySelector('button:not([type=button])');
     const label = btn ? btn.innerHTML : '';
     if (btn) { btn.disabled = true; btn.innerHTML = 'Saqlanmoqda…'; }
-    const entries = formToEntries(form);
+    const entries = await formToEntries(form);
     const actionUrl = new URL(form.getAttribute('action') || location.href, location.href).href;
     const item = { id: uuid(), user: userId, action: actionUrl, entries, label: form.dataset.offline, at: Date.now() };
     const done = () => { delete form.dataset.busy; if (btn) { btn.disabled = false; btn.innerHTML = label; } };
+    if (form.dataset.fast && window.indexedDB) {      // never wait for the network: the next entry can be typed at once
+      try {
+        await qPut(item);
+        form.reset(); arm(form); form.dispatchEvent(new CustomEvent('queued', { detail: { entries, id: item.id, fast: true } }));
+        $$('.previews', form).forEach(p => p.innerHTML = '');
+        done(); flush();
+        return;
+      } catch (_) { }                                  // no storage on this phone: the normal way below
+    }
     try {
       const { status, data } = await send(actionUrl, entries);
       if (status === 401) {        // logged out: keep the entry, it is sent after logging in again

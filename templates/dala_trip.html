@@ -7,7 +7,7 @@
     <div><h1 class="d-h1">2. {{ 'Kombayn va kg' if method == 'combine' else 'Odam va kilogramm' }}</h1>
       <div class="small muted">{{ ld.field_name }} · {{ ld.trailer_code }} · {{ ld.brigadier_name }} · <b>{{ ld.rate|num if ld.rate else '—' }} so‘m/kg</b></div></div></div>
 
-  <form method="post" action="{{ url_for('dala.weigh', load_id=ld.id) }}" class="d-form" id="d-entry" data-offline="Tortish {{ ld.trip_no }}" data-after="reset" autocomplete="off">
+  <form method="post" action="{{ url_for('dala.weigh', load_id=ld.id) }}" class="d-form" id="d-entry" data-offline="Tortish {{ ld.trip_no }}" data-after="reset" data-fast="1" autocomplete="off">
     {{ csrf() }}{{ uuid_field() }}
     <div id="d-gps-st" class="tiny" style="color:#8a97aa;margin-bottom:6px">📍 Joylashuv aniqlanmoqda…</div>
     <input type="hidden" name="lat" id="d-glat" data-keep><input type="hidden" name="lon" id="d-glon" data-keep><input type="hidden" name="acc" id="d-gacc" data-keep>
@@ -33,7 +33,7 @@
     <div><span>Summa, so‘m</span><b data-t="amount">{{ totals.amount|num }}</b></div>
   </div>
   <div id="d-queue" class="notice" hidden></div>
-  <div class="d-list" id="d-list" data-refresh-on-sync>
+  <div class="d-list" id="d-list">
     {% for r in recent %}<div class="d-line"><span>{{ r.name }}</span><b>{{ r.kg|num(1) if r.kg % 1 else r.kg|num }} kg</b><span class="tiny muted">{{ r.created_at[11:16] }}</span></div>{% endfor %}
   </div>
   {% if totals.n %}<a class="small" href="{{ url_for('ops.load_detail', load_id=ld.id) }}">Barcha tortishlar va tuzatish →</a>{% endif %}
@@ -59,6 +59,12 @@
   const WKEY = 'spx-workers-v1';
   const norm = v => String(v || '').toLowerCase().replace(/[ʻʼ‘’'`]/g, '').replace(/\s+/g, ' ').trim();
   function localList() { try { return (JSON.parse(localStorage.getItem(WKEY) || '{}').list) || []; } catch (_) { return []; } }
+  function addLocal(w) { try {
+    const saved = JSON.parse(localStorage.getItem(WKEY) || '{}'), list = saved.list || [];
+    const i = list.findIndex(x => (w.id && String(x.id) === String(w.id)) || (!x.id && norm(x.name) === norm(w.name)));
+    if (i >= 0) list[i] = Object.assign(list[i], w); else list.push(w);
+    localStorage.setItem(WKEY, JSON.stringify({ at: saved.at || 0, list }));
+  } catch (_) {} }
   function localSearch(t) { const k = norm(t);
     return localList().filter(w => norm(w.name).split(' ').some(p => p.startsWith(k)) || norm(w.name).startsWith(k) || (w.phone || '').includes(t)).slice(0, 15); }
   (async () => { try {
@@ -70,19 +76,38 @@
   // entries waiting in the offline queue are shown in the list and counted in the totals
   const RATE = {{ (ld.rate or 0)|int }}, ACTION = new URL(form.getAttribute('action'), location.href).href;
   let pend = { n: 0, kg: 0 };
+  function redraw(totals, recent) {
+    render(totals, recent); pend = { n: 0, kg: 0 }; document.getElementById('d-queue').hidden = true;
+    if (window.surxonQueue) window.surxonQueue.all().then(items => showPending(items.filter(i => i.action === ACTION)));
+  }
+  async function refresh() {
+    try { const r = await (await fetch(document.getElementById('d-trip').dataset.state, { headers: { 'X-Requested-With': 'fetch' } })).json();
+      if (r.ok) redraw(r.totals, r.recent); } catch (_) {}
+  }
+  // an entry sent in the background: the list and totals follow the server; a refused one comes back into the form
+  window.addEventListener('spx-sent', e => { const d = e.detail; if (d.item.action !== ACTION) return;
+    if (d.data.worker && d.data.worker.id) addLocal(d.data.worker);
+    if (d.data.totals) redraw(d.data.totals, d.data.recent); else refresh(); });
+  window.addEventListener('spx-refused', e => { const d = e.detail; if (d.item.action !== ACTION) return;
+    refresh();
+    const get = k => (d.item.entries.find(x => x[0] === k) || [])[1] || '';
+    if (/takror|hozirgina/.test(d.data.error || '') && !kg.value) {
+      if (name) { name.value = get('worker_name'); wid.value = get('worker_id'); nw.value = get('new_worker'); }
+      kg.value = get('kg'); dup.hidden = false;
+    } });
   function showPending(items) {
     items.forEach(it => {
       const get = k => (it.entries.find(e => e[0] === k) || [])[1] || '';
       const k = parseFloat(String(get('kg')).replace(',', '.')) || 0;
       pend.n++; pend.kg += k;
-      list.insertAdjacentHTML('afterbegin', `<div class="d-line d-pend"><span>${esc(get('worker_name') || 'Kombayn')}</span><b>${fmt(k)} kg</b><span class="tiny" style="color:#b45309">⏳ navbatda</span></div>`);
+      list.insertAdjacentHTML('afterbegin', `<div class="d-line d-pend"><span>${esc(get('worker_name') || 'Kombayn')}</span><b>${fmt(k)} kg</b><span class="tiny" style="color:#b45309">⏳ ${navigator.onLine ? 'yuborilmoqda' : 'navbatda'}</span></div>`);
     });
     if (!items.length) return;
     const t = k => tot.querySelector(`[data-t=${k}]`), num = el => parseFloat(el.textContent.replace(/\s/g, '')) || 0;
     t('n').textContent = num(t('n')) + items.length;
     t('kg').textContent = fmt(num(t('kg')) + items.reduce((a, it) => a + (parseFloat(String((it.entries.find(e => e[0] === 'kg') || [])[1]).replace(',', '.')) || 0), 0));
     if (RATE) t('amount').textContent = fmt(num(t('amount')) + items.reduce((a, it) => a + RATE * (parseFloat(String((it.entries.find(e => e[0] === 'kg') || [])[1]).replace(',', '.')) || 0), 0));
-    const q = document.getElementById('d-queue'); q.hidden = false;
+    const q = document.getElementById('d-queue'); q.hidden = navigator.onLine && pend.n < 3;
     q.innerHTML = `<div>⏳ <b>${pend.n} ta tortish telefonda navbatda</b> (${fmt(pend.kg)} kg). Internet kelganda o‘zi yuboriladi — yozishda davom etavering, hech narsa yo‘qolmaydi.</div>`;
   }
   // keep the closing page and the home page on the phone too, so the trip can be closed without internet
@@ -98,15 +123,20 @@
       clearTimeout(timer);
       const t = name.value.trim();
       if (t.length < 2) { sugg.innerHTML = ''; return; }
+      const show = ws => { if (name.value.trim() !== t) return;
+        sugg.innerHTML = ws.slice(0, 6).map(w => `<button type="button" class="d-pick" data-id="${w.id || ''}" data-name="${esc(w.name)}">${esc(w.name)} <span class="tiny muted">${esc(w.phone || (w.id ? '#' + w.id : 'yangi'))}</span></button>`).join('')
+          + `<button type="button" class="d-pick d-add" data-new="1">+ Yangi odam: <b>${esc(t)}</b></button>`; };
+      const local = localSearch(t), haveList = localList().length > 0;
+      if (haveList) show(local);                        // instant, from the list on the phone (“+ Yangi odam” too)
       timer = setTimeout(async () => {
-        let ws = null;
-        if (navigator.onLine) {
-          try { ws = (await (await fetch('/api/workers?q=' + encodeURIComponent(t), {headers: {'X-Requested-With': 'fetch'}})).json()).workers || []; } catch (_) {}
-        }
-        if (ws === null) ws = localSearch(t);        // no internet: search the list kept on the phone
-        sugg.innerHTML = ws.slice(0, 6).map(w => `<button type="button" class="d-pick" data-id="${w.id}" data-name="${esc(w.name)}">${esc(w.name)} <span class="tiny muted">${esc(w.phone || '#' + w.id)}</span></button>`).join('')
-          + `<button type="button" class="d-pick d-add" data-new="1">+ Yangi odam: <b>${esc(t)}</b></button>`;
-      }, 180);
+        if (!navigator.onLine) { show(local); return; }
+        const ctl = window.AbortController ? new AbortController() : null, stop = ctl && setTimeout(() => ctl.abort(), 2500);
+        try {
+          const ws = (await (await fetch('/api/workers?q=' + encodeURIComponent(t), { headers: { 'X-Requested-With': 'fetch' }, signal: ctl && ctl.signal })).json()).workers || [];
+          const seen = new Set(ws.map(w => String(w.id)));
+          show(ws.concat(localSearch(t).filter(w => !w.id || !seen.has(String(w.id)))));
+        } catch (_) { show(local); } finally { if (stop) clearTimeout(stop); }
+      }, haveList ? 350 : 150);
     });
     sugg.addEventListener('click', e => { const b = e.target.closest('.d-pick'); if (!b) return;
       if (b.dataset.new) pick('', name.value.trim(), true); else pick(b.dataset.id, b.dataset.name, false); });
@@ -120,7 +150,10 @@
     dup.hidden = true; if (sugg) sugg.innerHTML = ''; if (wid) { wid.value = ''; nw.value = ''; }
     (name || kg).focus(); });
   form.addEventListener('failed', e => { if (/takror|hozirgina/.test((e.detail && e.detail.error) || '')) dup.hidden = false; });
-  form.addEventListener('queued', e => { showPending([{ entries: (e.detail && e.detail.entries) || [] }]);
+  form.addEventListener('queued', e => { const en = (e.detail && e.detail.entries) || [];
+    const nm = (en.find(x => x[0] === 'worker_name') || [])[1];
+    if (nm && (en.find(x => x[0] === 'new_worker') || [])[1] === '1') addLocal({ id: '', name: nm, phone: '' });   // typed again → the same person
+    showPending([{ entries: en }]);
     if (sugg) sugg.innerHTML = ''; if (wid) { wid.value = ''; nw.value = ''; }
     (name || kg).focus(); });
 })();
