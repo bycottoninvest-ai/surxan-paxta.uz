@@ -14,7 +14,7 @@ from .config import BASE_DIR, Config
 from .security import (PERMISSIONS, ROLES, brigadier_scope, can, csrf_token, load_user, wants_json)
 from .utils import UserError, fmt_date, fmt_money, fmt_num, now_str, today_str, weekday_name
 
-VERSION = '2.24.2'
+VERSION = '2.24.3'
 
 
 def create_app(**overrides):
@@ -193,6 +193,7 @@ def register_template_helpers(app):
             'bot_username': app.config['SURXON'].TELEGRAM_BOT_USERNAME,
             'test_mode': app.config['SURXON'].APP_MODE == 'test',
             'gmaps_key': _gmaps_key() if user else '',
+            'offline_queue': user is not None and __import__('surxon.settings', fromlist=['get_bool']).get_bool('offline_queue'),
         }
 
     def _gmaps_key():

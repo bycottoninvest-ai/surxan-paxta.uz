@@ -206,9 +206,37 @@
     if (sent && document.querySelector('[data-refresh-on-sync]')) setTimeout(() => location.reload(), 800);
     if (again && !expired) setTimeout(flush, 50);
   }
-  window.addEventListener('online', flush);
-  window.addEventListener('offline', () => showSync());
-  if (window.indexedDB) { flush(); setInterval(flush, 30000); }
+  // Online only (the default): nothing waits on the phone. Entries left from before are never sent by themselves —
+  // a banner shows them, and the person sends them now or deletes them.
+  const OFFLINE_OK = document.body.dataset.offlineq === '1';
+  async function leftovers() {
+    let items = [];
+    try { items = (await qAll()).filter(x => x.user === userId); } catch (_) { return; }
+    if (!items.length || $('#spx-left')) return;
+    const oldest = new Date(Math.min(...items.map(i => i.at)));
+    const when = oldest.toLocaleDateString('ru-RU') + ' ' + oldest.toTimeString().slice(0, 5);
+    const bar = document.createElement('div');
+    bar.id = 'spx-left';
+    bar.style.cssText = 'position:fixed;left:8px;right:8px;bottom:78px;z-index:130;background:#fff7e6;border:2px solid #f59e0b;border-radius:14px;padding:12px;box-shadow:0 8px 24px rgba(0,0,0,.18);font-size:14px';
+    bar.innerHTML = `<b>⚠ Telefonda ${items.length} ta yuborilmagan eski yozuv bor</b> (eng eskisi ${when}):<div class="tiny" style="margin:4px 0">`
+      + items.slice(0, 6).map(i => (i.label || 'yozuv') + ' · ' + new Date(i.at).toTimeString().slice(0, 5)).join('<br>')
+      + `</div><div style="display:flex;gap:8px;margin-top:6px"><button class="btn btn-primary btn-sm" data-a="send">Hozir yuborish</button>`
+      + `<button class="btn btn-light btn-sm" data-a="del">O‘chirish (yubormaslik)</button></div>`;
+    document.body.appendChild(bar);
+    bar.addEventListener('click', async e => {
+      const a = e.target.dataset.a; if (!a) return;
+      if (a === 'del') {
+        if (!confirm('Bu yozuvlar serverga YUBORILMAYDI va telefondan o‘chiriladi. Rozimisiz?')) return;
+        for (const i of items) await qDel(i.id);
+        bar.remove(); showSync('Eski yozuvlar o‘chirildi');
+      } else { bar.remove(); await flush(); leftovers(); }
+    });
+  }
+  if (OFFLINE_OK) {
+    window.addEventListener('online', flush);
+    window.addEventListener('offline', () => showSync());
+    if (window.indexedDB) { flush(); setInterval(flush, 30000); }
+  } else if (window.indexedDB) { leftovers(); }
 
   document.addEventListener('submit', async e => {
     const form = e.target;
@@ -224,7 +252,9 @@
     const actionUrl = new URL(form.getAttribute('action') || location.href, location.href).href;
     const item = { id: uuid(), user: userId, action: actionUrl, entries, label: form.dataset.offline, at: Date.now() };
     const done = () => { delete form.dataset.busy; if (btn) { btn.disabled = false; btn.innerHTML = label; } };
-    if (form.dataset.fast && window.indexedDB) {      // never wait for the network: the next entry can be typed at once
+    const NOT_SAVED = 'Internet yo‘q — SAQLANMADI. Internet kelganda shu tugmani qayta bosing (yozganlaringiz o‘chmadi).';
+    if (!OFFLINE_OK && !navigator.onLine) { toast(NOT_SAVED, 'error'); done(); return; }
+    if (OFFLINE_OK && form.dataset.fast && window.indexedDB) {      // never wait for the network: the next entry can be typed at once
       try {
         await qPut(item);
         form.reset(); arm(form); form.dispatchEvent(new CustomEvent('queued', { detail: { entries, id: item.id, fast: true } }));
@@ -235,6 +265,9 @@
     }
     try {
       const { status, data } = await send(actionUrl, entries);
+      if (status === 401 && !OFFLINE_OK) {
+        alert('Sessiya tugagan — qayta kiring va yozuvni qaytadan kiriting.'); location.href = '/login'; return;
+      }
       if (status === 401) {        // logged out: keep the entry, it is sent after logging in again
         await qPut(item);
         alert('Sessiya tugagan. Yozuv telefonda saqlandi — qayta kiring, kirgandan keyin o‘zi yuboriladi.');
@@ -248,6 +281,7 @@
         done();
       } else { location.href = data.redirect || location.href; }
     } catch (_) {
+      if (!OFFLINE_OK) { toast(NOT_SAVED, 'error'); done(); return; }      // online only: nothing is kept on the phone
       await qPut(item);
       toast('Internet yo‘q — yozuv NAVBATDA: serverga hali yetmagan. Internet kelganda o‘zi yuboriladi.', 'warn');
       form.reset(); arm(form); form.dispatchEvent(new CustomEvent('queued', { detail: { entries } }));

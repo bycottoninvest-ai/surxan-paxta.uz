@@ -44,6 +44,8 @@ DEFAULTS = {
     'fleet_work_hours': ('07:00-19:00', 'GPS texnika: odatiy ish vaqti (texnikada alohida yozilmagan bo‘lsa)'),
     'fleet_over_pct': ('15', 'GPS texnika: berilgan salarka me’yordan shu % dan ko‘p bo‘lsa — “me’yordan ko‘p” (sariq)'),
     'tv_show_workers': ('1', 'TV’da bugungi eng yaxshi 5 terimchi (ism + familiya bosh harfi) ko‘rsatilsinmi (1/0)'),
+    'offline_queue': ('0', 'Internet yo‘q paytida yozuvlar telefonda saqlanib, keyin o‘zi yuborilsinmi (1/0). 0 — faqat internet '
+                           'bilan: internet bo‘lmasa “Saqlanmadi” deydi, telefonda hech narsa qolmaydi'),
     'report_feed': ('1', 'Hisobot kanaliga har bir muhim hodisa (reys tugadi, punkt qabul, kassa kirim/chiqim, kuzatuv '
                          'kechikishi) darhol yoziladi (1/0). Kunlik hisobot bundan tashqari keladi'),
     'kuzatuv_deadline_min': ('120', 'Kuzatuv: rasm/video so‘rovi javobi uchun necha daqiqa beriladi (keyin “KECHIKDI”)'),
