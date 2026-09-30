@@ -2,6 +2,7 @@
 Yunus scans the UY paper, then every trailer's field blank; the list and the total build themselves. After the weighing
 the punkt netto is shared over the trailers by their field kg, every trailer is QABUL, and one PQ-17 ties to the group."""
 import io
+import re
 
 from conftest import jpeg
 from surxon.db import q
@@ -31,6 +32,8 @@ def test_umumiy_yuk_scan_close_weigh_split_and_pq17(app, world):
     pdf = admin.get('/admin/uy-blankalar/1.pdf')
     assert pdf.status_code == 200 and pdf.data[:4] == b'%PDF'
     assert 'UY-0008' in admin.get('/admin/blankalar').get_data(as_text=True)
+    uy2 = admin.get('/admin/uy-blankalar/chop.pdf?dan=8&soni=2')
+    assert uy2.status_code == 200 and len(re.findall(rb'/Type\s*/Page[^s]', uy2.data)) == 2
     with app.app_context():
         uy = {r['number']: r for r in q('SELECT * FROM load_groups')}
         k2 = q("SELECT id FROM equipment WHERE code='K-02'", one=True)['id']

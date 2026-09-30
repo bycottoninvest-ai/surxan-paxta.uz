@@ -35,6 +35,13 @@ def test_blanks_print_attach_required_once_and_office_check(app, world):
     assert 'PB-0001' in text and 'PB-0600' in text and 'DALA NAKLADNOYI' in text and 'KOMBAYN' in text
     assert 'QO‘L TERIMI' in text and 'PAXTA, kg' in text and 'QABUL QILUVCHI' not in text      # the receiver part is on the UY
     assert admin.post('/admin/blankalar', {'count': '5000'}).get_json()['ok'] is False
+    # the simple print form: from a number, how many — only those, two per page
+    part = admin.get('/admin/blankalar/chop.pdf?dan=1&soni=10')
+    assert part.status_code == 200 and len(re.findall(rb'/Type\s*/Page[^s]', part.data)) == 5
+    t10 = pdf_text(part.data)
+    assert 'PB-0001' in t10 and 'PB-0010' in t10 and 'PB-0011' not in t10
+    page = admin.get('/admin/blankalar').get_data(as_text=True)
+    assert 'Chop etish' in page and 'PDF ochish' in page and 'faqat blanklar tugaganda' in page
     with app.app_context():
         b3 = q("SELECT * FROM punkt_blanks WHERE number='PB-0003'", one=True)
         b1 = q("SELECT * FROM punkt_blanks WHERE number='PB-0001'", one=True)

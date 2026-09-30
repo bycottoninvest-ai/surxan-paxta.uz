@@ -288,7 +288,10 @@ def blanks():
         rows = [r for r in rows if not r['waybill_id'] and not r['spoiled_reason']]
     elif show == 'otkazilgan':
         rows = ov['skipped']
+    first_free = next((int(r['number'][3:]) for r in ov['rows'] if not r['waybill_id'] and not r['spoiled_reason']), 1)
+    uy_free = q("SELECT MIN(CAST(substr(number, 4) AS INTEGER)) m FROM load_groups WHERE status='BOSH'", one=True)['m'] or 8
     return render_template('admin_blanks.html', ov=ov, rows=rows[:1000], show=show, new_batch=request.args.get('yangi', type=int),
+                           first_free=first_free, uy_free=uy_free,
                            receiver=_blank_receiver(), receiver_set=bool(get_setting('blank_receiver')),
                            uy=__import__('surxon.groups', fromlist=['overview']).overview(), new_uy=request.args.get('uy', type=int))
 
@@ -313,6 +316,43 @@ def blanks_pdf(batch):
                            receiver=_blank_receiver(), copies=1 if request.args.get('nusxa') == '1' else 2)
     return Response(pdf, mimetype='application/pdf', headers={
         'Content-Disposition': f'inline; filename="punkt_blanklari_{rows[0]["number"]}_{rows[-1]["number"]}.pdf"',
+        'Cache-Control': 'private, no-store'})
+
+
+def _range_args():
+    """“from number N, K pieces” of the simple print form → (first, last); K is at most 1000."""
+    first = parse_int(request.args.get('dan'), 'Raqam') or 1
+    n = min(max(parse_int(request.args.get('soni'), 'Soni') or 10, 1), 1000)
+    return first, first + n - 1
+
+
+@bp.get('/blankalar/chop.pdf')
+@perm_required('masterdata.write')
+def blanks_print():
+    """Only the blanks asked for (e.g. from PB-0001, 10 of them) — no page numbers to choose in the printer."""
+    from ..pdfdoc import build_blanks_pdf
+    a, b = _range_args()
+    rows = q("SELECT * FROM punkt_blanks WHERE CAST(substr(number, 4) AS INTEGER) BETWEEN ? AND ? ORDER BY number", (a, b))
+    if not rows:
+        abort(404)
+    pdf = build_blanks_pdf(rows, company=get_setting('company_name'), domain=current_app.config['SURXON'].DOMAIN)
+    return Response(pdf, mimetype='application/pdf', headers={
+        'Content-Disposition': f'inline; filename="dala_blanklari_{rows[0]["number"]}_{rows[-1]["number"]}.pdf"',
+        'Cache-Control': 'private, no-store'})
+
+
+@bp.get('/uy-blankalar/chop.pdf')
+@perm_required('masterdata.write')
+def group_blanks_print():
+    from ..pdfdoc import build_group_blanks_pdf
+    a, b = _range_args()
+    rows = q("SELECT * FROM load_groups WHERE CAST(substr(number, 4) AS INTEGER) BETWEEN ? AND ? ORDER BY number", (a, b))
+    if not rows:
+        abort(404)
+    pdf = build_group_blanks_pdf(rows, company=get_setting('company_name'), domain=current_app.config['SURXON'].DOMAIN,
+                                 receiver=_blank_receiver(), copies=1)
+    return Response(pdf, mimetype='application/pdf', headers={
+        'Content-Disposition': f'inline; filename="umumiy_nakladnoy_{rows[0]["number"]}_{rows[-1]["number"]}.pdf"',
         'Cache-Control': 'private, no-store'})
 
 
