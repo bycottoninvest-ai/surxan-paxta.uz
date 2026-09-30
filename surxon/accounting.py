@@ -325,6 +325,57 @@ def combine_balances(year, combine_id=None):
     return out
 
 
+def combine_statement(year, combine_id):
+    """Season hisob-kitob of one combine for its owner: day by day — fields, trips, dala kg, its share of the punkt kg
+    (in an umumiy yuk the punkt netto is shared by field kg), the sum — then every payment, and what is left to pay."""
+    bal = combine_balances(year, combine_id)
+    if not bal:
+        raise UserError('Kombayn topilmadi.')
+    c = bal[0]
+    c['owner'] = combine_owner(c)
+    hs = q('''SELECT h.work_date, h.load_id, h.kg, h.amount, f.name field_name, tl.trip_no, nr.accepted_kg, g.number uy,
+                     (SELECT SUM(x.kg) FROM harvests x WHERE x.load_id=h.load_id AND x.voided_at IS NULL) load_kg
+              FROM harvests h JOIN trailer_loads tl ON tl.id=h.load_id LEFT JOIN fields f ON f.id=h.field_id
+              LEFT JOIN waybills wb ON wb.load_id=h.load_id AND wb.status<>'BEKOR' LEFT JOIN nayman_receipts nr ON nr.waybill_id=wb.id
+              LEFT JOIN load_group_items gi ON gi.waybill_id=wb.id LEFT JOIN load_groups g ON g.id=gi.group_id
+              WHERE h.season_year=? AND h.combine_id=? AND h.method='combine' AND h.voided_at IS NULL
+              ORDER BY h.work_date, h.id''', (year, combine_id))
+    days = {}
+    for h in hs:
+        d = days.setdefault(h['work_date'], {'date': h['work_date'], 'fields': [], 'trips': [], 'kg': 0, 'punkt_kg': 0,
+                                             'waiting_kg': 0, 'amount': 0, 'uncalc_kg': 0, 'work': ''})
+        if h['field_name'] and h['field_name'] not in d['fields']:
+            d['fields'].append(h['field_name'])
+        trip = (h['trip_no'] or '') + (f' ({h["uy"]})' if h['uy'] else '')
+        if trip and trip not in d['trips']:
+            d['trips'].append(trip)
+        d['kg'] += h['kg']
+        if h['accepted_kg'] is not None and h['load_kg']:
+            d['punkt_kg'] += h['accepted_kg'] * h['kg'] / h['load_kg']
+        else:
+            d['waiting_kg'] += h['kg']
+        if h['amount'] is None:
+            d['uncalc_kg'] += h['kg']
+        else:
+            d['amount'] += h['amount']
+    for w in q('''SELECT work_date, unit, qty, amount FROM combine_work WHERE season_year=? AND combine_id=? AND voided_at IS NULL
+                  ORDER BY work_date''', (year, combine_id)):
+        d = days.setdefault(w['work_date'], {'date': w['work_date'], 'fields': [], 'trips': [], 'kg': 0, 'punkt_kg': 0,
+                                             'waiting_kg': 0, 'amount': 0, 'uncalc_kg': 0, 'work': ''})
+        d['amount'] += w['amount']
+        d['work'] = (d['work'] + ' ' if d['work'] else '') + (f'{w["qty"]:g} ga' if w['unit'] == 'gektar' else f'{w["qty"]:g} kun')
+    rows = [days[k] for k in sorted(days)]
+    for d in rows:
+        d['punkt_kg'] = round(d['punkt_kg'], 1)
+    pays = q('''SELECT entry_date, doc_no, category, amount, note FROM cash_entries WHERE season_year=? AND combine_id=?
+                AND voided_at IS NULL AND category IN ('combine_pay','refund_combine_pay') ORDER BY entry_date, id''',
+             (year, combine_id))
+    return {'combine': c, 'days': rows, 'payments': [dict(p, amount=p['amount'] if p['category'] == 'combine_pay' else -p['amount'])
+                                                     for p in pays],
+            'kg': sum(d['kg'] for d in rows), 'punkt_kg': round(sum(d['punkt_kg'] for d in rows), 1),
+            'waiting_kg': sum(d['waiting_kg'] for d in rows)}
+
+
 def set_combine_tariff(actor, combine_id, *, tariff_type, tariff_rate, operator_name=None, ownership=None):
     """New tariff applies to work written from now on; already booked work keeps its own rate."""
     _need(actor, 'combine.finance')

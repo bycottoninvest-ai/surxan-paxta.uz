@@ -10,7 +10,7 @@ from contextlib import contextmanager
 
 from flask import current_app, g
 
-SCHEMA_VERSION = 18
+SCHEMA_VERSION = 19
 
 SCHEMA = r'''
 CREATE TABLE IF NOT EXISTS brigadiers (
@@ -643,6 +643,25 @@ CREATE TABLE IF NOT EXISTS pq17_docs (      -- v15: the state's cotton receipt (
   waybill_id INTEGER UNIQUE REFERENCES waybills(id), match_how TEXT,
   uploaded_by INTEGER REFERENCES users(id), uploaded_at TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS load_groups (    -- v19: “umumiy yuk” — several trailers towed together, weighed ONCE at the punkt
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  number TEXT NOT NULL UNIQUE,              -- UY-0001 (printed in advance, like the PB blanks)
+  token TEXT NOT NULL UNIQUE,               -- in the QR: https://domain/punkt/uy/<token>
+  batch INTEGER NOT NULL,
+  status TEXT NOT NULL DEFAULT 'BOSH' CHECK (status IN ('BOSH','OCHIQ','YUBORILDI','QABUL','BEKOR')),
+  station_id INTEGER REFERENCES stations(id),
+  opened_by INTEGER REFERENCES users(id), opened_at TEXT,
+  sent_at TEXT, sent_kg REAL,               -- sum of the trailers' field kg when the list was closed
+  gross_kg REAL, tare_kg REAL, accepted_kg REAL, load_no TEXT, diff_kg REAL, diff_reason TEXT,
+  photo_id INTEGER REFERENCES photos(id), received_by INTEGER REFERENCES users(id), received_at TEXT,
+  spoiled_reason TEXT, created_by INTEGER REFERENCES users(id), created_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS load_group_items (
+  group_id INTEGER NOT NULL REFERENCES load_groups(id),
+  waybill_id INTEGER NOT NULL UNIQUE REFERENCES waybills(id),   -- a trip belongs to one umumiy yuk at most
+  added_by INTEGER REFERENCES users(id), added_at TEXT NOT NULL,
+  PRIMARY KEY (group_id, waybill_id)
+);
 CREATE TABLE IF NOT EXISTS punkt_blanks (   -- v14: numbered paper forms printed in advance, kept at the punkt
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   number TEXT NOT NULL UNIQUE,              -- PB-0001
@@ -1070,6 +1089,8 @@ def migrate(db):
     # v18: what a credit-account payment was for (Agrobank export: “Maqsad nomi”) and who got it — the “where did the loan go” view
     _add_column(db, 'contract_moves', 'category', 'TEXT')
     _add_column(db, 'contract_moves', 'counterparty', 'TEXT')
+    # v19: a PQ-17 for an umumiy yuk (several trailers weighed once) belongs to the group, shared out by kg
+    _add_column(db, 'pq17_docs', 'group_id', 'INTEGER REFERENCES load_groups(id)')
     # Future column changes go here as: if version < N: ALTER TABLE ...
     db.execute('UPDATE schema_version SET version=? WHERE version < ?', (SCHEMA_VERSION, SCHEMA_VERSION))
 

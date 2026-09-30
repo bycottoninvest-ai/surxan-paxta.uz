@@ -175,10 +175,13 @@ def test_rounds_and_picked_area_give_centner_per_hectare(app, world):
         assert tally.post(f'/dala/reys/{lid}/tortish', {'worker_name': 'Ali ' + kg, 'kg': kg, 'confirm_duplicate': '1',
                                                        'client_uuid': uuid4(), 'lat': lat, 'lon': lon, 'acc': 5}).get_json()['ok']
     close = tally.get(f'/dala/reys/{lid}/yopish').get_data(as_text=True)
-    assert 'Terilgan joyni belgilang' in close and cells[0]['id'] in close.split('"chosen"')[1][:60]     # suggested from GPS
+    assert 'Terilgan joyni belgilang' not in close                    # closing asks no map any more (only the blank)
     half = [c['id'] for c in cells[:len(cells) // 2]]
     from conftest import jpeg
-    assert tally.post(f'/dala/reys/{lid}/yopish', {'cells': ','.join(half)}, files={'photos': jpeg((1, 2, 3))}).get_json()['ok']
+    assert tally.post(f'/dala/reys/{lid}/yopish', files={'photos': jpeg((1, 2, 3))}).get_json()['ok']
+    pick = tally.get(f'/dala/reys/{lid}/joy').get_data(as_text=True)                 # marked later, if wanted
+    assert cells[0]['id'] in pick.split('"chosen"')[1][:60]                           # suggested from GPS
+    assert tally.post(f'/dala/reys/{lid}/joy', {'cells': ','.join(half), 'round': '2'}).get_json()['ok']
     with app.app_context():
         row = q('SELECT harvest_round, picked_ha FROM trailer_loads WHERE id=?', (lid,), one=True)
         assert row['harvest_round'] == 2 and abs(row['picked_ha'] - 2 * len(half) / len(cells)) < 0.01
@@ -209,11 +212,12 @@ def test_trip_across_two_fields_splits_kg_by_marked_area(app, world):
                                    'brigadier_id': world['b']['Juma ota'], 'rate': '1000', 'client_uuid': uuid4()}).get_json()
     lid = r['load_id']
     assert tally.post(f'/dala/reys/{lid}/tortish', {'worker_name': 'Ali', 'kg': '200', 'client_uuid': uuid4()}).get_json()['ok']
-    page = tally.get(f'/dala/reys/{lid}/yopish').get_data(as_text=True)
+    from conftest import jpeg
+    assert tally.post(f'/dala/reys/{lid}/yopish', files={'photos': jpeg((3, 2, 1))}).get_json()['ok']
+    page = tally.get(f'/dala/reys/{lid}/joy').get_data(as_text=True)
     assert '"code": "D-01"' in page                                   # the neighbour is on the marking map
     keys = [f"{world['f']['D-04']}|{c['id']}" for c in ca[:8]] + [f"{world['f']['D-01']}|{c['id']}" for c in cb[:2]]
-    from conftest import jpeg
-    assert tally.post(f'/dala/reys/{lid}/yopish', {'cells': ','.join(keys)}, files={'photos': jpeg((3, 2, 1))}).get_json()['ok']
+    assert tally.post(f'/dala/reys/{lid}/joy', {'cells': ','.join(keys)}).get_json()['ok']
     with app.app_context():
         y = picking.trip_yield(lid)
         assert [p['code'] for p in y['parts']] == ['D-04', 'D-01']

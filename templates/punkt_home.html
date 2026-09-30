@@ -7,6 +7,7 @@
   <div class="pk-body">
     <b>{{ t.number }} · {{ t.trailer_code }}</b>
     <span class="small">{{ t.field_name }} · {{ t.brigadier_name }}</span>
+    {% set w = who.get(t.id) if who else none %}{% if w %}<span class="pk-who {{ 'pk-kb' if w.combine else 'pk-ql' }}">{{ '🚜 ' if w.combine else '✋ ' }}{{ w.label }}</span>{% if w.uy %}<span class="pk-who pk-uy">{{ w.uy }}</span>{% endif %}{% endif %}
     <span class="small">Jo‘natilgan: <b>{{ t.net_kg|num }} kg</b> <span class="muted">({{ 'dala hisobi' if t.basis == 'dala' else 'tarozi netto' }})</span></span>
     <span class="tiny muted">{{ t.trip_no }}{% if not sid and t.station_name %} · {{ t.station_name }}{% endif %}</span>
     {% if t.arrived_at %}<span class="pk-st pk-q">Punktda navbatda</span>{% else %}<span class="pk-st pk-w">Yo‘lda</span>
@@ -17,7 +18,11 @@
 {%- endmacro %}
 {% block content %}
 <div class="d-wrap">
-  <div><h1 class="d-h1">1. Kelgan telashkani tanlang</h1><div class="small muted">Nakladnoylar avtomatik chiqadi · {{ station.name if station else 'Barcha punktlar' }}</div></div>
+  <div><h1 class="d-h1">1. Kelgan telashkani tanlang</h1>
+  {% if can('station.receive') %}<a class="btn btn-block uy-btn" href="{{ url_for('punkt.groups_home') }}">🚜 Umumiy yuk — bir nechta telashka birga</a>
+  <style>.uy-btn{background:#6d28d9;color:#fff;font-weight:800;margin:6px 0 10px;padding:14px}</style>{% endif %}
+  <style>.pk-who{display:inline-block;align-self:flex-start;font-size:.78rem;font-weight:700;border-radius:6px;padding:1px 7px;margin:2px 4px 2px 0}
+  .pk-kb{background:#fef3c7;color:#92400e}.pk-ql{background:#dcfce7;color:#166534}.pk-uy{background:#ede9fe;color:#5b21b6}</style><div class="small muted">Nakladnoylar avtomatik chiqadi · {{ station.name if station else 'Barcha punktlar' }}</div></div>
   {% if current_user['role'] != 'station' and stations|length > 1 %}
   <form method="get"><select name="punkt" onchange="this.form.submit()" class="pk-sel"><option value="">Barcha punktlar</option>{% for s in stations %}<option value="{{ s.id }}" {{ 'selected' if sid == s.id }}>{{ s.name }}</option>{% endfor %}</select></form>
   {% endif %}

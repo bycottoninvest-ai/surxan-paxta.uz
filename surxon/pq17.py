@@ -91,22 +91,30 @@ def _save_file(data, code):
 
 
 def find_trip(db, d):
-    """Our received trip for this PQ-17: the load number the punkt typed, else one trip with the same netto within
-    a day of the document date. Returns (waybill_id, how) or (None, None)."""
+    """Our received trip — or umumiy yuk (several trailers weighed once) — for this PQ-17: the load number the punkt
+    typed, else one with the same netto within a day of the document date. Returns (waybill_id, how, group_id)."""
+    g = db.execute("SELECT id FROM load_groups WHERE load_no=? AND status='QABUL'", (d['load_no'],)).fetchone()
+    if g:
+        return None, 'yuk xati (umumiy yuk)', g['id']
     r = db.execute("""SELECT wb.id FROM nayman_receipts nr JOIN waybills wb ON wb.id=nr.waybill_id
-                      WHERE nr.load_no=? AND wb.status<>'BEKOR'""", (d['load_no'],)).fetchone()
+                      WHERE nr.load_no=? AND wb.status<>'BEKOR'
+                        AND NOT EXISTS (SELECT 1 FROM load_group_items i WHERE i.waybill_id=wb.id)""", (d['load_no'],)).fetchone()
     if r:
-        return r['id'], 'yuk xati'
+        return r['id'], 'yuk xati', None
     if not d.get('doc_date'):
-        return None, None
+        return None, None, None
     day = date.fromisoformat(d['doc_date'])
+    lo, hi = (day - timedelta(days=1)).isoformat(), (day + timedelta(days=1)).isoformat()
     rows = db.execute("""SELECT wb.id FROM nayman_receipts nr JOIN waybills wb ON wb.id=nr.waybill_id
                          WHERE wb.status<>'BEKOR' AND ABS(nr.accepted_kg - ?) < 0.5 AND nr.received_date BETWEEN ? AND ?
-                           AND NOT EXISTS (SELECT 1 FROM pq17_docs p WHERE p.waybill_id=wb.id)""",
-                      (d['netto'], (day - timedelta(days=1)).isoformat(), (day + timedelta(days=1)).isoformat())).fetchall()
-    if len(rows) == 1:
-        return rows[0]['id'], 'netto va sana'
-    return None, None
+                           AND NOT EXISTS (SELECT 1 FROM load_group_items i WHERE i.waybill_id=wb.id)
+                           AND NOT EXISTS (SELECT 1 FROM pq17_docs p WHERE p.waybill_id=wb.id)""", (d['netto'], lo, hi)).fetchall()
+    groups = db.execute("""SELECT g.id FROM load_groups g WHERE g.status='QABUL' AND ABS(g.accepted_kg - ?) < 0.5
+                             AND substr(g.received_at,1,10) BETWEEN ? AND ?
+                             AND NOT EXISTS (SELECT 1 FROM pq17_docs p WHERE p.group_id=g.id)""", (d['netto'], lo, hi)).fetchall()
+    if len(rows) + len(groups) == 1:
+        return (rows[0]['id'], 'netto va sana', None) if rows else (None, 'netto va sana (umumiy yuk)', groups[0]['id'])
+    return None, None, None
 
 
 def import_pdf(actor, data, source='web'):
@@ -123,21 +131,21 @@ def import_pdf(actor, data, source='web'):
         old = db.execute('SELECT * FROM pq17_docs WHERE code=?', (d['code'],)).fetchone()
         if old:
             return old['id'], d, True, None
-        wid, how = find_trip(db, d)
+        wid, how, gid = find_trip(db, d)
         cur = db.execute("""INSERT INTO pq17_docs(code, doc_date, load_no, method, harvest_raw, lot, variety, grade, klass,
                               netto, dirt_pct, moist_pct, deduction_kg, bonus_kg, kond_kg, base_price, coef, price, amount, vat,
                               farmer_name, farmer_inn, cluster_name, cluster_inn, file_path, sha256, source, waybill_id,
-                              match_how, uploaded_by, uploaded_at)
-                            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                              match_how, uploaded_by, uploaded_at, group_id)
+                            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                          (d['code'], d['doc_date'], d['load_no'], d['method'], d['harvest_raw'], d['lot'], d['variety'],
                           d['grade'], d['klass'], d['netto'], d['dirt_pct'], d['moist_pct'], d['deduction_kg'], d['bonus_kg'],
                           d['kond_kg'], d['base_price'], d['coef'], d['price'], d['amount'], d['vat'], d['farmer_name'],
                           d['farmer_inn'], d['cluster_name'], d['cluster_inn'], _save_file(data, d['code']),
-                          hashlib.sha256(data).hexdigest(), source, wid, how, actor.user_id, now_str()))
+                          hashlib.sha256(data).hexdigest(), source, wid, how, actor.user_id, now_str(), gid))
         if wid:
             db.execute('UPDATE nayman_receipts SET load_no=COALESCE(load_no, ?) WHERE waybill_id=?', (d['load_no'], wid))
         audit(db, actor, 'IMPORT', 'pq17', cur.lastrowid, new={'code': d['code'], 'load_no': d['load_no'], 'netto': d['netto'],
-                                                               'amount': d['amount'], 'waybill_id': wid})
+                                                               'amount': d['amount'], 'waybill_id': wid, 'group_id': gid})
     return cur.lastrowid, d, False, how
 
 
@@ -149,6 +157,15 @@ def link(actor, doc_id, waybill_id):
         doc = db.execute('SELECT * FROM pq17_docs WHERE id=?', (doc_id,)).fetchone()
         if not doc:
             raise UserError('PQ-17 topilmadi.')
+        grp = db.execute("SELECT g.id FROM load_groups g JOIN load_group_items i ON i.group_id=g.id "
+                         "WHERE i.waybill_id=? AND g.status='QABUL'", (waybill_id,)).fetchone() if waybill_id else None
+        if grp:
+            busy = db.execute('SELECT code FROM pq17_docs WHERE group_id=? AND id<>?', (grp['id'], doc_id)).fetchone()
+            if busy:
+                raise UserError(f'Bu umumiy yukka {busy["code"]} allaqachon biriktirilgan.')
+            db.execute("UPDATE pq17_docs SET waybill_id=NULL, group_id=?, match_how='qo‘lda (umumiy yuk)' WHERE id=?", (grp['id'], doc_id))
+            audit(db, actor, 'UPDATE', 'pq17', doc_id, new={'group_id': grp['id']})
+            return
         if waybill_id:
             wb = db.execute("SELECT wb.id FROM waybills wb JOIN nayman_receipts nr ON nr.waybill_id=wb.id "
                             "WHERE wb.id=? AND wb.status<>'BEKOR'", (waybill_id,)).fetchone()
@@ -158,7 +175,7 @@ def link(actor, doc_id, waybill_id):
             if busy:
                 raise UserError(f'Bu reysga {busy["code"]} allaqachon biriktirilgan.')
             db.execute('UPDATE nayman_receipts SET load_no=? WHERE waybill_id=?', (doc['load_no'], waybill_id))
-        db.execute("UPDATE pq17_docs SET waybill_id=?, match_how=? WHERE id=?",
+        db.execute("UPDATE pq17_docs SET waybill_id=?, group_id=NULL, match_how=? WHERE id=?",
                    (waybill_id, 'qo‘lda' if waybill_id else None, doc_id))
         audit(db, actor, 'UPDATE', 'pq17', doc_id, old={'waybill_id': doc['waybill_id']}, new={'waybill_id': waybill_id})
 
@@ -224,7 +241,7 @@ def clusters():
         c['to_sign'] += st == 'sign'
         c['to_invoice'] += st in ('inv0', 'inv')
         c['invoices'] += st == 'done'
-        c['unmatched'] += d['waybill_id'] is None
+        c['unmatched'] += d['waybill_id'] is None and d['group_id'] is None
         c['last'] = d['doc_date'] or c['last']
     return list(out.values())
 
@@ -233,16 +250,32 @@ def rematch():
     """Match stored PQ-17s that arrived before their trip was received (called after each punkt receipt)."""
     n = 0
     with tx() as db:
-        for d in db.execute('SELECT * FROM pq17_docs WHERE waybill_id IS NULL').fetchall():
-            wid, how = find_trip(db, dict(d))
+        for d in db.execute('SELECT * FROM pq17_docs WHERE waybill_id IS NULL AND group_id IS NULL').fetchall():
+            wid, how, gid = find_trip(db, dict(d))
             if wid and not db.execute('SELECT 1 FROM pq17_docs WHERE waybill_id=?', (wid,)).fetchone():
                 db.execute('UPDATE pq17_docs SET waybill_id=?, match_how=? WHERE id=?', (wid, how, d['id']))
+                n += 1
+            elif gid and not db.execute('SELECT 1 FROM pq17_docs WHERE group_id=?', (gid,)).fetchone():
+                db.execute('UPDATE pq17_docs SET group_id=?, match_how=? WHERE id=?', (gid, how, d['id']))
                 n += 1
     return n
 
 
+SHARED = ('netto', 'kond_kg', 'deduction_kg', 'bonus_kg', 'amount', 'vat')
+
+
 def by_waybill(year=None):
-    return {r['waybill_id']: r for r in q('SELECT * FROM pq17_docs WHERE waybill_id IS NOT NULL')}
+    """{waybill_id: PQ-17 row}. A group's PQ-17 is shared over its trailers by their punkt share (kg and sum),
+    so every trip — and every combine / brigade behind it — gets its part of the one document."""
+    out = {r['waybill_id']: dict(r) for r in q('SELECT * FROM pq17_docs WHERE waybill_id IS NOT NULL')}
+    for d in q('SELECT p.*, g.accepted_kg g_kg, g.number g_number FROM pq17_docs p JOIN load_groups g ON g.id=p.group_id'):
+        items = q('''SELECT i.waybill_id, nr.accepted_kg FROM load_group_items i JOIN nayman_receipts nr ON nr.waybill_id=i.waybill_id
+                     WHERE i.group_id=? ORDER BY i.added_at, i.waybill_id''', (d['group_id'],))
+        tot = sum(i['accepted_kg'] for i in items) or 1
+        for i in items:
+            k = i['accepted_kg'] / tot
+            out[i['waybill_id']] = dict(d, **{f: (d[f] or 0) * k for f in SHARED}, waybill_id=i['waybill_id'], share=k)
+    return out
 
 
 def overview(year):
@@ -254,9 +287,19 @@ def overview(year):
                  LEFT JOIN fields f ON f.id=tl.field_id LEFT JOIN pq17_docs p ON p.waybill_id=wb.id
                  WHERE wb.status<>'BEKOR' AND tl.status<>'BEKOR' AND wb.season_year=?
                  ORDER BY nr.received_date DESC, wb.id DESC""", (year,))
+    grp = {}
+    for d in q('''SELECT p.*, g.accepted_kg g_kg, g.number g_number, i.waybill_id wid FROM pq17_docs p
+                  JOIN load_groups g ON g.id=p.group_id JOIN load_group_items i ON i.group_id=g.id'''):
+        grp[d['wid']] = d
     rows = []
     for t in trips:
         r = dict(t)
+        gd = grp.get(r['id'])
+        if gd and not r['pq_id']:      # a trailer of an umumiy yuk: the group's PQ-17, checked on the group's total
+            r.update(pq_id=gd['id'], code=gd['code'], pq_load=gd['load_no'], netto=gd['netto'], kond_kg=gd['kond_kg'],
+                     deduction_kg=gd['deduction_kg'], dirt_pct=gd['dirt_pct'], moist_pct=gd['moist_pct'], price=gd['price'],
+                     amount=gd['amount'], pq_method=None, grade=gd['grade'], klass=gd['klass'], match_how=gd['match_how'],
+                     group=gd['g_number'], accepted_kg_row=r['accepted_kg'], accepted_kg=gd['g_kg'])
         if not r['pq_id']:
             r['state'] = 'kutilmoqda'
         else:
@@ -269,13 +312,13 @@ def overview(year):
             r['problems'] = problems
             r['state'] = 'farq' if problems else 'mos'
         rows.append(r)
-    orphans = q('SELECT * FROM pq17_docs WHERE waybill_id IS NULL ORDER BY doc_date DESC, id DESC')
+    orphans = q('SELECT * FROM pq17_docs WHERE waybill_id IS NULL AND group_id IS NULL ORDER BY doc_date DESC, id DESC')
     docs = q('SELECT * FROM pq17_docs')
     tot = {'n': len(docs), 'netto': sum(d['netto'] for d in docs), 'kond': sum(d['kond_kg'] for d in docs),
            'deduction': sum(d['deduction_kg'] - d['bonus_kg'] for d in docs), 'amount': sum(d['amount'] for d in docs),
            'mos': sum(1 for r in rows if r['state'] == 'mos'), 'farq': sum(1 for r in rows if r['state'] == 'farq'),
            'kutilmoqda': sum(1 for r in rows if r['state'] == 'kutilmoqda'), 'orphans': len(orphans),
-           'our_kg': sum(r['accepted_kg'] or 0 for r in rows)}
+           'our_kg': sum((r['accepted_kg_row'] if r.get('group') else r['accepted_kg']) or 0 for r in rows)}
     for m in (HAND, COMBINE):
         ds = [d for d in docs if d['method'] == m]
         tot[m] = {'n': len(ds), 'kond': sum(d['kond_kg'] for d in ds), 'amount': sum(d['amount'] for d in ds),
@@ -296,11 +339,13 @@ def period(dan, gacha):
                     COALESCE(SUM(p.deduction_kg - COALESCE(p.bonus_kg,0)),0) deduction,
                     SUM(p.netto * COALESCE(p.moist_pct,0)) / NULLIF(SUM(p.netto),0) moist,
                     SUM(p.netto * COALESCE(p.dirt_pct,0)) / NULLIF(SUM(p.netto),0) dirt,
-                    SUM(p.waybill_id IS NULL) unmatched,
-                    COALESCE(SUM(CASE WHEN p.waybill_id IS NOT NULL THEN nr.accepted_kg END),0) ours,
-                    COALESCE(SUM(CASE WHEN p.waybill_id IS NOT NULL THEN p.netto END),0) matched_netto,
-                    SUM(CASE WHEN p.waybill_id IS NOT NULL AND ABS(COALESCE(nr.accepted_kg,0) - p.netto) >= 0.5 THEN 1 ELSE 0 END) farq_n
-             FROM pq17_docs p LEFT JOIN nayman_receipts nr ON nr.waybill_id=p.waybill_id
+                    SUM(p.waybill_id IS NULL AND p.group_id IS NULL) unmatched,
+                    COALESCE(SUM(CASE WHEN p.waybill_id IS NOT NULL OR p.group_id IS NOT NULL
+                                      THEN COALESCE(g.accepted_kg, nr.accepted_kg) END),0) ours,
+                    COALESCE(SUM(CASE WHEN p.waybill_id IS NOT NULL OR p.group_id IS NOT NULL THEN p.netto END),0) matched_netto,
+                    SUM(CASE WHEN (p.waybill_id IS NOT NULL OR p.group_id IS NOT NULL)
+                              AND ABS(COALESCE(g.accepted_kg, nr.accepted_kg, 0) - p.netto) >= 0.5 THEN 1 ELSE 0 END) farq_n
+             FROM pq17_docs p LEFT JOIN nayman_receipts nr ON nr.waybill_id=p.waybill_id LEFT JOIN load_groups g ON g.id=p.group_id
              WHERE p.doc_date BETWEEN ? AND ?''', (dan, gacha), one=True)
     if not r or not r['n']:
         return None

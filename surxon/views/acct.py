@@ -145,9 +145,12 @@ def pq17_cluster(inn):
         abort(404)
     fin = queries.finance_summary(year)
     c['received'] = fin['received'] if len(P.clusters()) == 1 else None
-    docs = q("""SELECT p.*, tl.trip_no, nr.accepted_kg, tl.method our_method, wb.id wb_id FROM pq17_docs p
+    docs = q("""SELECT p.*, COALESCE(g.number, tl.trip_no) trip_no, COALESCE(g.accepted_kg, nr.accepted_kg) accepted_kg,
+                       CASE WHEN g.id IS NULL THEN tl.method END our_method,
+                       COALESCE(wb.id, (SELECT MIN(i.waybill_id) FROM load_group_items i WHERE i.group_id=g.id)) wb_id, g.number grp
+                FROM pq17_docs p
                 LEFT JOIN waybills wb ON wb.id=p.waybill_id LEFT JOIN trailer_loads tl ON tl.id=wb.load_id
-                LEFT JOIN nayman_receipts nr ON nr.waybill_id=wb.id
+                LEFT JOIN nayman_receipts nr ON nr.waybill_id=wb.id LEFT JOIN load_groups g ON g.id=p.group_id
                 WHERE COALESCE(p.cluster_inn, p.cluster_name, '?')=? ORDER BY p.doc_date DESC, p.id DESC""", (inn,))
     rows = []
     for d in docs:
@@ -472,6 +475,36 @@ def combines():
     return render_template('acct_combines.html', rows=rows, year=year, tariffs=A.TARIFF_TYPES,
                            fields=q('SELECT id, name FROM fields WHERE active=1 ORDER BY code'),
                            total={k: sum(r[k] for r in rows) for k in ('earned', 'paid', 'balance', 'kg')})
+
+
+@bp.get('/buxgalteriya/kombaynlar/<int:cid>')
+@perm_required('acct.view')
+def combine_statement(cid):
+    """One combine's season hisob-kitob for its owner: day by day, payments, what is left — and the PDF to sign."""
+    year = season_arg()
+    try:
+        st = A.combine_statement(year, cid)
+    except UserError:
+        abort(404)
+    return render_template('acct_combine.html', st=st, c=st['combine'], year=year, tariffs=A.TARIFF_TYPES)
+
+
+@bp.get('/buxgalteriya/kombaynlar/<int:cid>.pdf')
+@perm_required('acct.view')
+def combine_statement_pdf(cid):
+    from ..pdfdoc import build_combine_statement_pdf
+    from ..utils import now_str
+    year = season_arg()
+    try:
+        st = A.combine_statement(year, cid)
+    except UserError:
+        abort(404)
+    c = st['combine']
+    pdf = build_combine_statement_pdf(st, company=get_setting('company_name'), year=year,
+                                      tariff_name=A.TARIFF_TYPES.get(c['tariff_type'] or '', ''),
+                                      generated_at=now_str(), generated_by=g.user['full_name'])
+    return Response(pdf, mimetype='application/pdf', headers={
+        'Content-Disposition': f'inline; filename="kombayn_{c["code"]}_{year}.pdf"', 'Cache-Control': 'private, no-store'})
 
 
 # ------------------------------------------------------------------ cotton / punkt (read from field and punkt)

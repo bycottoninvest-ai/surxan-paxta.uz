@@ -14,7 +14,7 @@ from .config import BASE_DIR, Config
 from .security import (PERMISSIONS, ROLES, brigadier_scope, can, csrf_token, load_user, wants_json)
 from .utils import UserError, fmt_date, fmt_money, fmt_num, now_str, today_str, weekday_name
 
-VERSION = '2.22.2'
+VERSION = '2.23.0'
 
 
 def create_app(**overrides):
@@ -164,9 +164,10 @@ def now_str_safe():
 
 
 def register_template_helpers(app):
+    from .pdfdoc import _short_trip
     from .photos import CATEGORIES
 
-    app.jinja_env.filters.update(num=fmt_num, money=fmt_money, d=fmt_date, weekday=weekday_name,
+    app.jinja_env.filters.update(num=fmt_num, short_trip=_short_trip, money=fmt_money, d=fmt_date, weekday=weekday_name,
                                  tojson_safe=lambda v: json.dumps(v, ensure_ascii=False), fromjson=json.loads,
                                  mln=lambda v: (f'{v / 1e6:.2f}'.replace('.', ',') + ' mln') if v is not None and abs(v) >= 1e6 else fmt_num(v or 0))
 

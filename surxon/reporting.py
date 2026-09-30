@@ -259,11 +259,14 @@ def sheet_summary_rows(year=None):
 def sheet_pq17_rows():
     """PQ-17 sverka for Google Sheets: one row per state receipt, side by side with our trip (upsert on the PQ-17 code)."""
     out = []
-    for d in q('''SELECT p.*, tl.trip_no, nr.accepted_kg FROM pq17_docs p LEFT JOIN waybills wb ON wb.id=p.waybill_id
+    for d in q('''SELECT p.*, COALESCE(g.number, tl.trip_no) trip_no, COALESCE(g.accepted_kg, nr.accepted_kg) accepted_kg,
+                         COALESCE(p.waybill_id, p.group_id) linked
+                  FROM pq17_docs p LEFT JOIN waybills wb ON wb.id=p.waybill_id
                   LEFT JOIN trailer_loads tl ON tl.id=wb.load_id LEFT JOIN nayman_receipts nr ON nr.waybill_id=wb.id
+                  LEFT JOIN load_groups g ON g.id=p.group_id
                   ORDER BY p.doc_date, p.id'''):
-        diff = round((d['accepted_kg'] or 0) - d['netto'], 1) if d['waybill_id'] else ''
-        state = 'reys topilmadi' if not d['waybill_id'] else ('✓ mos' if abs(diff) < 0.5 else 'FARQ')
+        diff = round((d['accepted_kg'] or 0) - d['netto'], 1) if d['linked'] else ''
+        state = 'reys topilmadi' if not d['linked'] else ('✓ mos' if abs(diff) < 0.5 else 'FARQ')
         out.append([d['code'], d['doc_date'] or '', d['load_no'] or '', d['cluster_name'] or '',
                     {'hand': 'Qo‘l', 'combine': 'Kombayn'}.get(d['method'], d['harvest_raw'] or ''), d['netto'], d['moist_pct'],
                     d['dirt_pct'], d['deduction_kg'] - (d['bonus_kg'] or 0), d['kond_kg'], d['price'], d['amount'],

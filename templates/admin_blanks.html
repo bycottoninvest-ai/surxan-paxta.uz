@@ -19,6 +19,18 @@
       <td><a class="btn btn-light btn-sm" href="{{ url_for('admin.blanks_pdf', batch=bt.batch) }}" target="_blank">{{ icon('printer','sm') }} PDF</a></td></tr>{% endfor %}
     </tbody></table></div>{% endif %}
   </div></section>
+  <section class="card s4"><div class="card-h"><h3>Umumiy nakladnoy (UY)</h3></div><div class="card-b">
+    <p class="small">Bitta traktor bir nechta telashkani olib borganda punktga kiradigan <b>yagona</b> hujjat. Yunusda turadi: blanklarni skanerlaydi, jami kg ni UY ga yozadi.</p>
+    <form method="post" action="{{ url_for('admin.group_blanks_create') }}" class="form">{{ csrf() }}
+      <div class="f h"><label>Birinchi raqam</label><input class="input" name="start" value="{{ uy.next }}" inputmode="numeric" style="font-size:20px"><span class="tiny muted">UY-{{ '%04d'|format(uy.next) }} dan (1–7 qog‘ozda ishlatilgan)</span></div>
+      <div class="f h"><label>Nechta UY varaq?</label><input class="input" name="count" value="200" inputmode="numeric" style="font-size:20px" required></div>
+      <div class="f"><button class="btn btn-primary btn-block">UY varaqlarni yaratish</button></div></form>
+    {% if uy.batches %}<div class="table-wrap"><table class="t"><thead><tr><th>To‘plam</th><th>Raqamlar</th><th class="num">Soni</th><th></th></tr></thead><tbody>
+    {% for bt in uy.batches %}<tr {% if new_uy == bt.batch %}style="background:#ecfdf5"{% endif %}><td>{{ bt.batch }}</td><td>{{ bt.a }} … {{ bt.b }}</td><td class="num">{{ bt.n }}</td>
+      <td><a class="btn btn-light btn-sm" href="{{ url_for('admin.group_blanks_pdf', batch=bt.batch) }}" target="_blank">{{ icon('printer','sm') }} PDF</a></td></tr>{% endfor %}
+    </tbody></table></div>{% endif %}
+    {% if uy.received %}<b class="small">Oxirgi umumiy yuklar</b>{% for g in uy.received[:15] %}<div class="small"><a class="link" href="{{ url_for('punkt.group', token=g.token) }}">{{ g.number }}</a> · {{ g.n }} ta · {{ {'OCHIQ': 'ochiq', 'YUBORILDI': 'punktga kirdi', 'QABUL': 'qabul ' ~ (g.accepted_kg|num) ~ ' kg', 'BEKOR': 'bekor'}.get(g.status, g.status) }}</div>{% endfor %}{% endif %}
+  </div></section>
   <section class="card s8"><div class="card-h"><h3>Sverka: qaysi blank qaysi reysga</h3></div><div class="card-b">
     <div class="kpis" style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px">
       <a class="btn btn-sm {{ 'btn-primary' if show == 'hammasi' else 'btn-light' }}" href="{{ url_for('admin.blanks') }}">Hammasi {{ ov.total }}</a>

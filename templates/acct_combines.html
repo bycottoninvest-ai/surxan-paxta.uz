@@ -10,13 +10,14 @@
 <div class="small muted mb">Texnikani boshqarish “Texnikalar” bo‘limida. Bu yerda faqat moliya: tarif, ish hajmi, hisob va to‘lov. Tarif o‘zgarsa, oldin yozilgan ish eski tarifida qoladi.</div>
 {% for c in rows %}
 <div class="m-card a-comb">
-  <div class="row"><b class="a-name">{{ c.code }}</b><span class="small muted">{{ c.operator_name or 'egasi/operator —' }}</span><span class="spacer"></span>
+  <div class="row"><a class="a-name b" href="{{ url_for('acct.combine_statement', cid=c.id, season=year) }}">{{ c.code }} ›</a><span class="small muted">{{ c.operator_name or 'egasi/operator —' }}</span><span class="spacer"></span>
     {% if c.tariff_type %}<span class="badge b-blue">{{ tariffs[c.tariff_type] }}: {{ c.tariff_rate|num }} so‘m</span>{% else %}<span class="badge b-red">Tarif yo‘q</span>{% endif %}</div>
   <div class="small muted">{{ c.fields or 'dala —' }} · {{ c.tonnes|num(2) }} t{% if c.work_days %} · {{ c.work_days|num }} kun{% endif %}{% if c.hectares %} · {{ c.hectares|num(1) }} ga{% endif %}{% if c.uncalc_kg %} · {{ c.uncalc_kg|num }} kg tarifsiz{% endif %}</div>
   <div class="small"><span class="badge {{ 'b-green' if c.own else 'b-orange' }}">{{ 'O‘zimizniki' if c.own else 'Tashqi (ijaraga / xizmat)' }}</span>
     · terildi {{ c.kg|num }} kg · salarka (mavsum) {{ c.fuel_l|num }} L</div>
   <div class="a-nums"><div><span>Hisoblangan</span><b class="num">{{ c.earned|num }}</b></div><div><span>To‘langan</span><b class="num">{{ c.paid|num }}</b></div>
     <div><span>Kutilmoqda</span><b class="num">{{ c.pending|num }}</b></div><div class="{{ 'neg' if c.balance < 0 }}"><span>Qoldiq</span><b class="num">{{ c.balance|num }}</b></div></div>
+  <a class="btn btn-block mt-s" href="{{ url_for('acct.combine_statement', cid=c.id, season=year) }}">📄 Kunma-kun hisob-kitob va PDF</a>
   {% if c.payable > 0 and can('payouts.prepare') %}
   <form method="post" action="{{ url_for('acct.payout_prepare') }}" data-confirm="{{ c.code }}: {{ c.payable|num }} so‘m to‘lovga tayyorlansinmi?">{{ csrf() }}{{ uuid_field() }}
     <input type="hidden" name="kind" value="combine"><input type="hidden" name="target_id" value="{{ c.id }}"><input type="hidden" name="next" value="{{ request.path }}">

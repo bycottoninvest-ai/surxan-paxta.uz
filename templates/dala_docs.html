@@ -15,7 +15,7 @@
   </div>
   {% if ld.waybill_status == 'YARATILDI' and not ld.arrived_at %}
   <form method="post" action="{{ url_for('dala.resume', load_id=ld.id) }}" class="d-resume" data-confirm="Telashka yana ochilsinmi? Tortishni davom ettirasiz, nakladnoy raqami o‘zgarmaydi.">{{ csrf() }}
-    <button class="btn btn-light btn-block">↩ Telashka hali to‘lmaganmi? (tushlik, tanaffus) — Davom ettirish</button></form>{% endif %}
+    <button class="btn btn-light btn-block" style="white-space:normal;height:auto;padding:12px;line-height:1.3;flex-direction:column;gap:2px"><b>↩ Davom ettirish</b><span class="small muted">Telashka hali to‘lmagan bo‘lsa (tushlik, tanaffus)</span></button></form>{% endif %}
   {% set doc_url = url_for('dala.workers_pdf', load_id=ld.id) %}{% set doc_file = (ld.trip_no or ld.id)|string ~ '_ishchilar_hisoboti.pdf' %}
   {% set doc_title = 'Kombayn hisoboti (ichki)' if ld.method == 'combine' else 'Ishchilar hisoboti (ichki)' %}{% set doc_sub = 'Ism · kg · narx · summa — punktga berilmaydi' %}
   {% include 'partials/doc_card.html' %}

@@ -9,7 +9,7 @@ from .. import queries
 from ..db import q
 from ..photos import read_upload
 from ..scale import scale_reading
-from ..security import perm_required
+from ..security import perm_required, wants_json
 from ..services import (OTHER_REASON, STATION_DIFF_REASONS, after_waybill_change, diff_level, mark_arrived,
                         receive_at_station)
 from ..settings import get_float
@@ -50,7 +50,9 @@ def home():
     today = today_str()
     from ..transit import on_the_way
     etas = {d['wb_id']: d for d in on_the_way(sid) if d['eta']}
+    from ..groups import who
     return render_template('punkt_home.html', station=station, stations=_stations(), sid=sid, etas=etas,
+                           who=who([t['id'] for t in trips]),
                            counts=queries.station_counts(sid, today),
                            on_way=[t for t in trips if not t['arrived_at']], arrived=[t for t in trips if t['arrived_at']],
                            received=queries.station_trips(sid, state='received', day=today, limit=50))
@@ -249,3 +251,115 @@ def scale_read():
         return jsonify(ok=True, **scale_reading())
     except UserError as e:
         return jsonify(ok=False, error=str(e))
+
+
+# ------------------------------------------------------------------ umumiy yuk (several trailers weighed once)
+
+@bp.get('/uy')
+@perm_required('station.view')
+def groups_home():
+    """Start: scan the UY paper's QR (or type its number); open / sent groups of this punkt to continue."""
+    from .. import groups as G
+    code = (request.args.get('q') or '').strip()
+    if code:
+        g0 = G.find(code)
+        if not g0:
+            flash('Bunday umumiy nakladnoy (UY) topilmadi.', 'error')
+        else:
+            return redirect(url_for('punkt.group', token=g0['token']))
+    return render_template('punkt_groups.html', active=G.active(my_station()))
+
+
+@bp.get('/uy/<token>')
+@perm_required('station.view')
+def group(token):
+    """Target of the QR on the UY paper: opens it (first scan) and shows the step it is at."""
+    from .. import groups as G
+    from ..security import can, current_actor
+    g0 = G.find(token)
+    if not g0:
+        abort(404)
+    if g.user['role'] == 'station' and g0['station_id'] and g0['station_id'] != my_station():
+        abort(403)
+    if g0['status'] == 'BOSH' and can('station.receive'):
+        g0 = G.open_group(current_actor(), token)
+    d = G.detail(g0['id'])
+    return render_template('punkt_group.html', g=d['group'], items=d['items'], sent_kg=d['sent_kg'],
+                           cands=G.candidates(my_station()) if d['group']['status'] == 'OCHIQ' else [],
+                           reasons=STATION_DIFF_REASONS, other_reason=OTHER_REASON, warn=get_float('punkt_warn_pct', 1),
+                           alert=get_float('punkt_alert_pct', 3), pick_blank=request.args.get('blanka', ''))
+
+
+@bp.post('/uy/<int:gid>/qosh')
+@perm_required('station.receive')
+def group_add(gid):
+    from .. import groups as G
+    g0 = G.get(gid)
+    actor = post_actor()
+    code = (request.form.get('code') or '').strip()
+    wid = parse_int(request.form.get('waybill_id'), 'Telashka', required=False)
+    try:
+        trip = G.add_blank(actor, gid, code, wid) if code else G.add_trip(actor, gid, wid)
+    except UserError as e:
+        if code and 'biriktirilmagan' in str(e):     # a blank not scanned in the field: pick its trailer once
+            from .. import blanks as BL
+            b = BL.find(code)
+            url = url_for('punkt.group', token=g0['token'], blanka=b['number'] if b else code)
+            if wants_json():
+                return jsonify(ok=False, error=str(e), need_trip=True, redirect=url)
+            flash(str(e), 'error')
+            return redirect(url)
+        raise
+    d = G.detail(gid)
+    return done(f'✓ {trip} qo‘shildi · {len(d["items"])} ta telashka · jami {d["sent_kg"]:,.0f} kg'.replace(',', ' '),
+                url_for('punkt.group', token=g0['token']), n=len(d['items']), kg=d['sent_kg'])
+
+
+@bp.post('/uy/<int:gid>/olib')
+@perm_required('station.receive')
+def group_remove(gid):
+    from .. import groups as G
+    g0 = G.get(gid)
+    G.remove(post_actor(), gid, parse_int(request.form.get('waybill_id'), 'Telashka'))
+    return done('Ro‘yxatdan olib tashlandi.', url_for('punkt.group', token=g0['token']))
+
+
+@bp.post('/uy/<int:gid>/yopish')
+@perm_required('station.receive')
+def group_close(gid):
+    from .. import groups as G
+    g0 = G.close(post_actor(), gid)
+    return done('Ro‘yxat yopildi — endi UY varaqqa telashkalar soni va jami kg ni yozing.', url_for('punkt.group', token=g0['token']))
+
+
+@bp.post('/uy/<int:gid>/ochish')
+@perm_required('station.receive')
+def group_reopen(gid):
+    from .. import groups as G
+    G.reopen(post_actor(), gid)
+    return done('Ro‘yxat qayta ochildi.', url_for('punkt.group', token=G.get(gid)['token']))
+
+
+@bp.post('/uy/<int:gid>/qabul')
+@perm_required('station.receive')
+def group_receive(gid):
+    from .. import groups as G
+    actor = post_actor()
+    max_kg = get_float('max_gross_kg', 40000)
+    if request.form.get('mode') == 'netto' or not request.form.get('gross_kg'):
+        gross = tare = None
+        kg = parse_number(request.form.get('station_kg'), 'Punkt netto (kg)', max_value=max_kg)
+    else:
+        gross = parse_number(request.form.get('gross_kg'), 'Brutto (kg)', max_value=max_kg)
+        tare = parse_number(request.form.get('tare_kg'), 'Tara (kg)', max_value=max_kg, allow_zero=True)
+        kg = None
+    res = G.receive(actor, gid, gross_kg=gross, tare_kg=tare, station_kg=kg, load_no=request.form.get('load_no', ''),
+                    reason=request.form.get('reason', ''), note=request.form.get('note', ''),
+                    photo=read_upload(request.files.get('photo')))
+    g0 = res['group']
+    if res['already']:
+        return done(f'{g0["number"]} allaqachon qabul qilingan — ikkinchi marta yozilmadi.', url_for('punkt.group', token=g0['token']))
+    for it in G.detail(gid)['items']:
+        after_waybill_change(actor, it['waybill_id'], f'punktda qabul qilindi ({g0["number"]})')
+    return done(f'QABUL QILINDI: {g0["number"]} · punkt {g0["accepted_kg"]:g} kg · farq {res["diff_kg"]:+g} kg ({res["diff_pct"]:+.2f}%)',
+                url_for('punkt.group', token=g0['token']), diff_kg=res['diff_kg'], level=res['level'])

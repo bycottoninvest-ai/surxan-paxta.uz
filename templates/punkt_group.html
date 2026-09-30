@@ -1,0 +1,109 @@
+{% extends 'base.html' %}
+{% from 'macros.html' import icon, csrf with context %}
+{% set page_title = g.number %}
+{% macro item(it, removable=False) %}
+<div class="uy-it"><div class="uy-l"><b>{{ it.blank or 'blanksiz' }} · {{ it.trailer }}</b>
+  <span class="uy-tag {{ 'k' if it.method == 'combine' or it.combines else 'h' }}">{{ it.owner }}</span>
+  <span class="tiny muted">{{ it.trip_no }} · {{ it.field_name or it.field_code }}</span></div>
+  <div class="uy-r"><b>{{ it.net_kg|num }}</b>{% if it.accepted_kg is not none %}<span class="tiny">punkt <b>{{ it.accepted_kg|num }}</b></span>{% endif %}
+  {% if removable and can('station.receive') %}<form method="post" action="{{ url_for('punkt.group_remove', gid=g.id) }}" data-confirm="{{ it.trip_no }} ro‘yxatdan olinsinmi?">{{ csrf() }}<input type="hidden" name="waybill_id" value="{{ it.waybill_id }}"><button class="btn btn-ghost btn-sm">×</button></form>{% endif %}</div>
+</div>{% endmacro %}
+{% block content %}
+<div class="d-wrap">
+  <div class="d-top"><a class="icon-btn" href="{{ url_for('punkt.groups_home') }}">{{ icon('chev-left') }}</a><h1 class="d-h1">{{ g.number }}</h1></div>
+{% if g.status == 'OCHIQ' %}
+  <p class="small muted">Haydovchi bergan blanklarni birma-bir skanerlang — ro‘yxat o‘zi to‘ladi.</p>
+  {% if can('station.receive') %}
+  <div class="p-cam"><video id="cam" playsinline muted></video><div class="p-frame"></div></div>
+  <div class="small mt-s" id="cam-msg">Kamera ochilmoqda…</div>
+  <form method="post" action="{{ url_for('punkt.group_add', gid=g.id) }}" class="row mt-s" style="gap:6px" id="uy-add">{{ csrf() }}
+    <input name="code" placeholder="PB-0012" autocomplete="off" style="flex:1" value="{{ pick_blank }}"><button class="btn btn-light">Qo‘shish</button></form>
+  {% if pick_blank %}<div class="notice">{{ pick_blank }} dalada telashkaga biriktirilmagan. Qaysi telashkaniki? Bir marta tanlang:</div>
+  <form method="post" action="{{ url_for('punkt.group_add', gid=g.id) }}" class="uy-pick">{{ csrf() }}<input type="hidden" name="code" value="{{ pick_blank }}">
+    {% for c in cands if not c.blank %}<button class="pk-card" name="waybill_id" value="{{ c.id }}"><div class="pk-body"><b>{{ c.trailer }} · {{ c.trip_no }}</b><span class="small">{{ c.field_code }} · {{ c.net_kg|num }} kg</span></div></button>
+    {% else %}<div class="small muted">Blanksiz telashka yo‘lda yo‘q.</div>{% endfor %}</form>{% endif %}
+  {% endif %}
+  <div class="uy-list">{% for it in items %}{{ item(it, True) }}{% else %}<div class="small muted">Hali telashka yo‘q.</div>{% endfor %}</div>
+  <div class="uy-tot"><span>{{ items|length }} ta telashka · jami</span><b>{{ sent_kg|num }} kg</b></div>
+  {% if can('station.receive') %}
+  {% set loose = cands|rejectattr('blank')|list %}
+  {% if loose and not pick_blank %}<details class="mt-s" open><summary class="small link">Blanksiz telashka qo‘shish ({{ loose|length }}) — bosing, ro‘yxatga tushadi</summary>
+    <form method="post" action="{{ url_for('punkt.group_add', gid=g.id) }}" class="uy-pick">{{ csrf() }}
+    {% for c in loose %}<button class="pk-card" name="waybill_id" value="{{ c.id }}"><div class="pk-body"><b>{{ c.trailer }} · {{ c.trip_no }}</b><span class="small">{{ c.field_code }} · {{ c.net_kg|num }} kg</span></div></button>{% endfor %}</form></details>{% endif %}
+  <form method="post" action="{{ url_for('punkt.group_close', gid=g.id) }}">{{ csrf() }}<button class="btn btn-primary btn-block d-big" {{ 'disabled' if not items }}>Hammasi shu — yopish ›</button></form>
+  {% endif %}
+{% elif g.status == 'YUBORILDI' %}
+  <div class="uy-write"><div class="small muted">UY varaqqa shularni yozing:</div>
+    <div class="uy-w"><span>Telashkalar soni</span><b>{{ items|length }} ta</b></div>
+    <div class="uy-w big"><span>JAMI JO‘NATILGAN</span><b>{{ sent_kg|num }} kg</b></div></div>
+  <div class="uy-list">{% for it in items %}{{ item(it) }}{% endfor %}</div>
+  {% if can('station.receive') %}
+  <form method="post" action="{{ url_for('punkt.group_reopen', gid=g.id) }}" class="mt-s">{{ csrf() }}<button class="btn btn-ghost btn-sm">↩ Ro‘yxatni qayta ochish</button></form>
+  <h2 class="d-h1 mt">Punktdan chiqdi: klaster yozgan kg</h2>
+  <form method="post" action="{{ url_for('punkt.group_receive', gid=g.id) }}" enctype="multipart/form-data" class="d-form" id="uy-rcv" data-sent="{{ sent_kg }}" data-warn="{{ warn }}">
+    {{ csrf() }}
+    <label class="d-l">Brutto (kg)</label><input name="gross_kg" id="uy-g" inputmode="decimal" class="d-num" autocomplete="off">
+    <label class="d-l">Tara (kg)</label><input name="tare_kg" id="uy-t" inputmode="decimal" class="d-num" autocomplete="off">
+    <label class="d-l">Yuk xati № <span class="tiny muted">(punkt tarozisi chekidagi raqam)</span></label><input name="load_no" inputmode="numeric" class="d-num" autocomplete="off">
+    <div class="uy-net" id="uy-net" hidden></div>
+    <div id="uy-reason" hidden><label class="d-l">Farq sababi</label>
+      {% for r in reasons %}<label class="d-radio"><input type="radio" name="reason" value="{{ r }}"><span>{{ r }}</span></label>{% endfor %}
+      <input name="note" placeholder="Izoh (Boshqa sabab bo‘lsa majburiy)"></div>
+    <label class="file-drop d-photo"><input type="file" name="photo" accept="image/*" capture="environment" data-preview required>{{ icon('camera','lg') }}<b>Muhrlangan UY varaqni rasmga olish</b><span class="tiny muted">majburiy</span><div class="previews"></div></label>
+    <button class="btn btn-green btn-block d-big">✓ Saqlash — tizim o‘zi bo‘ladi</button>
+  </form>{% endif %}
+{% else %}
+  <div class="d-ok">{{ icon('check-circle','lg') }}<b>{{ items|length }} ta telashka qabul qilindi</b><span class="small">{{ g.number }}{% if g.load_no %} · yuk xati {{ g.load_no }}{% endif %}</span></div>
+  <div class="pk-res"><div><span>Punkt netto</span><b class="pk-green">{{ g.accepted_kg|num }} kg</b></div>
+    <div><span>Farq</span><b class="{{ 'pk-red' if (g.diff_kg or 0) < 0 else 'pk-green' }}">{{ '%+.0f'|format(g.diff_kg or 0) }} kg</b></div>
+    <div class="tiny muted">Jo‘natilgan {{ g.sent_kg|num }} kg{% if g.gross_kg is not none %} · brutto {{ g.gross_kg|num }} − tara {{ g.tare_kg|num }}{% endif %}{% if g.diff_reason %} · {{ g.diff_reason }}{% endif %}</div></div>
+  <div class="small muted">Har bir telashkaga dala kg iga qarab bo‘lindi:</div>
+  <div class="uy-list">{% for it in items %}{{ item(it) }}{% endfor %}</div>
+  <a class="btn btn-primary btn-block d-big" href="{{ url_for('punkt.home') }}">Keyingi telashka ›</a>
+{% endif %}
+</div>
+<style>
+.uy-list{display:flex;flex-direction:column;gap:8px;margin:10px 0}
+.uy-it{display:flex;justify-content:space-between;gap:10px;background:#fff;border-radius:14px;padding:10px 12px;border:1px solid var(--line,#e5e7eb)}
+.uy-l{display:flex;flex-direction:column;gap:3px;min-width:0}.uy-r{display:flex;flex-direction:column;align-items:flex-end;gap:2px}.uy-r b{font-size:18px}
+.uy-tag{align-self:flex-start;font-size:12px;font-weight:700;padding:1px 8px;border-radius:99px}.uy-tag.k{background:#fff7ed;color:#c2410c}.uy-tag.h{background:#ecfdf5;color:#15803d}
+.uy-tot{display:flex;justify-content:space-between;background:#e0ecff;border-radius:12px;padding:12px 14px;font-weight:800;font-size:16px;margin-bottom:10px}
+.uy-write{background:#fff;border:2px solid #0a2c5a;border-radius:14px;padding:12px 14px;margin:8px 0}.uy-w{display:flex;justify-content:space-between;padding:6px 0;font-size:16px}.uy-w.big b{font-size:26px}
+.uy-pick{display:flex;flex-direction:column;gap:6px;margin:8px 0}.uy-pick .pk-card{text-align:left;width:100%}
+.uy-net{background:#dcfce7;color:#15803d;border-radius:12px;padding:10px 12px;font-weight:800;font-size:18px;margin:8px 0}
+</style>
+{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='js/qrscan.js') }}?v={{ version }}"></script><script>
+(() => {
+  const cam = document.getElementById('cam');
+  if (cam) {
+    const msg = document.getElementById('cam-msg'), form = document.getElementById('uy-add');
+    let busy = false;
+    spxQrScan(cam, msg, t => {
+      const s = String(t);
+      if (busy) return false;
+      if (/\/punkt\/uy\//.test(s)) { msg.textContent = 'Bu UY varaqning o‘zi. Endi telashka blanklarini skanerlang.'; return false; }
+      if (!/\/punkt\/blanka\/|PB-\d+/i.test(s)) { msg.textContent = 'Bu QR telashka blanki emas.'; return false; }
+      busy = true;
+      const fd = new FormData(form); fd.set('code', s);
+      fetch(form.action, {method: 'POST', body: fd, headers: {'X-Requested-With': 'fetch'}}).then(r => r.json()).then(j => {
+        if (j.ok) { location.reload(); return; }
+        if (j.need_trip && j.redirect) { location.href = j.redirect; return; }
+        msg.innerHTML = '⛔ ' + (j.error || j.message || 'Xato'); msg.style.color = '#b91c1c'; busy = false;
+      }).catch(() => { msg.textContent = 'Internet yo‘q — qayta urinib ko‘ring.'; busy = false; });
+      return false;
+    }, {{ url_for('static', filename='vendor/jsqr/jsQR.min.js')|tojson }});
+  }
+  const f = document.getElementById('uy-rcv');
+  if (f) {
+    const g = document.getElementById('uy-g'), t = document.getElementById('uy-t'), out = document.getElementById('uy-net'), rs = document.getElementById('uy-reason');
+    const sent = +f.dataset.sent, warn = +f.dataset.warn;
+    const upd = () => { const gv = parseFloat((g.value || '').replace(/\s/g, '').replace(',', '.')), tv = parseFloat((t.value || '').replace(/\s/g, '').replace(',', '.'));
+      if (!(gv > tv)) { out.hidden = true; rs.hidden = true; return; }
+      const n = Math.round((gv - tv) * 10) / 10, d = Math.round((n - sent) * 10) / 10, p = sent ? d / sent * 100 : 0;
+      out.hidden = false; out.textContent = 'Netto: ' + n.toLocaleString('ru-RU') + ' kg · farq ' + (d > 0 ? '+' : '') + d + ' kg (' + p.toFixed(2) + '%)';
+      rs.hidden = Math.abs(p) < warn; };
+    g.oninput = t.oninput = upd;
+  }
+})();
+</script>{% endblock %}

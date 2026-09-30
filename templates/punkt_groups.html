@@ -1,0 +1,24 @@
+{% extends 'base.html' %}
+{% from 'macros.html' import icon with context %}
+{% set page_title = 'Umumiy yuk' %}
+{% block content %}
+<div class="d-wrap">
+  <div class="d-top"><a class="icon-btn" href="{{ url_for('punkt.home') }}">{{ icon('chev-left') }}</a><h1 class="d-h1">Umumiy yuk (UY)</h1></div>
+  <p class="small muted">Traktor bir nechta telashka bilan keldimi? Toza <b>UY varaqning</b> QR kodini skanerlang — keyin telashkalarning blanklarini birma-bir skanerlaysiz.</p>
+  <div class="p-cam"><video id="cam" playsinline muted></video><div class="p-frame"></div></div>
+  <div class="small muted mt-s" id="cam-msg">Kamera ochilmoqda…</div>
+  <form class="p-find mt" method="get"><label for="p-q">Yoki UY raqamini yozing</label>
+    <div class="row"><input id="p-q" name="q" autocomplete="off" placeholder="UY-0001" required><button class="btn btn-primary">{{ icon('search','sm') }}</button></div></form>
+  {% if active %}<h3 class="d-h3">Davom ettirish</h3>
+  {% for a in active %}<a class="pk-card" href="{{ url_for('punkt.group', token=a.token) }}"><div class="pk-body"><b>{{ a.number }}</b>
+    <span class="small">{{ a.n }} ta telashka · {{ a.kg|num }} kg · {{ 'ro‘yxat ochiq' if a.status == 'OCHIQ' else 'punktga kirdi — kg kutilmoqda' }}</span></div></a>{% endfor %}{% endif %}
+</div>
+{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='js/qrscan.js') }}?v={{ version }}"></script><script>
+spxQrScan(document.getElementById('cam'), document.getElementById('cam-msg'), t => {
+  const s = String(t), m = s.match(/\/punkt\/uy\/([^/?#]+)/);
+  if (m) { location.href = {{ url_for('punkt.groups_home')|tojson }} + '/' + m[1]; return true; }
+  if (/\/punkt\/blanka\//.test(s)) { document.getElementById('cam-msg').textContent = 'Bu telashka blanki. Avval UY varaqning QR ini skanerlang.'; return false; }
+  document.getElementById('cam-msg').textContent = 'Bu QR UY varaqniki emas.'; return false;
+}, {{ url_for('static', filename='vendor/jsqr/jsQR.min.js')|tojson }});
+</script>{% endblock %}

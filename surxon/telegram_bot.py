@@ -559,8 +559,9 @@ def _on_pq17(chat, actor, doc, data=None):
              f'Namlik {d["moist_pct"]}% · ifloslik {d["dirt_pct"]}%',
              f'Narx {d["price"]:,.2f} · summa {d["amount"]:,.0f} so‘m'.replace(',', ' ')]
     if how:
-        wb = q('''SELECT tl.trip_no, nr.accepted_kg FROM pq17_docs p JOIN waybills wb ON wb.id=p.waybill_id
-                  JOIN trailer_loads tl ON tl.id=wb.load_id JOIN nayman_receipts nr ON nr.waybill_id=wb.id WHERE p.code=?''',
+        wb = q('''SELECT COALESCE(g.number, tl.trip_no) trip_no, COALESCE(g.accepted_kg, nr.accepted_kg) accepted_kg
+                  FROM pq17_docs p LEFT JOIN waybills wb ON wb.id=p.waybill_id LEFT JOIN trailer_loads tl ON tl.id=wb.load_id
+                  LEFT JOIN nayman_receipts nr ON nr.waybill_id=wb.id LEFT JOIN load_groups g ON g.id=p.group_id WHERE p.code=?''',
                (d['code'],), one=True)
         diff = abs((wb['accepted_kg'] or 0) - d['netto']) >= 0.5
         lines.append(f'Reys: {wb["trip_no"]} ({how})' + (f' — ⚠ FARQ: bizda {fmt_num(wb["accepted_kg"])} kg!' if diff else ' — ✓ mos'))

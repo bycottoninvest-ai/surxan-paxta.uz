@@ -289,7 +289,8 @@ def blanks():
     elif show == 'otkazilgan':
         rows = ov['skipped']
     return render_template('admin_blanks.html', ov=ov, rows=rows[:1000], show=show, new_batch=request.args.get('yangi', type=int),
-                           receiver=_blank_receiver(), receiver_set=bool(get_setting('blank_receiver')))
+                           receiver=_blank_receiver(), receiver_set=bool(get_setting('blank_receiver')),
+                           uy=__import__('surxon.groups', fromlist=['overview']).overview(), new_uy=request.args.get('uy', type=int))
 
 
 def _blank_receiver():
@@ -312,6 +313,28 @@ def blanks_pdf(batch):
                            receiver=_blank_receiver(), copies=1 if request.args.get('nusxa') == '1' else 2)
     return Response(pdf, mimetype='application/pdf', headers={
         'Content-Disposition': f'inline; filename="punkt_blanklari_{rows[0]["number"]}_{rows[-1]["number"]}.pdf"',
+        'Cache-Control': 'private, no-store'})
+
+
+@bp.post('/uy-blankalar')
+@perm_required('masterdata.write')
+def group_blanks_create():
+    from .. import groups as G
+    batch, a, b = G.create_batch(post_actor(), request.form.get('count'), request.form.get('start'))
+    return done(f'{a} … {b} umumiy nakladnoy (UY) tayyor. Endi PDF’ni chop eting.', url_for('admin.blanks', uy=batch))
+
+
+@bp.get('/uy-blankalar/<int:batch>.pdf')
+@perm_required('masterdata.write')
+def group_blanks_pdf(batch):
+    from ..pdfdoc import build_group_blanks_pdf
+    rows = q('SELECT * FROM load_groups WHERE batch=? ORDER BY id', (batch,))
+    if not rows:
+        abort(404)
+    pdf = build_group_blanks_pdf(rows, company=get_setting('company_name'), domain=current_app.config['SURXON'].DOMAIN,
+                                 receiver=_blank_receiver(), copies=1 if request.args.get('nusxa') == '1' else 2)
+    return Response(pdf, mimetype='application/pdf', headers={
+        'Content-Disposition': f'inline; filename="umumiy_nakladnoy_{rows[0]["number"]}_{rows[-1]["number"]}.pdf"',
         'Cache-Control': 'private, no-store'})
 
 

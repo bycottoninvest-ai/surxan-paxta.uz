@@ -1,0 +1,30 @@
+{% extends 'base.html' %}
+{% from 'macros.html' import icon with context %}
+{% set page_title = c.code ~ ' · hisob-kitob' %}
+{% block content %}
+<div class="page-h"><a class="icon-btn no-print" href="{{ url_for('acct.combines', season=year) }}">{{ icon('chev-left') }}</a><h1>{{ c.code }} · {{ c.owner }}</h1></div>
+<div class="small muted mb">{{ year }} mavsum · {% if c.tariff_type %}{{ tariffs[c.tariff_type] }}: {{ c.tariff_rate|num }} so‘m{% else %}tarif yo‘q{% endif %}
+  · {{ 'O‘zimizniki' if c.own else 'Tashqi (xizmat)' }}</div>
+<div class="m-tiles"><div class="m-tile"><span>Dala kg</span><b class="num">{{ st.kg|num }}</b></div>
+  <div class="m-tile"><span>Punkt kg</span><b class="num">{{ st.punkt_kg|num }}</b></div>
+  <div class="m-tile"><span>Hisoblangan</span><b class="num">{{ c.earned|num }}</b></div>
+  <div class="m-tile"><span>To‘langan</span><b class="num">{{ c.paid|num }}</b></div></div>
+<div class="m-card"><div class="row"><b>{{ 'Qoldiq — to‘lanadi' if c.balance >= 0 else 'Ortiqcha to‘langan' }}</b><span class="spacer"></span>
+  <b class="num" style="font-size:1.35rem">{{ c.balance|abs|num }} so‘m</b></div>
+  <a class="btn btn-primary btn-block btn-lg mt-s" href="{{ url_for('acct.combine_statement_pdf', cid=c.id, season=year) }}" target="_blank">📄 Hisob-kitob PDF (egasiga berish)</a></div>
+<h2 class="mt">Kunma-kun</h2>
+<div class="table-wrap"><table class="table">
+  <thead><tr><th>Sana</th><th>Dala</th><th>Reyslar</th><th class="r">Dala kg</th><th class="r">Punkt kg</th><th class="r">Summa</th></tr></thead>
+  <tbody>{% for d in st.days %}<tr><td>{{ d.date[8:10] }}.{{ d.date[5:7] }}</td><td>{{ d.fields|join(', ') }}</td>
+    <td class="small">{% for t in d.trips %}№{{ t|short_trip }}{{ ', ' if not loop.last }}{% else %}{{ d.work }}{% endfor %}</td><td class="r num">{{ d.kg|num }}</td>
+    <td class="r num">{{ d.punkt_kg|num if d.punkt_kg else '—' }}</td><td class="r num">{{ d.amount|num }}{% if d.uncalc_kg %} *{% endif %}</td></tr>
+  {% else %}<tr><td colspan="6" class="muted">Bu mavsumda terim yozilmagan.</td></tr>{% endfor %}</tbody>
+  <tfoot><tr><th colspan="3">Jami</th><th class="r num">{{ st.kg|num }}</th><th class="r num">{{ st.punkt_kg|num }}</th><th class="r num">{{ c.earned|num }}</th></tr></tfoot>
+</table></div>
+{% if st.waiting_kg %}<div class="small muted">Punktda hali qabul qilinmagan: {{ st.waiting_kg|num }} kg.</div>{% endif %}
+<div class="small muted">Bir nechta telashka birga tortilsa (UY), punkt nettosi telashkalarga dala kg bo‘yicha bo‘linadi.</div>
+<h2 class="mt">To‘lovlar</h2>
+<div class="table-wrap"><table class="table"><thead><tr><th>Sana</th><th>Hujjat</th><th>Izoh</th><th class="r">Summa</th></tr></thead>
+  <tbody>{% for p in st.payments %}<tr><td>{{ p.entry_date }}</td><td>{{ p.doc_no or '' }}</td><td>{{ p.note or '' }}</td><td class="r num">{{ p.amount|num }}</td></tr>
+  {% else %}<tr><td colspan="4" class="muted">To‘lov hali yo‘q.</td></tr>{% endfor %}</tbody></table></div>
+{% endblock %}

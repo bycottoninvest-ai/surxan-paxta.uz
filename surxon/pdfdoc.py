@@ -675,6 +675,104 @@ def build_blanks_pdf(blanks, *, company, domain, receiver='', copies=2):
     return buf.getvalue()
 
 
+def build_group_blanks_pdf(groups, *, company, domain, receiver='', copies=2):
+    """UMUMIY NAKLADNOY (UY) papers, one A4 each (`copies` per number): the single paper that goes into the punkt with
+    a tractor's several trailers. TOP — ours: tractor, date, number of trailers, TOTAL sent kg, who made it; the list of
+    trailers lives in the system behind the QR. BOTTOM — the receiver: brutto, tara, ACCEPTED netto, load number, name,
+    signature; the rest of the page is left empty for the stamps."""
+    _fonts()
+    buf = io.BytesIO()
+    c = canvas.Canvas(buf, pagesize=A4)
+    W, H = A4
+    c.setTitle('Umumiy nakladnoy blanklari')
+    c.setAuthor(company)
+    logo = Path(current_app.static_folder) / 'img' / 'logo-dark.png'
+    x0, x1 = 16 * mm, W - 16 * mm
+    copy_names = {1: '1-NUSXA — QABUL QILUVCHIDA QOLADI', 2: '2-NUSXA — JO‘NATUVCHIDA QOLADI'}
+
+    def line_field(y, label, width=None, x=None, big=False):
+        x = x or x0
+        f = 'DejaVu-Bold' if big else 'DejaVu'
+        c.setFont(f, 12 if big else 11)
+        c.drawString(x, y, label)
+        c.setLineWidth(0.8)
+        c.line(x + c.stringWidth(label, f, 12 if big else 11) + 3 * mm, y - 1.2 * mm, (x + width) if width else x1, y - 1.2 * mm)
+
+    def banner(y, text, rgb):
+        c.setFillColorRGB(*rgb)
+        c.rect(x0, y, x1 - x0, 8 * mm, fill=1, stroke=0)
+        c.setFillColorRGB(1, 1, 1)
+        size = 12
+        while size > 8 and c.stringWidth(text, 'DejaVu-Bold', size) > x1 - x0 - 6 * mm:
+            size -= 0.5
+        c.setFont('DejaVu-Bold', size)
+        c.drawString(x0 + 3 * mm, y + 2.4 * mm, text)
+        c.setFillColorRGB(0, 0, 0)
+
+    def big_box(y, text):
+        c.setLineWidth(1.6)
+        c.rect(x0, y - 4 * mm, x1 - x0, 13 * mm)
+        c.setFont('DejaVu-Bold', 15)
+        c.drawString(x0 + 3 * mm, y + 1.5 * mm, text)
+
+    for g in groups:
+        url = f'https://{domain}/punkt/uy/{g["token"]}'
+        for copy in range(1, copies + 1):
+            y = H - 14 * mm
+            if copies > 1:
+                c.setFont('DejaVu-Bold', 9)
+                c.drawString(x0, H - 8 * mm, copy_names.get(copy, f'{copy}-NUSXA'))
+            if logo.exists():
+                c.drawImage(str(logo), x0, y - 16 * mm, width=52 * mm, height=16 * mm, mask='auto', preserveAspectRatio=True, anchor='sw')
+            c.setFont('DejaVu-Bold', 13)
+            c.drawRightString(x1 - 40 * mm, y - 4 * mm, 'UMUMIY NAKLADNOY')
+            c.setFont('DejaVu', 9)
+            c.drawRightString(x1 - 40 * mm, y - 8.5 * mm, '(punktga kiradigan yagona hujjat)')
+            c.setFont('DejaVu-Bold', 26)
+            c.drawRightString(x1 - 40 * mm, y - 18 * mm, '№ ' + g['number'])
+            _qr(c, url, x1 - 36 * mm, y - 34 * mm, 36 * mm)
+            y -= 46 * mm
+            banner(y, f'1. JO‘NATUVCHI: {company}', (0.04, 0.23, 0.43))
+            y -= 12 * mm
+            line_field(y, 'Traktor:', width=80 * mm)
+            line_field(y, 'Sana:', x=x0 + 90 * mm)
+            y -= 12 * mm
+            line_field(y, 'Telashkalar soni:', width=80 * mm)
+            y -= 16 * mm
+            big_box(y, 'JAMI JO‘NATILGAN PAXTA, kg:')
+            y -= 14 * mm
+            line_field(y, 'Tuzdi (F.I.Sh.):', width=100 * mm)
+            line_field(y, 'Imzo:', x=x0 + 110 * mm)
+            y -= 6 * mm
+            c.setFont('DejaVu', 8)
+            c.drawString(x0, y, 'Ichidagi telashkalar (qaysi kombayn / qo‘l terimi, kimniki, necha kg) tizimda saqlanadi — QR orqali bog‘langan.')
+            y -= 10 * mm
+            c.setDash(4, 3)
+            c.setLineWidth(0.6)
+            c.line(x0, y, x1, y)
+            c.setDash()
+            y -= 12 * mm
+            banner(y, '2. QABUL QILUVCHI' + (f': {receiver}' if receiver else ''), (0.09, 0.45, 0.24))
+            y -= 11 * mm
+            line_field(y, 'Punkt:')
+            y -= 12 * mm
+            line_field(y, 'Brutto, kg:', width=80 * mm, big=True)
+            line_field(y, 'Tara, kg:', x=x0 + 90 * mm, big=True)
+            y -= 16 * mm
+            big_box(y, 'QABUL QILINGAN PAXTA (NETTO), kg:')
+            y -= 16 * mm
+            line_field(y, 'Yuk xati №:', width=80 * mm)
+            line_field(y, 'Qabul sanasi:', x=x0 + 90 * mm)
+            y -= 12 * mm
+            line_field(y, 'Qabul qiluvchi F.I.Sh.:', width=120 * mm)
+            line_field(y, 'Imzo:', x=x0 + 126 * mm)
+            c.setFont('DejaVu', 8)
+            c.drawString(x0, 10 * mm, f'№ {g["number"]} · ikki nusxada · ikki tomon imzosi va muhri bilan haqiqiy.')
+            c.showPage()
+    c.save()
+    return buf.getvalue()
+
+
 KIND_TITLES = {'zapravka': 'ZAPRAVKA (SOLYARKA)', 'traktor': 'TRAKTOR', 'kombayn': 'KOMBAYN', 'telashka': 'PRITSEP (TELASHKA)', 'mashina': 'MASHINA'}
 KIND_HINTS = {
     'zapravka': 'Solyarka olishda shu QR skanerlanadi (Solyarka → Olish).',
@@ -747,5 +845,124 @@ def build_qr_labels_pdf(items, *, company):
         c.drawCentredString(x0 + cw / 2, y0 + 8.5 * mm, (sub or '')[:48])
         c.setFont('DejaVu', 7)
         c.drawCentredString(x0 + cw / 2, y0 + ch - 7 * mm, f'{company} · solyarka')
+    c.save()
+    return buf.getvalue()
+
+
+def _short_trip(t):
+    """“TL-2026-000026 (UY-0001)” → “26 (UY-0001)” — the number the clerk says."""
+    n, _, rest = t.partition(' ')
+    return (n.rsplit('-', 1)[-1].lstrip('0') or n) + (f' {rest}' if rest else '')
+
+
+def build_combine_statement_pdf(st, *, company, year, tariff_name='', generated_at='', generated_by=''):
+    """KOMBAYN HISOB-KITOBI for the season — given to the combine's owner (ours or a hired one): day by day kg and sum,
+    the payments, what is left. Signed by both sides at the season's end."""
+    _fonts()
+    buf = io.BytesIO()
+    c = canvas.Canvas(buf, pagesize=A4)
+    W, H = A4
+    x0, x1 = 14 * mm, W - 14 * mm
+    cb = st['combine']
+    c.setTitle(f'Kombayn hisob-kitobi {cb["code"]} {year}')
+
+    def header():
+        y = H - 16 * mm
+        c.setFont('DejaVu-Bold', 14)
+        c.drawString(x0, y, company)
+        c.setFont('DejaVu', 8.5)
+        c.drawRightString(x1, y, f'Chop: {_date(generated_at)} · {generated_by or ""}')
+        y -= 9 * mm
+        c.setFont('DejaVu-Bold', 15)
+        c.drawCentredString(W / 2, y, f'KOMBAYN HISOB-KITOBI · {year} MAVSUM')
+        y -= 6 * mm
+        c.setFont('DejaVu', 10)
+        tariff = f'{tariff_name}: {_num(cb["tariff_rate"])} so‘m' if cb['tariff_type'] else 'tarif yo‘q'
+        c.drawCentredString(W / 2, y, f'{cb["code"]} · egasi: {cb["owner"]} · {tariff}')
+        return y - 7 * mm
+
+    cols = [('Sana', x0 + 1.5 * mm, 'l'), ('Dala', x0 + 21 * mm, 'l'), ('Reyslar', x0 + 58 * mm, 'l'),
+            ('Dala kg', x0 + 128 * mm, 'r'), ('Punkt kg', x0 + 150 * mm, 'r'), ('Summa, so‘m', x1 - 1.5 * mm, 'r')]
+
+    def head_row(y, cols=cols):
+        c.setFillColor(colors.HexColor('#eef3fa'))
+        c.rect(x0, y - 6.5 * mm, x1 - x0, 6.5 * mm, stroke=0, fill=1)
+        c.setFillColor(colors.black)
+        c.setFont('DejaVu-Bold', 8.5)
+        for t, x, a in cols:
+            (c.drawString if a == 'l' else c.drawRightString)(x, y - 4.6 * mm, t)
+        return y - 6.5 * mm
+
+    def line(y, vals, cols=cols, bold=False):
+        c.setFont('DejaVu-Bold' if bold else 'DejaVu', 8.5)
+        for (t, x, a), v in zip(cols, vals):
+            (c.drawString if a == 'l' else c.drawRightString)(x, y - 4.8 * mm, v)
+        c.setStrokeColor(colors.HexColor('#dfe6ef'))
+        c.line(x0, y - 6.6 * mm, x1, y - 6.6 * mm)
+        c.setStrokeColor(colors.black)
+        return y - 6.6 * mm
+
+    def room(y, need=12 * mm):
+        if y < need + 14 * mm:
+            c.showPage()
+            return head_row(header())
+        return y
+
+    y = head_row(header())
+    for d in st['days']:
+        y = room(y)
+        trips = ', '.join(_short_trip(t) for t in d['trips']) or d['work']
+        amt = _num(d['amount']) + (' *' if d['uncalc_kg'] else '')
+        y = line(y, [_date(d['date']), ', '.join(d['fields'])[:22], trips[:44], _num(d['kg'], 1 if d['kg'] % 1 else 0),
+                     _num(d['punkt_kg'], 1 if d['punkt_kg'] % 1 else 0) if d['punkt_kg'] else '—', amt])
+    y = room(y)
+    c.setFillColor(colors.HexColor('#f4f6f9'))
+    c.rect(x0, y - 6.6 * mm, x1 - x0, 6.6 * mm, stroke=0, fill=1)
+    c.setFillColor(colors.black)
+    y = line(y, [f'JAMI: {len(st["days"])} kun', '', '', _num(st['kg'], 1 if st['kg'] % 1 else 0),
+                 _num(st['punkt_kg'], 1 if st['punkt_kg'] % 1 else 0), _num(cb['earned'])], bold=True)
+
+    pcols = [('Sana', x0 + 1.5 * mm, 'l'), ('Hujjat', x0 + 30 * mm, 'l'), ('Izoh', x0 + 72 * mm, 'l'), ('Summa, so‘m', x1 - 1.5 * mm, 'r')]
+    y -= 6 * mm
+    y = room(y, 30 * mm)
+    c.setFont('DejaVu-Bold', 11)
+    c.drawString(x0, y - 4 * mm, 'TO‘LOVLAR')
+    y = head_row(y - 6 * mm, pcols)
+    for p in st['payments']:
+        y = room(y)
+        y = line(y, [_date(p['entry_date']), p['doc_no'] or '', (p['note'] or ('Qaytarildi' if p['amount'] < 0 else ''))[:50],
+                     _num(p['amount'])], pcols)
+    if not st['payments']:
+        y = line(y, ['—', '', 'To‘lov hali yo‘q', ''], pcols)
+
+    y -= 6 * mm
+    y = room(y, 50 * mm)
+    boxes = [('Hisoblangan', cb['earned'], '#eef3fa'), ('To‘langan', cb['paid'], '#e8f6ec'),
+             ('Qoldiq (to‘lanadi)' if cb['balance'] >= 0 else 'Ortiqcha to‘langan', abs(cb['balance']), '#fff4e5')]
+    bw = (x1 - x0 - 8 * mm) / 3
+    for i, (t, v, col) in enumerate(boxes):
+        bx = x0 + i * (bw + 4 * mm)
+        c.setFillColor(colors.HexColor(col))
+        c.roundRect(bx, y - 17 * mm, bw, 17 * mm, 2 * mm, stroke=0, fill=1)
+        c.setFillColor(colors.black)
+        c.setFont('DejaVu', 9)
+        c.drawString(bx + 3 * mm, y - 6 * mm, t)
+        c.setFont('DejaVu-Bold', 14)
+        c.drawString(bx + 3 * mm, y - 13.5 * mm, f'{_num(v)} so‘m')
+    y -= 24 * mm
+    c.setFont('DejaVu', 8)
+    notes = ['Dala kg — dala tarozisida kombayn tortgan paxta. Punkt kg — punkt qabul qilgan netto; bir nechta telashka',
+             'birga tortilsa (umumiy yuk, UY), punkt nettosi telashkalarga dala kg bo‘yicha bo‘lingan.']
+    if st['waiting_kg']:
+        notes.append(f'Punktda hali qabul qilinmagan: {_num(st["waiting_kg"])} kg.')
+    if cb['uncalc_kg']:
+        notes.append(f'* {_num(cb["uncalc_kg"])} kg tarif qo‘yilmagan paytda yozilgan — summaga kirmagan.')
+    for n in notes:
+        c.drawString(x0, y, n)
+        y -= 4.2 * mm
+    y -= 10 * mm
+    c.setFont('DejaVu', 10)
+    c.drawString(x0, y, f'{company}: ____________________')
+    c.drawRightString(x1, y, f'{cb["owner"]}: ____________________')
     c.save()
     return buf.getvalue()

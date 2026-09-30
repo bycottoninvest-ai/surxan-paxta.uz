@@ -77,7 +77,7 @@ def check_free(code, waybill_id=None):
     return b
 
 
-def attach(actor, waybill_id, code, photo=None, field=False):
+def attach(actor, waybill_id, code, photo=None, field=False, photo_later=False):
     """Tie a filled blank to a trip (with its photo). Idempotent for the same pair; a blank already used for another
     trip, or a trip that already has a blank, is refused. In the field (the clerk scans the blank when closing the
     trailer) no photo is needed yet — the punkt photographs the filled paper."""
@@ -105,7 +105,7 @@ def attach(actor, waybill_id, code, photo=None, field=False):
             pid = store_photo(db, actor, photo, category='nayman', entity_type='punkt_blank', entity_id=b['id'],
                               caption=f'Punkt blanki {cur["number"]} · {wb["trip_no"]}',
                               links={'waybill_id': waybill_id, 'load_id': wb['load_id'], 'season_year': wb['sy']})
-        if not pid and not field:
+        if not pid and not field and not photo_later:     # umumiy yuk: one photo of the UY paper covers it
             raise UserError('To‘ldirilgan blankni rasmga oling.')
         db.execute('UPDATE punkt_blanks SET waybill_id=?, used_by=COALESCE(used_by, ?), used_at=COALESCE(used_at, ?), photo_id=? '
                    'WHERE id=?', (waybill_id, actor.user_id, now_str(), pid, b['id']))
