@@ -13,6 +13,17 @@
     {% if yld.parts %}<div class="small">Dalalarga bo‘lindi: {% for p in yld.parts %}<b>{{ p.code }}</b> {{ p.share }}% ({{ p.kg|num }} kg){{ ' · ' if not loop.last }}{% endfor %}</div>{% endif %}
     {% else %}🌱 {{ rnd }}-terim{% endif %}
   </div>
+  {% if ld.waybill_status == 'YARATILDI' %}
+  {% if blank %}<div class="notice" style="display:block">🧾 Blank: <b>{{ blank.number }}</b> — haydovchiga bering, punktda skanerlanadi.</div>
+  {% elif can('load.full') %}
+  <form method="post" action="{{ url_for('dala.attach_blank', load_id=ld.id) }}" class="d-form" style="margin:8px 0">{{ csrf() }}
+    <label class="d-l">🧾 Blank biriktirish <span class="tiny muted">— blank yozib, QR ini skanerlang</span></label>
+    <div class="row" style="gap:8px"><input name="blank_code" id="d-blank" placeholder="PB-0012" autocomplete="off" style="flex:1" required>
+      <button type="button" class="btn btn-light" id="d-blank-scan">📷 Skanerlash</button></div>
+    <div class="p-cam" id="d-cam" hidden><video id="d-video" playsinline muted></video><div class="p-frame"></div></div>
+    <div class="tiny muted" id="d-cam-msg"></div>
+    <button class="btn btn-primary btn-block">Blankni biriktirish</button></form>
+  {% endif %}{% endif %}
   {% if ld.waybill_status == 'YARATILDI' and not ld.arrived_at %}
   <form method="post" action="{{ url_for('dala.resume', load_id=ld.id) }}" class="d-resume" data-confirm="Telashka yana ochilsinmi? Tortishni davom ettirasiz, nakladnoy raqami o‘zgarmaydi.">{{ csrf() }}
     <button class="btn btn-light btn-block" style="white-space:normal;height:auto;padding:12px;line-height:1.3;flex-direction:column;gap:2px"><b>↩ Davom ettirish</b><span class="small muted">Telashka hali to‘lmagan bo‘lsa (tushlik, tanaffus)</span></button></form>{% endif %}
@@ -29,3 +40,19 @@
   <a class="btn btn-primary btn-block d-big" href="{{ url_for('dala.new_trip') }}">{{ icon('plus') }} Yangi telashka</a>
 </div>
 {% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='js/qrscan.js') }}?v={{ version }}"></script><script>
+(() => {   // the new blank's QR → its number
+  const b = document.getElementById('d-blank-scan'); if (!b) return;
+  let stop = null;
+  b.onclick = () => {
+    const cam = document.getElementById('d-cam'), msg = document.getElementById('d-cam-msg'); cam.hidden = false; if (stop) return;
+    stop = spxQrScan(document.getElementById('d-video'), msg, t => {
+      const m = String(t).match(/PB-\d{1,6}/i), tok = String(t).split('/blanka/')[1];
+      if (!m && !tok) { msg.textContent = 'Bu blankning QR i emas.'; return false; }
+      document.getElementById('d-blank').value = m ? m[0].toUpperCase() : tok.split('?')[0];
+      msg.textContent = '✓ Blank topildi: ' + document.getElementById('d-blank').value;
+      cam.hidden = true; stop = null; return true;
+    }, {{ url_for('static', filename='vendor/jsqr/jsQR.min.js')|tojson }});
+  };
+})();
+</script>{% endblock %}

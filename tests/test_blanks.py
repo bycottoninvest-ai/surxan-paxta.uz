@@ -136,3 +136,33 @@ def test_combine_choices_show_the_owner(app, world):
     lid = open_trip(tally, world, method='combine', rate='300')
     page = tally.get(f'/dala/reys/{lid}').get_data(as_text=True)
     assert 'K-02 · Farhod aka (xizmat)' in page and 'K-01 · SURXON' in page
+
+
+def test_clerk_attaches_a_blank_to_a_trailer_closed_before(app, world):
+    """Trailers closed without a blank (before blanks were printed) still in the field / on the way: the clerk fills a
+    new blank and scans it on the trip's page; the punkt then receives it with the blank's photo as usual."""
+    from test_dala import open_trip, weigh
+    tally, yunus, ali, st = setup(app, world)
+    l1 = open_trip(tally, world)
+    assert weigh(tally, l1, '150', name='Ali', new=True)['ok'] and weigh(tally, l1, '160', name='Soli', new=True)['ok']
+    assert tally.post(f'/dala/reys/{l1}/yopish', files={'photos': jpeg()}).get_json()['ok']       # no blanks yet
+    world['admin'].post('/admin/blankalar', {'count': '3'})
+    docs = tally.get(f'/dala/reys/{l1}/hujjatlar').get_data(as_text=True)
+    assert 'Blank biriktirish' in docs
+    r = tally.post(f'/dala/reys/{l1}/blanka', {'blank_code': 'PB-0002'}).get_json()
+    assert r['ok'] and 'PB-0002' in r['message'], r
+    assert 'Blank: <b>PB-0002</b>' in tally.get(f'/dala/reys/{l1}/hujjatlar').get_data(as_text=True)
+    with app.app_context():
+        w1 = q('SELECT id FROM waybills WHERE load_id=?', (l1,), one=True)['id']
+        assert q("SELECT waybill_id FROM punkt_blanks WHERE number='PB-0002'", one=True)['waybill_id'] == w1
+    # the same blank cannot go on a second trailer
+    l2 = open_trip(tally, world, trailer='TL-02')
+    assert weigh(tally, l2, '200', name='Vali', new=True)['ok']
+    assert tally.post(f'/dala/reys/{l2}/yopish', files={'photos': jpeg()}).get_json()['ok']
+    again = tally.post(f'/dala/reys/{l2}/blanka', {'blank_code': 'PB-0002'}).get_json()
+    assert again['ok'] is False and 'allaqachon' in again['error']
+    # the punkt: only the photo of the paper
+    ok = yunus.post(f'/punkt/yuk/{w1}/qabul', {'station_kg': '308'}, files={'blank_photo': jpeg()}).get_json()
+    assert ok['ok'], ok
+    late = tally.post(f'/dala/reys/{l1}/blanka', {'blank_code': 'PB-0003'}).get_json()
+    assert late['ok'] is False

@@ -255,6 +255,25 @@ def resume(load_id):
                 url_for('dala.trip', load_id=load_id))
 
 
+@bp.post('/dala/reys/<int:load_id>/blanka')
+@perm_required('load.full')
+def attach_blank(load_id):
+    """A trailer closed before it had a blank (still in the field or on the way): the clerk fills a new blank and scans it
+    here — the punkt then knows it from the QR, with its combine / hand label."""
+    from .. import blanks as BL
+    ld = _trip(load_id)
+    actor = post_actor()
+    code = (request.form.get('blank_code') or '').strip()
+    if not code:
+        raise UserError('Blank QR ini skanerlang yoki raqamini yozing (masalan PB-0012).')
+    if not ld['waybill_id'] or ld['waybill_status'] != 'YARATILDI':
+        raise UserError('Bu telashka punktda allaqachon qabul qilingan yoki nakladnoyi yo‘q.')
+    num = BL.attach(actor, ld['waybill_id'], code, field=True)
+    after_waybill_change(actor, ld['waybill_id'], f'blank {num} biriktirildi')
+    return done(f'✓ {num} {ld["trip_no"]} ga biriktirildi. Blankni haydovchiga bering — punktda skanerlanadi.',
+                url_for('dala.docs', load_id=load_id))
+
+
 def combine_choices():
     """Active combines with whose they are: ours (the company) or a hired one (its owner's name)."""
     from ..accounting import combine_owner
@@ -267,7 +286,9 @@ def combine_choices():
 def docs(load_id):
     ld = _trip(load_id)
     from .. import picking
+    from .. import blanks as BL
     return render_template('dala_docs.html', ld=ld, totals=_totals(load_id), yld=picking.trip_yield(load_id),
+                           blank=BL.of_waybill(ld['waybill_id']) if ld['waybill_id'] else None,
                            rnd=q('SELECT harvest_round FROM trailer_loads WHERE id=?', (load_id,), one=True)[0] or 1)
 
 
