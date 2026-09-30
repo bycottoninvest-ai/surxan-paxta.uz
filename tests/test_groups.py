@@ -108,6 +108,8 @@ def test_umumiy_yuk_scan_close_weigh_split_and_pq17(app, world):
         g = q('SELECT * FROM load_groups WHERE id=?', (gid,), one=True)
         assert g['status'] == 'QABUL' and g['accepted_kg'] == 985 and g['sent_kg'] == 1000 and g['photo_id']
     assert yunus.post(f'/punkt/uy/{gid}/ochish').get_json()['ok'] is False                   # received: stays closed
+    wl = admin.get('/nakladnoylar').get_data(as_text=True)                                    # the waybill list marks them
+    assert wl.count('🚜 UY-0008') == 3
 
     # 5. one PQ-17 from the cluster for the whole load → shared over the three trailers
     bux.post('/buxgalteriya/narx', {'hand': '7800', 'combine': '7600'})

@@ -19,7 +19,8 @@
   <div class="table-wrap"><table class="t">
     <thead><tr><th>№</th><th>Sana / vaqt</th><th>Telashka</th><th>Traktor</th><th>Mashina</th><th>Dala</th><th>Brigadir</th><th class="num">Brutto</th><th class="num">Tara</th><th class="num">Netto (kg)</th><th class="num">Nayman qabul</th><th class="num">Farq</th><th>Holat</th><th>Blank</th></tr></thead>
     <tbody>{% for r in rows %}<tr class="{{ 'void' if r.status == 'BEKOR' }}">
-      <td class="keep"><a class="link" href="{{ url_for('ops.waybill_detail', waybill_id=r.id) }}">{{ r.number }}</a></td>
+      <td class="keep"><a class="link" href="{{ url_for('ops.waybill_detail', waybill_id=r.id) }}">{{ r.number }}</a>{% set gr = groups.get(r.id) %}{% if gr %}
+        <a href="{{ url_for('punkt.group', token=gr.token) }}" title="Birga tortilgan (umumiy yuk)" style="display:inline-block;margin-left:4px;padding:0 6px;border-radius:6px;background:#ede9fe;color:#5b21b6;font-size:11px;font-weight:700">🚜 {{ gr.number }}</a>{% endif %}</td>
       <td>{{ r.document_date|d }} <span class="muted">{{ (r.tare_at or r.created_at)[11:16] }}</span></td><td>{{ r.trailer_code }}</td><td>{{ r.tractor_code or '—' }}</td><td>{{ r.vehicle_plate or '—' }}</td>
       <td>{{ r.field_name }}</td><td>{{ r.brigadier_name }}</td>{% if r.basis == 'dala' %}<td class="num muted" colspan="2">dala yig‘indisi</td>{% else %}<td class="num">{{ r.gross_kg|num }}</td><td class="num">{{ r.tare_kg|num }}</td>{% endif %}<td class="num b">{{ r.net_kg|num }}</td>
       <td class="num">{{ r.accepted_kg|num if r.accepted_kg is not none else '—' }}</td>

@@ -296,8 +296,11 @@ def waybills():
     ids = [r['id'] for r in rows]
     blanks = {b['waybill_id']: b['number'] for b in q(
         f"SELECT waybill_id, number FROM punkt_blanks WHERE waybill_id IN ({','.join('?' * len(ids))})", ids)} if ids else {}
+    groups = {g['waybill_id']: g for g in q(
+        f'''SELECT i.waybill_id, g.number, g.token FROM load_group_items i JOIN load_groups g ON g.id=i.group_id
+            WHERE i.waybill_id IN ({','.join('?' * len(ids))})''', ids)} if ids else {}
     return render_template('waybills.html', rows=rows, year=year, period=period, totals=totals,
-                           page=page_arg(), has_more=has_more, blanks=blanks)
+                           page=page_arg(), has_more=has_more, blanks=blanks, groups=groups)
 
 
 @bp.get('/nakladnoy/<int:waybill_id>')
