@@ -196,7 +196,9 @@ def test_trailers_already_on_the_way_join_a_uy_without_blanks(app, world):
     page = yunus.get(f'/punkt/uy/{g["token"]}').get_data(as_text=True)
     assert 'K-01 · SURXON' in page and 'blanksiz' in page
     assert yunus.post(f'/punkt/uy/{g["id"]}/yopish').get_json()['ok']
-    r = yunus.post(f'/punkt/uy/{g["id"]}/qabul', {'station_kg': '1510', 'load_no': '1'}, files={'photo': jpeg()}).get_json()
+    assert 'Dala jami bilan' in yunus.get(f'/punkt/uy/{g["token"]}').get_data(as_text=True)     # one tap: the field total
+    r = yunus.post(f'/punkt/uy/{g["id"]}/qabul', {'station_kg': '1510', 'gross_kg': '', 'tare_kg': '', 'load_no': ''},
+                   files={'photo': jpeg()}).get_json()
     assert r['ok'], r
     with app.app_context():
         assert {r['waybill_id']: r['accepted_kg'] for r in q('SELECT * FROM nayman_receipts')} == {w1: 1200, w2: 310}

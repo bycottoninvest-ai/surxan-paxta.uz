@@ -42,6 +42,9 @@
   <h2 class="d-h1 mt">Punktdan chiqdi: klaster yozgan kg</h2>
   <form method="post" action="{{ url_for('punkt.group_receive', gid=g.id) }}" enctype="multipart/form-data" class="d-form" id="uy-rcv" data-sent="{{ sent_kg }}" data-warn="{{ warn }}">
     {{ csrf() }}
+    <input type="hidden" name="station_kg" id="uy-n">
+    <button type="button" class="btn btn-green btn-block d-big" id="uy-dala">✓ Dala jami bilan — {{ sent_kg|num }} kg</button>
+    <div class="tiny muted" style="text-align:center;margin:4px 0 12px">Odatda shu. Ko‘chadagi tarozida tortilgan bo‘lsa — brutto va tarani yozing.</div>
     <label class="d-l">Brutto (kg)</label><input name="gross_kg" id="uy-g" inputmode="decimal" class="d-num" autocomplete="off">
     <label class="d-l">Tara (kg)</label><input name="tare_kg" id="uy-t" inputmode="decimal" class="d-num" autocomplete="off">
     <label class="d-l">Yuk xati № <span class="tiny muted">(punkt tarozisi chekidagi raqam)</span></label><input name="load_no" inputmode="numeric" class="d-num" autocomplete="off">
@@ -103,7 +106,12 @@
       const n = Math.round((gv - tv) * 10) / 10, d = Math.round((n - sent) * 10) / 10, p = sent ? d / sent * 100 : 0;
       out.hidden = false; out.textContent = 'Netto: ' + n.toLocaleString('ru-RU') + ' kg · farq ' + (d > 0 ? '+' : '') + d + ' kg (' + p.toFixed(2) + '%)';
       rs.hidden = Math.abs(p) < warn; };
-    g.oninput = t.oninput = upd;
+    const nn = document.getElementById('uy-n');
+    g.oninput = t.oninput = () => { nn.value = ''; upd(); };
+    // not weighed on the way (the usual case): the field total goes in as it is
+    document.getElementById('uy-dala').addEventListener('click', () => {
+      g.value = ''; t.value = ''; nn.value = sent; rs.hidden = true; out.hidden = false;
+      out.textContent = '✓ Dala jami: ' + sent.toLocaleString('ru-RU') + ' kg — endi UY varaq rasmini oling va saqlang'; });
   }
 })();
 </script>{% endblock %}

@@ -48,7 +48,7 @@ def test_blanks_print_attach_required_once_and_office_check(app, world):
 
     # now the punkt cannot close the trip without the filled blank's number and photo
     page = yunus.get(f'/punkt/yuk/{w1}').get_data(as_text=True)
-    assert 'blank_code' in page and 'blank_photo' in page
+    assert 'blank_code' in page and 'blank_photo' in page and 'Dala nettosi bilan' in page
     no_blank = yunus.post(f'/punkt/yuk/{w1}/qabul', {'gross_kg': '5470', 'tare_kg': '5000'}).get_json()
     assert no_blank['ok'] is False and 'blank' in no_blank['error'].lower()
     no_photo = yunus.post(f'/punkt/yuk/{w1}/qabul', {'gross_kg': '5470', 'tare_kg': '5000', 'blank_code': 'PB-0003'}).get_json()

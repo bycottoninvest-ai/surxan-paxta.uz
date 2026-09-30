@@ -54,7 +54,9 @@
         data-sent="{{ wb.net_kg }}" data-warn="{{ warn }}">
     {{ csrf() }}<input type="hidden" name="mode" id="pk-mode" value="bt">
     <div id="pk-step2">
-      <h2 class="d-h1">2. Og‘irlikni kiriting</h2>
+      <h2 class="d-h1">2. Og‘irlik</h2>
+      <button type="button" class="btn btn-green btn-block d-big" id="pk-dala">✓ Dala nettosi bilan — {{ wb.net_kg|num }} kg</button>
+      <div class="tiny muted" style="text-align:center;margin:4px 0 12px">Odatda shu. Ko‘chadagi tarozida tortilgan bo‘lsa — pastga brutto va tarani yozing.</div>
       <div class="d-seg"><label><input type="radio" name="wmode" value="bt" checked><span>Brutto va tara</span></label><label><input type="radio" name="wmode" value="netto"><span>Tayyor netto</span></label></div>
       <div id="pk-bt">
         <label class="d-l">Brutto (kg)</label><input name="gross_kg" id="pk-g" inputmode="decimal" class="d-num" placeholder="0" autocomplete="off">
@@ -121,6 +123,10 @@
     s2.hidden = true; s3.hidden = false; window.scrollTo(0, 0);
   });
   document.getElementById('pk-back').addEventListener('click', () => { s3.hidden = true; s2.hidden = false; });
+  // not weighed on the way (the usual case): the field netto goes in as it is, one tap
+  document.getElementById('pk-dala').addEventListener('click', () => {
+    const r = f.querySelector('input[name=wmode][value=netto]'); r.checked = true; r.dispatchEvent(new Event('change'));
+    n.value = sent; g.value = ''; t.value = ''; show(); document.getElementById('pk-next').click(); });
   f.querySelectorAll('input[name=reason]').forEach(r => r.addEventListener('change', () => {
     const other = r.value === {{ other_reason|tojson }}; note.hidden = !other; note.required = other; if (other) note.focus(); }));
   f.addEventListener('submit', e => { if (!navigator.onLine) { e.preventDefault(); alert('Internet yo‘q — qabul hali saqlanmadi. Internet kelganda yana “Qabulni tasdiqlash” ni bosing.'); } });
