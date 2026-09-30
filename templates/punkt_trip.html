@@ -37,6 +37,12 @@
       <button class="btn btn-green btn-block">Saqlash</button></form>{% endif %}
   </div>
   <a class="btn btn-primary btn-block d-big" href="{{ url_for('punkt.home') }}">Keyingi telashka ›</a>
+  {% if can('station.receive') %}
+  <details class="mt-s"><summary class="small link">↩ Xato qabul qilindimi? (masalan boshqa telashka bilan birga kirgan edi)</summary>
+    <form method="post" action="{{ url_for('punkt.receive_undo', waybill_id=wb.id) }}" class="d-form" style="margin-top:8px" data-confirm="Qabul bekor qilinsinmi? Telashka yana punkt ro‘yxatiga qaytadi.">{{ csrf() }}
+      <input name="reason" value="Boshqa telashka bilan birga kirgan — umumiy yukka qo‘shiladi" required>
+      <button class="btn btn-light btn-block" style="margin-top:6px">↩ Qabulni bekor qilish</button></form></details>
+  {% endif %}
 {% else %}
   <div class="d-top"><a class="icon-btn" href="{{ url_for('punkt.home') }}">{{ icon('chev-left') }}</a><span class="small">Orqaga</span></div>
   <div class="pk-card pk-static">

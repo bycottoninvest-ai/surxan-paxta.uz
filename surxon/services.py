@@ -1622,6 +1622,36 @@ def clerk_continue_trip(actor, load_id):
     return admin_reopen_trip(actor, load_id, 'Hisobchi davom ettirdi (tanaffusdan keyin)', clerk=True)
 
 
+def undo_station_receipt(actor, waybill_id, reason):
+    """A trip received at the punkt by mistake (e.g. it came in together with another and belongs in one umumiy yuk):
+    the receipt is taken back and the trip waits at the punkt again. The punkt's own man — the same day — or Admin;
+    never once a PQ-17 or a payment is tied to it, or it is in an umumiy yuk. The receipt is kept in the audit."""
+    _need(actor, 'station.receive')
+    reason = _require_reason(reason, 'Qabulni bekor qilish')
+    with tx() as db:
+        wb = db.execute('''SELECT wb.*, tl.station_id, tl.trip_no FROM waybills wb JOIN trailer_loads tl ON tl.id=wb.load_id
+                           WHERE wb.id=?''', (waybill_id,)).fetchone()
+        r = db.execute('SELECT * FROM nayman_receipts WHERE waybill_id=?', (waybill_id,)).fetchone()
+        if not wb or not r:
+            raise UserError('Bu reys punktda qabul qilinmagan.')
+        if actor.role != 'admin':
+            if actor.role == 'station' and wb['station_id'] != actor.station_id:
+                raise UserError('Bu reys boshqa punktga tegishli.')
+            if (r['created_at'] or '')[:10] != today_str():
+                raise UserError('Qabulni faqat o‘sha kuni bekor qilish mumkin — kerak bo‘lsa Admin qiladi.')
+        if db.execute('SELECT 1 FROM load_group_items WHERE waybill_id=?', (waybill_id,)).fetchone():
+            raise UserError('Bu reys umumiy yukda — uni UY sahifasidan boshqaring.')
+        if db.execute('SELECT 1 FROM pq17_docs WHERE waybill_id=?', (waybill_id,)).fetchone():
+            raise UserError('Bu reysga PQ-17 bog‘langan — qabulni bekor qilib bo‘lmaydi.')
+        if db.execute('SELECT 1 FROM payments WHERE waybill_id=? AND voided_at IS NULL', (waybill_id,)).fetchone():
+            raise UserError('Bu nakladnoyga to‘lov bog‘langan — avval to‘lovni bekor qiling.')
+        db.execute('DELETE FROM nayman_receipts WHERE id=?', (r['id'],))
+        db.execute("UPDATE waybills SET status='YARATILDI', updated_at=? WHERE id=?", (now_str(), waybill_id))
+        audit(db, actor, 'VOID', 'nayman_receipt', r['id'], old=row_dict(r), reason=f'qabul bekor: {reason}')
+        _sheet_waybill(db, waybill_id, 'punkt qabuli bekor qilindi')
+    return {'trip_no': wb['trip_no'], 'number': wb['number']}
+
+
 def admin_reopen_trip(actor, load_id, reason, clerk=False):
     """Admin only: a trip closed too early (the trailer was not full) goes back to “open” so the tally who ran it
     continues on the same trip. The waybill is set aside (BEKOR, “qayta ochildi”) and issued again with the SAME number

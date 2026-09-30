@@ -204,3 +204,38 @@ def test_trailers_already_on_the_way_join_a_uy_without_blanks(app, world):
     assert r['ok'], r
     with app.app_context():
         assert {r['waybill_id']: r['accepted_kg'] for r in q('SELECT * FROM nayman_receipts')} == {w1: 1200, w2: 310}
+
+
+def test_received_alone_by_mistake_goes_back_and_into_a_uy(app, world):
+    """Two trailers came in together but Yunus received them one by one: he takes each receipt back (the same day)
+    and they go into one umumiy yuk. Another punkt, a PQ-17 or a payment stops it."""
+    tally, yunus, ali, st = setup(app, world)
+    admin = world['admin']
+    w1 = closed_trip(app, tally, world, 'TL-01', ['140', '160'])
+    w2 = closed_trip(app, tally, world, 'TL-02', ['150', '155'])
+    for w, kg in ((w1, '300'), (w2, '305')):
+        assert yunus.post(f'/punkt/yuk/{w}/qabul', {'station_kg': kg}).get_json()['ok']
+    page = yunus.get(f'/punkt/yuk/{w1}').get_data(as_text=True)
+    assert 'Qabulni bekor qilish' in page
+    assert ali.post(f'/punkt/yuk/{w1}/qabul-bekor', {'reason': 'xato'}).status_code in (302, 403)     # other punkt
+    no_reason = yunus.post(f'/punkt/yuk/{w1}/qabul-bekor', {'reason': ''}).get_json()
+    assert no_reason['ok'] is False
+    for w in (w1, w2):
+        r = yunus.post(f'/punkt/yuk/{w}/qabul-bekor', {'reason': 'Birga kirgan — umumiy yukka'}).get_json()
+        assert r['ok'] and 'bekor qilindi' in r['message'], r
+    with app.app_context():
+        assert q('SELECT COUNT(*) n FROM nayman_receipts', one=True)['n'] == 0
+        assert {q('SELECT status FROM waybills WHERE id=?', (w,), one=True)['status'] for w in (w1, w2)} == {'YARATILDI'}
+        assert q("SELECT COUNT(*) n FROM audit_logs WHERE entity_type='nayman_receipt' AND action='VOID'", one=True)['n'] == 2
+    home = yunus.get('/punkt').get_data(as_text=True)
+    assert 'TL-01' in home and 'TL-02' in home
+    admin.post('/admin/uy-blankalar', {'count': '1'})
+    with app.app_context():
+        g = q('SELECT * FROM load_groups', one=True)
+    yunus.get(f'/punkt/uy/{g["token"]}')
+    for w in (w1, w2):
+        assert yunus.post(f'/punkt/uy/{g["id"]}/qosh', {'waybill_id': w}).get_json()['ok']
+    assert yunus.post(f'/punkt/uy/{g["id"]}/yopish').get_json()['ok']
+    assert yunus.post(f'/punkt/uy/{g["id"]}/qabul', {'station_kg': '605'}, files={'photo': jpeg()}).get_json()['ok']
+    again = yunus.post(f'/punkt/yuk/{w1}/qabul-bekor', {'reason': 'yana'}).get_json()
+    assert again['ok'] is False and 'umumiy yuk' in again['error']

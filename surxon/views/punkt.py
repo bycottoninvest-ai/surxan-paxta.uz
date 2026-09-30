@@ -123,6 +123,18 @@ def arrived(waybill_id):
     return done('Belgilandi: yuk punktga KELDI.', url_for('punkt.trip', waybill_id=waybill_id))
 
 
+@bp.post('/yuk/<int:waybill_id>/qabul-bekor')
+@perm_required('station.receive')
+def receive_undo(waybill_id):
+    from ..services import undo_station_receipt
+    _trip_or_404(waybill_id)
+    actor = post_actor()
+    res = undo_station_receipt(actor, waybill_id, request.form.get('reason', ''))
+    after_waybill_change(actor, waybill_id, 'punkt qabuli bekor qilindi')
+    return done(f'{res["number"]} qabuli bekor qilindi — telashka yana punkt ro‘yxatida. Endi uni umumiy yukka qo‘shishingiz mumkin.',
+                url_for('punkt.home'))
+
+
 @bp.post('/yuk/<int:waybill_id>/qabul')
 @perm_required('station.receive')
 def receive(waybill_id):
