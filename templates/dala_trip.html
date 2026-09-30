@@ -13,7 +13,7 @@
     <input type="hidden" name="lat" id="d-glat" data-keep><input type="hidden" name="lon" id="d-glon" data-keep><input type="hidden" name="acc" id="d-gacc" data-keep>
     {% if method == 'combine' %}
     <label class="d-l">Kombayn</label>
-    <select name="combine_id" required data-keep>{% for c in combines %}<option value="{{ c.id }}">{{ c.code }}{{ ' · ' ~ c.operator_name if c.operator_name }}</option>{% endfor %}</select>
+    <select name="combine_id" required data-keep>{% for c in combines %}<option value="{{ c.id }}">{{ c.code }} · {{ c.owner }}</option>{% endfor %}</select>
     {% else %}
     <label class="d-l">Ismni qidiring</label>
     <input type="hidden" name="worker_id" id="d-wid"><input type="hidden" name="new_worker" id="d-new">

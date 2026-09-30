@@ -283,6 +283,14 @@ def worker_history(worker_id, year):
 
 # ------------------------------------------------------------------ combines
 
+def combine_owner(c):
+    """Whose combine: a hired one carries its owner's name (“Farhod aka (xizmat)”), ours the company's short name."""
+    if c['ownership'] == 'external':
+        return f"{c['operator_name'] or 'Tashqi'} (xizmat)"
+    from .settings import get_setting
+    return (get_setting('company_name') or 'SURXON').split()[0]
+
+
 def combine_balances(year, combine_id=None):
     rows = q('''SELECT e.id, e.code, e.operator_name, e.ownership, e.tariff_type, e.tariff_rate,
                        COALESCE(h.kg,0) kg, COALESCE(h.amount,0) tonnage_amount, COALESCE(h.uncalc_kg,0) uncalc_kg, h.days,

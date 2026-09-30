@@ -135,8 +135,9 @@ def receive(waybill_id):
         tare = parse_number(request.form.get('tare_kg'), 'Tara (kg)', max_value=max_kg, allow_zero=True)
         kg = None
     from .. import blanks as BL
-    if BL.required() and not BL.of_waybill(waybill_id) and not wb['receipt_id']:
-        code = (request.form.get('blank_code') or '').strip()
+    have = BL.of_waybill(waybill_id)
+    if BL.required() and not wb['receipt_id'] and not (have and have['photo_id']):
+        code = (request.form.get('blank_code') or '').strip() or (have['number'] if have else '')
         ph = read_upload(request.files.get('blank_photo'))
         if not code:
             raise UserError('Punkt blankasi raqamini yozing (masalan PB-0012) yoki blankdagi QR ni skanerlang.')

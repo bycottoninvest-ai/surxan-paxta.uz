@@ -17,9 +17,17 @@
   <form method="post" enctype="multipart/form-data" class="d-form" id="d-close" data-offline="Yopish {{ ld.trip_no }}">{{ csrf() }}
     <input type="hidden" name="cells" id="pk-cells">
     {% if pick %}{% include 'partials/pick_map.html' %}{% endif %}
+    <label class="d-l">Blank (qog‘oz nakladnoy) <span class="tiny muted">— QR ni skanerlang</span></label>
+    <div class="d-blank">
+      <div class="row" style="gap:8px"><input name="blank_code" id="d-blank" placeholder="PB-0012" autocomplete="off" style="flex:1">
+        <button type="button" class="btn btn-light" id="d-blank-scan">📷 Skanerlash</button></div>
+      <div class="p-cam" id="d-cam" hidden><video id="d-video" playsinline muted></video><div class="p-frame"></div></div>
+      <div class="tiny muted" id="d-cam-msg">Blank bo‘lmasa bo‘sh qoldiring — keyin punktda biriktiriladi.</div>
+    </div>
     <label class="d-l">Telashka rasmi</label>
     <label class="file-drop d-photo"><input type="file" name="photos" accept="image/*" capture="environment" required data-preview>{{ icon('camera','lg') }}<b>Rasmga olish</b><span class="tiny muted">kamera ochilmasa — galereyadan tanlang</span><div class="previews"></div></label>
     <button class="btn btn-green btn-block d-big">{{ icon('check','sm') }} Tasdiqlash va yopish</button>
+    <div class="notice" style="margin-top:8px">🍽 Tushlik yoki tanaffusda <b>yopmang</b> — telashka ochiq turadi, keyin “Davom ettirish” bilan shu telashkaga yozaverasiz. Faqat telashka to‘lganda yoping.</div>
     <div class="tiny muted">Server tasdiqlamaguncha telashka yopilmaydi. Rasm yuklanmasa — qayta urinasiz, hech narsa yo‘qolmaydi.</div>
   </form>
   {% endif %}
@@ -28,7 +36,21 @@
 {% block scripts %}{% if pick %}<link rel="stylesheet" href="{{ url_for('static', filename='vendor/leaflet/leaflet.css') }}">
 <script src="{{ url_for('static', filename='vendor/leaflet/leaflet.js') }}"></script>
 <script src="{{ url_for('static', filename='js/basemap.js') }}"></script>
-<script src="{{ url_for('static', filename='js/pickmap.js') }}"></script>{% endif %}<script>
+<script src="{{ url_for('static', filename='js/pickmap.js') }}"></script>{% endif %}<script src="{{ url_for('static', filename='js/qrscan.js') }}?v={{ version }}"></script><script>
+(() => {   // the blank's QR → its number in the field (a PB link or a bare token both work; the server resolves it)
+  const b = document.getElementById('d-blank-scan'); if (!b) return;
+  let stop = null;
+  b.onclick = () => {
+    const cam = document.getElementById('d-cam'); cam.hidden = false; if (stop) return;
+    stop = spxQrScan(document.getElementById('d-video'), document.getElementById('d-cam-msg'), t => {
+      const m = String(t).match(/PB-\d{1,6}/i), tok = String(t).split('/blanka/')[1];
+      if (!m && !tok) { document.getElementById('d-cam-msg').textContent = 'Bu blankning QR i emas.'; return false; }
+      document.getElementById('d-blank').value = m ? m[0].toUpperCase() : tok.split('?')[0];
+      document.getElementById('d-cam-msg').textContent = '✓ Blank topildi: ' + document.getElementById('d-blank').value;
+      cam.hidden = true; stop = null; return true;
+    }, {{ url_for('static', filename='vendor/jsqr/jsQR.min.js')|tojson }});
+  };
+})();
 // no internet: closing (with the photo and the marked cells) waits in the phone's queue and is sent later
 document.getElementById('d-close')?.addEventListener('queued', () => {
   const f = document.getElementById('d-close');

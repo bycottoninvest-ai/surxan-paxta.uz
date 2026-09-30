@@ -217,3 +217,32 @@ def test_four_clerks_at_once_with_double_taps(app, world):
         assert len(trips) == 4 and len({t['trip_no'] for t in trips}) == 4
         assert len(wbs) == 4 and len({w['number'] for w in wbs}) == 4 and all(w['net_kg'] == 315 for w in wbs)
         assert scalar('SELECT COUNT(*) FROM harvests') == 24
+
+
+def test_clerk_continues_a_trailer_closed_for_lunch(app, world):
+    """Closed at lunch with 306 kg, the same trailer goes on after lunch: “Davom ettirish” reopens THE SAME trip, the
+    waybill keeps its number and ends with the whole trailer (one waybill, not two halves)."""
+    c = setup(app, world)
+    lid = open_trip(c, world)
+    for n, kg in (('Ali', '156'), ('Vali', '150')):
+        assert weigh(c, lid, kg, name=n, new=True)['ok']
+    assert c.post(f'/dala/reys/{lid}/yopish', files={'photos': jpeg()}).get_json()['ok']
+    with app.app_context():
+        wb = q('SELECT * FROM waybills WHERE load_id=?', (lid,), one=True)
+        assert wb['net_kg'] == 306
+    assert 'Davom ettirish' in c.get(f'/dala/reys/{lid}/hujjatlar').get_data(as_text=True)
+    r = c.post(f'/dala/reys/{lid}/davom', {}).get_json()
+    assert r['ok'], r
+    for n, kg in (('Ali', '200'), ('Soli', '195'), ('Gul', '150')):
+        assert weigh(c, lid, kg, name=n, new=n != 'Ali')['ok']
+    assert c.post(f'/dala/reys/{lid}/yopish', files={'photos': jpeg()}).get_json()['ok']
+    with app.app_context():
+        rows = q("SELECT * FROM waybills WHERE load_id=? AND status<>'BEKOR'", (lid,))
+        assert len(rows) == 1 and rows[0]['number'] == wb['number'] and rows[0]['net_kg'] == 851
+    # another clerk cannot reopen it; once the trailer reached the punkt nobody can
+    other = setup(app, world, username='boshqa')
+    assert other.post(f'/dala/reys/{lid}/davom', {}).status_code in (403, 400) or other.post(f'/dala/reys/{lid}/davom', {}).get_json()['ok'] is False
+    with app.app_context():
+        get_db().execute("UPDATE waybills SET arrived_at='2026-09-30 12:00:00' WHERE load_id=?", (lid,))
+    r = c.post(f'/dala/reys/{lid}/davom', {}).get_json()
+    assert r['ok'] is False and 'punktga' in r['error']

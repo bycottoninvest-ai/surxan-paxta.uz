@@ -1604,11 +1604,29 @@ def admin_void_trip(actor, load_id, reason):
     return plan
 
 
-def admin_reopen_trip(actor, load_id, reason):
+def clerk_continue_trip(actor, load_id):
+    """The clerk closed the trailer too early (a lunch break, rain) and it has not left for the punkt yet: they open the
+    SAME trip again and keep weighing — one trailer, one waybill (its number is kept), never two halves."""
+    if actor is None or not actor.can('load.full'):
+        raise UserError('Bu amal uchun huquqingiz yo‘q.')
+    with tx() as db:
+        load = load_row(db, load_id)
+        if actor.role == 'tally' and load['opened_by'] != actor.user_id:
+            raise UserError('Faqat o‘zingiz ochgan telashkani davom ettira olasiz.')
+        wb = db.execute("SELECT * FROM waybills WHERE load_id=? AND status<>'BEKOR'", (load_id,)).fetchone()
+        if wb and wb['arrived_at']:
+            raise UserError('Telashka punktga yetib borgan — endi davom ettirib bo‘lmaydi.')
+        if wb and db.execute("SELECT 1 FROM sqlite_master WHERE name='load_group_items'").fetchone() and \
+                db.execute('SELECT 1 FROM load_group_items WHERE waybill_id=?', (wb['id'],)).fetchone():
+            raise UserError('Telashka umumiy yukka qo‘shilgan — endi davom ettirib bo‘lmaydi.')
+    return admin_reopen_trip(actor, load_id, 'Hisobchi davom ettirdi (tanaffusdan keyin)', clerk=True)
+
+
+def admin_reopen_trip(actor, load_id, reason, clerk=False):
     """Admin only: a trip closed too early (the trailer was not full) goes back to “open” so the tally who ran it
     continues on the same trip. The waybill is set aside (BEKOR, “qayta ochildi”) and issued again with the SAME number
     when the trip is closed; the field-sum weighing is removed (kept in full in the audit). Not after the punkt received it."""
-    if actor is None or actor.role != 'admin':
+    if actor is None or (actor.role != 'admin' and not clerk):
         raise UserError('Reysni qayta ochishni faqat Admin qila oladi.')
     reason = _require_reason(reason, 'Qayta ochish')
     with tx() as db:

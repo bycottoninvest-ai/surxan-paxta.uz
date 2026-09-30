@@ -62,21 +62,33 @@ def of_waybill(waybill_id):
     return q('SELECT * FROM punkt_blanks WHERE waybill_id=?', (waybill_id,), one=True)
 
 
-def attach(actor, waybill_id, code, photo=None):
-    """Tie a filled blank to a trip (with its photo). Idempotent for the same pair; a blank already used for another
-    trip, or a trip that already has a blank, is refused."""
-    _need(actor, 'station.receive')
+def check_free(code, waybill_id=None):
+    """The blank for this code, if it exists, is not spoiled and is not used by another trip — else a clear error."""
     b = find(code)
     if not b:
         raise UserError('Bunday blank topilmadi — QR ni qayta skanerlang yoki raqamini to‘g‘ri yozing (masalan PB-0012).')
     if b['spoiled_reason']:
         raise UserError(f'{b["number"]} buzilgan deb belgilangan — boshqa blank oling.')
+    if b['waybill_id'] and b['waybill_id'] != waybill_id:
+        other = q('SELECT tl.trip_no FROM waybills wb JOIN trailer_loads tl ON tl.id=wb.load_id WHERE wb.id=?',
+                  (b['waybill_id'],), one=True)
+        raise UserError(f'{b["number"]} allaqachon {other["trip_no"] if other else "boshqa reys"}ga ishlatilgan — '
+                        'bitta blank faqat bitta reysga.')
+    return b
+
+
+def attach(actor, waybill_id, code, photo=None, field=False):
+    """Tie a filled blank to a trip (with its photo). Idempotent for the same pair; a blank already used for another
+    trip, or a trip that already has a blank, is refused. In the field (the clerk scans the blank when closing the
+    trailer) no photo is needed yet — the punkt photographs the filled paper."""
+    _need(actor, 'load.full' if field else 'station.receive')
+    b = check_free(code, waybill_id)
     with tx() as db:
         wb = db.execute("""SELECT wb.*, tl.trip_no, tl.station_id, tl.season_year sy FROM waybills wb
                            JOIN trailer_loads tl ON tl.id=wb.load_id WHERE wb.id=?""", (waybill_id,)).fetchone()
         if not wb or wb['status'] == 'BEKOR':
             raise UserError('Reys topilmadi yoki bekor qilingan.')
-        if actor.role == 'station' and wb['station_id'] != actor.station_id:
+        if not field and actor.role == 'station' and wb['station_id'] != actor.station_id:
             raise UserError('Bu reys boshqa punktga jo‘natilgan.')
         cur = db.execute('SELECT * FROM punkt_blanks WHERE id=?', (b['id'],)).fetchone()
         if cur['waybill_id'] and cur['waybill_id'] != waybill_id:
@@ -93,11 +105,12 @@ def attach(actor, waybill_id, code, photo=None):
             pid = store_photo(db, actor, photo, category='nayman', entity_type='punkt_blank', entity_id=b['id'],
                               caption=f'Punkt blanki {cur["number"]} · {wb["trip_no"]}',
                               links={'waybill_id': waybill_id, 'load_id': wb['load_id'], 'season_year': wb['sy']})
-        if not pid:
+        if not pid and not field:
             raise UserError('To‘ldirilgan blankni rasmga oling.')
         db.execute('UPDATE punkt_blanks SET waybill_id=?, used_by=COALESCE(used_by, ?), used_at=COALESCE(used_at, ?), photo_id=? '
                    'WHERE id=?', (waybill_id, actor.user_id, now_str(), pid, b['id']))
-        audit(db, actor, 'ATTACH', 'punkt_blank', b['id'], new={'waybill_id': waybill_id, 'trip_no': wb['trip_no'], 'photo_id': pid})
+        audit(db, actor, 'ATTACH', 'punkt_blank', b['id'], new={'waybill_id': waybill_id, 'trip_no': wb['trip_no'], 'photo_id': pid,
+                                                              'where': 'dala' if field else 'punkt'})
     return cur['number']
 
 

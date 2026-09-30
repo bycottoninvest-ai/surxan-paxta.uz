@@ -88,3 +88,51 @@ def test_blanks_print_attach_required_once_and_office_check(app, world):
     # switched off → receiving works without a blank again
     admin.post('/admin/sozlamalar', {'set_punkt_blank_required': '0'})
     assert yunus.post(f'/punkt/yuk/{w2}/qabul', {'station_kg': '480'}).get_json()['ok']
+
+
+def test_clerk_scans_blank_when_closing_and_punkt_only_photographs(app, world):
+    """The field clerk scans the paper blank's QR while closing the trailer: the blank is tied to the trip there.
+    A blank already used elsewhere is refused before anything closes; the punkt then only photographs the paper."""
+    from test_dala import open_trip, weigh
+    tally, yunus, ali, st = setup(app, world)
+    admin = world['admin']
+    admin.post('/admin/blankalar', {'count': '5'})
+    with app.app_context():
+        tok2 = q("SELECT token FROM punkt_blanks WHERE number='PB-0002'", one=True)['token']
+    l1 = open_trip(tally, world)
+    assert weigh(tally, l1, '150', name='Ali', new=True)['ok'] and weigh(tally, l1, '150', name='Soli', new=True)['ok']
+    page = tally.get(f'/dala/reys/{l1}/yopish').get_data(as_text=True)
+    assert 'blank_code' in page and 'Skanerlash' in page and 'pk-map' not in page       # no “mark the picked part” map
+    r = tally.post(f'/dala/reys/{l1}/yopish', {'blank_code': f'https://x/punkt/blanka/{tok2}'}, files={'photos': jpeg()}).get_json()
+    assert r['ok'] and 'PB-0002 biriktirildi' in r['message'], r
+    with app.app_context():
+        w1 = q('SELECT id FROM waybills WHERE load_id=?', (l1,), one=True)['id']
+        b = q("SELECT * FROM punkt_blanks WHERE number='PB-0002'", one=True)
+        assert b['waybill_id'] == w1 and b['photo_id'] is None
+    docs = tally.get(f'/dala/reys/{l1}/hujjatlar').get_data(as_text=True)
+    assert 'Terilgan joyni belgilash' not in docs
+    # the same blank on another trailer: refused, and that trailer stays open
+    l2 = open_trip(tally, world, trailer='TL-02')
+    assert weigh(tally, l2, '200', name='Vali', new=True)['ok']
+    r = tally.post(f'/dala/reys/{l2}/yopish', {'blank_code': 'PB-0002'}, files={'photos': jpeg()}).get_json()
+    assert r['ok'] is False and 'allaqachon' in r['error']
+    with app.app_context():
+        assert q('SELECT status FROM trailer_loads WHERE id=?', (l2,), one=True)['status'] == 'OCHIQ'
+    # the punkt: the blank is known, only its photo is asked
+    no_photo = yunus.post(f'/punkt/yuk/{w1}/qabul', {'station_kg': '298'}).get_json()
+    assert no_photo['ok'] is False and 'rasm' in no_photo['error'].lower()
+    ok = yunus.post(f'/punkt/yuk/{w1}/qabul', {'station_kg': '298'}, files={'blank_photo': jpeg()}).get_json()
+    assert ok['ok'], ok
+    with app.app_context():
+        assert q("SELECT photo_id FROM punkt_blanks WHERE number='PB-0002'", one=True)['photo_id']
+
+
+def test_combine_choices_show_the_owner(app, world):
+    from test_dala import open_trip
+    tally, yunus, ali, st = setup(app, world)
+    with app.app_context():
+        from surxon.db import get_db
+        get_db().execute("UPDATE equipment SET ownership='external', operator_name='Farhod aka' WHERE code='K-02'")
+    lid = open_trip(tally, world, method='combine', rate='300')
+    page = tally.get(f'/dala/reys/{lid}').get_data(as_text=True)
+    assert 'K-02 · Farhod aka (xizmat)' in page and 'K-01 · SURXON' in page

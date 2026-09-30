@@ -10,7 +10,7 @@ from .. import queries
 from ..db import q, tx
 from ..photos import uploads_from_request
 from ..security import can, perm_required
-from ..services import add_harvest, after_waybill_change, mark_full, open_load
+from ..services import add_harvest, after_waybill_change, clerk_continue_trip, mark_full, open_load
 from ..settings import get_setting
 from ..utils import UserError, now_str, parse_int, parse_number, today_str
 from . import done, form_uuid, post_actor, scope
@@ -152,8 +152,7 @@ def trip(load_id):
         return redirect(url_for('dala.docs', load_id=load_id))
     method = ld['method'] or 'hand'
     return render_template('dala_trip.html', ld=ld, method=method, totals=_totals(load_id), recent=_recent(load_id),
-                           combines=q("SELECT id, code, operator_name FROM equipment WHERE kind='kombayn' AND active=1 "
-                                      "ORDER BY code") if method == 'combine' else [])
+                           combines=combine_choices() if method == 'combine' else [])
 
 
 @bp.post('/dala/reys/<int:load_id>/tortish')
@@ -195,7 +194,17 @@ def close(load_id):
     ld = _trip(load_id)
     if request.method == 'POST':
         actor = post_actor()
+        from .. import blanks as BL
+        code = (request.form.get('blank_code') or '').strip()
+        if code:                     # checked before closing, so a wrong blank never leaves a closed trip without it
+            BL.check_free(code, ld['waybill_id'])
         res = mark_full(actor, load_id, photos=uploads_from_request(request, 'photos'))
+        blank_msg = ''
+        if code and res.get('waybill_id'):
+            try:
+                blank_msg = f" Blank {BL.attach(actor, res['waybill_id'], code, field=True)} biriktirildi."
+            except UserError as e:
+                blank_msg = f" ⚠ Blank biriktirilmadi: {e}"
         cells = [c for c in (request.form.get('cells') or '').split(',') if c]
         from .. import picking
         if not cells and not res.get('already'):
@@ -209,10 +218,11 @@ def close(load_id):
             notify_async(f'🚜 Telashka yopildi: {ld["trip_no"]} · {ld["field_name"]} · {ld["brigadier_name"]}\n'
                          f'{res["net_kg"]:,.0f} kg · {res["number"]}'.replace(',', ' '), roles=('admin', 'manager'),
                          station_id=ld['station_id'])
-        return done('Telashka yopildi. Hujjatlar tayyor.', url_for('dala.docs', load_id=load_id))
+        return done('Telashka yopildi. Hujjatlar tayyor.' + blank_msg, url_for('dala.docs', load_id=load_id))
     if ld['status'] != 'OCHIQ':
         return redirect(url_for('dala.docs', load_id=load_id))
-    return render_template('dala_close.html', ld=ld, totals=_totals(load_id), lines=_lines(load_id), pick=_pick_ctx(ld))
+    # the picked part of the field is taken from the weighings' locations by itself — the clerk marks nothing here
+    return render_template('dala_close.html', ld=ld, totals=_totals(load_id), lines=_lines(load_id), pick=None)
 
 
 def _pick_ctx(ld):
@@ -231,6 +241,25 @@ def picked_area(load_id):
         ha = picking.save_cells(post_actor(), load_id, [c for c in (request.form.get('cells') or '').split(',') if c], rnd)
         return done(f'Terilgan joy saqlandi: {ha:g} ga.' if ha else 'Belgilash olib tashlandi.', url_for('dala.docs', load_id=load_id))
     return render_template('dala_pick.html', ld=ld, pick=_pick_ctx(ld))
+
+
+@bp.post('/dala/reys/<int:load_id>/davom')
+@perm_required('load.full')
+def resume(load_id):
+    """Closed too early (lunch, rain) and still in the field: open the same trip again — its waybill number is kept."""
+    ld = _trip(load_id)
+    clerk_continue_trip(post_actor(), load_id)
+    if ld['waybill_id']:
+        after_waybill_change(post_actor(), ld['waybill_id'], 'davom ettirildi')
+    return done('Telashka yana ochildi — tortishni davom ettiring. Yopganingizda nakladnoy o‘sha raqam bilan yangilanadi.',
+                url_for('dala.trip', load_id=load_id))
+
+
+def combine_choices():
+    """Active combines with whose they are: ours (the company) or a hired one (its owner's name)."""
+    from ..accounting import combine_owner
+    return [dict(c, owner=combine_owner(c))
+            for c in q("SELECT id, code, operator_name, ownership FROM equipment WHERE kind='kombayn' AND active=1 ORDER BY code")]
 
 
 @bp.get('/dala/reys/<int:load_id>/hujjatlar')
