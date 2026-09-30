@@ -11,9 +11,8 @@
     <form method="post" class="form" style="margin-top:10px">{{ csrf() }}<input type="hidden" name="action" value="receiver">
       <div class="f"><label>Qabul qiluvchi (blankda yoziladi)</label><input class="input" name="receiver" value="{{ receiver }}" placeholder="FAYZ AGROKLASTER MCHJ (STIR 311919351)"></div>
       <div class="f"><button class="btn btn-light btn-sm">Saqlash</button>{% if not receiver_set and receiver %} <span class="tiny muted">oxirgi PQ-17 dan olindi</span>{% endif %}</div></form>
-    <p class="small">Har bir raqam <b>2 nusxada</b> chiqadi: 1-nusxa qabul qiluvchida, 2-nusxa bizda qoladi (raqam va QR bir xil). Bitta nusxa kerak bo‘lsa: PDF havolasi oxiriga <code>?nusxa=1</code>.</p>
-    <p class="small">Har bir blank — bitta A4 varaq: <b>tepada</b> bizning qism (reys, nakladnoy, brutto, tara, jo‘natilgan netto kg, qo‘l terimi / kombayn), <b>pastda</b> qabul qiluvchi qismi (brutto, tara, qabul qilingan kg, F.I.Sh., imzo, muhr). Raqamlar oldingisidan davom etadi.</p>
-    <p class="small">Punktda: blank to‘ldiriladi → uning <b>QR</b>i telefon kamerasi bilan skanerlanadi → telashka tanlanadi → blank rasmga olinadi → qabul. <b>Blank rasmisiz qabul yopilmaydi.</b></p>
+    <p class="small"><b>Dala nakladnoyi</b>: bitta A4 varaqda <b>2 ta</b> (qirqiladi). Hisobchi faqat telashka, dala, kg va ✓ qo‘l terimi / kombayn yozadi — qolgani QR orqali tizimda. Klasterga faqat <b>UY</b> kiradi.</p>
+    <p class="small">Dalada: telashka yopilganda blank QR i skanerlanadi → haydovchiga beriladi → punktda Yunus skanerlaydi.</p>
     {% if ov.batches %}<div class="table-wrap"><table class="t"><thead><tr><th>To‘plam</th><th>Raqamlar</th><th class="num">Soni</th><th></th></tr></thead><tbody>
     {% for bt in ov.batches %}<tr {% if new_batch == bt.batch %}style="background:#ecfdf5"{% endif %}><td>{{ bt.batch }}</td><td>{{ bt.a }} … {{ bt.b }}</td><td class="num">{{ bt.n }}</td>
       <td><a class="btn btn-light btn-sm" href="{{ url_for('admin.blanks_pdf', batch=bt.batch) }}" target="_blank">{{ icon('printer','sm') }} PDF</a></td></tr>{% endfor %}
