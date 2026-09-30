@@ -55,14 +55,14 @@
     {{ csrf() }}<input type="hidden" name="mode" id="pk-mode" value="bt">
     <div id="pk-step2">
       <h2 class="d-h1">2. Og‘irlik</h2>
-      <button type="button" class="btn btn-green btn-block d-big" id="pk-dala">✓ Dala nettosi bilan — {{ wb.net_kg|num }} kg</button>
+      <label class="d-l">Yuk xati № <span class="tiny muted">(punkt chekidagi raqam — bo‘lsa yozing, PQ-17 o‘zi bog‘lanadi)</span></label><input name="load_no" inputmode="numeric" class="d-num" placeholder="199045" autocomplete="off">
+      <button type="button" class="btn btn-green btn-block d-big" id="pk-dala" style="margin-top:10px">✓ Dala nettosi bilan — {{ wb.net_kg|num }} kg</button>
       <div class="tiny muted" style="text-align:center;margin:4px 0 12px">Odatda shu. Ko‘chadagi tarozida tortilgan bo‘lsa — pastga brutto va tarani yozing.</div>
       <div class="d-seg"><label><input type="radio" name="wmode" value="bt" checked><span>Brutto va tara</span></label><label><input type="radio" name="wmode" value="netto"><span>Tayyor netto</span></label></div>
       <div id="pk-bt">
         <label class="d-l">Brutto (kg)</label><input name="gross_kg" id="pk-g" inputmode="decimal" class="d-num" placeholder="0" autocomplete="off">
         <label class="d-l">Tara (kg)</label><input name="tare_kg" id="pk-t" inputmode="decimal" class="d-num" placeholder="0" autocomplete="off">
       </div>
-      <label class="d-l">Yuk xati № <span class="tiny muted">(punkt tarozisi chekidagi raqam, masalan 199045)</span></label><input name="load_no" inputmode="numeric" class="d-num" placeholder="199045" autocomplete="off">
       <div id="pk-nt" hidden><label class="d-l">Netto (kg) — tarozi ko‘rsatgani</label><input name="station_kg" id="pk-n" inputmode="decimal" class="d-num" placeholder="0" autocomplete="off"></div>
       {% if scale.connected %}<button type="button" class="btn btn-light" id="scale-read">{{ icon('download','sm') }} Tarozidan olish</button>{% endif %}
       <div class="pk-net" id="pk-net">Netto: <b>—</b></div>
