@@ -26,10 +26,10 @@
   <div class="uy-list">{% for it in items %}{{ item(it, True) }}{% else %}<div class="small muted">Hali telashka yo‘q.</div>{% endfor %}</div>
   <div class="uy-tot"><span>{{ items|length }} ta telashka · jami</span><b>{{ sent_kg|num }} kg</b></div>
   {% if can('station.receive') %}
-  {% set loose = cands|rejectattr('blank')|list %}
-  {% if loose and not pick_blank %}<details class="mt-s" open><summary class="small link">Blanksiz telashka qo‘shish ({{ loose|length }}) — bosing, ro‘yxatga tushadi</summary>
+  {% set loose = cands %}
+  {% if loose and not pick_blank %}<details class="mt-s" open><summary class="small link">Yo‘ldagi telashkalar ({{ loose|length }}) — blank skanerlanmasa, shu yerdan bosing</summary>
     <form method="post" action="{{ url_for('punkt.group_add', gid=g.id) }}" class="uy-pick">{{ csrf() }}
-    {% for c in loose %}<button class="pk-card" name="waybill_id" value="{{ c.id }}"><div class="pk-body"><b>{{ c.trailer }} · {{ c.trip_no }}</b><span class="small">{{ c.field_code }} · {{ c.net_kg|num }} kg</span></div></button>{% endfor %}</form></details>{% endif %}
+    {% for c in loose %}<button class="pk-card" name="waybill_id" value="{{ c.id }}"><div class="pk-body"><b>{{ c.trailer }} · {{ c.trip_no }}</b><span class="small">{{ c.field_code }} · {{ c.net_kg|num }} kg{% if c.blank %} · blank {{ c.blank }}{% endif %}</span></div></button>{% endfor %}</form></details>{% endif %}
   <form method="post" action="{{ url_for('punkt.group_close', gid=g.id) }}">{{ csrf() }}<button class="btn btn-primary btn-block d-big" {{ 'disabled' if not items }}>Hammasi shu — yopish ›</button></form>
   {% endif %}
 {% elif g.status == 'YUBORILDI' %}

@@ -192,7 +192,7 @@ def test_trailers_already_on_the_way_join_a_uy_without_blanks(app, world):
     with app.app_context():
         g = q('SELECT * FROM load_groups', one=True)
     page = yunus.get(f'/punkt/uy/{g["token"]}').get_data(as_text=True)
-    assert 'Blanksiz telashka qo‘shish (2)' in page and 'TL-01' in page and 'TL-02' in page
+    assert 'Yo‘ldagi telashkalar (2)' in page and 'TL-01' in page and 'TL-02' in page
     assert yunus.post(f'/punkt/uy/{g["id"]}/qosh', {'waybill_id': w1}).get_json()['ok']
     assert yunus.post(f'/punkt/uy/{g["id"]}/qosh', {'waybill_id': w2}).get_json()['kg'] == 1510
     page = yunus.get(f'/punkt/uy/{g["token"]}').get_data(as_text=True)
