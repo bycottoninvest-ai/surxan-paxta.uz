@@ -11,11 +11,16 @@
       <div class="f"><label>Telefon</label><input name="phone"></div>
       <div class="f"><button class="btn btn-primary btn-block">Saqlash</button></div></form></div></section>
   <section class="card s8"><div class="card-h"><h3>Ro‘yxat</h3></div>
-    <div class="table-wrap"><table class="t"><thead><tr><th>Nom</th><th>To‘liq F.I.Sh.</th><th>Telefon</th><th>Holat</th><th></th></tr></thead>
-      <tbody>{% for b in all_rows %}<tr><form method="post">{{ csrf() }}<input type="hidden" name="id" value="{{ b.id }}">
+    <div class="table-wrap"><table class="t"><thead><tr><th>Rasm</th><th>Nom</th><th>To‘liq F.I.Sh.</th><th>Telefon</th><th>Holat</th><th></th></tr></thead>
+      <tbody>{% for b in all_rows %}<tr><td><form method="post" action="{{ url_for('admin.set_face_photo', kind='brigadir', rid=b.id) }}" enctype="multipart/form-data" class="bph">{{ csrf() }}
+          <label title="Rasm qo‘yish">{% if faces.get(b.photo_id) %}<img src="{{ photo_url(faces[b.photo_id]) }}" alt="">{% else %}<span>📷</span>{% endif %}
+          <input type="file" name="photo" accept="image/*" hidden onchange="this.form.submit()"></label></form></td>
+        <form method="post">{{ csrf() }}<input type="hidden" name="id" value="{{ b.id }}">
         <td><input class="input" name="name" value="{{ b.name }}" style="height:36px"></td><td><input class="input" name="full_name" value="{{ b.full_name or '' }}" placeholder="kiritilmagan" style="height:36px"></td>
         <td><input class="input" name="phone" value="{{ b.phone or '' }}" style="height:36px"></td><td><label class="check"><input type="checkbox" name="active" value="1" {{ 'checked' if b.active }}> faol</label></td>
         <td><button class="btn btn-light btn-sm">Saqlash</button></td></form></tr>{% endfor %}</tbody></table></div>
-    <div class="card-b tiny muted">To‘liq ism-shariflar hali tasdiqlanmagan bo‘lsa bo‘sh qoldiring — tizim ularni o‘zi to‘ldirmaydi.</div></section>
+    <div class="card-b tiny muted">📷 ni bosib brigadir rasmini qo‘ying — bosh sahifada ko‘rinadi. To‘liq ism-shariflar hali tasdiqlanmagan bo‘lsa bo‘sh qoldiring — tizim ularni o‘zi to‘ldirmaydi.</div></section>
 </div>
+<style>.bph label{display:block;width:48px;height:48px;border-radius:10px;overflow:hidden;background:#e7eef8;cursor:pointer;text-align:center;line-height:48px;font-size:22px}
+.bph img{width:100%;height:100%;object-fit:cover}</style>
 {% endblock %}

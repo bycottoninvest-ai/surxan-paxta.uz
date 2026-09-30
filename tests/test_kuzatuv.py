@@ -112,7 +112,7 @@ def test_invite_link_request_and_photo_answer(app, world):
     assert admin.get(f'/media/{item["thumb_path"]}').status_code == 200
     assert world['juma'].get(f'/media/{item["path"]}').status_code == 404
     assert world['bux'].get('/kuzatuv').status_code in (302, 403)          # no access: sent back
-    dash = world['rahbar'].get('/?view=full').get_data(as_text=True)
+    dash = world['rahbar'].get('/?view=full&batafsil=1').get_data(as_text=True)
     assert 'Jonli kuzatuv (bugun)' in dash and item['thumb_path'] in dash
 
 

@@ -239,3 +239,36 @@ def test_received_alone_by_mistake_goes_back_and_into_a_uy(app, world):
     assert yunus.post(f'/punkt/uy/{g["id"]}/qabul', {'station_kg': '605'}, files={'photo': jpeg()}).get_json()['ok']
     again = yunus.post(f'/punkt/yuk/{w1}/qabul-bekor', {'reason': 'yana'}).get_json()
     assert again['ok'] is False and 'umumiy yuk' in again['error']
+
+
+def test_main_screen_bugungi_paxta(app, world):
+    """The main screen shows the way of today's cotton: picked → closed → sent → arrived → accepted, the combines with
+    their owner, hand picking by field, the punkt, fields, transport and the brigades — kg only for the field, money
+    only for money people."""
+    tally, yunus, ali, st = setup(app, world)
+    admin = world['admin']
+    with app.app_context():
+        from surxon.db import get_db
+        get_db().execute("UPDATE equipment SET ownership='external', operator_name='Farhod aka' WHERE code='K-02'")
+        k2 = q("SELECT id FROM equipment WHERE code='K-02'", one=True)['id']
+    w1 = closed_trip(app, tally, world, 'TL-01', ['140', '160'])
+    closed_trip(app, tally, world, 'TL-02', ['600', '700'], method='combine', combine=k2)
+    assert yunus.post(f'/punkt/yuk/{w1}/qabul', {'station_kg': '300'}).get_json()['ok']
+    page = admin.get('/').get_data(as_text=True).replace(' ', ' ').replace(' ', ' ')
+    assert 'BUGUNGI PAXTA' in page and 'TERILDI (jami)' in page and 'NAYMAN NETTO QABUL' in page
+    assert 'K-02 · Farhod aka (xizmat)' in page and 'KOMBAYNLAR TERIMI' in page and 'QO‘L TERIMI' in page
+    assert 'Juma ota' in page and 'BRIGADALAR BO‘YICHA TERIM' in page and 'KASSA' in page
+    assert 'o‘g‘irlik' not in page.lower() and 'kamomad' not in page.lower()
+    brig = world['juma'].get('/?view=full').get_data(as_text=True)
+    assert 'BUGUNGI PAXTA' in brig and 'KASSA' not in brig                          # no money for a brigadier
+    assert 'MAVSUM PAXTASI' in admin.get('/?davr=mavsum').get_data(as_text=True)
+    # the brigadier's face: uploaded on Brigadirlar, shown on the main screen
+    bid = world['b']['Juma ota']
+    r = admin.c.post(f'/admin/rasm/brigadir/{bid}', data={'photo': (io.BytesIO(jpeg((10, 120, 60), (300, 300))), 'j.jpg'),
+                                                        '_csrf': admin.csrf()}, content_type='multipart/form-data',
+                     headers={'X-Requested-With': 'fetch', 'Accept': 'application/json'}).get_json()
+    assert r['ok'], r
+    with app.app_context():
+        thumb = q('SELECT p.thumb_path FROM brigadiers b JOIN photos p ON p.id=b.photo_id WHERE b.id=?', (bid,), one=True)['thumb_path']
+    assert thumb in admin.get('/').get_data(as_text=True) and thumb in admin.get('/admin/brigadirlar').get_data(as_text=True)
+    assert world['juma'].c.post(f'/admin/rasm/brigadir/{bid}', data={'_csrf': world['juma'].csrf()}).status_code in (302, 403)

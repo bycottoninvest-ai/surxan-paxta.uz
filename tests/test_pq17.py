@@ -154,6 +154,6 @@ def test_pq17_strip_on_dashboard(app, world, admin):
                         content_type='multipart/form-data')
     with app.app_context():
         doc_date = q('SELECT doc_date FROM pq17_docs', one=True)['doc_date']
-    page = admin.get(f'/?view=full&date={doc_date}').get_data(as_text=True).replace(' ', ' ').replace('\xa0', ' ')
+    page = admin.get(f'/?view=full&batafsil=1&date={doc_date}').get_data(as_text=True).replace(' ', ' ').replace('\xa0', ' ')
     assert 'Klaster (PQ-17)' in page and 'Klaster to‘laydi' in page and '471' in page and 'namlik ' in page and '✓ mos' in page
     assert 'so‘m' not in page.split('kpi-pq')[1].split('</a>')[0]          # kg only, no money

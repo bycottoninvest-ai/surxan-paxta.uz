@@ -1,0 +1,135 @@
+{% extends 'base.html' %}
+{% from 'macros.html' import icon with context %}
+{% set page_title = 'Bosh sahifa' %}
+{% macro kg(v) %}{{ (v or 0)|num }}<small> kg</small>{% endmacro %}
+{% macro thumb(path, ic, cls='') %}{% if path %}<img class="bp-ph {{ cls }}" loading="lazy" src="{{ photo_url(path) }}" alt="">{% else %}<span class="bp-ph bp-ph-ic {{ cls }}">{{ icon(ic) }}</span>{% endif %}{% endmacro %}
+{% block content %}
+{% set f = b.flow %}{% set p = b.punkt %}
+<div class="bp">
+  <div class="bp-head">
+    <div><div class="bp-hi">Xush kelibsiz, {{ current_user['full_name'] }}</div>
+      <h1>{{ {'bugun': 'BUGUNGI PAXTA', 'kecha': 'KECHAGI PAXTA', 'mavsum': 'MAVSUM PAXTASI'}.get(davr, day|d ~ ' PAXTASI') }}</h1></div>
+    <div class="bp-clock">{{ icon('clock') }}<b id="bp-time">{{ now_time }}</b><span>{{ day|d }}</span></div>
+    <div class="bp-brand"><b>SURXAN-PAXTA.UZ</b><span>DALADAN — OMBORGACHA</span></div>
+  </div>
+  <div class="bp-tabs">
+    <a class="{{ 'on' if davr == 'kecha' }}" href="{{ url_for('main.dashboard', davr='kecha') }}">Kecha</a>
+    <a class="{{ 'on' if davr == 'bugun' }}" href="{{ url_for('main.dashboard') }}">Bugun</a>
+    <a class="{{ 'on' if davr == 'mavsum' }}" href="{{ url_for('main.dashboard', davr='mavsum') }}">Mavsum</a>
+    <form method="get" class="bp-date">{{ icon('calendar') }}<input type="date" name="date" value="{{ day }}" onchange="this.form.submit()"></form>
+    <a class="bp-more" href="{{ url_for('main.dashboard', batafsil=1, date=day) }}">{{ icon('menu') }} Batafsil (xarita, grafik)</a>
+  </div>
+
+  <div class="bp-flow">
+    {% for c, ic, t, v, s in [('g', 'sprout', 'TERILDI (jami)', f.harvest, 'Kombayn + qo‘l terim'),
+                               ('b', 'scale', 'TELASHKA YOPILDI', f.closed, 'Dala netto'),
+                               ('o', 'truck', 'NAYMANGA KETDI', f.sent, 'Jo‘natildi'),
+                               ('v', 'pin', 'NAYMANGA YETDI', f.arrived, 'Yetib borgan'),
+                               ('d', 'factory', 'NAYMAN NETTO QABUL', f.accepted, 'Netto qabul')] %}
+    <div class="bp-fc bp-{{ c }}"><span class="bp-fi">{{ icon(ic) }}</span><div><em>{{ t }}</em><b>{{ kg(v) }}</b><span>{{ s }}</span></div></div>
+    {% if not loop.last %}<span class="bp-arr">→</span>{% endif %}{% endfor %}
+  </div>
+
+  <div class="bp-grid">
+    <section class="bp-card bp-c1"><div class="bp-ch">{{ icon('combine') }}<h3>KOMBAYNLAR TERIMI</h3><span>Jami: <b>{{ b.combines|length }} ta</b></span><span>Jami terim: <b class="bp-gr">{{ b.comb_total|num }} kg</b></span></div>
+      {% for c in b.combines %}<div class="bp-row">{{ thumb(c.thumb, 'combine') }}<div class="bp-rt"><b>{{ c.code }} · {{ c.owner }}</b><span>{{ c.fields or '—' }}</span></div><div class="bp-rk">{{ kg(c.kg) }}</div></div>
+      {% else %}<div class="bp-empty">Kombayn terimi yo‘q</div>{% endfor %}
+    </section>
+
+    <section class="bp-card bp-c2"><div class="bp-ch">{{ icon('truck') }}<h3>NAYMAN HOLATI</h3>{% if can('waybill.view') %}<a href="{{ url_for('ops.waybills') }}">Batafsil →</a>{% endif %}</div>
+      <div class="bp-tiles">
+        <div class="bp-t t-o">{{ icon('truck') }}<span>Ketdi</span><b>{{ kg(p.sent) }}</b></div>
+        <div class="bp-t t-v">{{ icon('pin') }}<span>Yetib bordi</span><b>{{ kg(p.arrived) }}</b></div>
+        <div class="bp-t t-b">💧<span>Namlik</span><b>{{ ('%.1f'|format(p.moist) ~ ' %') if p.moist is not none else '—' }}</b><small>PQ-17</small></div>
+        <div class="bp-t t-r">{{ icon('scale') }}<span>Farq</span><b>{{ ('%+.0f'|format(p.diff)) if p.n else '—' }}<small> kg</small></b><small>dala / punkt</small></div>
+        <div class="bp-t t-g">🧺<span>Ifloslik</span><b>{{ ('%.1f'|format(p.dirt) ~ ' %') if p.dirt is not none else '—' }}</b><small>PQ-17</small></div>
+        <div class="bp-t t-d">{{ icon('factory') }}<span>Netto qabul</span><b>{{ kg(p.accepted) }}</b><small>{{ ('(%.1f%%)'|format(p.pct)) if p.pct is not none else '' }}</small></div>
+      </div>
+      <div class="bp-real">{% if p.real is not none %}Klaster (PQ-17) real netto: <b>{{ p.real|num }} kg</b>{% if p.deduction %} <small>· chegirma {{ p.deduction|num }} kg</small>{% endif %}
+        {% else %}Nayman netto qabul: <b>{{ p.accepted|num }} kg</b> <small>· PQ-17 kelganda aniqlanadi</small>{% endif %}</div>
+    </section>
+
+    <section class="bp-card bp-c1"><div class="bp-ch">{{ icon('users') }}<h3>QO‘L TERIMI</h3><span>Jami: <b>{{ b.hand|length }} ta dala</b></span><span>Jami qo‘l terim: <b class="bp-gr">{{ b.hand_total|num }} kg</b></span></div>
+      {% for h in b.hand %}<div class="bp-row">{{ thumb(h.thumb, 'cotton') }}<div class="bp-rt"><b>{{ h.field_name }}</b><span>{{ h.brigadier_name or '' }}{% if h.people %} · {{ h.people }} kishi{% endif %}</span></div><div class="bp-rk">{{ kg(h.kg) }}</div></div>
+      {% else %}<div class="bp-empty">Qo‘l terimi yo‘q</div>{% endfor %}
+    </section>
+
+    <div class="bp-c2 bp-mini">
+      <section class="bp-card"><div class="bp-ch">{{ icon('field') }}<h3>DALALAR HOLATI</h3></div>
+        <div class="bp-3"><div><span>Jami</span><b>{{ b.fields.area|num(0) }} ga</b></div><div><span>Terilmoqda</span><b>{{ b.fields.started|num(0) }} ga</b></div><div><span>Qolgan</span><b>{{ b.fields.left|num(0) }} ga</b></div></div>
+        <div class="bp-bar"><i style="width:{{ b.fields.pct }}%"></i></div><div class="bp-pct">{{ b.fields.pct }}%</div></section>
+      <section class="bp-card"><div class="bp-ch">{{ icon('trailer') }}<h3>TRANSPORT VA NAVBAT</h3></div>
+        <div class="bp-3"><div><span>Yo‘ldagi</span><b>{{ b.transport.on_way }} ta</b></div><div><span>Navbatda</span><b>{{ b.transport.queue }} ta</b></div><div><span>Dalada</span><b>{{ b.transport.in_field }} ta</b></div></div></section>
+      <section class="bp-card"><div class="bp-ch">{{ icon('fuel') }}<h3>YOQILG‘I</h3></div><div class="bp-big"><span>{{ 'Sarf' }}</span><b>{{ b.fuel|num }} litr</b></div></section>
+      {% if b.cash is not none %}<section class="bp-card"><div class="bp-ch">{{ icon('wallet') }}<h3>KASSA</h3></div><div class="bp-big"><span>To‘langan</span><b>{{ b.cash|num }} so‘m</b></div></section>{% endif %}
+    </div>
+  </div>
+
+  <section class="bp-card bp-brig"><div class="bp-ch">{{ icon('users') }}<h3>BRIGADALAR BO‘YICHA TERIM</h3>{% if can('masterdata.write') %}<a href="{{ url_for('admin.brigadiers') }}">Barchasi →</a>{% endif %}</div>
+    <div class="bp-bgrid">{% for r in b.brigades %}
+      <div class="bp-bc">{% if r.thumb %}<img class="bp-av" loading="lazy" src="{{ photo_url(r.thumb) }}" alt="">{% else %}<span class="bp-av bp-av-i">{{ (r.name or '?')[:1] }}</span>{% endif %}
+        <div class="bp-bt"><b>{{ r.name }}</b>
+          <div class="bp-bs"><span>{{ icon('field','sm') }} {{ r.area|num(0) }} ga</span><span>{{ icon('cotton','sm') }} {{ r.kg|num }} kg</span>{% if r.per_ha %}<span>{{ icon('chart','sm') }} {{ r.per_ha|num }} kg/ga</span>{% endif %}</div>
+          <div class="bp-bar"><i style="width:{{ r.bar }}%"></i></div></div></div>
+    {% endfor %}</div>
+    <div class="bp-btot">{{ b.brig_total|num }} kg</div>
+  </section>
+  <div class="bp-foot"><span>SURXON TAXIATOSH TEXTILE · SURXAN-PAXTA.UZ · {{ year }}</span><span class="bp-gr">Paxta — bizning kelajagimiz! 🌱</span></div>
+</div>
+<style>
+.bp{--g:#15803d;--b:#1d6fe0;--o:#f97316;--v:#7c3aed;--d:#166534;display:flex;flex-direction:column;gap:14px}
+.bp-head{display:flex;align-items:center;gap:24px;flex-wrap:wrap}.bp-head>div:first-child{flex:1;min-width:240px}
+.bp-hi{color:#5b6b80;font-size:14px}.bp-head h1{margin:0;font-size:34px;font-weight:900;color:#0b2b55;letter-spacing:.5px}
+.bp-clock{display:flex;align-items:center;gap:8px;color:#0b2b55}.bp-clock .ico{width:26px;height:26px}.bp-clock b{font-size:26px}.bp-clock span{color:#5b6b80}
+.bp-brand{text-align:right;color:#1d4ed8}.bp-brand b{display:block;font-size:22px;font-weight:900}.bp-brand span{font-size:12px;font-weight:700;color:#0b2b55}
+.bp-tabs{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.bp-tabs>a,.bp-date{background:#fff;border:1px solid #e3e9f2;border-radius:12px;padding:10px 26px;font-weight:700;color:#0b2b55;text-decoration:none}
+.bp-tabs>a.on{background:var(--b);color:#fff;border-color:var(--b)}
+.bp-date{display:flex;align-items:center;gap:8px;padding:6px 14px}.bp-date input{border:0;font-weight:700;color:#0b2b55;background:transparent}
+.bp-tabs .bp-more{margin-left:auto;display:flex;align-items:center;gap:8px}
+.bp-flow{display:flex;align-items:stretch;gap:8px}
+.bp-fc{flex:1;display:flex;gap:12px;align-items:center;background:#fff;border-radius:16px;overflow:hidden;min-width:0;box-shadow:0 2px 8px rgba(11,43,85,.06)}
+.bp-fi{align-self:stretch;display:flex;align-items:center;justify-content:center;width:78px;flex:0 0 78px;color:#fff}.bp-fi .ico{width:40px;height:40px}
+.bp-fc>div{padding:10px 8px 10px 0;min-width:0}.bp-fc em{display:block;font-style:normal;font-weight:800;font-size:13px}
+.bp-fc b{display:block;font-size:30px;font-weight:900;color:#0b2b55;white-space:nowrap}.bp-fc b small{font-size:15px;font-weight:700}.bp-fc span{font-size:13px;color:#334155}
+.bp-g .bp-fi{background:var(--g)}.bp-g em{color:var(--g)}.bp-b .bp-fi{background:var(--b)}.bp-b em{color:var(--b)}
+.bp-o .bp-fi{background:var(--o)}.bp-o em{color:var(--o)}.bp-v .bp-fi{background:var(--v)}.bp-v em{color:var(--v)}.bp-d .bp-fi{background:var(--d)}.bp-d em{color:var(--d)}
+.bp-arr{align-self:center;font-size:24px;color:#0b2b55;font-weight:900}
+.bp-grid{display:grid;grid-template-columns:1fr 1.1fr;gap:14px}
+.bp-card{background:#fff;border-radius:16px;padding:14px 16px;box-shadow:0 2px 8px rgba(11,43,85,.06)}
+.bp-ch{display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap}.bp-ch .ico{width:26px;height:26px;color:#0b2b55}
+.bp-ch h3{margin:0;font-size:15px;font-weight:900;color:#1d4ed8;flex:1}.bp-ch span{font-size:13px;color:#334155}.bp-ch a{font-size:13px;font-weight:700}
+.bp-gr{color:var(--g)}
+.bp-row{display:flex;align-items:center;gap:14px;padding:6px;border-radius:12px;background:#f5f8fc;margin-bottom:6px}
+.bp-ph{width:120px;height:58px;border-radius:10px;object-fit:cover;flex:0 0 120px}.bp-ph-ic{display:flex;align-items:center;justify-content:center;background:#e7eef8;color:#1d4ed8}.bp-ph-ic .ico{width:30px;height:30px}
+.bp-rt{flex:1;min-width:0}.bp-rt b{display:block;color:#1d3a8a;font-size:16px}.bp-rt span{font-size:13px;color:#475569}
+.bp-rk{font-size:24px;font-weight:900;color:#0b2b55;white-space:nowrap;padding-right:10px}.bp-rk small{font-size:13px}
+.bp-empty{color:#8a97aa;padding:18px;text-align:center}
+.bp-tiles{display:grid;grid-template-columns:repeat(6,1fr);gap:8px}
+.bp-t{border-radius:12px;padding:10px 6px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:2px;font-size:22px}
+.bp-t .ico{width:28px;height:28px}.bp-t span{font-size:13px;color:#334155}.bp-t b{font-size:19px;color:#0b2b55;white-space:nowrap}.bp-t b small{font-size:12px}.bp-t>small{font-size:11px;color:#64748b}
+.t-o{background:#fff7ed;color:var(--o)}.t-v{background:#f5f3ff;color:var(--v)}.t-b{background:#eff6ff}.t-r{background:#fef2f2;color:#dc2626}.t-g{background:#f8fafc}.t-d{background:#ecfdf5;color:var(--d)}
+.bp-real{margin-top:10px;background:#ecfdf5;border-radius:12px;padding:12px;text-align:center;font-size:17px;color:#0b2b55}.bp-real b{color:var(--g);font-size:26px}
+.bp-mini{display:grid;grid-template-columns:1.7fr 1.3fr .9fr .9fr;gap:10px}.bp-mini .bp-ch h3{font-size:12px}
+.bp-3{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;text-align:center}.bp-3 span{display:block;font-size:11px;color:#64748b;white-space:nowrap}.bp-3 b{font-size:16px;color:#0b2b55;white-space:nowrap}
+.bp-bar{height:10px;background:#e5eaf1;border-radius:99px;overflow:hidden;margin-top:10px}.bp-bar i{display:block;height:100%;background:var(--g);border-radius:99px}
+.bp-pct{text-align:right;font-weight:800;font-size:13px;margin-top:2px}
+.bp-big span{display:block;font-size:12px;color:#64748b}.bp-big b{font-size:24px;color:#0b2b55;white-space:nowrap}
+.bp-bgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:10px}
+.bp-bc{display:flex;gap:14px;align-items:center;background:#f5f8fc;border-radius:14px;padding:10px}
+.bp-av{width:92px;height:92px;border-radius:12px;object-fit:cover;flex:0 0 92px}.bp-av-i{display:flex;align-items:center;justify-content:center;background:#dbe7f7;color:#1d4ed8;font-size:40px;font-weight:900}
+.bp-bt{flex:1;min-width:0}.bp-bt>b{font-size:19px;color:#0b2b55}.bp-bs{display:flex;gap:12px;flex-wrap:wrap;font-size:13px;font-weight:700;color:#0b2b55;margin-top:6px}.bp-bs .ico{width:16px;height:16px;color:var(--g)}
+.bp-btot{text-align:right;font-size:26px;font-weight:900;color:var(--g);margin-top:8px}
+.bp-foot{display:flex;justify-content:space-between;font-size:13px;color:#1d4ed8;padding:4px 2px;flex-wrap:wrap;gap:6px}
+@media (max-width:1300px){.bp-flow{flex-wrap:wrap}.bp-fc{flex:1 1 30%}.bp-arr{display:none}.bp-grid{grid-template-columns:1fr}.bp-tiles{grid-template-columns:repeat(3,1fr)}}
+@media (max-width:700px){.bp-fc{flex:1 1 100%}.bp-mini{grid-template-columns:1fr 1fr}.bp-head h1{font-size:26px}.bp-ph{width:80px;flex-basis:80px}}
+</style>
+{% endblock %}
+{% block scripts %}<script>
+(() => {   // the clock ticks; the numbers refresh every 2 minutes while the page is on screen
+  const t = document.getElementById('bp-time');
+  const tick = () => { const d = new Date(); t.textContent = String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); };
+  tick(); setInterval(tick, 15000);
+  setInterval(() => { if (!document.hidden) location.reload(); }, 120000);
+})();
+</script>{% endblock %}

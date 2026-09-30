@@ -24,7 +24,10 @@
         <div class="f h"><label>Ish vaqti</label><input name="work_hours" value="{{ edit.work_hours or '' if edit else '' }}" placeholder="{{ def_hours }}"></div>
       </details>
       {% if edit %}<div class="f"><label class="check"><input type="checkbox" name="active" value="1" {{ 'checked' if edit.active }}> Faol</label></div>{% endif %}
-      <div class="f"><button class="btn btn-primary btn-block">Saqlash</button></div></form></div></section>
+      <div class="f"><button class="btn btn-primary btn-block">Saqlash</button></div></form>
+    {% if edit %}<form method="post" action="{{ url_for('admin.set_face_photo', kind='texnika', rid=edit.id) }}" enctype="multipart/form-data" class="form" style="margin-top:10px">{{ csrf() }}
+      <label class="file-drop d-photo"><input type="file" name="photo" accept="image/*" data-preview required>📷 <b>Texnika rasmi</b><span class="tiny muted">bosh sahifada kombayn yonida ko‘rinadi</span><div class="previews"></div></label>
+      <button class="btn btn-light btn-block">Rasmni saqlash</button></form>{% endif %}</div></section>
   {% endif %}
   <section class="card {{ 's8' if can('masterdata.write') else 's12' }}"><div class="card-h"><h3>Ro‘yxat ({{ year }})</h3></div>
     <div class="table-wrap"><table class="t"><thead><tr><th>Turi</th><th>Kod</th><th>Raqam</th><th>Operator</th><th>Egalik</th><th class="num">Reyslar</th><th class="num">Kombayn kg</th><th>Hozir</th><th>GPS</th><th></th></tr></thead>

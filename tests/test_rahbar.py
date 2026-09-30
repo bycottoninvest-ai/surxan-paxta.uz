@@ -85,7 +85,7 @@ def test_director_phone_lands_on_panel_and_computer_keeps_dashboard(app, world):
     r = phone.get('/')
     assert r.status_code == 302 and r.headers['Location'].endswith('/rahbar')
     assert world['rahbar'].get('/').status_code == 200                     # computer: the existing dashboard
-    assert 'fields-map' in world['rahbar'].get('/?view=full').get_data(as_text=True)
+    assert 'fields-map' in world['rahbar'].get('/?view=full&batafsil=1').get_data(as_text=True)
 
 
 def test_fuel_card_when_used(app, world):
@@ -150,7 +150,7 @@ def test_tablet_gets_full_dashboard_phone_gets_director_panel(app, world):
     ipad = 'Mozilla/5.0 (iPad; CPU OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/604.1'
     for ua in (tab, ipad):
         r = world['rahbar'].c.get('/', headers={'User-Agent': ua})
-        assert r.status_code == 200 and 'Dalalar xaritasi' in r.get_data(as_text=True)
+        assert r.status_code == 200 and 'BUGUNGI PAXTA' in r.get_data(as_text=True)
     assert world['rahbar'].c.get('/', headers={'User-Agent': PHONE}).status_code == 302      # phone → /rahbar
 
 
@@ -188,7 +188,7 @@ def test_staff_photo_name_on_map_dashboard_card_and_stale_reminder(app, world, m
         get_db().execute('''INSERT INTO trackers(imei, equipment_id, first_seen, last_seen, last_lat, last_lon, last_speed, last_fix_at)
                             SELECT '0359339075012345', id, ?, ?, 42.315, 59.605, 12, ? FROM equipment WHERE code='T-01' ''',
                          (real_now(), real_now(), real_now()))
-    dash = admin.get('/').get_data(as_text=True)
+    dash = admin.get('/?batafsil=1').get_data(as_text=True)
     assert 'Odamlar va texnika xaritada' in dash and 'spxStaffMap' in dash and 'SM_MACHINES' in dash and '"T-01"' in dash
     assert 'Odamlar va texnika' not in world['juma'].get('/').get_data(as_text=True)    # brigadier: no staff map
     page = world['rahbar'].get('/rahbar/xodimlar').get_data(as_text=True)

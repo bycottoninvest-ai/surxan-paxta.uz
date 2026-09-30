@@ -10,7 +10,7 @@ from ..photos import CATEGORIES, uploads_from_request
 from ..security import can, login_required, perm_required, require
 from ..services import upload_archive_photo, void_photo
 from ..settings import get_float, get_setting
-from ..utils import UserError, parse_date, parse_int, today_str
+from ..utils import UserError, now_str, parse_date, parse_int, today_str
 from . import done, post_actor, scope, season_arg
 
 bp = Blueprint('main', __name__)
@@ -168,6 +168,14 @@ def _kuz(day):
 
 
 def full_dashboard(year, day, brig, kpi):
+    if not request.args.get('batafsil'):          # “Bugungi paxta”: the whole way in one look; the old page is “Batafsil”
+        from .. import board
+        davr = getattr(g, 'davr', 'bugun')
+        dan, gacha = ((f'{year}-01-01', today_str() if str(year) == today_str()[:4] else f'{year}-12-31')
+                      if davr == 'mavsum' else (day, day))
+        money = g.user['role'] in ('admin', 'manager', 'accountant', 'cashier')
+        return render_template('dashboard_board.html', b=board.build(year, dan, gacha, brig, money=money), davr=davr,
+                               day=day, year=year, now_time=now_str()[11:16])
     tractors, combines = queries.equipment_live(day)
     fields = queries.field_yields(year, brig)
     brigs = queries.brigadier_results(year)

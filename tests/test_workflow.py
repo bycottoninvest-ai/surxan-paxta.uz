@@ -85,7 +85,7 @@ def test_full_chain_field_to_payment(app, world):
         who = {a['action']: a['user_id'] for a in q("SELECT action, user_id FROM audit_logs WHERE entity_type IN ('weighing','trailer_load')")}
         assert who['TOLDI'] != who['TARE']
     # visible on dashboard, waybill page and photo archive
-    assert 'PA-000001' in admin.get('/').get_data(as_text=True)
+    assert 'PA-000001' in admin.get('/?batafsil=1').get_data(as_text=True)
     page = admin.get(f'/nakladnoy/{wid}').get_data(as_text=True)
     assert 'PA-000001' in page and 'TOLDI' in page
     assert 'Telashka' in admin.get('/foto').get_data(as_text=True)

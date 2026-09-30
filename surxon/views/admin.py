@@ -113,8 +113,33 @@ def brigadiers():
                        checkbox('active') if request.form.get('id') else True)
         return done('Brigadir saqlandi.', url_for('admin.brigadiers'))
     year = season_arg()
-    return render_template('admin_brigadiers.html', rows=queries.brigadier_results(year), year=year,
-                           all_rows=q('SELECT * FROM brigadiers ORDER BY active DESC, name'))
+    all_rows = q('SELECT * FROM brigadiers ORDER BY active DESC, name')
+    faces = {r['id']: r['thumb_path'] for r in q('SELECT id, thumb_path FROM photos WHERE id IN (SELECT photo_id FROM brigadiers)')}
+    return render_template('admin_brigadiers.html', rows=queries.brigadier_results(year), year=year, all_rows=all_rows, faces=faces)
+
+
+@bp.post('/rasm/<kind>/<int:rid>')
+@perm_required('masterdata.write')
+def set_face_photo(kind, rid):
+    """The face shown on the main screen: a brigadier's photo, or a combine's (any machine's) picture."""
+    from ..db import tx
+    from ..photos import read_upload, store_photo
+    from ..security import audit
+    table = {'brigadir': ('brigadiers', 'worker', 'brigadier'), 'texnika': ('equipment', 'combine', 'equipment')}.get(kind)
+    if not table:
+        abort(404)
+    data = read_upload(request.files.get('photo'))
+    if not data:
+        raise UserError('Rasmni tanlang.')
+    actor = post_actor()
+    with tx() as db:
+        if not db.execute(f'SELECT 1 FROM {table[0]} WHERE id=?', (rid,)).fetchone():
+            raise UserError('Topilmadi.')
+        pid = store_photo(db, actor, data, category=table[1], entity_type=table[2], entity_id=rid, caption='Bosh sahifa rasmi')
+        db.execute(f'UPDATE {table[0]} SET photo_id=? WHERE id=?', (pid, rid))
+        audit(db, actor, 'UPDATE', table[2], rid, new={'photo_id': pid})
+    back = url_for('admin.brigadiers') if kind == 'brigadir' else url_for('admin.equipment', edit=rid)
+    return done('Rasm saqlandi — bosh sahifada ko‘rinadi.', back)
 
 
 @bp.route('/kassalar', methods=['GET', 'POST'])

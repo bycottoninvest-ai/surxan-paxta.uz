@@ -137,7 +137,7 @@ def test_gps_is_saved_with_trip_and_weighings_and_shown_on_map(app, world):
         assert q('SELECT open_lat, open_acc FROM trailer_loads WHERE id=?', (lid,), one=True)['open_lat'] == 41.2995
         rows = q('SELECT lat, gps_acc FROM harvests WHERE load_id=? ORDER BY id', (lid,))
         assert rows[0]['lat'] == 41.29961 and rows[0]['gps_acc'] == 8 and rows[1]['lat'] is None
-    page = admin.get('/?view=full').get_data(as_text=True)
+    page = admin.get('/?view=full&batafsil=1').get_data(as_text=True)
     assert 'picked-data' in page and '41.29961' in page and 'Terilgan joylar' in page
     # the field picker page offers the location button
     assert 'Joylashuvdan aniqlash' in tally.get('/dala/yangi').get_data(as_text=True)
@@ -244,7 +244,7 @@ def test_punkt_coordinates_give_estimated_arrival(app, world):
         t = transit.on_the_way()
         assert len(t) == 1 and t[0]['eta'] and 5.5 < t[0]['km'] < 7.5 and 15 <= t[0]['minutes'] <= 25    # 5.56 km × 1.3 at 20 km/h
     assert '≈' in punkt.get('/punkt').get_data(as_text=True)
-    assert 'transit-data' in admin.get('/?view=full').get_data(as_text=True)
+    assert 'transit-data' in admin.get('/?view=full&batafsil=1').get_data(as_text=True)
 
 
 def test_cancelled_trip_never_counts_in_pay_even_if_left_half_cancelled(app, world):
@@ -280,11 +280,11 @@ def test_dashboard_today_yesterday_season_and_archive_only(app, world):
         y = (date.fromisoformat(today_str()) - timedelta(days=1)).isoformat()
         get_db().execute('UPDATE harvests SET work_date=? WHERE load_id=?', (y, lid1))       # yesterday's trip
     assert admin.post(f'/nakladnoy/{wb2}/bekor', {'reason': 'Xato'}).get_json()['ok']       # today's trip cancelled
-    t = flat(admin.get('/?view=full&davr=bugun').get_data(as_text=True))
+    t = flat(admin.get('/?view=full&batafsil=1&davr=bugun').get_data(as_text=True))
     assert 'Bugungi terim (kg) 0' in t
-    t = flat(admin.get('/?view=full&davr=kecha').get_data(as_text=True))
+    t = flat(admin.get('/?view=full&batafsil=1&davr=kecha').get_data(as_text=True))
     assert 'Kechagi terim (kg) 100' in t
-    t = flat(admin.get('/?view=full&davr=mavsum').get_data(as_text=True))
+    t = flat(admin.get('/?view=full&batafsil=1&davr=mavsum').get_data(as_text=True))
     assert 'Mavsum terimi (kg) 100' in t                                                    # the cancelled 70 never counts
     # lists show only real work; the cancelled one is in the admin's archive
     wbs = admin.get('/nakladnoylar').get_data(as_text=True)

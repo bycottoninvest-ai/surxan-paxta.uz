@@ -4,7 +4,7 @@ from conftest import Client, jpeg, open_load
 
 PHONE = 'Mozilla/5.0 (Linux; Android 13; SM-A135F) AppleWebKit/537.36 Chrome/124 Mobile Safari/537.36'
 
-GET_PAGES = ['/', '/?view=full', '/?view=mobile', '/terim', '/telashkalar', '/tarozi', '/nakladnoylar', '/nayman',
+GET_PAGES = ['/', '/?view=full&batafsil=1', '/?view=mobile', '/terim', '/telashkalar', '/tarozi', '/nakladnoylar', '/nayman',
              '/ishchilar', '/ishchilar/hisob-kitob', '/tolovlar', '/kassa', '/xarajatlar', '/hisobotlar', '/foto', '/audit',
              '/admin/foydalanuvchilar', '/admin/brigadirlar', '/admin/dalalar', '/admin/texnikalar', '/admin/sozlamalar',
              '/admin/mavsumlar', '/admin/zaxira', '/admin/integratsiyalar', '/parol', '/qidiruv?q=TL', '/tv',
@@ -57,7 +57,9 @@ def test_phone_gets_light_home_and_desktop_gets_dashboard(app, world):
     assert 'm-actions' in html and 'Terim kiritish' in html
     assert 'chart.umd.js' not in html and 'leaflet.js' not in html      # no heavy libraries on the phone home
     desk = world['admin'].get('/').get_data(as_text=True)
-    assert 'harvest-chart' in desk and 'fields-map' in desk
+    assert 'BUGUNGI PAXTA' in desk and 'NAYMAN HOLATI' in desk and 'Batafsil (xarita, grafik)' in desk
+    old = world['admin'].get('/?batafsil=1').get_data(as_text=True)          # the detailed page stays one tap away
+    assert 'harvest-chart' in old and 'fields-map' in old
 
 
 def test_role_home_screens(app, world):
