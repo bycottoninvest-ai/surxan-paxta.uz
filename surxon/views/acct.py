@@ -453,10 +453,13 @@ def combines():
         action = request.form.get('action')
         if action == 'tariff':
             ttype = request.form.get('tariff_type') or None
-            A.set_combine_tariff(post_actor(), cid, tariff_type=ttype,
-                                 tariff_rate=parse_money(request.form.get('tariff_rate'), required=bool(ttype)),
-                                 operator_name=request.form.get('operator_name'),
-                                 ownership=request.form.get('ownership') or None)
+            whole = request.form.get('whole_season') == '1'
+            n = A.set_combine_tariff(post_actor(), cid, tariff_type=ttype,
+                                     tariff_rate=parse_money(request.form.get('tariff_rate'), required=bool(ttype)),
+                                     operator_name=request.form.get('operator_name'),
+                                     ownership=request.form.get('ownership') or None, whole_season=whole)
+            if whole:
+                return done(f'Tarif saqlandi va butun mavsumga qo‘llandi ({n} ta tortish qayta hisoblandi).', url_for('acct.combines'))
             return done('Tarif saqlandi. U bundan keyingi ishga qo‘llanadi; oldingi hisob o‘zgarmaydi.', url_for('acct.combines'))
         if action == 'work':
             A.add_combine_work(post_actor(), cid, work_date=parse_date(request.form.get('work_date') or today_str(), 'Sana'),
@@ -474,7 +477,8 @@ def combines():
         r['fuel_l'] = fuel.get(r['id'], 0)
     return render_template('acct_combines.html', rows=rows, year=year, tariffs=A.TARIFF_TYPES,
                            fields=q('SELECT id, name FROM fields WHERE active=1 ORDER BY code'),
-                           total={k: sum(r[k] for r in rows) for k in ('earned', 'paid', 'balance', 'kg')})
+                           total={k: sum(r[k] for r in rows) for k in ('earned', 'paid', 'balance', 'kg', 'pay_kg', 'waiting_kg',
+                                                                       'pq_wait_kg', 'provisional_amount', 'pending')})
 
 
 @bp.get('/buxgalteriya/kombaynlar/<int:cid>')

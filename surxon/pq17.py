@@ -17,7 +17,7 @@ from flask import current_app
 from .db import get_db, q, tx
 from .security import audit
 from .settings import get_setting
-from .utils import UserError, now_str
+from .utils import UserError, now_str, today_str
 
 HAND, COMBINE = 'hand', 'combine'
 
@@ -101,10 +101,12 @@ def find_trip(db, d):
                         AND NOT EXISTS (SELECT 1 FROM load_group_items i WHERE i.waybill_id=wb.id)""", (d['load_no'],)).fetchone()
     if r:
         return r['id'], 'yuk xati', None
-    if not d.get('doc_date'):
-        return None, None, None
-    day = date.fromisoformat(d['doc_date'])
-    lo, hi = (day - timedelta(days=1)).isoformat(), (day + timedelta(days=1)).isoformat()
+    if d.get('doc_date'):
+        day = date.fromisoformat(d['doc_date'])
+        lo, hi = (day - timedelta(days=1)).isoformat(), (day + timedelta(days=1)).isoformat()
+    else:                       # the date was not read from the PDF: the week before it was uploaded (still one match only)
+        day = date.fromisoformat((d.get('uploaded_at') or today_str())[:10])
+        lo, hi = (day - timedelta(days=7)).isoformat(), day.isoformat()
     rows = db.execute("""SELECT wb.id FROM nayman_receipts nr JOIN waybills wb ON wb.id=nr.waybill_id
                          WHERE wb.status<>'BEKOR' AND ABS(nr.accepted_kg - ?) < 0.5 AND nr.received_date BETWEEN ? AND ?
                            AND NOT EXISTS (SELECT 1 FROM load_group_items i WHERE i.waybill_id=wb.id)
@@ -346,7 +348,7 @@ def period(dan, gacha):
                     SUM(CASE WHEN (p.waybill_id IS NOT NULL OR p.group_id IS NOT NULL)
                               AND ABS(COALESCE(g.accepted_kg, nr.accepted_kg, 0) - p.netto) >= 0.5 THEN 1 ELSE 0 END) farq_n
              FROM pq17_docs p LEFT JOIN nayman_receipts nr ON nr.waybill_id=p.waybill_id LEFT JOIN load_groups g ON g.id=p.group_id
-             WHERE p.doc_date BETWEEN ? AND ?''', (dan, gacha), one=True)
+             WHERE COALESCE(p.doc_date, substr(p.uploaded_at,1,10)) BETWEEN ? AND ?''', (dan, gacha), one=True)
     if not r or not r['n']:
         return None
     return dict(r, diff=round(r['ours'] - r['matched_netto'], 1))

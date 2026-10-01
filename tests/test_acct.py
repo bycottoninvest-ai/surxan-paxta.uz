@@ -186,6 +186,84 @@ def test_day_close_difference_and_lock(app, world):
     assert bux.post('/buxgalteriya/kun-yopish', {'cashbox_id': box, 'day': day, 'counted': '1'}).get_json()['ok'] is False
 
 
+def punkt_receive(app, lid, accepted_kg):
+    """The trip as received at the punkt (waybill + punkt netto) — only the money logic is under test here."""
+    from surxon.utils import now_str, today_str
+    with app.app_context():
+        db = get_db()
+        seq = scalar('SELECT COALESCE(MAX(seq),0)+1 FROM waybills')
+        field_kg = scalar('SELECT SUM(kg) FROM harvests WHERE load_id=? AND voided_at IS NULL', (lid,))
+        cur = db.execute('''INSERT INTO waybills(seq, number, season_year, load_id, net_kg, document_date, status, created_at)
+                            VALUES (?,?,?,?,?,?,'QABUL',?)''', (seq, f'NK-T-{seq}', year_of(app), lid, field_kg, today_str(), now_str()))
+        db.execute('''INSERT INTO nayman_receipts(waybill_id, accepted_kg, diff_kg, received_date, created_at)
+                      VALUES (?,?,?,?,?)''', (cur.lastrowid, accepted_kg, accepted_kg - field_kg, today_str(), now_str()))
+        db.commit()
+        return cur.lastrowid
+
+
+def pq17_for(app, waybill_id, netto, kond):
+    from surxon.utils import now_str
+    with app.app_context():
+        db = get_db()
+        db.execute('''INSERT INTO pq17_docs(code, load_no, netto, kond_kg, deduction_kg, price, amount, waybill_id, uploaded_at)
+                      VALUES (?,?,?,?,?,0,0,?,?)''', (f'XH{waybill_id}', str(waybill_id), netto, kond, netto - kond, waybill_id, now_str()))
+        db.commit()
+
+
+def combines(app):
+    from surxon.accounting import combine_balances
+    with app.app_context():
+        return {x['code']: x for x in combine_balances(year_of(app))}
+
+
+def test_combine_paid_on_punkt_kg_not_field_kg(app, world):
+    """Owner's rule: the field clerk's kg is information only; a combine is paid on what the punkt accepted
+    (the PQ-17 sof kg after dirt and moisture once it is in, the punkt netto until then) × its tariff per tonne."""
+    bux, juma, admin = world['bux'], world['juma'], world['admin']
+    k1, k2 = world['eq']['K-01'], world['eq']['K-02']
+    assert admin.post('/admin/sozlamalar', {'set_combine_rate_standard': '1000'}).get_json()['ok']
+    # a rate other than the standard 1 000 so‘m/kg: the accountant cannot write it, only the Admin
+    assert bux.post('/buxgalteriya/kombaynlar', {'action': 'tariff', 'combine_id': k1, 'tariff_type': 'tonna',
+                                                 'tariff_rate': '1 500 000'}).get_json()['ok'] is False
+    assert admin.post('/buxgalteriya/kombaynlar', {'action': 'tariff', 'combine_id': k1, 'tariff_type': 'tonna',
+                                                   'tariff_rate': '1 500 000'}).get_json()['ok']
+    lid = open_load(juma, world)
+    # the clerk's trip rate is not the combine's money: K-01's own tariff (1 500 000 / t), K-02 the standard
+    with app.app_context():
+        get_db().execute("UPDATE trailer_loads SET method='combine', rate=1700, rate_unit='kg' WHERE id=?", (lid,))
+        get_db().commit()
+    assert juma.post('/terim', {'load_id': lid, 'method': 'combine', 'combine_id': k1, 'kg': '1200', 'client_uuid': uuid4()}).get_json()['ok']
+    assert juma.post('/terim', {'load_id': lid, 'method': 'combine', 'combine_id': k2, 'kg': '600', 'client_uuid': uuid4()}).get_json()['ok']
+    c = combines(app)
+    assert (c['K-01']['kg'], c['K-01']['waiting_kg'], c['K-01']['earned'], c['K-01']['payable']) == (1200, 1200, 0, 0)   # not at the punkt yet
+    wid = punkt_receive(app, lid, 1650)                    # 1 800 field kg → 1 650 at the punkt, shared 2 : 1
+    c = combines(app)
+    assert (c['K-01']['punkt_kg'], c['K-01']['pay_kg'], c['K-01']['earned']) == (1100, 1100, 1_650_000)
+    assert c['K-01']['pq_wait_kg'] == 1100 and c['K-01']['provisional_amount'] == 1_650_000 and c['K-01']['diff_kg'] == -100
+    assert c['K-02']['uncalc_kg'] == 0 and c['K-02']['earned'] == 550_000          # no tariff: standard 1 000 so‘m/kg, on punkt kg
+    pq17_for(app, wid, 1650, 1590)                         # the cluster took dirt and moisture off: 1 590 sof kg
+    c = combines(app)
+    assert (c['K-01']['sof_kg'], c['K-01']['pay_kg'], c['K-01']['earned'], c['K-01']['provisional_amount']) == (1060, 1060, 1_590_000, 0)
+    assert c['K-02']['earned'] == 530_000
+    with app.app_context():
+        from surxon.accounting import combine_statement
+        st = combine_statement(year_of(app), k1)
+    assert [(d['kg'], d['punkt_kg'], d['pay_kg'], d['amount']) for d in st['days']] == [(1200, 1100, 1060, 1_590_000)]
+    page = bux.get(f'/buxgalteriya/kombaynlar/{k1}').get_data(as_text=True)
+    assert 'Hisob kg' in page and '1590000' in flat(page)
+    assert bux.get(f'/buxgalteriya/kombaynlar/{k1}.pdf').status_code == 200
+    # a tariff agreed late: applied to the whole season on request, K-02's kg is priced
+    assert admin.post('/buxgalteriya/kombaynlar', {'action': 'tariff', 'combine_id': k2, 'tariff_type': 'tonna',
+                                                   'tariff_rate': '1 400 000', 'whole_season': '1'}).get_json()['ok']
+    assert combines(app)['K-02']['earned'] == round(530 * 1400)
+    # the field clerk cannot open a combine trip at another rate either
+    from conftest import make_user
+    tally = make_user(app, admin, 'sadokat', 'tally')
+    r = tally.post('/dala/yangi', {'trailer_id': world['eq']['TL-02'], 'field_id': world['f']['D-04'], 'method': 'combine',
+                                   'rate': '1500', 'brigadier_id': world['b']['Juma ota'], 'client_uuid': uuid4()}).get_json()
+    assert r['ok'] is False and 'Admin' in r['error']
+
+
 def test_combine_tariffs_tonne_day_hectare(app, world):
     bux, juma, kassa = world['bux'], world['juma'], world['kassa']
     income(bux, '10 000 000')
@@ -201,6 +279,7 @@ def test_combine_tariffs_tonne_day_hectare(app, world):
     for kg in ('1000', '2000'):                                      # two weighings, one working day
         assert juma.post('/terim', {'load_id': lid, 'method': 'combine', 'combine_id': k2, 'kg': kg,
                                     'client_uuid': uuid4()}).get_json()['ok']
+    punkt_receive(app, lid, 21600)                                   # the punkt accepted exactly the field kg
     r = bux.post('/buxgalteriya/tolov', {'kind': 'combine', 'target_id': k1, 'amount': '2 000 000', 'client_uuid': uuid4()}).get_json()
     assert r['ok'] and kassa.post(f'/buxgalteriya/tolov/{r["payout_id"]}/berildi', {}).get_json()['ok']
     from surxon.accounting import combine_balances
@@ -224,7 +303,7 @@ def test_combine_tariffs_tonne_day_hectare(app, world):
         c2 = {x['code']: x for x in combine_balances(year_of(app))}['K-02']
     assert c2['own'] and c2['earned'] == 800_000 + 1_750_000 and c2['kg'] == 3000
     page = bux.get('/buxgalteriya/kombaynlar').get_data(as_text=True)
-    assert 'O‘zimizniki' in page and 'salarka (mavsum)' in page
+    assert 'O‘zimizniki' in page and 'salarka' in page and 'Hisob kg' in page
 
 
 def test_expense_by_cashier_waits_for_accountant(app, world):

@@ -396,9 +396,11 @@ def test_tally_clerk_enters_all_brigades_and_combine_pay(app, world):
     assert tally.post('/terim', {'load_id': lid, 'method': 'combine', 'combine_id': world['eq']['K-01'], 'kg': '3700',
                                  'client_uuid': uuid4()}).get_json()['ok']
     from surxon.accounting import combine_balances, worker_balances
+    from test_acct import punkt_receive
+    punkt_receive(app, lid, 3700)                     # combine pay is on the punkt kg
     with app.app_context():
         year = q('SELECT year FROM seasons LIMIT 1', one=True)['year']
-        k1 = [c for c in combine_balances(year) if c['code'] == 'K-01'][0]
+        k1 =[c for c in combine_balances(year) if c['code'] == 'K-01'][0]
         assert (k1['kg'], k1['earned'], k1['balance']) == (3700, 925_000, 925_000)     # 3.7 t × 250 000
         w = [x for x in worker_balances(year) if x['full_name'] == 'Gulbahor opa'][0]
         assert (w['kg'], w['earned']) == (80, 120_000)

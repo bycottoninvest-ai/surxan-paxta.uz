@@ -209,6 +209,9 @@ def open_load(actor, *, trailer_id, field_id, brigadier_id, tractor_id=None, veh
             raise UserError('Terim narxini kiriting (so‘m/kg).')
         if rate <= 0 or rate > 100000:
             raise UserError('Terim narxi so‘m/kg da bo‘lishi kerak (masalan 1500).')
+        if method == 'combine':
+            from .accounting import check_combine_rate
+            check_combine_rate(actor, rate)
     with tx() as db:
         if client_uuid:
             dup = db.execute('SELECT id FROM trailer_loads WHERE client_uuid=?', (client_uuid,)).fetchone()

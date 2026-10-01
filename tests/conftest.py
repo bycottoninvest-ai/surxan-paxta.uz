@@ -94,6 +94,8 @@ def world(app, admin):
         assert r.get_json()['ok']
     with app.app_context():
         f = {r['code']: r['id'] for r in q('SELECT id, code FROM fields')}
+    # most tests write their own combine rates; the standard-rate rule has its own test (test_acct)
+    assert admin.post('/admin/sozlamalar', {'set_combine_rate_standard': ''}).get_json()['ok']
     w = {
         'admin': admin, 'b': b, 'eq': eq, 'f': f,
         'juma': make_user(app, admin, 'juma', 'brigadier', 'Juma ota'),

@@ -131,7 +131,7 @@ def test_combine_trip_priced_per_kg(app, world):
         assert scalar('SELECT COUNT(*) FROM combine_work') == 0
         from surxon.accounting import combine_balances
         k = [x for x in combine_balances(scalar('SELECT MAX(year) FROM seasons')) if x['code'] == 'K-01'][0]
-        assert k['earned'] == 555_000
+        assert (k['earned'], k['waiting_kg']) == (0, 1850)    # the combine is paid on punkt kg: nothing before the punkt
     r = c.post(f'/dala/reys/{lid}/yopish', files={'photos': jpeg()}).get_json()
     assert r['ok']
     inner = norm(pdf_text(c.get(f'/dala/reys/{lid}/ishchilar.pdf').data))

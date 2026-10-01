@@ -76,16 +76,16 @@ def _combines(year, args):
     for c in combine_balances(year):
         if not (c['kg'] or c['work_days'] or c['hectares'] or c['paid']):
             continue
-        d = {'code': c['code'], 'operator_name': c['operator_name'], 'days': c['days'] or 0, 'kg': c['kg'],
+        d = {'code': c['code'], 'operator_name': c['operator_name'], 'days': c['days'] or 0, 'kg': c['kg'], 'pay_kg': c['pay_kg'],
              'tariff': (f"{TARIFF_TYPES[c['tariff_type']]}: {c['tariff_rate']:,}".replace(',', ' ') if c['tariff_type'] else 'tarif yo‘q')}
         if money:
             d.update(earned=c['earned'], paid=c['paid'], balance=c['balance'])
         out.append(d)
-    cols = [('code', 'Kombayn', T), ('operator_name', 'Egasi / operator', T), ('days', 'Kunlar', N), ('kg', 'Jami kg (ichki)', K),
-            ('tariff', 'Tarif', T)]
+    cols = [('code', 'Kombayn', T), ('operator_name', 'Egasi / operator', T), ('days', 'Kunlar', N), ('kg', 'Dala kg', K),
+            ('pay_kg', 'Hisob kg (punkt)', K), ('tariff', 'Tarif', T)]
     if money:
         cols += [('earned', 'Hisoblangan', M), ('paid', 'To‘langan', M), ('balance', 'Qoldiq', M)]
-    return {'title': f'Kombaynlar hisoboti — {year}', 'columns': cols, 'rows': out, 'sum': ['kg', 'earned', 'paid', 'balance']}
+    return {'title': f'Kombaynlar hisoboti — {year}', 'columns': cols, 'rows': out, 'sum': ['kg', 'pay_kg', 'earned', 'paid', 'balance']}
 
 
 def _brigadiers(year, args):

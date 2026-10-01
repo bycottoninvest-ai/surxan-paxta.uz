@@ -11,6 +11,8 @@ DEFAULTS = {
     'price_per_kg': ('', 'Umumiy paxta narxi, so‘m/kg — faqat yuqoridagi alohida narxlar bo‘sh bo‘lsa ishlatiladi'),
     'worker_rate_hand': ('', 'Qo‘l terimi narxi, so‘m/kg. Har tortishda shu paytdagi narx saqlanadi; o‘zgartirilsa eski hisob o‘zgarmaydi (bo‘sh = hisoblanmaydi)'),
     'combine_rate_kg': ('', 'Kombayn terimi narxi, so‘m/kg (oxirgi telashkada kiritilgani — keyingisida o‘zi chiqadi)'),
+    'combine_rate_standard': ('1000', 'Kombayn terimi STANDART narxi, so‘m/kg — barcha kombaynlarga, punkt kg bo‘yicha. '
+                                      'Boshqa narxni (reysda yoki kombayn tarifida) faqat Admin yoza oladi'),
     'income_sources': ('Direktor, Nayman (paxta puli), Boshqa', 'Kassa kirimi manbalari (vergul bilan)'),
     'sheets_prefix': ('SPX ', 'Google Sheets: tizim yozadigan varaqlar nomi oldidagi belgi (qo‘lda qilingan varaqlarga tegmaslik uchun)'),
     'report_time': ('21:00', 'Telegram kunlik hisobot vaqti (HH:MM); kun yopilsa, darhol yuboriladi'),

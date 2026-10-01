@@ -898,3 +898,35 @@ a.a-tile:active{transform:scale(.98)}
 .a-price{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;margin-top:12px;padding-top:12px;border-top:1px solid var(--line)}
 .a-price input{width:110px;min-height:38px;border:1.5px solid var(--line);border-radius:8px;padding:0 8px;font-size:16px;margin-left:4px}
 .rb-pk{background:#f5f3ff;color:#3b0764}.rb-pk span{color:#5b21b6}.rb-pk-debt{background:#fff1f2;color:#881337}.rb-pk-debt span{color:#9f1239}
+
+/* kombaynlar hisobi: dala kg → punkt netto → hisob kg (pul punkt qabul qilgan kg bo'yicha) */
+.kc-rule{background:var(--blue-50);color:#1d3f6e;border:1px solid #cfe0f7;border-radius:10px;padding:10px 12px;font-size:13px;margin-bottom:12px}
+.kc-hl{border-color:#bfe8cd;background:linear-gradient(0deg,#fff,#f3fbf6)}
+.kc-hl b{color:#146c34}
+.kc-neg{color:var(--red)!important}
+.kc{padding:14px}
+.a-comb.kc-ext{border-left-color:var(--orange)}
+.kc-head{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:6px 10px;margin-bottom:4px}
+.kc-title{display:flex;align-items:baseline;gap:8px;min-width:0}
+.kc-owner{font-weight:600;color:var(--text-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.kc-badges{display:flex;flex-wrap:wrap;gap:6px}
+.kc-flow{display:grid;grid-template-columns:1fr auto 1fr auto 1.15fr;align-items:stretch;gap:6px;margin:10px 0 4px}
+.kc-flow>div:not(.kc-arrow){background:#f5f8fc;border-radius:10px;padding:7px 9px;min-width:0}
+.kc-flow span{display:block;font-size:11px;color:var(--muted)}
+.kc-flow b{display:block;font-size:16px;line-height:1.2}
+.kc-flow i{display:block;font-style:normal;font-size:10.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.kc-flow .kc-pay{background:var(--green-50);box-shadow:inset 0 0 0 1px #bfe8cd}
+.kc-flow .kc-pay b{color:#146c34;font-size:18px}
+.kc-arrow{display:grid;place-items:center;color:var(--muted);font-size:18px;font-weight:700}
+.kc-warn{background:var(--orange-50);color:#8a4b05;border-radius:8px;padding:6px 10px;font-size:12.5px;margin-top:6px}
+.kc-warn.red{background:var(--red-50);color:#a0133a}
+.kc-acts{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:6px}
+.kc-acts form{margin:0}
+.kc-acts>:only-child{grid-column:1/-1}
+.kc-check{display:flex;gap:8px;align-items:flex-start;font-weight:400!important;font-size:13px}
+.kc-check input{margin-top:3px}
+@media (max-width:520px){.kc-flow{grid-template-columns:1fr 1fr 1fr}.kc-arrow{display:none}.kc-acts{grid-template-columns:1fr}.a-comb .a-nums{grid-template-columns:1fr 1fr}}
+.kc-photos{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin-bottom:12px}
+.kc-photos a{display:block;background:#fff;border:1px solid var(--line);border-radius:10px;overflow:hidden;color:var(--text)}
+.kc-photos img{display:block;width:100%;height:150px;object-fit:cover;background:#f3f6fa}
+.kc-photos span{display:block;padding:6px 8px;font-size:11.5px;line-height:1.35}

@@ -142,7 +142,7 @@ def new_trip():
                            brigadiers=q('SELECT id, name FROM brigadiers WHERE active=1' + (' AND id=?' if brig else '')
                                         + ' ORDER BY name', (brig,) if brig else ()),
                            tractors=q("SELECT id, code FROM equipment WHERE kind='traktor' AND active=1 ORDER BY code"),
-                           rate_hand=get_setting('worker_rate_hand'), rate_combine=get_setting('combine_rate_kg'),
+                           rate_hand=get_setting('worker_rate_hand'), rate_combine=get_setting('combine_rate_standard') or get_setting('combine_rate_kg'),
                            stations=q('SELECT id, name FROM stations WHERE active=1 ORDER BY id'))
 
 

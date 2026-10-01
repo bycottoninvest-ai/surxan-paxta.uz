@@ -818,114 +818,306 @@ def _short_trip(t):
     return (n.rsplit('-', 1)[-1].lstrip('0') or n) + (f' {rest}' if rest else '')
 
 
+def _photo_reader(cfg, rel, max_px=1100):
+    """A stored photo, downscaled for the PDF (the full 2400 px originals would make a 10 MB file)."""
+    from PIL import Image
+    from reportlab.lib.utils import ImageReader
+    path = Path(cfg.UPLOAD_DIR) / rel
+    if not path.exists():
+        return None
+    try:
+        img = Image.open(path)
+        img = img.convert('RGB')
+        img.thumbnail((max_px, max_px))
+        out = io.BytesIO()
+        img.save(out, 'JPEG', quality=72, optimize=True)
+        out.seek(0)
+        return ImageReader(out), img.size
+    except Exception:
+        return None
+
+
 def build_combine_statement_pdf(st, *, company, year, tariff_name='', generated_at='', generated_by=''):
-    """KOMBAYN HISOB-KITOBI for the season — given to the combine's owner (ours or a hired one): day by day kg and sum,
-    the payments, what is left. Signed by both sides at the season's end."""
+    """KOMBAYN AKT-SVERKA for the season — given to the combine's owner (ours or a hired one). One line per trip:
+    the field clerk's kg (information), the punkt netto, the cluster's PQ-17 sof kg and the sum on it; then the
+    payments, what is left to pay, both signatures — and, as an annex, the photos of the field blanks and the punkt's
+    stamped papers, so the owner sees where every kilogram comes from."""
     _fonts()
     buf = io.BytesIO()
     c = canvas.Canvas(buf, pagesize=A4)
     W, H = A4
     x0, x1 = 14 * mm, W - 14 * mm
     cb = st['combine']
-    c.setTitle(f'Kombayn hisob-kitobi {cb["code"]} {year}')
+    navy, blue50, green50, orange50, gray50, line_c = (colors.HexColor(h) for h in
+                                                       ('#0d2a4a', '#eaf1fb', '#e6f5ec', '#fff2e0', '#f1f3f6', '#d9e2ee'))
+    c.setTitle(f'Kombayn akt-sverka {cb["code"]} {year}')
+    c.setAuthor(company)
+    logo = Path(current_app.static_folder) / 'img' / 'logo-dark.png'
+    std = None
+    if cb['tariff_type'] == 'tonna' and cb['tariff_rate']:
+        rate_txt = f'{_num(cb["tariff_rate"] / 1000)} so‘m/kg'
+    elif cb['tariff_type']:
+        rate_txt = f'{tariff_name}: {_num(cb["tariff_rate"])} so‘m'
+    else:
+        from .accounting import combine_standard
+        std = combine_standard()
+        rate_txt = f'{_num(std)} so‘m/kg (standart)' if std else 'tarif yo‘q'
+    page = [1]
 
-    def header():
-        y = H - 16 * mm
-        c.setFont('DejaVu-Bold', 14)
-        c.drawString(x0, y, company)
-        c.setFont('DejaVu', 8.5)
-        c.drawRightString(x1, y, f'Chop: {_date(generated_at)} · {generated_by or ""}')
-        y -= 9 * mm
+    def footer():
+        c.setFont('DejaVu', 7.5)
+        c.setFillColor(colors.HexColor('#7a8aa0'))
+        c.drawString(x0, 9 * mm, f'{company} · Kombayn akt-sverka · {cb["code"]} · {year}')
+        c.drawRightString(x1, 9 * mm, f'{page[0]}-bet')
+        c.setFillColor(colors.black)
+
+    def new_page():
+        footer()
+        c.showPage()
+        page[0] += 1
+
+    def header(first=True):
+        y = H - 14 * mm
+        if logo.exists():
+            c.drawImage(str(logo), x0, y - 11 * mm, width=38 * mm, height=12 * mm, mask='auto', preserveAspectRatio=True,
+                        anchor='sw')
+        else:
+            c.setFont('DejaVu-Bold', 13)
+            c.drawString(x0, y - 7 * mm, company)
+        c.setFont('DejaVu', 8)
+        c.setFillColor(colors.HexColor('#5d6f86'))
+        c.drawRightString(x1, y - 3 * mm, company)
+        c.drawRightString(x1, y - 7 * mm, f'Chop: {_date(generated_at)} · {generated_by or ""}')
+        c.setFillColor(colors.black)
+        y -= 15 * mm
+        if not first:
+            c.setFont('DejaVu-Bold', 10)
+            c.drawString(x0, y, f'{cb["code"]} · {cb["owner"]} — davomi')
+            return y - 5 * mm
+        c.setFillColor(navy)
+        c.roundRect(x0, y - 10 * mm, x1 - x0, 10 * mm, 2 * mm, stroke=0, fill=1)
+        c.setFillColor(colors.white)
+        c.setFont('DejaVu-Bold', 13)
+        c.drawCentredString(W / 2, y - 6.6 * mm, f'KOMBAYN AKT-SVERKA · {year} MAVSUM')
+        c.setFillColor(colors.black)
+        y -= 16 * mm
         c.setFont('DejaVu-Bold', 15)
-        c.drawCentredString(W / 2, y, f'KOMBAYN HISOB-KITOBI · {year} MAVSUM')
-        y -= 6 * mm
-        c.setFont('DejaVu', 10)
-        tariff = f'{tariff_name}: {_num(cb["tariff_rate"])} so‘m' if cb['tariff_type'] else 'tarif yo‘q'
-        c.drawCentredString(W / 2, y, f'{cb["code"]} · egasi: {cb["owner"]} · {tariff}')
+        c.drawString(x0, y, f'{cb["code"]} · {cb["owner"]}')
+        c.setFont('DejaVu', 9)
+        c.drawRightString(x1, y, f'{"O‘zimizniki" if cb["own"] else "Tashqi (xizmat)"} · narx: {rate_txt}')
+        y -= 5 * mm
+        c.setFillColor(blue50)
+        c.roundRect(x0, y - 11 * mm, x1 - x0, 11 * mm, 1.5 * mm, stroke=0, fill=1)
+        c.setFillColor(navy)
+        c.setFont('DejaVu-Bold', 8.5)
+        c.drawString(x0 + 3 * mm, y - 4.3 * mm, 'Summa = hisob kg × narx. Pul punkt qabul qilgan paxtaga hisoblanadi, dala kg ga emas.')
+        c.setFont('DejaVu', 8)
+        c.drawString(x0 + 3 * mm, y - 8.5 * mm, 'Hisob kg — PQ-17 sof kg (namlik, ifloslik ayirilgan); PQ-17 kelmagan bo‘lsa punkt netto '
+                                                '(taxminiy, sariq).')
+        c.setFillColor(colors.black)
+        return y - 15 * mm
+
+    def boxes(y, items, h=15 * mm):
+        n = len(items)
+        gap = 3 * mm
+        bw = (x1 - x0 - gap * (n - 1)) / n
+        for i, (label, value, sub, col) in enumerate(items):
+            bx = x0 + i * (bw + gap)
+            c.setFillColor(col)
+            c.roundRect(bx, y - h, bw, h, 2 * mm, stroke=0, fill=1)
+            c.setFillColor(colors.HexColor('#5d6f86'))
+            c.setFont('DejaVu', 7.5)
+            c.drawString(bx + 3 * mm, y - 4.5 * mm, label)
+            c.setFillColor(navy)
+            c.setFont('DejaVu-Bold', 12.5)
+            c.drawString(bx + 3 * mm, y - 10 * mm, value)
+            if sub:
+                c.setFillColor(colors.HexColor('#5d6f86'))
+                c.setFont('DejaVu', 7)
+                c.drawString(bx + 3 * mm, y - 13.4 * mm, sub)
+            c.setFillColor(colors.black)
+        return y - h - 4 * mm
+
+    cols = [('Sana', 14, 'l'), ('Reys / nakladnoy', 40, 'l'), ('Dala', 20, 'l'), ('Dala kg', 17, 'r'),
+            ('Punkt netto', 20, 'r'), ('PQ-17', 19, 'l'), ('Hisob kg', 22, 'r'), ('Summa, so‘m', 30, 'r')]
+    xs, acc = [], x0
+    for _, w, _a in cols:
+        xs.append((acc, acc + w * mm))
+        acc += w * mm
+
+    def cell(i, y, text, bold=False, size=8, color=None):
+        a = cols[i][2]
+        lx, rx = xs[i]
+        c.setFont('DejaVu-Bold' if bold else 'DejaVu', size)
+        if color is not None:
+            c.setFillColor(color)
+        if a == 'l':
+            c.drawString(lx + 1.5 * mm, y, text)
+        else:
+            c.drawRightString(rx - 1.5 * mm, y, text)
+        c.setFillColor(colors.black)
+
+    def table_head(y):
+        c.setFillColor(navy)
+        c.rect(x0, y - 7 * mm, x1 - x0, 7 * mm, stroke=0, fill=1)
+        for i, (t, _w, _a) in enumerate(cols):
+            cell(i, y - 4.8 * mm, t, bold=True, size=7.8, color=colors.white)
         return y - 7 * mm
 
-    cols = [('Sana', x0 + 1.5 * mm, 'l'), ('Dala', x0 + 21 * mm, 'l'), ('Reyslar', x0 + 58 * mm, 'l'),
-            ('Dala kg', x0 + 128 * mm, 'r'), ('Punkt kg', x0 + 150 * mm, 'r'), ('Summa, so‘m', x1 - 1.5 * mm, 'r')]
-
-    def head_row(y, cols=cols):
-        c.setFillColor(colors.HexColor('#eef3fa'))
-        c.rect(x0, y - 6.5 * mm, x1 - x0, 6.5 * mm, stroke=0, fill=1)
-        c.setFillColor(colors.black)
-        c.setFont('DejaVu-Bold', 8.5)
-        for t, x, a in cols:
-            (c.drawString if a == 'l' else c.drawRightString)(x, y - 4.6 * mm, t)
-        return y - 6.5 * mm
-
-    def line(y, vals, cols=cols, bold=False):
-        c.setFont('DejaVu-Bold' if bold else 'DejaVu', 8.5)
-        for (t, x, a), v in zip(cols, vals):
-            (c.drawString if a == 'l' else c.drawRightString)(x, y - 4.8 * mm, v)
-        c.setStrokeColor(colors.HexColor('#dfe6ef'))
-        c.line(x0, y - 6.6 * mm, x1, y - 6.6 * mm)
+    def row(y, vals, fill=None, bold=False, h=6.8 * mm, sub=None):
+        if fill is not None:
+            c.setFillColor(fill)
+            c.rect(x0, y - h, x1 - x0, h, stroke=0, fill=1)
+            c.setFillColor(colors.black)
+        for i, v in enumerate(vals):
+            cell(i, y - (4.2 if sub else 4.6) * mm, v, bold=bold)
+        if sub:
+            c.setFont('DejaVu', 6.5)
+            c.setFillColor(colors.HexColor('#7a8aa0'))
+            c.drawString(xs[1][0] + 1.5 * mm, y - 7.4 * mm, sub)
+            c.setFillColor(colors.black)
+        c.setStrokeColor(line_c)
+        c.line(x0, y - h, x1, y - h)
         c.setStrokeColor(colors.black)
-        return y - 6.6 * mm
+        return y - h
 
-    def room(y, need=12 * mm):
-        if y < need + 14 * mm:
-            c.showPage()
-            return head_row(header())
+    def room(y, need, first_head=True):
+        if y < need + 16 * mm:
+            new_page()
+            y = header(first=False)
+            return table_head(y) if first_head else y
         return y
 
-    y = head_row(header())
-    for d in st['days']:
-        y = room(y)
-        trips = ', '.join(_short_trip(t) for t in d['trips']) or d['work']
-        amt = _num(d['amount']) + (' *' if d['uncalc_kg'] else '')
-        y = line(y, [_date(d['date']), ', '.join(d['fields'])[:22], trips[:44], _num(d['kg'], 1 if d['kg'] % 1 else 0),
-                     _num(d['punkt_kg'], 1 if d['punkt_kg'] % 1 else 0) if d['punkt_kg'] else '—', amt])
-    y = room(y)
-    c.setFillColor(colors.HexColor('#f4f6f9'))
-    c.rect(x0, y - 6.6 * mm, x1 - x0, 6.6 * mm, stroke=0, fill=1)
-    c.setFillColor(colors.black)
-    y = line(y, [f'JAMI: {len(st["days"])} kun', '', '', _num(st['kg'], 1 if st['kg'] % 1 else 0),
-                 _num(st['punkt_kg'], 1 if st['punkt_kg'] % 1 else 0), _num(cb['earned'])], bold=True)
+    def kg(v):
+        return _num(v, 1 if v % 1 else 0) if v is not None else '—'
 
-    pcols = [('Sana', x0 + 1.5 * mm, 'l'), ('Hujjat', x0 + 30 * mm, 'l'), ('Izoh', x0 + 72 * mm, 'l'), ('Summa, so‘m', x1 - 1.5 * mm, 'r')]
-    y -= 6 * mm
-    y = room(y, 30 * mm)
-    c.setFont('DejaVu-Bold', 11)
-    c.drawString(x0, y - 4 * mm, 'TO‘LOVLAR')
-    y = head_row(y - 6 * mm, pcols)
-    for p in st['payments']:
-        y = room(y)
-        y = line(y, [_date(p['entry_date']), p['doc_no'] or '', (p['note'] or ('Qaytarildi' if p['amount'] < 0 else ''))[:50],
-                     _num(p['amount'])], pcols)
-    if not st['payments']:
-        y = line(y, ['—', '', 'To‘lov hali yo‘q', ''], pcols)
+    y = header()
+    y = boxes(y, [('Dala kg (ma’lumot)', kg(st['kg']), 'terim hisobchi yozgani', gray50),
+                  ('Punkt netto', kg(st['punkt_kg']), f'{kg(st["waiting_kg"])} kg punktga yetmagan' if st['waiting_kg'] else 'punkt tarozisi', blue50),
+                  ('Hisob kg', kg(st['pay_kg']), f'{kg(st["pq_wait_kg"])} kg PQ-17 kutilmoqda' if st['pq_wait_kg'] else 'PQ-17 sof kg', green50),
+                  ('Hisoblangan', f'{_num(cb["earned"])} so‘m',
+                   f'shundan taxminiy {_num(st["provisional_amount"])}' if st['provisional_amount'] else 'aniq', green50)])
+    y = table_head(y)
+    trips = st.get('trips') or []
+    for t in trips:
+        tall = bool(t['uy'])
+        y = room(y, 9 * mm)
+        waiting = t['basis'] == 'kutilmoqda'
+        prov = t['basis'] == 'punkt'
+        fill = gray50 if waiting else orange50 if prov else None
+        ref = f'{_short_trip(t["trip_no"] or "")} · {t["waybill_no"] or "—"}'
+        y = row(y, [_date(t['date'])[:5], ref, (t['field'] or '')[:14], kg(t['kg']),
+                    'yo‘lda' if waiting else kg(t['punkt_kg']),
+                    '—' if waiting else (t['pq_code'] or 'kutilmoqda'),
+                    '—' if waiting else kg(t['pay_kg']) + ('*' if prov else ''),
+                    '—' if waiting else (_num(t['tonnage_amount']) + ('*' if prov else '') if not t['uncalc_kg'] else 'tarifsiz')],
+                fill=fill, h=9 * mm if tall else 6.8 * mm, sub=f'umumiy yuk {t["uy"]}' if tall else None)
+    work_days = [d for d in st['days'] if d.get('work')]
+    for d in work_days:
+        y = room(y, 9 * mm)
+        y = row(y, [_date(d['date'])[:5], f'ish hajmi: {d["work"]}', '', '', '', '', '', _num(d['amount'] - d['tonnage_amount'])])
+    if not trips and not work_days:
+        y = row(y, ['', 'Bu mavsumda terim yozilmagan', '', '', '', '', '', ''])
+    y = room(y, 9 * mm)
+    y = row(y, [f'JAMI', f'{len(trips)} ta reys', '', kg(st['kg']), kg(st['punkt_kg']), '', kg(st['pay_kg']), _num(cb['earned'])],
+            fill=blue50, bold=True, h=7.5 * mm)
 
+    # payments
     y -= 6 * mm
-    y = room(y, 50 * mm)
-    boxes = [('Hisoblangan', cb['earned'], '#eef3fa'), ('To‘langan', cb['paid'], '#e8f6ec'),
-             ('Qoldiq (to‘lanadi)' if cb['balance'] >= 0 else 'Ortiqcha to‘langan', abs(cb['balance']), '#fff4e5')]
-    bw = (x1 - x0 - 8 * mm) / 3
-    for i, (t, v, col) in enumerate(boxes):
-        bx = x0 + i * (bw + 4 * mm)
-        c.setFillColor(colors.HexColor(col))
-        c.roundRect(bx, y - 17 * mm, bw, 17 * mm, 2 * mm, stroke=0, fill=1)
+    y = room(y, 40 * mm, first_head=False)
+    c.setFont('DejaVu-Bold', 10.5)
+    c.drawString(x0, y, 'TO‘LOVLAR')
+    y -= 3 * mm
+    c.setStrokeColor(line_c)
+    c.line(x0, y, x1, y)
+    c.setStrokeColor(colors.black)
+    c.setFont('DejaVu', 8.5)
+    if st['payments']:
+        for p in st['payments']:
+            y -= 5.5 * mm
+            y = room(y, 10 * mm, first_head=False)
+            c.drawString(x0 + 1.5 * mm, y, _date(p['entry_date']))
+            c.drawString(x0 + 28 * mm, y, p['doc_no'] or '')
+            c.drawString(x0 + 62 * mm, y, (p['note'] or ('Qaytarildi' if p['amount'] < 0 else ''))[:60])
+            c.drawRightString(x1 - 1.5 * mm, y, f'{_num(p["amount"])} so‘m')
+    else:
+        y -= 5.5 * mm
+        c.setFillColor(colors.HexColor('#7a8aa0'))
+        c.drawString(x0 + 1.5 * mm, y, 'To‘lov hali yo‘q.')
         c.setFillColor(colors.black)
-        c.setFont('DejaVu', 9)
-        c.drawString(bx + 3 * mm, y - 6 * mm, t)
-        c.setFont('DejaVu-Bold', 14)
-        c.drawString(bx + 3 * mm, y - 13.5 * mm, f'{_num(v)} so‘m')
-    y -= 24 * mm
-    c.setFont('DejaVu', 8)
-    notes = ['Dala kg — dala tarozisida kombayn tortgan paxta. Punkt kg — punkt qabul qilgan netto; bir nechta telashka',
-             'birga tortilsa (umumiy yuk, UY), punkt nettosi telashkalarga dala kg bo‘yicha bo‘lingan.']
+    y -= 6 * mm
+    y = room(y, 50 * mm, first_head=False)
+    bal = cb['balance']
+    y = boxes(y, [('Hisoblangan', f'{_num(cb["earned"])} so‘m', None, blue50),
+                  ('To‘langan', f'{_num(cb["paid"])} so‘m', None, gray50),
+                  ('Qoldiq (to‘lanadi)' if bal >= 0 else 'Ortiqcha to‘langan', f'{_num(abs(bal))} so‘m', None, green50 if bal >= 0 else orange50)],
+              h=13 * mm)
+    c.setFont('DejaVu', 7.5)
+    c.setFillColor(colors.HexColor('#5d6f86'))
+    notes = ['Umumiy yukda (UY) bir nechta telashka birga tortiladi: punkt nettosi va PQ-17 sof kg telashkalarga dala kg ulushiga qarab bo‘linadi.']
+    if st['provisional_amount']:
+        notes.append(f'* PQ-17 hali kelmagan: {_num(st["provisional_amount"])} so‘m punkt netto bo‘yicha taxminiy, PQ-17 kelgach aniqlanadi.')
     if st['waiting_kg']:
-        notes.append(f'Punktda hali qabul qilinmagan: {_num(st["waiting_kg"])} kg.')
-    if cb['uncalc_kg']:
-        notes.append(f'* {_num(cb["uncalc_kg"])} kg tarif qo‘yilmagan paytda yozilgan — summaga kirmagan.')
+        notes.append(f'Punktga hali yetmagan {kg(st["waiting_kg"])} kg — summaga kirmagan, qabul qilingach qo‘shiladi.')
+    if st['uncalc_kg']:
+        notes.append(f'{kg(st["uncalc_kg"])} kg uchun narx belgilanmagan — summaga kirmagan.')
+    if st.get('photos'):
+        notes.append('Ilova: har bir reysning dala blanki va punkt muhrlagan qog‘oz rasmlari (keyingi betlarda).')
     for n in notes:
-        c.drawString(x0, y, n)
-        y -= 4.2 * mm
+        c.drawString(x0, y, n[:150])
+        y -= 4 * mm
+    c.setFillColor(colors.black)
+    y -= 12 * mm
+    y = room(y, 20 * mm, first_head=False)
+    c.setFont('DejaVu', 9.5)
+    c.drawString(x0, y, f'{company}:')
+    c.drawString(x0 + 100 * mm, y, f'{cb["owner"]}:')
     y -= 10 * mm
-    c.setFont('DejaVu', 10)
-    c.drawString(x0, y, f'{company}: ____________________')
-    c.drawRightString(x1, y, f'{cb["owner"]}: ____________________')
+    c.line(x0, y, x0 + 75 * mm, y)
+    c.line(x0 + 100 * mm, y, x1, y)
+    c.setFont('DejaVu', 7)
+    c.drawString(x0, y - 3.5 * mm, 'imzo, F.I.Sh.')
+    c.drawString(x0 + 100 * mm, y - 3.5 * mm, 'imzo, F.I.Sh.')
+
+    # annex: the photos behind every kilogram
+    photos = st.get('photos') or []
+    if photos:
+        cfg = current_app.config['SURXON']
+        per_row, per_page = 3, 6
+        gw = (x1 - x0 - 2 * 4 * mm) / per_row
+        gh = 95 * mm
+        for i, p in enumerate(photos):
+            if i % per_page == 0:
+                new_page()
+                y = header(first=False)
+                c.setFont('DejaVu-Bold', 11)
+                c.drawString(x0, y, 'ILOVA: HUJJAT RASMLARI')
+                y -= 6 * mm
+                top = y
+            k = i % per_page
+            gx = x0 + (k % per_row) * (gw + 4 * mm)
+            gy = top - (k // per_row) * (gh + 8 * mm)
+            c.setStrokeColor(line_c)
+            c.roundRect(gx, gy - gh, gw, gh, 1.5 * mm, stroke=1, fill=0)
+            c.setStrokeColor(colors.black)
+            got = _photo_reader(cfg, p['path']) or _photo_reader(cfg, p['thumb_path'])
+            if got:
+                img, (iw, ih) = got
+                box_w, box_h = gw - 4 * mm, gh - 14 * mm
+                s = min(box_w / iw, box_h / ih)
+                dw, dh = iw * s, ih * s
+                c.drawImage(img, gx + (gw - dw) / 2, gy - 2 * mm - box_h + (box_h - dh) / 2, width=dw, height=dh)
+            else:
+                c.setFont('DejaVu', 8)
+                c.drawCentredString(gx + gw / 2, gy - gh / 2, 'rasm topilmadi')
+            c.setFont('DejaVu-Bold', 7.8)
+            c.drawString(gx + 2 * mm, gy - gh + 7 * mm,
+                         f'{_short_trip(p["trip_no"] or "")} · {p["waybill_no"] or ""}' + (f' · {p["uy"]}' if p['uy'] else ''))
+            c.setFont('DejaVu', 7.2)
+            c.setFillColor(colors.HexColor('#5d6f86'))
+            c.drawString(gx + 2 * mm, gy - gh + 3 * mm,
+                         ('Punkt muhrlagan qog‘oz' if p['kind'] == 'punkt' else 'Dala blanki / telashka') + f' · {_date(p["uploaded_at"])[:10]}')
+            c.setFillColor(colors.black)
+    footer()
     c.save()
     return buf.getvalue()
