@@ -55,6 +55,19 @@ def test_director_report_and_faktura_reminder(app, world):
         d = q("SELECT payload_json FROM outbox WHERE kind='director'")
         f = q("SELECT payload_json FROM outbox WHERE kind='faktura' AND ref LIKE 'faktura:%'")
         assert len(d) == 1 and '"111"' in d[0]['payload_json'] and len(f) == 1 and '"222"' in f[0]['payload_json']
+        akt = q("SELECT payload_json FROM outbox WHERE kind='akt'")       # K-01 worked today → its day akt to both
+        assert len(akt) == 2 and all(f'"cid": {k1}' in a['payload_json'] for a in akt)
+        pdf, name, cap = Y.combine_day_akt(k1, q('SELECT work_date FROM harvests LIMIT 1', one=True)['work_date'])
+        assert pdf[:4] == b'%PDF' and name.startswith('akt_K-01_') and 'HOZIR TO‘LASH MUMKIN' in cap
+        sent = []
+        import surxon.outbox as O
+        real = O.telegram_upload
+        O.telegram_upload = lambda method, fields, files, token=None: sent.append((method, fields['chat_id'], list(files)))
+        try:
+            O._send_report({'kind': 'akt'}, __import__('json').loads(akt[0]['payload_json']))
+        finally:
+            O.telegram_upload = real
+        assert sent and sent[0][0] == 'sendDocument' and sent[0][2] == ['document']
         text = Y.director_text()
     for part in ('DIREKTOR HISOBOTI', 'Terildi: 480 kg', 'Punkt qabul qildi: 1 ta · 480 kg', 'KLASTER (PQ-17)',
                  'K-01 480 kg', 'ERTAGA QILISH KERAK', '1 ta PQ-17 ni imzolash kerak'):

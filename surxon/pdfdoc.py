@@ -898,7 +898,10 @@ def build_combine_statement_pdf(st, *, company, year, tariff_name='', generated_
         c.roundRect(x0, y - 10 * mm, x1 - x0, 10 * mm, 2 * mm, stroke=0, fill=1)
         c.setFillColor(colors.white)
         c.setFont('DejaVu-Bold', 13)
-        c.drawCentredString(W / 2, y - 6.6 * mm, f'KOMBAYN AKT-SVERKA · {year} MAVSUM')
+        per = st.get('period')
+        title = (f'KOMBAYN AKT-SVERKA · {_date(per["dan"])}' + (f' – {_date(per["gacha"])}' if per['gacha'] != per['dan'] else '')
+                 if per else f'KOMBAYN AKT-SVERKA · {year} MAVSUM')
+        c.drawCentredString(W / 2, y - 6.6 * mm, title)
         c.setFillColor(colors.black)
         y -= 16 * mm
         c.setFont('DejaVu-Bold', 15)
@@ -1048,13 +1051,20 @@ def build_combine_statement_pdf(st, *, company, year, tariff_name='', generated_
     y -= 6 * mm
     y = room(y, 50 * mm, first_head=False)
     bal = cb['balance']
-    y = boxes(y, [('Hisoblangan', f'{_num(cb["earned"])} so‘m', None, blue50),
-                  ('To‘langan', f'{_num(cb["paid"])} so‘m', None, gray50),
-                  ('Qoldiq (to‘lanadi)' if bal >= 0 else 'Ortiqcha to‘langan', f'{_num(abs(bal))} so‘m', None, green50 if bal >= 0 else orange50)],
-              h=13 * mm)
+    per = st.get('period')
+    items = [('Hisoblangan' + (' (davrda)' if per else ''), f'{_num(cb["earned"])} so‘m', None, blue50),
+             ('To‘langan' + (' (davrda)' if per else ''), f'{_num(cb["paid"])} so‘m', None, gray50),
+             (('Qoldiq (davr oxiriga)' if per else 'Qoldiq (to‘lanadi)') if bal >= 0 else 'Ortiqcha to‘langan',
+              f'{_num(abs(bal))} so‘m', None, green50 if bal >= 0 else orange50)]
+    if per:
+        items.insert(0, ('Davr boshiga qoldiq', f'{_num(per["opening"])} so‘m', None, gray50))
+    y = boxes(y, items, h=13 * mm)
     c.setFont('DejaVu', 7.5)
     c.setFillColor(colors.HexColor('#5d6f86'))
     notes = ['Umumiy yukda (UY) bir nechta telashka birga tortiladi: punkt nettosi va PQ-17 sof kg telashkalarga dala kg ulushiga qarab bo‘linadi.']
+    held = (st.get('season') or cb).get('held') or 0
+    if held > 0:
+        notes.append(f'Hozir to‘lanadigan: {_num((st.get("season") or cb)["payable"])} so‘m. {_num(held)} so‘m PQ-17 kelguncha ushlab turiladi.')
     if st['provisional_amount']:
         notes.append(f'* PQ-17 hali kelmagan: {_num(st["provisional_amount"])} so‘m punkt netto bo‘yicha taxminiy, PQ-17 kelgach aniqlanadi.')
     if st['waiting_kg']:

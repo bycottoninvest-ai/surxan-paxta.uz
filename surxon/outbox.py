@@ -165,6 +165,15 @@ def _send_telegram(job, payload):
 
 def _send_report(job, payload):
     cfg = current_app.config['SURXON']
+    if payload.get('combine_akt'):      # the combine's day akt — the PDF is made at sending time, from the live figures
+        from .yordamchi import combine_day_akt
+        a = payload['combine_akt']
+        pdf, name, caption = combine_day_akt(a['cid'], a['day'])
+        personal = payload.get('chat_id')
+        telegram_upload('sendDocument', {'chat_id': personal or chat_id('telegram_report'), 'caption': caption[:1000]},
+                        {'document': (name, pdf, 'application/pdf')},
+                        token=cfg.TELEGRAM_BOT_TOKEN if personal else (cfg.TELEGRAM_REPORT_BOT_TOKEN or cfg.TELEGRAM_BOT_TOKEN))
+        return
     if payload.get('chat_id'):          # a personal message (Nazorat) — through the main bot the person linked
         telegram_upload('sendMessage', {'chat_id': payload['chat_id'], 'text': payload['text'][:4000]}, {},
                         token=cfg.TELEGRAM_BOT_TOKEN if payload.get('main_bot') else (cfg.TELEGRAM_REPORT_BOT_TOKEN or cfg.TELEGRAM_BOT_TOKEN))

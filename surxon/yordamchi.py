@@ -181,18 +181,51 @@ def _people(db, roles):
                       roles).fetchall()
 
 
-def _send(db, kind, ref, text, roles):
+def _send(db, kind, ref, text, roles, extra=None):
     """Personal chats of these roles; the report group when nobody of them linked Telegram."""
     people = _people(db, roles)
     for u in people:
-        enqueue(db, 'telegram_report', kind, f'{ref}:u{u["id"]}', {'text': text, 'chat_id': u['telegram_id'], 'main_bot': True})
+        enqueue(db, 'telegram_report', kind, f'{ref}:u{u["id"]}',
+                {'text': text, 'chat_id': u['telegram_id'], 'main_bot': True, **(extra or {})})
     if not people:
-        enqueue(db, 'telegram_report', kind, ref, {'text': text})
+        enqueue(db, 'telegram_report', kind, ref, {'text': text, **(extra or {})})
     return len(people)
 
 
 DIRECTOR_ROLES = ('admin', 'manager')
 ACCOUNTANT_ROLES = ('accountant',)
+AKT_ROLES = ('admin', 'manager', 'accountant', 'cashier')
+
+
+def combines_worked(day):
+    """Combines that picked (or have a day / hectare job) on that day."""
+    return [r['id'] for r in q("""SELECT DISTINCT combine_id id FROM harvests h JOIN trailer_loads tl ON tl.id=h.load_id
+                                  WHERE h.method='combine' AND h.voided_at IS NULL AND tl.status<>'BEKOR' AND h.work_date=?
+                                  UNION SELECT combine_id FROM combine_work WHERE voided_at IS NULL AND work_date=?""", (day, day))]
+
+
+def combine_day_akt(cid, day):
+    """(pdf bytes, file name, caption) — one combine's akt-sverka for one day, built when it is sent (always fresh)."""
+    from .accounting import TARIFF_TYPES, combine_statement
+    from .pdfdoc import build_combine_statement_pdf
+    from .services import current_season
+    year = current_season(get_db())
+    st = combine_statement(year, cid, day, day)
+    c, season = st['combine'], st['season']
+    pdf = build_combine_statement_pdf(st, company=get_setting('company_name') or 'SURXON', year=year,
+                                      tariff_name=TARIFF_TYPES.get(c['tariff_type'] or '', ''), generated_at=now_str(),
+                                      generated_by='Tizim (avtomatik)')
+    sure = st['sof_kg']
+    cap = [f'🚜 {c["code"]} · {c["owner"]} · {_d(day)} — KUNLIK AKT-SVERKA',
+           f'Dala kg: {_n(st["kg"])} · punkt netto: {_n(st["punkt_kg"])} · PQ-17 bilan tasdiqlangan: {_n(sure)} kg']
+    if st['waiting_kg']:
+        cap.append(f'⏳ {_n(st["waiting_kg"])} kg hali punktga yetmagan — summaga kirmagan')
+    if st['pq_wait_kg']:
+        cap.append(f'🟡 {_n(st["pq_wait_kg"])} kg PQ-17 kutilmoqda — summa taxminiy')
+    cap += [f'Bugun hisoblangan: {_n(c["earned"])} so‘m · to‘langan: {_n(c["paid"])} so‘m',
+            f'Jami qoldiq: {_n(season["balance"])} so‘m · HOZIR TO‘LASH MUMKIN: {_n(season["payable"])} so‘m'
+            + (f' ({_n(season["held"])} PQ-17 kelguncha ushlab turiladi)' if season['held'] > 0 else '')]
+    return pdf, f'akt_{c["code"]}_{day}.pdf', '\n'.join(cap)
 
 
 def send_evening(day=None, force=False):
@@ -202,6 +235,8 @@ def send_evening(day=None, force=False):
     tag = now_str()[11:19].replace(':', '') if force else ''
     with tx(db):
         _send(db, 'director', f'director:{day}{tag}', director_text(day), DIRECTOR_ROLES)
+        for cid in combines_worked(day):
+            _send(db, 'akt', f'akt:{day}:{cid}{tag}', '', AKT_ROLES, extra={'combine_akt': {'cid': cid, 'day': day}})
         acc = accountant_text()
         if acc:
             _send(db, 'faktura', f'faktura:{day}{tag}', acc, ACCOUNTANT_ROLES)

@@ -146,3 +146,41 @@ def test_nazorat_finds_mistakes_and_tells_people(app, world):
         get_db().commit()
         tick(force=True)
         assert q("SELECT resolved_at FROM nazorat_alerts WHERE key=?", (f'open:{lid}',), one=True)['resolved_at']
+
+
+def test_combine_never_overpaid_and_period_akt(app, world):
+    """Real money: an estimated (no PQ-17 yet) sum is paid only at the safe share, the cashier checks again when the
+    PQ-17 comes in lower, and the akt can be printed for one day or a date range."""
+    tally, yunus, ali, st = setup(app, world)
+    admin, bux, kassa = world['admin'], world['bux'], world['kassa']
+    assert admin.post('/admin/sozlamalar', {'set_combine_rate_standard': '1000'}).get_json()['ok']
+    with app.app_context():
+        k1 = q("SELECT id FROM equipment WHERE code='K-01'", one=True)['id']
+    w = _close(app, tally, world, 'TL-01', [('480', k1)])
+    assert yunus.post(f'/punkt/yuk/{w}/qabul', {'station_kg': '480', 'load_no': '555001'}).get_json()['ok']
+    assert bux.post('/buxgalteriya/kirim', {'amount': '2 000 000', 'source': 'Direktor', 'client_uuid': uuid4()}).get_json()['ok']
+    # 480 000 earned on punkt kg, no PQ-17 → only 90 % = 432 000 may be paid now
+    r = bux.post('/buxgalteriya/tolov', {'kind': 'combine', 'target_id': k1, 'amount': '480 000', 'client_uuid': uuid4()}).get_json()
+    assert not r['ok'] and '432 000' in r['error'].replace('\xa0', ' ').replace('\u202f', ' ')
+    r = bux.post('/buxgalteriya/tolov', {'kind': 'combine', 'target_id': k1, 'amount': '432 000', 'client_uuid': uuid4()}).get_json()
+    assert r['ok'], r
+    page = bux.get(f'/buxgalteriya/kombaynlar/{k1}').get_data(as_text=True).replace('\xa0', ' ').replace('\u202f', ' ')
+    assert 'ushlab turiladi' in page
+    # the PQ-17 comes in much lower (380 kg sof) before the cashier hands the money out → refused
+    bux.c.post('/buxgalteriya/pq17', data={'files': [(io.BytesIO(pq17_pdf('XH1000000005', '555001', deduction=100)), 'x.pdf')],
+                                           '_csrf': bux.csrf()}, content_type='multipart/form-data', headers={'X-Requested-With': 'fetch'})
+    r2 = kassa.post(f'/buxgalteriya/tolov/{r["payout_id"]}/berildi', {}).get_json()
+    assert not r2['ok'] and '380 000' in r2['error'].replace('\xa0', ' ').replace('\u202f', ' ')
+    with app.app_context():
+        from surxon.accounting import combine_balances
+        c = combine_balances(q('SELECT MAX(year) y FROM seasons', one=True)['y'], k1)[0]
+        assert (c['earned'], c['paid'], c['held']) == (380000, 0, 0)
+        assert q("SELECT COALESCE(SUM(amount),0) s FROM cash_entries WHERE category='combine_pay'", one=True)['s'] == 0
+        day = q('SELECT work_date FROM harvests LIMIT 1', one=True)['work_date']
+    # the akt for that one day, and for a range that holds nothing
+    page = bux.get(f'/buxgalteriya/kombaynlar/{k1}?dan={day}').get_data(as_text=True).replace('\xa0', ' ').replace('\u202f', ' ')
+    assert 'Akt davri' in page and 'davr oxiriga qoldiq <b>380 000' in page
+    pdf = bux.get(f'/buxgalteriya/kombaynlar/{k1}.pdf?dan={day}&gacha={day}')
+    assert pdf.status_code == 200 and pdf.data[:4] == b'%PDF'
+    page = bux.get(f'/buxgalteriya/kombaynlar/{k1}?dan=2026-01-01&gacha=2026-01-02').get_data(as_text=True).replace('\xa0', ' ').replace('\u202f', ' ')
+    assert 'davrda hisoblangan <b>0' in page

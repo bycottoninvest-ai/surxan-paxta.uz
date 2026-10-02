@@ -16,6 +16,8 @@ DEFAULTS = {
     'income_sources': ('Direktor, Nayman (paxta puli), Boshqa', 'Kassa kirimi manbalari (vergul bilan)'),
     'sheets_prefix': ('SPX ', 'Google Sheets: tizim yozadigan varaqlar nomi oldidagi belgi (qo‘lda qilingan varaqlarga tegmaslik uchun)'),
     'report_time': ('21:00', 'Telegram kunlik hisobot vaqti (HH:MM); kun yopilsa, darhol yuboriladi'),
+    'combine_prov_pay_pct': ('90', 'Kombayn: PQ-17 hali kelmagan (taxminiy) summaning necha foizini hozir to‘lash mumkin. '
+                                   'Mavsumdagi eng katta PQ-17 chegirmasi bundan katta bo‘lsa — avtomatik kamroq'),
     'director_report_time': ('23:00', 'Direktor hisoboti va buxgalterga faktura ro‘yxati Telegram shaxsiy chatga (HH:MM)'),
     'auto_waybill_hand': ('1', '“Tugatish” bosilganda telashka yopiladi, nakladnoy dala vazni bilan avtomatik chiqadi '
                                 'va “PUNKTGA YO‘LDA” bo‘ladi (1). 0 — eski tartib: avval umumiy tarozida brutto/tara.'),

@@ -13,7 +13,22 @@
   <div class="m-tile"><span>To‘langan</span><b class="num">{{ c.paid|num }}</b></div>
   <div class="m-tile"><span>{{ 'Qoldiq — to‘lanadi' if c.balance >= 0 else 'Ortiqcha to‘langan' }}</span><b class="num {{ 'kc-neg' if c.balance < 0 }}">{{ c.balance|abs|num }}</b></div></div>
 {% if st.uncalc_kg %}<div class="kc-warn red">⚠ {{ st.uncalc_kg|num }} kg tarifsiz — summa hisoblanmagan. Kombaynlar sahifasida tonnaga narxni kiriting.</div>{% endif %}
-<a class="btn btn-primary btn-block btn-lg mb" href="{{ url_for('acct.combine_statement_pdf', cid=c.id, season=year) }}" target="_blank">📄 Hisob-kitob PDF (egasiga berish)</a>
+<div class="card ak-pick no-print"><div class="card-b">
+  <div class="ak-tabs">
+    <a class="btn btn-sm {{ 'btn-primary' if dan == today and gacha == today else 'btn-light' }}" href="?season={{ year }}&dan={{ today }}">📅 Bugungi akt</a>
+    <a class="btn btn-sm {{ 'btn-primary' if not dan else 'btn-light' }}" href="?season={{ year }}">📘 Butun mavsum (oxirgi akt)</a>
+  </div>
+  <form method="get" class="ak-form"><input type="hidden" name="season" value="{{ year }}">
+    <label>dan <input class="input" type="date" name="dan" value="{{ dan or '' }}"></label>
+    <label>gacha <input class="input" type="date" name="gacha" value="{{ gacha or '' }}"></label>
+    <button class="btn btn-light btn-sm">Ko‘rsatish</button></form>
+</div></div>
+{% if st.period %}<div class="ak-per">🗓 Akt davri: <b>{{ st.period.dan|d }}{% if st.period.gacha != st.period.dan %} – {{ st.period.gacha|d }}{% endif %}</b>
+  · davr boshiga qoldiq <b>{{ st.period.opening|num }}</b> · davrda hisoblangan <b>{{ c.earned|num }}</b> · to‘langan <b>{{ c.paid|num }}</b>
+  · davr oxiriga qoldiq <b>{{ st.period.closing|num }}</b> so‘m</div>{% endif %}
+{% set sc = st.season or c %}
+{% if sc.held and sc.held > 0 %}<div class="kc-warn">🔒 Hozir to‘lash mumkin: <b>{{ sc.payable|num }} so‘m</b>. {{ sc.held|num }} so‘m ushlab turiladi — PQ-17 kelmagan taxminiy summa; PQ-17 kelgach aniq summa chiqadi va qolgani to‘lanadi.</div>{% endif %}
+<a class="btn btn-primary btn-block btn-lg mb" href="{{ url_for('acct.combine_statement_pdf', cid=c.id, season=year, dan=dan, gacha=gacha) }}" target="_blank">📄 {{ 'Shu davr akt-sverkasi' if dan else 'Hisob-kitob' }} PDF (egasiga berish)</a>
 <h2 class="mt">Reyslar bo‘yicha</h2>
 <section class="card"><div class="table-wrap"><table class="t">
   <thead><tr><th>Sana</th><th>Reys · nakladnoy</th><th>Dala</th><th class="right">Dala kg</th><th class="right">Punkt netto</th><th>PQ-17</th><th class="right">Hisob kg</th><th class="right">Summa</th><th>Holat</th></tr></thead>
@@ -45,4 +60,7 @@
 <section class="card"><div class="table-wrap"><table class="t"><thead><tr><th>Sana</th><th>Hujjat</th><th>Izoh</th><th class="right">Summa</th></tr></thead>
   <tbody>{% for p in st.payments %}<tr><td>{{ p.entry_date }}</td><td>{{ p.doc_no or '' }}</td><td>{{ p.note or '' }}</td><td class="right num">{{ p.amount|num }}</td></tr>
   {% else %}<tr><td colspan="4" class="muted">To‘lov hali yo‘q.</td></tr>{% endfor %}</tbody></table></div></section>
+<style>.ak-pick{margin-bottom:10px}.ak-pick .card-b{display:flex;gap:12px;flex-wrap:wrap;align-items:center}.ak-tabs{display:flex;gap:8px;flex-wrap:wrap}
+.ak-form{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.ak-form label{display:flex;gap:4px;align-items:center;font-size:13px}.ak-form .input{height:34px}
+.ak-per{background:#eef6ff;border-radius:12px;padding:10px 14px;margin-bottom:10px;font-size:14px}</style>
 {% endblock %}

@@ -383,6 +383,19 @@ def _kg_totals(rows):
     return t
 
 
+def provisional_pay_ratio():
+    """How much of an estimated (no PQ-17 yet) combine sum may be paid now: combine_prov_pay_pct (90 %), lowered to the
+    worst sof/netto seen on this season's PQ-17s — so a PQ-17 that comes later cannot leave the owner overpaid."""
+    from .settings import get_float
+    pct = get_float('combine_prov_pay_pct', 90)
+    pct = 90 if pct is None else max(0, min(100, pct))
+    worst = q('SELECT MIN(kond_kg / netto) r FROM pq17_docs WHERE netto > 0', one=True)['r']
+    ratio = pct / 100
+    if worst is not None:
+        ratio = min(ratio, worst)
+    return ratio
+
+
 def combine_balances(year, combine_id=None):
     rows = q('''SELECT e.id, e.code, e.operator_name, e.ownership, e.tariff_type, e.tariff_rate,
                        COALESCE(w.days_amount,0) days_amount, COALESCE(w.work_days,0) work_days,
@@ -400,6 +413,7 @@ def combine_balances(year, combine_id=None):
                            AND status='TAYYOR' GROUP BY combine_id) p ON p.combine_id=e.id
                 WHERE e.kind='kombayn' ''' + (' AND e.id=?' if combine_id else '') + ' ORDER BY e.code',
              (year, year, year) + ((combine_id,) if combine_id else ()))
+    ratio = provisional_pay_ratio()
     by_combine = {}
     for r in combine_rows(year, combine_id):
         by_combine.setdefault(r['combine_id'], []).append(r)
@@ -413,7 +427,11 @@ def combine_balances(year, combine_id=None):
         d['earned'] = d['tonnage_amount'] + d['days_amount'] + d['ha_amount']
         d['own'] = d['ownership'] != 'external'        # shown for information; the combine's pay is counted either way
         d['balance'] = d['earned'] - d['paid']
-        d['payable'] = max(0, d['balance'] - d['pending'])
+        # never pay money that a later PQ-17 can take back: the estimate (punkt kg, no PQ-17 yet) counts only at the
+        # safe share — the worst sof/netto of this season's PQ-17s, never more than combine_prov_pay_pct
+        d['safe_earned'] = d['earned'] - d['provisional_amount'] + int(d['provisional_amount'] * ratio)
+        d['held'] = d['earned'] - d['safe_earned']
+        d['payable'] = max(0, d['safe_earned'] - d['paid'] - d['pending'])
         d['tonnes'] = round(d['kg'] / 1000, 2)
         d['pay_tonnes'] = round(d['pay_kg'] / 1000, 2)
         d['diff_kg'] = round(d['pay_kg'] - (d['kg'] - d['waiting_kg']), 1)     # what the punkt took off the received kg
@@ -447,7 +465,7 @@ def trip_photos(trip_list, per_trip=2):
     return out
 
 
-def combine_statement(year, combine_id):
+def combine_statement(year, combine_id, dan=None, gacha=None):
     """Season hisob-kitob of one combine for its owner: day by day — fields, trips, dala kg, its share of the punkt kg
     and of the PQ-17 sof kg (in an umumiy yuk shared by field kg), the sum on that kg — then every payment, and what
     is left to pay."""
@@ -499,9 +517,27 @@ def combine_statement(year, combine_id):
     pays = q('''SELECT entry_date, doc_no, category, amount, note FROM cash_entries WHERE season_year=? AND combine_id=?
                 AND voided_at IS NULL AND category IN ('combine_pay','refund_combine_pay') ORDER BY entry_date, id''',
              (year, combine_id))
-    return {'combine': c, 'days': rows, 'trips': trip_list, 'photos': trip_photos(trip_list),
-            'payments': [dict(p, amount=p['amount'] if p['category'] == 'combine_pay' else -p['amount']) for p in pays],
-            **{k: c[k] for k in ('kg', 'punkt_kg', 'sof_kg', 'pay_kg', 'waiting_kg', 'pq_wait_kg', 'uncalc_kg', 'provisional_amount')}}
+    payments = [dict(p, amount=p['amount'] if p['category'] == 'combine_pay' else -p['amount']) for p in pays]
+    keys = ('kg', 'punkt_kg', 'sof_kg', 'pay_kg', 'waiting_kg', 'pq_wait_kg', 'uncalc_kg', 'provisional_amount')
+    if not (dan or gacha):
+        return {'combine': c, 'days': rows, 'trips': trip_list, 'photos': trip_photos(trip_list), 'payments': payments,
+                'period': None, **{k: c[k] for k in keys}}
+    # one day or a date range: only that work and those payments, with what was owed before and after it
+    dan, gacha = dan or '0000-00-00', gacha or '9999-12-31'
+
+    def inside(day_):
+        return dan <= (day_ or '')[:10] <= gacha
+    before = sum(d['amount'] for d in rows if d['date'] < dan) - sum(p['amount'] for p in payments if p['entry_date'] < dan)
+    p_rows = [d for d in rows if inside(d['date'])]
+    p_trips = [t for t in trip_list if inside(t['date'])]
+    p_pays = [p for p in payments if inside(p['entry_date'])]
+    t = _kg_totals([h for h in hs if inside(h['work_date'])])
+    earned = sum(d['amount'] for d in p_rows)
+    paid = sum(p['amount'] for p in p_pays)
+    pc = dict(c, earned=earned, paid=paid, balance=before + earned - paid)
+    return {'combine': pc, 'season': c, 'days': p_rows, 'trips': p_trips, 'photos': trip_photos(p_trips), 'payments': p_pays,
+            'period': {'dan': dan, 'gacha': gacha, 'opening': before, 'closing': before + earned - paid},
+            **{k: t[k] for k in keys}}
 
 
 def set_combine_tariff(actor, combine_id, *, tariff_type, tariff_rate, operator_name=None, ownership=None, whole_season=False):
@@ -633,6 +669,12 @@ def pay_payout(actor, payout_id, check=None):
             raise UserError('Bu to‘lov boshqa kassadan beriladi.')
         if check:
             check(db, p, box)
+        if p['kind'] == 'combine':          # a PQ-17 may have come in since the order was written: check again
+            c = next(iter(combine_balances(p['season_year'], p['combine_id'])), None)
+            room = (c['safe_earned'] - c['paid']) if c else 0
+            if p['amount'] > room:
+                raise UserError(f'{c["code"] if c else "Kombayn"}: hozir to‘lash mumkin {fmt_som(max(0, room))} — '
+                                f'{fmt_som(p["amount"])} berilmaydi (PQ-17 bo‘yicha hisob kamaygan). Buyruqni bekor qilib, qaytadan yozing.')
         category = 'combine_pay' if p['kind'] == 'combine' else ('advance' if p['purpose'] == 'advance' else 'worker_pay')
         who = (db.execute('SELECT full_name FROM workers WHERE id=?', (p['worker_id'],)).fetchone()['full_name']
                if p['kind'] == 'worker' else db.execute('SELECT code FROM equipment WHERE id=?', (p['combine_id'],)).fetchone()['code'])

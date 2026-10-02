@@ -536,11 +536,27 @@ def yordamchi():
 def combine_statement(cid):
     """One combine's season hisob-kitob for its owner: day by day, payments, what is left — and the PDF to sign."""
     year = season_arg()
+    dan, gacha = _akt_range()
     try:
-        st = A.combine_statement(year, cid)
+        st = A.combine_statement(year, cid, dan, gacha)
     except UserError:
         abort(404)
-    return render_template('acct_combine.html', st=st, c=st['combine'], year=year, tariffs=A.TARIFF_TYPES)
+    return render_template('acct_combine.html', st=st, c=st['combine'], year=year, tariffs=A.TARIFF_TYPES,
+                           dan=dan, gacha=gacha, today=today_str())
+
+
+def _akt_range():
+    """?dan=&gacha= for a one-day / period akt (both empty = the whole season)."""
+    dan = request.args.get('dan') or None
+    gacha = request.args.get('gacha') or dan
+    try:
+        dan = parse_date(dan, 'Sana') if dan else None
+        gacha = parse_date(gacha, 'Sana') if gacha else None
+    except UserError:
+        return None, None
+    if dan and gacha and dan > gacha:
+        dan, gacha = gacha, dan
+    return dan, gacha
 
 
 @bp.get('/buxgalteriya/kombaynlar/<int:cid>.pdf')
@@ -549,8 +565,9 @@ def combine_statement_pdf(cid):
     from ..pdfdoc import build_combine_statement_pdf
     from ..utils import now_str
     year = season_arg()
+    dan, gacha = _akt_range()
     try:
-        st = A.combine_statement(year, cid)
+        st = A.combine_statement(year, cid, dan, gacha)
     except UserError:
         abort(404)
     c = st['combine']
@@ -558,7 +575,7 @@ def combine_statement_pdf(cid):
                                       tariff_name=A.TARIFF_TYPES.get(c['tariff_type'] or '', ''),
                                       generated_at=now_str(), generated_by=g.user['full_name'])
     return Response(pdf, mimetype='application/pdf', headers={
-        'Content-Disposition': f'inline; filename="kombayn_{c["code"]}_{year}.pdf"', 'Cache-Control': 'private, no-store'})
+        'Content-Disposition': f'inline; filename="kombayn_{c["code"]}_{dan + "_" + gacha if dan else year}.pdf"', 'Cache-Control': 'private, no-store'})
 
 
 # ------------------------------------------------------------------ cotton / punkt (read from field and punkt)
