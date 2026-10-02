@@ -245,6 +245,46 @@ def send_evening(day=None, force=False):
     return True
 
 
+def remind_text():
+    """Short daytime reminder for the accountant ('' when nothing is missing or waiting)."""
+    miss = pq17_missing()
+    fq = faktura_queue()
+    sign, inv = sum(c['sign'] for c in fq), sum(c['invoice'] for c in fq)
+    if not (miss or sign or inv):
+        return ''
+    lines = ['SURXAN-PAXTA.UZ', '⏰ ESLATMA — BUXGALTER']
+    if miss:
+        lines.append(f'📥 {len(miss)} ta yukning PQ-17 si hali yuklanmagan ({_n(sum(kg or 0 for _l, _d_, kg in miss))} kg):')
+        lines += [f'• {lab} · {_d(day) if day else "—"} · {_n(kg)} kg' for lab, day, kg in miss[:10]]
+        if len(miss) > 10:
+            lines.append(f'… yana {len(miss) - 10} ta')
+        lines.append('→ hosil-qabuli.uz dan PDF ni oling va shu botga yuboring.')
+    if sign:
+        lines.append(f'✍ {sign} ta PQ-17 ni hosil-qabuli.uz da imzolash kerak')
+    if inv:
+        lines.append(f'🧾 {inv} ta PQ-17 ga faktura yaratish / imzolash kerak')
+    return '\n'.join(lines)
+
+
+def maybe_remind():
+    """From the outbox worker: at each pq17_remind_times (10:00, 15:00) remind the accountant once, if anything waits."""
+    db = get_db()
+    day, now = today_str(), now_str()[11:16]
+    passed = sorted(x.strip() for x in (get_setting('pq17_remind_times') or '').split(',') if x.strip() and x.strip() <= now)
+    if not passed:
+        return False
+    key = f'pq17remind:{day}:{passed[-1]}'          # only the latest time that has come (a late worker sends one, not all)
+    if (get_setting('pq17_reminded') or '') >= key:
+        return False
+    text = remind_text()
+    with tx(db):
+        if text:
+            _send(db, 'remind', key, text, ACCOUNTANT_ROLES)
+        db.execute("INSERT INTO settings(key, value, updated_at) VALUES ('pq17_reminded', ?, ?) "
+                   "ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at", (key, now_str()))
+    return bool(text)
+
+
 def maybe_send_evening():
     """From the outbox worker: after director_report_time (23:00), once a day."""
     at = (get_setting('director_report_time') or '23:00').strip()

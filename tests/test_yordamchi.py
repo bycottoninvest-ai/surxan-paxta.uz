@@ -29,6 +29,15 @@ def test_director_report_and_faktura_reminder(app, world):
     from surxon import yordamchi as Y
     with app.app_context():                                         # accepted, no PQ-17 yet → the accountant is asked for it
         assert 'PQ-17 HALI YUKLANMAGAN: 1 ta' in Y.accountant_text()
+        get_db().execute("INSERT INTO settings(key, value, updated_at) VALUES ('pq17_remind_times', '00:00,00:01', '') "
+                         "ON CONFLICT(key) DO UPDATE SET value='00:00,00:01'")
+        get_db().commit()
+        assert Y.maybe_remind() and not Y.maybe_remind()            # daytime reminder: once per time, the latest only
+        r = q("SELECT payload_json FROM outbox WHERE kind='remind'")
+        assert len(r) == 1 and '"222"' in r[0]['payload_json'] and 'PQ-17 si hali yuklanmagan' in r[0]['payload_json']
+    page = bux.get('/buxgalteriya/kombaynlar').get_data(as_text=True)  # the standing banner on top of every page
+    assert 'Buxgalter eslatmasi' in page and '1 ta yukning PQ-17 si yuklanmagan' in page
+    assert 'Buxgalter eslatmasi' not in world['juma'].get('/').get_data(as_text=True)
     _upload(bux, 'XH1000000001', '555001')
     with app.app_context():
         new = q("SELECT * FROM outbox WHERE ref LIKE 'pq17new:%'")

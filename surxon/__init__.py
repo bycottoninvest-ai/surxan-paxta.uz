@@ -194,8 +194,20 @@ def register_template_helpers(app):
             'test_mode': app.config['SURXON'].APP_MODE == 'test',
             'gmaps_key': _gmaps_key() if user else '',
             'nazorat_open': _nazorat_open() if user and can('acct.view') else 0,
+            'pq17_todo': _pq17_todo() if user and can('nayman.write') else None,
             'offline_queue': user is not None and __import__('surxon.settings', fromlist=['get_bool']).get_bool('offline_queue'),
         }
+
+    def _pq17_todo():
+        try:      # the accountant's standing reminder on top of every page
+            from .yordamchi import faktura_queue, pq17_missing
+            miss = pq17_missing()
+            fq = faktura_queue()
+            out = {'missing': len(miss), 'missing_kg': sum(kg or 0 for _l, _d, kg in miss),
+                   'sign': sum(c['sign'] for c in fq), 'invoice': sum(c['invoice'] for c in fq)}
+            return out if any(out[k] for k in ('missing', 'sign', 'invoice')) else None
+        except Exception:
+            return None
 
     def _nazorat_open():
         try:      # what the last self-check found and nobody has fixed yet (cheap: one count)

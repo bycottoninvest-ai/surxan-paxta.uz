@@ -11,6 +11,8 @@
 <link rel="apple-touch-icon" href="{{ url_for('static', filename='img/apple-touch-icon.png') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}?v={{ version }}">
 {% block head %}{% endblock %}
+<style>.pq-todo{display:flex;gap:10px 16px;flex-wrap:wrap;align-items:center;background:#fff7ed;border:1px solid #fdba74;color:#9a3412;border-radius:12px;padding:10px 14px;margin-bottom:12px;font-size:14px}
+.pq-todo a{color:#9a3412;font-weight:700;text-decoration:underline}</style>
 </head>
 <body data-user="{{ current_user['id'] }}"{% if offline_queue %} data-offlineq="1"{% endif %}{% if current_user and current_user['role'] in ('tally', 'fuel', 'brigadier', 'driver') %} data-track="1"{% endif %}{% if gmaps_key %} data-gmaps="{{ gmaps_key }}"{% endif %}>
 {% set ep = request.endpoint or '' %}
@@ -151,6 +153,10 @@
       {% with messages = get_flashed_messages(with_categories=true) %}{% for cat, msg in messages %}
         <div class="flash {{ cat }}">{{ icon('check-circle' if cat == 'success' else 'alert','sm') }}<div>{{ msg }}</div></div>
       {% endfor %}{% endwith %}
+      {% if pq17_todo and request.endpoint not in ('acct.pq17', 'acct.faktura') %}<div class="pq-todo no-print">⏰ <b>Buxgalter eslatmasi:</b>
+        {% if pq17_todo.missing %}<a href="{{ url_for('acct.pq17') }}">📥 {{ pq17_todo.missing }} ta yukning PQ-17 si yuklanmagan ({{ pq17_todo.missing_kg|num }} kg) — hosil-qabuli.uz dan yuklang</a>{% endif %}
+        {% if pq17_todo.sign %}<a href="{{ url_for('acct.faktura') }}">✍ {{ pq17_todo.sign }} ta imzolash</a>{% endif %}
+        {% if pq17_todo.invoice %}<a href="{{ url_for('acct.faktura') }}">🧾 {{ pq17_todo.invoice }} ta faktura</a>{% endif %}</div>{% endif %}
       {% block content %}{% endblock %}
       <div class="tiny muted center no-print" style="margin-top:26px">SURXON TAXIATOSH TEXTILE · {{ domain }} · v{{ version }}</div>
     </main>
