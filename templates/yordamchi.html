@@ -11,10 +11,31 @@
 </div>
 <div class="card" style="margin-top:12px"><div class="card-b">🚜 Shu vaqtda bugun ishlagan <b>har bir kombayn</b> uchun <b>kunlik akt-sverka PDF</b> ham boradi
   (direktor, buxgalter, kassir): dala kg, punkt netto, PQ-17 bilan tasdiqlangan kg, bugungi summa, jami qoldiq va <b>hozir to‘lash mumkin</b> bo‘lgan summa.</div></div>
+<section class="card yd-ds"><div class="card-h"><h3>📡 Xabar kimga boradi va bordimi?</h3></div><div class="card-b">
+  {% if not ds.bot %}<div class="yd-bad">❌ Telegram bot ulanmagan (serverda bot tokeni yo‘q) — hech qanday xabar ketmaydi.</div>{% endif %}
+  {% if ds.worker_min is none or ds.worker_min > 30 %}<div class="yd-bad">❌ Xabar yuboruvchi (fon jarayoni) ishlamayapti{% if ds.worker_min is not none %} — oxirgi marta {{ ds.worker_min|round|int }} daqiqa oldin{% endif %}. Server administratoriga ayting.</div>
+  {% else %}<div class="yd-ok">✓ Xabar yuboruvchi ishlayapti (oxirgi tekshiruv {{ ds.worker_min|round|int }} daqiqa oldin)</div>{% endif %}
+  <table class="t"><thead><tr><th>Kim</th><th>Rol</th><th>Telegram</th></tr></thead><tbody>
+  {% for p in ds.people %}<tr><td class="b">{{ p.full_name }} <span class="tiny muted">{{ p.username }}</span></td><td>{{ p.role_name }}</td>
+    <td>{% if p.telegram_id %}<span class="yd-ok">✓ bog‘langan</span>{% else %}<span class="yd-bad">✗ bog‘lanmagan — xabar bormaydi</span>
+      {% if can('users.manage') %}<a class="link small" href="{{ url_for('admin.users') }}">→ bog‘lash kodi</a>{% endif %}{% endif %}</td></tr>{% endfor %}
+  </tbody></table>
+  {% if not ds.people|selectattr('telegram_id')|list %}<div class="tiny muted">Hech kim bog‘lamagan — xabarlar {{ 'hisobot guruhiga' if ds.group else 'hech qayerga (hisobot guruhi ham ulanmagan)' }} ketadi.</div>{% endif %}
+  <h4 style="margin:14px 0 6px">Oxirgi xabarlar</h4>
+  <table class="t"><thead><tr><th>Vaqt</th><th>Nima</th><th>Kimga</th><th>Holat</th></tr></thead><tbody>
+  {% for j in ds.jobs %}<tr><td class="nowrap">{{ j.created_at[5:16] }}</td>
+    <td>{{ {'director':'Direktor hisoboti','faktura':'Faktura ro‘yxati','akt':'Kombayn akt PDF','remind':'Eslatma','alert':'Nazorat'}[j.kind] }}</td>
+    <td>{{ j.to }}</td>
+    <td>{% if j.status == 'sent' %}<span class="yd-ok">✓ yetkazildi {{ (j.sent_at or '')[11:16] }}</span>{% elif j.last_error %}<span class="yd-bad">✗ xato: {{ j.last_error[:120] }}</span>{% else %}<span class="muted">⏳ navbatda</span>{% endif %}</td></tr>
+  {% else %}<tr><td colspan="4" class="muted">Hali xabar yuborilmagan.</td></tr>{% endfor %}
+  </tbody></table>
+  <div class="tiny muted" style="margin-top:8px">Telegramni bog‘lash: Admin → Foydalanuvchilar → odamning qatorida “Ulash kodi” → o‘sha odam botga shu kodni yuboradi.</div>
+</div></section>
 <div class="tiny muted" style="margin-top:10px">Xabar Telegramni profiliga bog‘lagan Rahbar/Admin (direktor) va Buxgalterning shaxsiy chatiga boradi.
   Hech kim bog‘lamagan bo‘lsa — hisobot guruhiga. Vaqtni Sozlamalar → “director_report_time” da o‘zgartirish mumkin.</div>
 <style>
 .yd{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:14px}
 .yd-msg{white-space:pre-wrap;font-family:inherit;font-size:14.5px;line-height:1.5;margin:0;padding:14px 16px;background:#eef6ff;border-radius:0 0 14px 14px}
+.yd-ds{margin-top:14px}.yd-ok{color:#15803d;font-weight:700}.yd-bad{color:#b91c1c;font-weight:700;margin-bottom:6px}
 </style>
 {% endblock %}

@@ -93,3 +93,30 @@ def test_director_report_and_faktura_reminder(app, world):
     with app.app_context():
         assert Y.accountant_text() == ''                            # PQ-17 in, invoice signed → nothing to ask
         assert 'imzolash kerak' not in Y.director_text()
+
+
+def test_personal_message_goes_without_report_group(app, world):
+    """No report group connected: a personal message (director report, akt, reminder) is still sent through the bot,
+    and the Yordamchi page shows who has not linked Telegram and what happened to each message."""
+    import surxon.outbox as O
+    cfg = app.config['SURXON']
+    old = (cfg.TELEGRAM_BOT_TOKEN, cfg.TELEGRAM_REPORT_CHAT_ID)
+    cfg.TELEGRAM_BOT_TOKEN, cfg.TELEGRAM_REPORT_CHAT_ID = 'x:test', ''
+    sent, real = [], O.telegram_upload
+    O.telegram_upload = lambda method, fields, files, token=None: sent.append(fields['chat_id']) or {'ok': True}
+    try:
+        with app.app_context():
+            db = get_db()
+            db.execute("UPDATE users SET telegram_id='111' WHERE username='admin'")
+            db.execute("DELETE FROM settings WHERE key='tg_report_chat_id'")
+            db.commit()
+            from surxon import yordamchi as Y
+            Y.send_evening(force=True)
+            O.run_once()
+            assert '111' in sent
+            assert q("SELECT status FROM outbox WHERE kind='director'", one=True)['status'] == 'sent'
+    finally:
+        O.telegram_upload = real
+        cfg.TELEGRAM_BOT_TOKEN, cfg.TELEGRAM_REPORT_CHAT_ID = old
+    page = world['admin'].get('/yordamchi').get_data(as_text=True)
+    assert 'Xabar kimga boradi' in page and '✓ yetkazildi' in page and '✗ bog‘lanmagan' in page

@@ -526,9 +526,10 @@ def yordamchi():
     if request.method == 'POST':
         post_actor()
         Y.send_evening(force=True)
-        return done('Hisobot Telegramga yuborildi.', url_for('acct.yordamchi'))
+        return done('Navbatga qo‘yildi — 1–2 daqiqada Telegramga boradi. Pastdagi “Oxirgi xabarlar” da holatini ko‘ring.',
+                    url_for('acct.yordamchi'))
     return render_template('yordamchi.html', text=Y.director_text(), acc=Y.accountant_text(),
-                           at=get_setting('director_report_time') or '23:00')
+                           at=get_setting('director_report_time') or '23:00', ds=Y.delivery_state())
 
 
 @bp.get('/buxgalteriya/kombaynlar/<int:cid>')

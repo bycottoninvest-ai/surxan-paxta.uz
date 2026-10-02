@@ -315,3 +315,34 @@ def pq17_arrived(db, doc_ids):
                       'hosil-qabuli.uz → PQ-17 ni imzolang → klasterga faktura yarating.',
                       'Keyin tizimda: Faktura sahifasi → “Faktura yaratildi / imzolandi”.'])
     _send(db, 'faktura', 'pq17new:' + '-'.join(str(i) for i in ids), text, ACCOUNTANT_ROLES)
+
+
+ROLE_NAMES = {'admin': 'Admin', 'manager': 'Rahbar', 'accountant': 'Buxgalter', 'cashier': 'Kassir'}
+
+
+def delivery_state():
+    """For the Yordamchi page: who gets the messages (and who has not linked Telegram), is the sender running,
+    and what happened to the last messages — so “xabar kelmadi” can be seen and fixed without guessing."""
+    from flask import current_app
+    from .outbox import chat_id
+    cfg = current_app.config['SURXON']
+    people = [dict(r, role_name=ROLE_NAMES.get(r['role'], r['role'])) for r in q(
+        """SELECT id, full_name, username, role, telegram_id FROM users WHERE active=1
+           AND role IN ('admin','manager','accountant','cashier') ORDER BY role, full_name""")]
+    names = {str(p['telegram_id']): p['full_name'] for p in people if p['telegram_id']}
+    jobs = []
+    for j in q("""SELECT kind, ref, status, attempts, last_error, created_at, sent_at, payload_json FROM outbox
+                  WHERE channel='telegram_report' AND kind IN ('director','faktura','akt','remind','alert')
+                  ORDER BY id DESC LIMIT 15"""):
+        import json
+        pl = json.loads(j['payload_json'] or '{}')
+        to = names.get(str(pl.get('chat_id')), 'shaxsiy chat') if pl.get('chat_id') else 'hisobot guruhi'
+        jobs.append(dict(j, to=to))
+    last = get_setting('nazorat_last_run') or ''
+    from datetime import datetime
+    try:
+        age = (datetime.strptime(now_str()[:19], '%Y-%m-%d %H:%M:%S') - datetime.strptime(last[:19], '%Y-%m-%d %H:%M:%S')).total_seconds() / 60
+    except ValueError:
+        age = None
+    return {'people': people, 'jobs': jobs, 'bot': bool(cfg.TELEGRAM_BOT_TOKEN), 'group': bool(chat_id('telegram_report', cfg)),
+            'worker_min': age}

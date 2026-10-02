@@ -369,8 +369,12 @@ def run_once(limit=50):
     jobs = db.execute(f'''SELECT * FROM outbox WHERE status='pending' AND next_try_at <= ?
                           AND channel IN ({','.join('?' * len(SENDERS))}) ORDER BY id LIMIT ?''',
                       (time.time(), *SENDERS.keys(), limit)).fetchall()
+    cfg = current_app.config['SURXON']
     for job in jobs:
-        if job['channel'] in skipped:
+        personal = job['channel'] == 'telegram_report' and '"chat_id"' in job['payload_json']
+        if personal and not cfg.TELEGRAM_BOT_TOKEN:
+            continue
+        if job['channel'] in skipped and not personal:      # a personal chat needs only the bot, not the report group
             continue
         try:
             SENDERS[job['channel']](job, json.loads(job['payload_json']))
