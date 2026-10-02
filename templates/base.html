@@ -53,6 +53,7 @@
       {{ nav('acct.expense_pick', 'Xarajat yozish', 'receipt', None, ['acct.expense_pick', 'acct.expense_new']) }}
       {% else %}
       {{ nav('main.dashboard', 'Bosh sahifa', 'home') }}
+      {{ nav('acct.nazorat', 'Nazorat' ~ (' (' ~ nazorat_open ~ ')' if nazorat_open else ''), 'shield', 'acct.view') }}
       {% call group('Rahbar', 'chart') %}
       {% if current_user['role'] in ('admin', 'manager') %}{{ nav('rahbar.home', 'Direktor paneli (telefon)', 'chart', None, ['rahbar.home', 'rahbar.cotton', 'rahbar.moving', 'rahbar.trip', 'rahbar.cash', 'rahbar.wages', 'rahbar.worker', 'rahbar.checks', 'rahbar.fuel']) }}
       {{ nav('rahbar.car', 'Mashina ekrani', 'map', None, ['rahbar.car']) }}{% endif %}

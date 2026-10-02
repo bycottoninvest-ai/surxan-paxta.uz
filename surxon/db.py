@@ -10,7 +10,7 @@ from contextlib import contextmanager
 
 from flask import current_app, g
 
-SCHEMA_VERSION = 20
+SCHEMA_VERSION = 21
 
 SCHEMA = r'''
 CREATE TABLE IF NOT EXISTS brigadiers (
@@ -1094,6 +1094,10 @@ def migrate(db):
     # v20: a face for the main screen — the brigadier's photo, the combine's photo
     _add_column(db, 'brigadiers', 'photo_id', 'INTEGER REFERENCES photos(id)')
     _add_column(db, 'equipment', 'photo_id', 'INTEGER REFERENCES photos(id)')
+    # v21: Nazorat — every problem the self-check found, so each one is told once and closed when it is fixed
+    db.execute('''CREATE TABLE IF NOT EXISTS nazorat_alerts (
+                    key TEXT PRIMARY KEY, level TEXT NOT NULL, title TEXT NOT NULL,
+                    first_at TEXT NOT NULL, resolved_at TEXT)''')
     # Future column changes go here as: if version < N: ALTER TABLE ...
     db.execute('UPDATE schema_version SET version=? WHERE version < ?', (SCHEMA_VERSION, SCHEMA_VERSION))
 

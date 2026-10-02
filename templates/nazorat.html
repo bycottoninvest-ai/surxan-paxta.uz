@@ -1,0 +1,28 @@
+{% extends 'base.html' %}
+{% from 'macros.html' import icon, csrf, empty with context %}
+{% set page_title = 'Nazorat' %}
+{% block content %}
+<div class="page-h"><h1>🛡 Nazorat</h1><span class="sub">Tizim o‘zini o‘zi tekshiradi — xato bo‘lsa Telegram guruhga va shaxsiy chatga yozadi</span>
+  <form method="post" style="margin-left:auto">{{ csrf() }}<button class="btn btn-light btn-sm">{{ icon('refresh','sm') }} Hozir tekshirish</button></form></div>
+{% if not items %}
+<div class="card"><div class="card-b" style="text-align:center;padding:40px"><div style="font-size:54px">✅</div>
+  <h2 style="color:#15803d;margin:6px 0">Hammasi joyida</h2><div class="muted">Kg ham, pul ham mos — xato topilmadi.</div></div></div>
+{% else %}
+<div class="nz-sum"><div class="nz-r"><b>{{ reds|length }}</b><span>xato — to‘lovdan oldin tuzating</span></div>
+  <div class="nz-y"><b>{{ yellows|length }}</b><span>kechikkan — kuzatib boring</span></div></div>
+{% for i in items %}
+<a class="nz-it nz-{{ i.level }}" href="{{ i.url or '#' }}"><span class="nz-dot">{{ '🔴' if i.level == 'red' else '🟡' }}</span>
+  <div><b>{{ i.title }}</b><span>{{ i.detail }}</span></div><span class="nz-go">Tuzatish ›</span></a>
+{% endfor %}
+{% endif %}
+<div class="tiny muted" style="margin-top:12px">Tekshiriladi: PQ-17 bog‘lanmagani · punkt kg va PQ-17 farqi · PQ-17 kechikishi · uzoq yo‘lda / ochiq qolgan telashka ·
+  nakladnoy va tortishlar yig‘indisi · umumiy yuk bo‘linishi · kombayn egasiga ortiqcha yoki taxminiy summadan to‘lov · narxsiz kg.
+  Har 15 daqiqada o‘zi tekshiradi; PQ-17 ni reysga bog‘lashni o‘zi qiladi.</div>
+<style>
+.nz-sum{display:flex;gap:12px;margin-bottom:12px;flex-wrap:wrap}.nz-sum>div{flex:1;min-width:200px;border-radius:14px;padding:14px 16px;display:flex;gap:12px;align-items:center}
+.nz-sum b{font-size:32px}.nz-r{background:#fef2f2;color:#b91c1c}.nz-y{background:#fffbeb;color:#92400e}
+.nz-it{display:flex;gap:12px;align-items:center;background:#fff;border-radius:14px;padding:12px 16px;margin-bottom:8px;text-decoration:none;color:#0b2b55;border-left:6px solid}
+.nz-red{border-color:#dc2626}.nz-yellow{border-color:#f59e0b}.nz-it>div{flex:1;display:flex;flex-direction:column;gap:2px}.nz-it span{font-size:13px;color:#475569}
+.nz-dot{font-size:20px}.nz-go{font-weight:800;color:#1d4ed8!important;white-space:nowrap}
+</style>
+{% endblock %}

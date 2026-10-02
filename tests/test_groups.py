@@ -134,7 +134,7 @@ def test_umumiy_yuk_scan_close_weigh_split_and_pq17(app, world):
     pdf = bux.get(f'/buxgalteriya/kombaynlar/{k2}.pdf')
     from test_documents import pdf_text
     text = pdf_text(pdf.data)
-    assert pdf.status_code == 200 and 'KOMBAYN HISOB-KITOBI' in text and 'Farhod aka (xizmat)' in text and '394' in text
+    assert pdf.status_code == 200 and 'KOMBAYN AKT-SVERKA' in text and 'Farhod aka (xizmat)' in text and '394' in text
     assert f'/buxgalteriya/kombaynlar/{k2}' in bux.get('/buxgalteriya/kombaynlar').get_data(as_text=True)
 
 

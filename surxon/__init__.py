@@ -14,7 +14,7 @@ from .config import BASE_DIR, Config
 from .security import (PERMISSIONS, ROLES, brigadier_scope, can, csrf_token, load_user, wants_json)
 from .utils import UserError, fmt_date, fmt_money, fmt_num, now_str, today_str, weekday_name
 
-VERSION = '2.25.1'
+VERSION = '2.26.0'
 
 
 def create_app(**overrides):
@@ -193,8 +193,15 @@ def register_template_helpers(app):
             'bot_username': app.config['SURXON'].TELEGRAM_BOT_USERNAME,
             'test_mode': app.config['SURXON'].APP_MODE == 'test',
             'gmaps_key': _gmaps_key() if user else '',
+            'nazorat_open': _nazorat_open() if user and can('acct.view') else 0,
             'offline_queue': user is not None and __import__('surxon.settings', fromlist=['get_bool']).get_bool('offline_queue'),
         }
+
+    def _nazorat_open():
+        try:      # what the last self-check found and nobody has fixed yet (cheap: one count)
+            return dbmod.scalar('SELECT COUNT(*) FROM nazorat_alerts WHERE resolved_at IS NULL') or 0
+        except Exception:
+            return 0
 
     def _gmaps_key():
         # server .env wins; otherwise the key the admin saved on the Integrations page

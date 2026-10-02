@@ -165,6 +165,10 @@ def _send_telegram(job, payload):
 
 def _send_report(job, payload):
     cfg = current_app.config['SURXON']
+    if payload.get('chat_id'):          # a personal message (Nazorat) — through the main bot the person linked
+        telegram_upload('sendMessage', {'chat_id': payload['chat_id'], 'text': payload['text'][:4000]}, {},
+                        token=cfg.TELEGRAM_BOT_TOKEN if payload.get('main_bot') else (cfg.TELEGRAM_REPORT_BOT_TOKEN or cfg.TELEGRAM_BOT_TOKEN))
+        return
     telegram_upload('sendMessage', {'chat_id': chat_id('telegram_report'), 'text': payload['text'][:4000]}, {},
                     token=cfg.TELEGRAM_REPORT_BOT_TOKEN or cfg.TELEGRAM_BOT_TOKEN)
 
@@ -334,6 +338,11 @@ def run_once(limit=50):
         tick()
     except Exception as exc:  # kuzatuv schedule/delivery problems never block the archive deliveries
         print(f'kuzatuv tick failed: {exc}', flush=True)
+    try:
+        from .nazorat import tick as nazorat_tick
+        nazorat_tick()
+    except Exception as exc:  # the self-check never blocks deliveries
+        print(f'nazorat failed: {exc}', flush=True)
     try:
         from .reporting import maybe_schedule_daily_report
         maybe_schedule_daily_report()

@@ -481,6 +481,20 @@ def combines():
                                                                        'pq_wait_kg', 'provisional_amount', 'pending')})
 
 
+@bp.route('/nazorat', methods=['GET', 'POST'])
+@perm_required('acct.view')
+def nazorat():
+    """The self-check: what does not add up (red) and what is late (yellow), each with a link to fix it."""
+    from .. import nazorat as N
+    if request.method == 'POST':
+        post_actor()
+        res = N.tick(force=True)
+        return done(f'Tekshirildi: {res["found"]} ta muammo, {res["new"]} ta yangi.', url_for('acct.nazorat'))
+    items = N.issues(season_arg())
+    return render_template('nazorat.html', items=items, reds=[i for i in items if i['level'] == 'red'],
+                           yellows=[i for i in items if i['level'] != 'red'])
+
+
 @bp.get('/buxgalteriya/kombaynlar/<int:cid>')
 @perm_required('acct.view')
 def combine_statement(cid):

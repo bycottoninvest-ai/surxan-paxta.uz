@@ -94,3 +94,55 @@ def test_combine_akt_sverka_adds_up(app, world):
         assert pdf.status_code == 200 and pdf.data[:4] == b'%PDF', code
     text = pdf_text(bux.get(f'/buxgalteriya/kombaynlar/{k["K-02"]}.pdf').data).replace(' ', ' ')
     assert 'Farhod aka' in text and '810 000' in text and '310 000' in text and '500 000' in text
+
+
+def test_nazorat_finds_mistakes_and_tells_people(app, world):
+    """The self-check: a PQ-17 tied to no trip, a combine paid more than it earned, a trip left open — found, written
+    to the report group and to the admin's own chat once, listed on the Nazorat page, and closed when fixed."""
+    tally, yunus, ali, st = setup(app, world)
+    admin, bux, kassa = world['admin'], world['bux'], world['kassa']
+    assert admin.post('/admin/sozlamalar', {'set_combine_rate_standard': '1000'}).get_json()['ok']
+    with app.app_context():
+        db = get_db()
+        db.execute("UPDATE users SET telegram_id='555' WHERE username='admin'")
+        db.commit()
+        k1 = q("SELECT id FROM equipment WHERE code='K-01'", one=True)['id']
+    w = _close(app, tally, world, 'TL-01', [('600', k1)])
+    assert yunus.post(f'/punkt/yuk/{w}/qabul', {'station_kg': '600'}).get_json()['ok']
+    # a stranger PQ-17 (load 999999, 480 kg) — no trip of ours
+    bux.c.post('/buxgalteriya/pq17', data={'files': [(io.BytesIO(pq17_pdf('XH1000000099', '999999')), 'x.pdf')], '_csrf': bux.csrf()},
+               content_type='multipart/form-data', headers={'X-Requested-With': 'fetch'})
+    # K-01 earned 600 000 (punkt kg, estimate) but is paid 700 000
+    assert bux.post('/buxgalteriya/kirim', {'amount': '1 000 000', 'source': 'Direktor', 'client_uuid': uuid4()}).get_json()['ok']
+    r = bux.post('/buxgalteriya/tolov', {'kind': 'combine', 'target_id': k1, 'amount': '700 000', 'client_uuid': uuid4()}).get_json()
+    if r['ok']:
+        assert kassa.post(f'/buxgalteriya/tolov/{r["payout_id"]}/berildi', {}).get_json()['ok']
+    else:                                   # the payout form itself refuses more than the balance — also fine
+        with app.app_context():
+            from surxon.utils import now_str, today_str
+            get_db().execute('''INSERT INTO cash_entries(season_year, entry_date, direction, category, amount, combine_id, created_at)
+                                VALUES ((SELECT MAX(year) FROM seasons), ?, 'OUT', 'combine_pay', 700000, ?, ?)''',
+                             (today_str(), k1, now_str()))
+            get_db().commit()
+    from test_dala import open_trip
+    lid = open_trip(tally, world, trailer='TL-02')
+    with app.app_context():
+        get_db().execute("UPDATE trailer_loads SET opened_at='2026-01-01 08:00:00' WHERE id=?", (lid,))
+        get_db().commit()
+        from surxon.nazorat import tick
+        res = tick(force=True)
+        msgs = [m['payload_json'] for m in q("SELECT payload_json FROM outbox WHERE ref LIKE 'nazorat:%'")]
+        again = tick(force=True)                        # nothing new → nothing sent twice
+        assert len(q("SELECT 1 FROM outbox WHERE ref LIKE 'nazorat:%'")) == len(msgs)
+    assert res['new'] >= 3 and again['new'] == 0
+    assert any('"555"' in m for m in msgs) and any('XH1000000099' in m for m in msgs) and any('ko\\u2018p to\\u2018langan' in m or 'ko‘p to‘langan' in m for m in msgs)
+    page = bux.get('/nazorat').get_data(as_text=True)
+    assert 'PQ-17 XH1000000099 hech bir reysga bog‘lanmagan' in page and 'K-01: hisoblangandan ko‘p to‘langan' in page
+    assert 'reys 24 soatdan ko‘p ochiq turibdi' in page and 'Nazorat (' in page
+    assert world['juma'].get('/nazorat').status_code in (302, 403)          # brigadier: no
+    # fixed: the open trip is cancelled → closed on the next check
+    with app.app_context():
+        get_db().execute("UPDATE trailer_loads SET status='BEKOR' WHERE id=?", (lid,))
+        get_db().commit()
+        tick(force=True)
+        assert q("SELECT resolved_at FROM nazorat_alerts WHERE key=?", (f'open:{lid}',), one=True)['resolved_at']
