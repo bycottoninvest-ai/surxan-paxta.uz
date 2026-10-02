@@ -33,7 +33,7 @@
     <div class="table-wrap"><table class="t"><thead><tr><th>Turi</th><th>Kod</th><th>Raqam</th><th>Operator</th><th>Egalik</th><th class="num">Reyslar</th><th class="num">Kombayn kg</th><th>Hozir</th><th>GPS</th><th></th></tr></thead>
       <tbody>{% for e in rows %}<tr class="{{ 'void' if not e.active }}"><td>{{ kinds.get(e.kind) }}</td><td class="b">{{ e.code }}</td><td>{{ e.plate or '—' }}</td><td>{{ e.operator_name or '—' }}</td><td>{{ 'Tashqi' if e.ownership == 'external' else 'O‘zimizniki' }}</td>
         <td class="num">{{ e.trips }}</td><td class="num">{{ e.combine_kg|num if e.kind == 'kombayn' else '' }}</td>
-        <td class="keep">{% if e.busy %}<span class="badge b-green">Ishlayapti ({{ e.busy }})</span>{% else %}<span class="badge b-gray">Bo‘sh</span>{% endif %}</td>
+        <td class="keep">{% if e.busy %}<a class="badge b-green" href="{{ url_for('ops.load_detail', load_id=e.busy_load) }}" title="Ochiq reysni ko‘rish — kerak bo‘lmasa shu yerdan bekor qiling">Ishlayapti ({{ e.busy }}) ›</a>{% else %}<span class="badge b-gray">Bo‘sh</span>{% endif %}</td>
         <td class="keep">{% if e.imei %}<span class="badge {{ 'b-green' if e.gps_seen and e.gps_seen[:10] == today else 'b-gray' }}" title="IMEI {{ e.imei }}">{{ 'ulangan' if e.gps_seen else 'kutilmoqda' }}</span>{% else %}—{% endif %}</td>
         <td class="keep">{% if can('masterdata.write') %}<a class="btn btn-ghost btn-sm" href="{{ url_for('admin.equipment', edit=e.id) }}">{{ icon('edit','sm') }}</a>{% endif %}</td></tr>
       {% endfor %}</tbody></table></div></section>

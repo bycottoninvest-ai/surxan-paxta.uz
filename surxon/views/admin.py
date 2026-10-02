@@ -473,6 +473,8 @@ def equipment():
                    (SELECT COALESCE(SUM(kg),0) FROM harvests h WHERE h.combine_id=e.id AND h.season_year=? AND h.voided_at IS NULL) combine_kg,
                    (SELECT status FROM trailer_loads tl WHERE (tl.trailer_id=e.id OR tl.tractor_id=e.id)
                       AND tl.status IN ('OCHIQ','TOLDI') LIMIT 1) busy,
+                   (SELECT tl.id FROM trailer_loads tl WHERE (tl.trailer_id=e.id OR tl.tractor_id=e.id)
+                      AND tl.status IN ('OCHIQ','TOLDI') LIMIT 1) busy_load,
                    t.imei, t.last_seen gps_seen
                 FROM equipment e LEFT JOIN trackers t ON t.equipment_id=e.id ORDER BY e.active DESC, e.kind, e.code''', (year, year))
     edit = None
