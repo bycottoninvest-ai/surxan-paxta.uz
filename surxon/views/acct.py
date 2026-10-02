@@ -495,6 +495,42 @@ def nazorat():
                            yellows=[i for i in items if i['level'] != 'red'])
 
 
+@bp.route('/buxgalteriya/faktura', methods=['GET', 'POST'])
+@perm_required('nayman.write')
+def faktura():
+    """PQ-17s that still need our signature or the invoice to the cluster — the accountant's daily list."""
+    from .. import pq17 as P
+    from .. import yordamchi as Y
+    if request.method == 'POST':
+        act = request.form.get('action')
+        if act == 'send':
+            post_actor()
+            Y.send_evening(force=True)
+            return done('Telegramga yuborildi (direktor va buxgalter).', url_for('acct.faktura'))
+        kw = {'sign': {'signed': True}, 'inv_made': {'invoice': 'yaratildi'}, 'inv_signed': {'invoice': 'imzolandi'}}.get(act)
+        if not kw:
+            raise UserError('Noma’lum amal.')
+        n = P.set_status(post_actor(), request.form.getlist('ids'),
+                         invoice_no=request.form.get('invoice_no') if act.startswith('inv_') else None, **kw)
+        return done(f'{n} ta PQ-17 holati saqlandi.', url_for('acct.faktura'))
+    return render_template('acct_faktura.html', clusters=Y.faktura_queue())
+
+
+@bp.route('/yordamchi', methods=['GET', 'POST'])
+@perm_required('acct.view')
+def yordamchi():
+    """What the director gets on Telegram tonight — seen here, sent again on request."""
+    from .. import yordamchi as Y
+    if g.user['role'] not in ('admin', 'manager'):
+        abort(403)
+    if request.method == 'POST':
+        post_actor()
+        Y.send_evening(force=True)
+        return done('Hisobot Telegramga yuborildi.', url_for('acct.yordamchi'))
+    return render_template('yordamchi.html', text=Y.director_text(), acc=Y.accountant_text(),
+                           at=get_setting('director_report_time') or '23:00')
+
+
 @bp.get('/buxgalteriya/kombaynlar/<int:cid>')
 @perm_required('acct.view')
 def combine_statement(cid):

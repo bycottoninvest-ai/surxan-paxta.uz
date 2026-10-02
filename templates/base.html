@@ -55,6 +55,7 @@
       {{ nav('main.dashboard', 'Bosh sahifa', 'home') }}
       {{ nav('acct.nazorat', 'Nazorat' ~ (' (' ~ nazorat_open ~ ')' if nazorat_open else ''), 'shield', 'acct.view') }}
       {% call group('Rahbar', 'chart') %}
+      {% if current_user['role'] in ('admin', 'manager') %}{{ nav('acct.yordamchi', 'Yordamchi (kunlik hisobot)', 'chart') }}{% endif %}
       {% if current_user['role'] in ('admin', 'manager') %}{{ nav('rahbar.home', 'Direktor paneli (telefon)', 'chart', None, ['rahbar.home', 'rahbar.cotton', 'rahbar.moving', 'rahbar.trip', 'rahbar.cash', 'rahbar.wages', 'rahbar.worker', 'rahbar.checks', 'rahbar.fuel']) }}
       {{ nav('rahbar.car', 'Mashina ekrani', 'map', None, ['rahbar.car']) }}{% endif %}
       {% endcall %}
@@ -79,6 +80,7 @@
       {{ nav('acct.expense_pick', 'Xarajat yozish', 'receipt', 'expenses.write', ['acct.expense_pick', 'acct.expense_new']) }}
       {{ nav('finance.cash', 'Kassa kitobi', 'cash', 'cash.view') }}
       {{ nav('hamyon.fixes', 'Tuzatishlar', 'edit', 'cash.view') }}
+      {{ nav('acct.faktura', 'Faktura (PQ-17)', 'receipt', 'nayman.write') }}
       {{ nav('acct.pq17', 'Agroklaster sverkasi', 'check-circle', 'nayman.write', ['acct.pq17', 'acct.pq17_cluster']) }}
       {{ nav('loans.firms', 'Akt-sverka va firmalar', 'doc', 'loans.view', ['loans.firms', 'loans.akt']) }}
       {{ nav('loans.home', 'Kreditlar va lizing', 'building', 'loans.view', ['loans.home', 'loans.party', 'loans.contract']) }}

@@ -1,0 +1,18 @@
+{% extends 'base.html' %}
+{% from 'macros.html' import icon, csrf with context %}
+{% set page_title = 'Yordamchi' %}
+{% block content %}
+<div class="page-h"><h1>🤖 Yordamchi — kunlik hisobot</h1>
+  <span class="sub">Har kuni soat {{ at }} da direktorning Telegramiga shu xabar boradi (buxgalterga — faktura ro‘yxati)</span>
+  <form method="post" style="margin-left:auto">{{ csrf() }}<button class="btn btn-green btn-sm">📨 Hozir Telegramga yuborish</button></form></div>
+<div class="yd">
+  <section class="card"><div class="card-h"><h3>📋 Direktorga</h3></div><pre class="yd-msg">{{ text }}</pre></section>
+  <section class="card"><div class="card-h"><h3>🧾 Buxgalterga</h3></div><pre class="yd-msg">{{ acc or 'Faktura kutayotgan PQ-17 yo‘q — buxgalterga xabar bormaydi.' }}</pre></section>
+</div>
+<div class="tiny muted" style="margin-top:10px">Xabar Telegramni profiliga bog‘lagan Rahbar/Admin (direktor) va Buxgalterning shaxsiy chatiga boradi.
+  Hech kim bog‘lamagan bo‘lsa — hisobot guruhiga. Vaqtni Sozlamalar → “director_report_time” da o‘zgartirish mumkin.</div>
+<style>
+.yd{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:14px}
+.yd-msg{white-space:pre-wrap;font-family:inherit;font-size:14.5px;line-height:1.5;margin:0;padding:14px 16px;background:#eef6ff;border-radius:0 0 14px 14px}
+</style>
+{% endblock %}

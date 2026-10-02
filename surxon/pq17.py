@@ -146,6 +146,8 @@ def import_pdf(actor, data, source='web'):
                           hashlib.sha256(data).hexdigest(), source, wid, how, actor.user_id, now_str(), gid))
         if wid:
             db.execute('UPDATE nayman_receipts SET load_no=COALESCE(load_no, ?) WHERE waybill_id=?', (d['load_no'], wid))
+        from .yordamchi import pq17_arrived
+        pq17_arrived(db, [cur.lastrowid])
         audit(db, actor, 'IMPORT', 'pq17', cur.lastrowid, new={'code': d['code'], 'load_no': d['load_no'], 'netto': d['netto'],
                                                                'amount': d['amount'], 'waybill_id': wid, 'group_id': gid})
     return cur.lastrowid, d, False, how

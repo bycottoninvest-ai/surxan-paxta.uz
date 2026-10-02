@@ -348,6 +348,11 @@ def run_once(limit=50):
         maybe_schedule_daily_report()
     except Exception as exc:  # never block deliveries because of the report scheduler
         print(f'daily report scheduling failed: {exc}', flush=True)
+    try:
+        from .yordamchi import maybe_send_evening
+        maybe_send_evening()
+    except Exception as exc:  # the director's report never blocks deliveries
+        print(f'director report failed: {exc}', flush=True)
     db = get_db()
     sent = errors = 0
     skipped = [ch for ch in SENDERS if not configured(ch)]

@@ -1,0 +1,52 @@
+{% extends 'base.html' %}
+{% from 'macros.html' import icon, csrf, empty with context %}
+{% set page_title = 'Faktura (PQ-17)' %}
+{% block content %}
+<div class="page-h"><h1>🧾 Faktura kerak bo‘lgan PQ-17 lar</h1>
+  <span class="sub">Klasterga faktura: hosil-qabuli.uz → PQ-17 ni imzolang → faktura yarating va imzolang → shu yerda belgilang</span>
+  <form method="post" style="margin-left:auto">{{ csrf() }}<button class="btn btn-light btn-sm" name="action" value="send">📨 Telegramga hozir yuborish</button></form></div>
+{% if not clusters %}
+<div class="card"><div class="card-b" style="text-align:center;padding:40px"><div style="font-size:54px">✅</div>
+  <h2 style="color:#15803d;margin:6px 0">Hamma fakturalar imzolangan</h2><div class="muted">Yangi PQ-17 kelsa, shu yerda va Telegramda chiqadi.</div></div></div>
+{% endif %}
+{% for c in clusters %}
+<form method="post">{{ csrf() }}
+<section class="card fk"><div class="card-h"><h3>🏭 {{ c.name }} <span class="muted small">STIR {{ c.inn }}</span></h3></div>
+  <div class="fk-sum">
+    <div><small>PQ-17</small><b>{{ c.docs|length }} ta</b></div>
+    <div><small>To‘lanadigan kg</small><b>{{ c.kond|num }}</b></div>
+    <div><small>Summa (QQS bilan)</small><b>{{ c.amount|money }}</b></div>
+    <div><small>shundan QQS</small><b>{{ c.vat|money }}</b></div>
+    <div class="{{ 'r' if c.sign }}"><small>✍ Imzolash kerak</small><b>{{ c.sign }}</b></div>
+    <div class="{{ 'y' if c.invoice }}"><small>🧾 Faktura kerak</small><b>{{ c.invoice }}</b></div>
+  </div>
+  <div class="table-wrap"><table class="t"><thead><tr>
+    <th><input type="checkbox" onclick="this.closest('form').querySelectorAll('.fk-ck').forEach(x => x.checked = this.checked)"></th>
+    <th>PQ-17</th><th>Sana</th><th>Yuk xati</th><th>Terim</th><th class="num">Kg</th><th class="num">Narx</th><th class="num">Summa</th><th class="num">QQS</th><th>Holat</th></tr></thead><tbody>
+  {% for d in c.docs %}<tr>
+    <td><input class="fk-ck" type="checkbox" name="ids" value="{{ d.id }}"></td>
+    <td><a class="link" href="{{ url_for('acct.pq17_file', doc_id=d.id) }}" target="_blank">{{ d.code }}</a></td>
+    <td class="nowrap">{{ d.doc_date|d }}</td><td class="b">{{ d.load_no }}</td>
+    <td>{{ 'Kombayn' if d.method == 'combine' else 'Qo‘l' if d.method == 'hand' else d.harvest_raw }}</td>
+    <td class="num b">{{ d.kond_kg|num }}</td><td class="num">{{ '%.2f'|format(d.price) }}</td>
+    <td class="num b">{{ d.amount|money }}</td><td class="num">{{ (d.vat or 0)|money }}</td>
+    <td><span class="pq-st st-{{ d.stage[0] }}">{{ d.stage[1] }}</span>{% if d.invoice_no %}<div class="tiny muted">№ {{ d.invoice_no }}</div>{% endif %}</td>
+  </tr>{% endfor %}
+  </tbody></table></div>
+  <div class="card-b fk-act"><b>Belgilanganlar:</b>
+    <button class="btn btn-green btn-sm" name="action" value="sign">✍ SURXON imzoladi</button>
+    <input class="input" name="invoice_no" placeholder="faktura № (ixtiyoriy)" style="max-width:180px;height:34px">
+    <button class="btn btn-light btn-sm" name="action" value="inv_made">🧾 Faktura yaratildi</button>
+    <button class="btn btn-light btn-sm" name="action" value="inv_signed">✓ Faktura imzolandi</button></div>
+</section></form>
+{% endfor %}
+<div class="tiny muted" style="margin-top:10px">Har kuni kechqurun shu ro‘yxat buxgalterning Telegramiga boradi; yangi PQ-17 kelganda darhol ham yoziladi.
+  Faktura imzolangach PQ-17 bu ro‘yxatdan chiqadi.</div>
+<style>
+.fk{margin-bottom:14px}.fk-sum{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px;padding:0 16px 12px}
+.fk-sum div{background:#f8fafc;border-radius:10px;padding:8px 12px}.fk-sum small{display:block;color:#64748b}.fk-sum b{font-size:19px}
+.fk-sum .r{background:#fee2e2;color:#991b1b}.fk-sum .y{background:#fef3c7;color:#92400e}
+.fk-act{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.pq-st{display:inline-block;padding:3px 8px;border-radius:8px;font-size:12.5px;font-weight:700;white-space:nowrap}.st-sign{background:#fee2e2;color:#991b1b}.st-inv0,.st-inv{background:#fef3c7;color:#92400e}.st-done{background:#dcfce7;color:#166534}
+</style>
+{% endblock %}
