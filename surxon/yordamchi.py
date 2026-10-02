@@ -43,9 +43,29 @@ def faktura_queue():
     return list(out.values())
 
 
+def pq17_missing():
+    """Trips (and umumiy yuklar) the punkt accepted that have no PQ-17 in the system yet: [(label, day, kg)]."""
+    rows = [(f'{r["number"]} ({r["trip_no"]})', r['received_date'], r['accepted_kg']) for r in q(
+        """SELECT wb.number, tl.trip_no, nr.received_date, nr.accepted_kg FROM nayman_receipts nr
+           JOIN waybills wb ON wb.id=nr.waybill_id JOIN trailer_loads tl ON tl.id=wb.load_id
+           WHERE wb.status<>'BEKOR' AND NOT EXISTS (SELECT 1 FROM load_group_items i WHERE i.waybill_id=wb.id)
+           AND NOT EXISTS (SELECT 1 FROM pq17_docs p WHERE p.waybill_id=wb.id) ORDER BY nr.received_date, wb.id""")]
+    rows += [(g['number'], (g['received_at'] or '')[:10], g['accepted_kg']) for g in q(
+        """SELECT number, received_at, accepted_kg FROM load_groups WHERE status='QABUL'
+           AND NOT EXISTS (SELECT 1 FROM pq17_docs p WHERE p.group_id=load_groups.id) ORDER BY received_at""")]
+    return rows
+
+
 def accountant_text():
     """The invoice list for the accountant ('' when nothing waits)."""
     lines = []
+    miss = pq17_missing()
+    if miss:
+        lines += ['', f'📥 PQ-17 HALI YUKLANMAGAN: {len(miss)} ta (punkt qabul qilgan)']
+        lines += [f'• {lab} · {_d(day) if day else "—"} · {_n(kg)} kg' for lab, day, kg in miss[:20]]
+        if len(miss) > 20:
+            lines.append(f'… yana {len(miss) - 20} ta')
+        lines.append('   → hosil-qabuli.uz dan PQ-17 PDF ni oling va Telegram botga yuboring (yoki Agroklaster sverkasi sahifasiga yuklang).')
     for c in faktura_queue():
         docs = c['docs']
         kond, amount, vat = (sum(d[k] or 0 for d in docs) for k in ('kond_kg', 'amount', 'vat'))
@@ -60,7 +80,7 @@ def accountant_text():
             lines.append(f'… yana {len(docs) - 25} ta')
     if not lines:
         return ''
-    return '\n'.join(['SURXAN-PAXTA.UZ', '🧾 FAKTURA KUTAYOTGAN PQ-17 LAR', *lines, '',
+    return '\n'.join(['SURXAN-PAXTA.UZ', '🧾 BUXGALTER: PQ-17 VA FAKTURA', *lines, '',
                       'Qilish kerak: hosil-qabuli.uz → PQ-17 ni imzolang → klasterga faktura yarating va imzolang.',
                       'Keyin tizimda belgilang: Faktura sahifasi → “Faktura yaratildi / imzolandi”.'])
 

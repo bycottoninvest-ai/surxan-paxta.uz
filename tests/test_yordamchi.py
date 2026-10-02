@@ -26,6 +26,9 @@ def test_director_report_and_faktura_reminder(app, world):
     assert yunus.post(f'/punkt/yuk/{w}/qabul', {'station_kg': '480', 'load_no': '555001'}).get_json()['ok']
 
     # a new PQ-17 → the accountant is told at once, in their own chat, with the kg, price and sum
+    from surxon import yordamchi as Y
+    with app.app_context():                                         # accepted, no PQ-17 yet → the accountant is asked for it
+        assert 'PQ-17 HALI YUKLANMAGAN: 1 ta' in Y.accountant_text()
     _upload(bux, 'XH1000000001', '555001')
     with app.app_context():
         new = q("SELECT * FROM outbox WHERE ref LIKE 'pq17new:%'")
@@ -58,7 +61,7 @@ def test_director_report_and_faktura_reminder(app, world):
         assert part in text, part
 
     page = admin.get('/yordamchi').get_data(as_text=True)
-    assert 'DIREKTOR HISOBOTI' in page and 'FAKTURA KUTAYOTGAN' in page
+    assert 'DIREKTOR HISOBOTI' in page and 'PQ-17 VA FAKTURA' in page
     assert bux.get('/yordamchi').status_code in (302, 403)            # only the director / admin
     assert world['juma'].get('/buxgalteriya/faktura').status_code in (302, 403)
 
@@ -66,5 +69,5 @@ def test_director_report_and_faktura_reminder(app, world):
     page = bux.get('/buxgalteriya/faktura').get_data(as_text=True)
     assert 'XH1000000001' not in page and 'Hamma fakturalar imzolangan' in page
     with app.app_context():
-        assert Y.accountant_text() == ''
+        assert Y.accountant_text() == ''                            # PQ-17 in, invoice signed → nothing to ask
         assert 'imzolash kerak' not in Y.director_text()
