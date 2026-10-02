@@ -45,7 +45,8 @@
         <div class="bp-t t-g">🧺<span>Ifloslik</span><b>{{ ('%.1f'|format(p.dirt) ~ ' %') if p.dirt is not none else '—' }}</b><small>PQ-17</small></div>
         <div class="bp-t t-d">{{ icon('factory') }}<span>Netto qabul</span><b>{{ kg(p.accepted) }}</b><small>{{ ('(%.1f%%)'|format(p.pct)) if p.pct is not none else '' }}</small></div>
       </div>
-      <div class="bp-real">{% if p.real is not none %}Klaster (PQ-17) real netto: <b>{{ p.real|num }} kg</b>{% if p.deduction %} <small>· chegirma {{ p.deduction|num }} kg</small>{% endif %}
+      <div class="bp-real">{% if p.real is not none %}Klaster (PQ-17), {{ p.pq_n }} ta yuk: topshirildi <b>{{ p.pq_netto|num }}</b> − chegirma {{ p.deduction|num }}{% if p.pq_netto %} ({{ '%.1f'|format(p.deduction / p.pq_netto * 100) }}%){% endif %} = real netto <b>{{ p.real|num }} kg</b>
+        {% if p.pq_wait %}<small>· PQ-17 hali kelmagan: {{ p.pq_wait|num }} kg</small>{% endif %}{% if p.pq_unmatched %} <small class="t-down">· {{ p.pq_unmatched }} ta PQ-17 reysga bog‘lanmagan</small>{% endif %}
         {% else %}Nayman netto qabul: <b>{{ p.accepted|num }} kg</b> <small>· PQ-17 kelganda aniqlanadi</small>{% endif %}</div>
     </section>
 

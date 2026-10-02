@@ -65,7 +65,10 @@ def build(year, dan, gacha, brig=None, money=False):
              'pct': round(rec['acc'] / rec['shipped'] * 100, 1) if rec['shipped'] else None,
              'moist': round(pq['moist'], 1) if pq and pq['moist'] is not None else None,
              'dirt': round(pq['dirt'], 1) if pq and pq['dirt'] is not None else None,
-             'deduction': pq['deduction'] if pq else None, 'real': pq['kond'] if pq else None, 'pq_n': pq['n'] if pq else 0}
+             'deduction': pq['deduction'] if pq else None, 'real': pq['kond'] if pq else None, 'pq_n': pq['n'] if pq else 0,
+             'pq_netto': pq['netto'] if pq else None, 'pq_ours': pq['ours'] if pq else None,
+             'pq_unmatched': pq['unmatched'] if pq else 0,
+             'pq_wait': max(rec['acc'] - pq['ours'], 0) if pq else None}
 
     ff = ' AND f.brigadier_id=?' if brig else ''
     area = scalar(f'SELECT COALESCE(SUM(area_ha),0) FROM fields f WHERE f.active=1{ff}', bp)
