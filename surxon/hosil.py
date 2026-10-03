@@ -145,13 +145,16 @@ def compare():
     """Every yuk xati of the table beside our receipt for it (by number, else a same-day exact-netto candidate)."""
     ours = {}
     for r in q('''SELECT nr.load_no, nr.waybill_id, nr.accepted_kg, nr.received_date, tl.trip_no, tl.method, g.number grp,
-                         g.accepted_kg grp_kg, g.id gid
+                         g.accepted_kg grp_kg, g.id gid, nr.receiver_name, nr.created_at, nr.station_gross_kg, nr.station_tare_kg
                   FROM nayman_receipts nr JOIN waybills wb ON wb.id=nr.waybill_id JOIN trailer_loads tl ON tl.id=wb.load_id
                   LEFT JOIN load_group_items i ON i.waybill_id=wb.id LEFT JOIN load_groups g ON g.id=i.group_id AND g.status='QABUL'
                   WHERE wb.status<>'BEKOR' AND nr.load_no IS NOT NULL'''):
-        o = ours.setdefault(r['load_no'], {'label': r['grp'] or r['trip_no'], 'kg': 0.0, 'wid': r['waybill_id'], 'gid': r['gid']})
+        o = ours.setdefault(r['load_no'], {'label': r['grp'] or r['trip_no'], 'kg': 0.0, 'wid': r['waybill_id'], 'gid': r['gid'],
+                                           'who': r['receiver_name'], 'at': r['created_at'],
+                                           'copied': r['station_gross_kg'] is None})
         o['kg'] = r['grp_kg'] if r['grp'] else o['kg'] + (r['accepted_kg'] or 0)
-    free = q('''SELECT wb.id, tl.trip_no, tl.method, nr.accepted_kg, nr.received_date, g.number grp, g.accepted_kg grp_kg
+    free = q('''SELECT wb.id, tl.trip_no, tl.method, nr.accepted_kg, nr.received_date, g.number grp, g.accepted_kg grp_kg,
+                       nr.receiver_name, nr.created_at, wb.net_kg
                 FROM nayman_receipts nr JOIN waybills wb ON wb.id=nr.waybill_id JOIN trailer_loads tl ON tl.id=wb.load_id
                 LEFT JOIN load_group_items i ON i.waybill_id=wb.id LEFT JOIN load_groups g ON g.id=i.group_id AND g.status='QABUL'
                 WHERE wb.status<>'BEKOR' AND nr.load_no IS NULL ORDER BY wb.id''')
@@ -162,7 +165,7 @@ def compare():
                 continue
             seen.add(w['grp'])
         cands.append({'wid': w['id'], 'label': w['grp'] or w['trip_no'], 'kg': w['grp_kg'] if w['grp'] else w['accepted_kg'],
-                      'day': w['received_date'], 'method': w['method']})
+                      'day': w['received_date'], 'method': w['method'], 'who': w['receiver_name'], 'at': w['created_at']})
     pq = {r['load_no']: r for r in q('SELECT load_no, code, netto FROM pq17_docs')}
     rows = []
     for h in q('SELECT * FROM hq_loads ORDER BY dt DESC, load_no DESC'):
@@ -181,10 +184,13 @@ def compare():
             else:
                 r['state'] = 'yoq'
         rows.append(r)
+    used = {r['cand']['wid'] for r in rows if r['cand']}
+    orphans = [c for c in cands if c['wid'] not in used]          # our receipts no yuk xati of the table explains
     tot = {k: sum(1 for r in rows if r['state'] == k) for k in ('mos', 'farq', 'raqamsiz', 'yoq', 'tarozida')}
+    tot['orphans'] = len(orphans)
     tot['n'] = len(rows)
     tot['last'] = q('SELECT MAX(imported_at) m FROM hq_loads', one=True)['m']
-    return {'rows': rows, 'tot': tot}
+    return {'rows': rows, 'tot': tot, 'orphans': orphans}
 
 
 def assign(actor, load_no, waybill_id):

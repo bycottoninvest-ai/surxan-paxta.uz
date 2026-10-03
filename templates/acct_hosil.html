@@ -31,16 +31,26 @@
     <td class="num">{{ r.brutto|num }}</td><td class="num">{{ r.tara|num }}</td><td class="num b">{{ r.netto|num }}</td><td class="num">{{ r.kond|num }}</td>
     <td>{% if r.pq %}<span class="pq-ok">{{ r.pq.code }}</span>{% elif r.pq_no %}<span class="muted">{{ r.pq_no }} (yuklanmagan)</span>{% else %}<span class="muted">hali yo‘q</span>{% endif %}</td>
     <td>
-      {% if r.state == 'mos' %}<span class="pq-ok">✓ {{ r.ours.label }} · {{ r.ours.kg|num }} kg</span>
+      {% if r.state == 'mos' %}<span class="pq-ok">✓ {{ r.ours.label }} · {{ r.ours.kg|num }} kg</span> <span class="tiny muted">· {{ r.ours.who or '' }}</span>
       {% elif r.state == 'farq' %}<span style="color:#b45309">⚠ {{ r.ours.label }}: bizda {{ r.ours.kg|num }} kg, klasterda {{ r.netto|num }} kg</span>
+        <div class="tiny">Kiritgan: <b>{{ r.ours.who or '—' }}</b> · {{ r.ours.at|d }}{% if r.ours.copied %} · brutto/tara yozilmagan (dala kg qoldirilgan){% endif %}</div>
         <a class="link small" href="{{ url_for('ops.waybill_detail', waybill_id=r.ours.wid) }}">→ qabulni tuzatish</a>
       {% elif r.state == 'raqamsiz' %}
         <form method="post" style="display:inline">{{ csrf() }}<input type="hidden" name="action" value="assign"><input type="hidden" name="load_no" value="{{ r.load_no }}"><input type="hidden" name="waybill_id" value="{{ r.cand.wid }}">
           <span>{{ r.cand.label }} · {{ r.cand.day|d }} · {{ r.cand.kg|num }} kg — kg aniq mos, raqami yozilmagan</span>
+          <span class="tiny muted">(kiritgan: {{ r.cand.who or '—' }})</span>
           <button class="btn btn-light btn-sm">Raqamni yozish</button></form>
       {% elif r.state == 'tarozida' %}<span class="muted">hali tarozida (tara tortilmagan)</span>
       {% else %}<span style="color:#b91c1c">✗ bizda bu yuk topilmadi — punkt daftarini tekshiring</span>{% endif %}
     </td></tr>
   {% else %}<tr><td colspan="9" class="muted">Hali jadval yuklanmagan.</td></tr>{% endfor %}</tbody>
 </table></div></section>
+
+{% if cmp.orphans %}
+<section class="card" style="margin-top:12px"><div class="card-h"><h3>⚠ Bizda bor, lekin jadvalda mos yuk xati topilmadi ({{ cmp.orphans|length }} ta)</h3></div><div class="card-b">
+  <div class="tiny muted" style="margin-bottom:6px">Bu reyslar punktda qabul qilingan deb yozilgan, lekin yuk xati № yozilmagan va klaster jadvalida kg aniq mos yuk yo‘q. Ko‘pincha sabab: punkt kg o‘rniga dala kg qoldirilgan yoki ikki tortish bitta deb yozilgan.</div>
+  <table class="table small"><thead><tr><th>Reys</th><th>Qabul sanasi</th><th>Terim</th><th class="num">Bizda kg</th><th>Kiritgan</th><th></th></tr></thead><tbody>
+  {% for c in cmp.orphans %}<tr><td class="b">{{ c.label }}</td><td>{{ c.day|d }}</td><td>{{ 'Qo‘l' if c.method == 'hand' else 'Kombayn' }}</td><td class="num">{{ c.kg|num }}</td>
+    <td>{{ c.who or '—' }} <span class="tiny muted">{{ c.at|d }}</span></td><td><a class="link small" href="{{ url_for('ops.waybill_detail', waybill_id=c.wid) }}">ochish</a></td></tr>{% endfor %}
+  </tbody></table></div></section>{% endif %}
 {% endblock %}
