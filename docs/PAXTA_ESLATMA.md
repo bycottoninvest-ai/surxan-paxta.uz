@@ -3,6 +3,24 @@
 Oxirgi yangilanish: 2026-09-25 (kech, v2.5.0 — ikki bot). Yozgan: Claude (bulutdagi sessiya “Yangi loya qilash”).
 
 
+## ⏸ TO‘XTATILGAN JOY — 04.10.2026 (tun), v2.31.0 (main = production’ga push qilingan, server olishi kutilgan)
+
+Foydalanuvchi boshqa loyihaga o‘tdi. Davom ettirganda AVVAL saytdagi versiyani tekshir (pastda v2.31.0 bo‘lishi kerak), keyin
+quyidagi 4 ishni bajar (har biri uchun foydalanuvchi “hammasini qil” deb ruxsat bergan; ruxsat so‘raydigan rejimda ishlaydi):
+1. hosil-qabuli.uz jadvalini qayta o‘qib `/buxgalteriya/hosil-qabuli` ga CSV yuklash (oldin 26/29 yuklangan — 367843, 363442,
+   362185 tushib qolgan edi; v2.29.2 da tuzatilgan). hosil-qabuli.uz da FAQAT O‘QISH — hech narsa bosilmaydi.
+   Kirish har tab uchun alohida: Chrome dagi Claude guruhidagi tabda foydalanuvchi o‘zi kiradi.
+2. “Klaster kg i bilan tuzatish”: 311058 → UY-0013 (2 500 → 3 080; Yunus “Dala jami bilan” bosgan; kombaynlar K-02 Orazboy,
+   Farhod og‘a — xizmat); 289603 → UY-0008 + TL-2026-000038 (2 900 + 2 900 = 5 800; ikkalasini “Administrator” kiritgan).
+3. “Xodimlarga Telegram’da yuborish” — Yunusga savol: 353283 (03.10 12:52, qo‘l, 1 270 kg) — TL-000059 (730, Gulbohar 22 ishchi)
+   bilan qabul qilingan, rasmda UY-0024 qog‘ozi (brutto 7 960 − tara 6 690 = 1 270). Qolgan 540 kg: ikkinchi telashka yoki dalada
+   kam yozilgan — Yunus/Gulbohar javobidan keyin 353283 ni tuzatish. UY-0024 sahifasini ochganda u “OCHIQ” bo‘lib qolgan bo‘lishi mumkin.
+4. Sozlama `combine_prov_pay_pct` 90 → 0 (kombaynga faqat PQ-17 kg bo‘yicha pul). Auto rejimda brauzer orqali saqlash bloklangan edi.
+Yana: 4 ta yangi PQ-17 PDF (PQ-2936/2939/2942/2944) ni foydalanuvchi yuklashi kerak; bugungi 363442 (qo‘l 1 800) va 362185
+(kombayn 1 580) bizda yo‘q bo‘lishi mumkin — punktdan so‘rash.
+Kunlik avtomatik tekshiruv: Claude ilovasidagi scheduled task `kunlik-paxta-sverka` (har kuni ~21:07).
+Holat 03.10 kech: hosil jadvali 26 yukdan 22 ✓ mos; 13 reysga yuk xati № yozildi (359608→UY-0026 va boshqalar).
+
 ## QO‘SHIMCHA 03.10.2026 (kech) — v2.29.0
 
 - Sabab topildi: 3 ta PQ-17 bog‘lanmadi, chunki punktda yuk xati № yozilmagan va punkt kg o‘rniga dala kg qolgan
