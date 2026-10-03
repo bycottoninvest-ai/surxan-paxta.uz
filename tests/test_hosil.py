@@ -33,6 +33,18 @@ def test_parse_site_layout():
     assert rows[1]['method'] == 'hand' and rows[2]['netto'] is None
 
 
+def test_parse_csv_keeps_first_rows():
+    """The daily check sends a plain CSV (numbers as text) — the first data rows must not be taken for a header."""
+    from surxon.hosil import parse
+    csv = ('YUK XATI SANASI,YUK XATI RAQAMI,BRUTTO,TARA,NETTO,KONDITSION VAZNI,IFLOSLIK,NAMLIK,TERIM TURI,PQ-17 RAQAMI\n'
+           '03.10.2026 19:59,367843,8370,6730,1640,1543,6.5,10.5,Mashina bilan,PQ-2936\n'
+           '03.10.2026 18:26,363442,6670,4870,1800,1764,2.8,10.3,Qolda,PQ-2939\n'
+           '03.10.2026 17:53,362185,8370,6790,1580,1487,6.5,10.5,Mashina bilan,\n').encode()
+    rows = parse(csv, 'hq.csv')
+    assert [r['load_no'] for r in rows] == ['367843', '363442', '362185']
+    assert rows[0]['netto'] == 1640 and rows[1]['method'] == 'hand' and rows[2]['pq_no'] is None
+
+
 def test_hosil_table_compares_and_writes_the_number(app, world):
     tally, yunus, ali, st = setup(app, world)
     bux = world['bux']

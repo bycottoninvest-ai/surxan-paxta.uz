@@ -67,7 +67,7 @@ def parse(data, filename=''):
         raise UserError('Bu hosil-qabuli.uz jadvali emas — “NETTO” ustuni topilmadi. Saytdagi “Yuklab olish” Excel faylini yuboring.')
     # header text per column: the rows above the first data row, merged cells carried to the right
     first_data = head_n + 1
-    while first_data < min(len(rows), head_n + 4) and not any(isinstance(c, (int, float)) for c in rows[first_data]):
+    while first_data < min(len(rows), head_n + 4) and not any(_num(c) is not None for c in rows[first_data]):
         first_data += 1
     heads = [''] * width
     for r in rows[max(0, head_n - 2):first_data]:
@@ -153,13 +153,28 @@ def compare():
                                            'who': r['receiver_name'], 'at': r['created_at'],
                                            'copied': r['station_gross_kg'] is None})
         o['kg'] = r['grp_kg'] if r['grp'] else o['kg'] + (r['accepted_kg'] or 0)
-    free = q('''SELECT wb.id, tl.trip_no, tl.method, nr.accepted_kg, nr.received_date, g.number grp, g.accepted_kg grp_kg,
+    for p in q('''SELECT p.load_no, COALESCE(g.number, tl.trip_no) label, COALESCE(g.accepted_kg, nr.accepted_kg) kg,
+                         COALESCE(p.waybill_id, (SELECT MIN(i.waybill_id) FROM load_group_items i WHERE i.group_id=p.group_id)) wid,
+                         p.group_id gid, nr.receiver_name, nr.created_at, nr.station_gross_kg
+                  FROM pq17_docs p LEFT JOIN waybills wb ON wb.id=p.waybill_id LEFT JOIN trailer_loads tl ON tl.id=wb.load_id
+                  LEFT JOIN load_groups g ON g.id=p.group_id
+                  LEFT JOIN nayman_receipts nr ON nr.waybill_id=COALESCE(p.waybill_id,
+                        (SELECT MIN(i.waybill_id) FROM load_group_items i WHERE i.group_id=p.group_id))
+                  WHERE p.waybill_id IS NOT NULL OR p.group_id IS NOT NULL'''):
+        if p['load_no'] not in ours:
+            ours[p['load_no']] = {'label': p['label'], 'kg': p['kg'], 'wid': p['wid'], 'gid': p['gid'], 'who': p['receiver_name'],
+                                  'at': p['created_at'], 'copied': p['station_gross_kg'] is None}
+    taken_w = {o['wid'] for o in ours.values()}
+    taken_g = {o['gid'] for o in ours.values() if o['gid']}
+    free = q('''SELECT wb.id, tl.trip_no, tl.method, nr.accepted_kg, nr.received_date, g.number grp, g.accepted_kg grp_kg, g.id gid,
                        nr.receiver_name, nr.created_at, wb.net_kg
                 FROM nayman_receipts nr JOIN waybills wb ON wb.id=nr.waybill_id JOIN trailer_loads tl ON tl.id=wb.load_id
                 LEFT JOIN load_group_items i ON i.waybill_id=wb.id LEFT JOIN load_groups g ON g.id=i.group_id AND g.status='QABUL'
                 WHERE wb.status<>'BEKOR' AND nr.load_no IS NULL ORDER BY wb.id''')
     cands, seen = [], set()
     for w in free:
+        if w['id'] in taken_w or (w['gid'] and w['gid'] in taken_g):
+            continue
         if w['grp']:
             if w['grp'] in seen:
                 continue
