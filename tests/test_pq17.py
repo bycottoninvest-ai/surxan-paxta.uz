@@ -191,7 +191,8 @@ def test_pq17_without_date_far_weight_and_two_trips(app, world):
     assert d1['waybill_id'] is None and d1['group_id'] is None       # 480 = 240 + 240 → nobody alone
     page = bux.get('/buxgalteriya/pq17').get_data(as_text=True)
     assert f'value="{w1}" selected' not in page and f'value="{w2}" selected' not in page   # 240 kg not pre-picked for 480
-    assert 'bir nechta reys' in page
+    assert 'bir nechta reys' in page and 'kombayn' in page
+    assert f'value="{w3}"' not in page                               # w3 is taken by XI…002 — not offered again
     with app.app_context():
         assert q("SELECT doc_date FROM pq17_docs WHERE id=?", (d2['id'],), one=True)['doc_date'] == rec   # trip's day
     # too far in kg → refused

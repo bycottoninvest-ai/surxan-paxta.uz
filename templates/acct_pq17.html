@@ -19,13 +19,13 @@
   <form method="post" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">{{ csrf() }}<input type="hidden" name="action" value="link"><input type="hidden" name="doc_id" value="{{ d.id }}">
     <span>PQ-17 <b>{{ d.code }}</b> · yuk xati {{ d.load_no }} · {{ d.doc_date|d if d.doc_date else 'sana o‘qilmadi' }} · <b>{{ d.netto|num }} kg</b> — bizda bunday reys topilmadi. Qaysi reys?</span>
     <select class="input" name="waybill_id" required style="height:34px;max-width:360px"><option value="">— reysni tanlang —</option>
-      {% if nr %}<optgroup label="Sanasi yaqin (kg bo‘yicha eng yaqini birinchi)">{% for w in nr %}<option value="{{ w.id }}" {{ 'selected' if guess.get(d.id) == w.id }}>{{ w.trip_no }} · {{ w.received_date|d }} · punkt {{ w.accepted_kg|num }} kg ({{ '%+.0f'|format((w.accepted_kg or 0) - d.netto) }})</option>{% endfor %}</optgroup>{% endif %}
-      <optgroup label="Boshqa reyslar">{% for w in free if w.id not in nids %}<option value="{{ w.id }}">{{ w.grp ~ ' · ' if w.grp }}{{ w.trip_no }} · {{ w.received_date|d }} · punkt {{ w.accepted_kg|num }} kg</option>{% endfor %}</optgroup></select>
+      {% if nr %}<optgroup label="Sanasi yaqin (kg bo‘yicha eng yaqini birinchi)">{% for w in nr %}<option value="{{ w.id }}" {{ 'selected' if guess.get(d.id) == w.id }}>{{ w.label }} · {{ 'qo‘l' if w.method == 'hand' else 'kombayn' }} · {{ w.received_date|d }} · punkt {{ w.accepted_kg|num }} kg ({{ 'aniq mos' if ((w.accepted_kg or 0) - d.netto)|abs < 0.5 else '%+.0f kg'|format((w.accepted_kg or 0) - d.netto) }})</option>{% endfor %}</optgroup>{% endif %}
+      <optgroup label="Boshqa reyslar">{% for w in free if w.id not in nids %}<option value="{{ w.id }}">{{ w.label }} · {{ 'qo‘l' if w.method == 'hand' else 'kombayn' }} · {{ w.received_date|d }} · punkt {{ w.accepted_kg|num }} kg</option>{% endfor %}</optgroup></select>
     <button class="btn btn-light btn-sm">Biriktirish</button>
     {% if not guess.get(d.id) %}<span class="tiny muted">kg bo‘yicha aniq mos reys yo‘q — tanlashdan oldin punkt daftarini tekshiring</span>{% endif %}</form>
-  {% if nr|length >= 2 %}<details style="margin-top:6px"><summary class="link small">Bitta yuk xatida bir nechta reys bo‘lganmi? (masalan 2 ta telashka)</summary>
+  {% set singles = nr|selectattr('single')|list %}{% if singles|length >= 2 %}<details style="margin-top:6px"><summary class="link small">Bitta yuk xatida bir nechta reys bo‘lganmi? (masalan 2 ta telashka)</summary>
   <form method="post" class="pq-many" data-netto="{{ d.netto }}" style="margin-top:6px">{{ csrf() }}<input type="hidden" name="action" value="link_many"><input type="hidden" name="doc_id" value="{{ d.id }}">
-    {% for w in nr %}<label style="display:block;font-size:13px"><input type="checkbox" name="waybill_ids" value="{{ w.id }}" data-kg="{{ w.accepted_kg or 0 }}"> {{ w.trip_no }} · {{ w.received_date|d }} · {{ w.accepted_kg|num }} kg</label>{% endfor %}
+    {% for w in singles %}<label style="display:block;font-size:13px"><input type="checkbox" name="waybill_ids" value="{{ w.id }}" data-kg="{{ w.accepted_kg or 0 }}"> {{ w.trip_no }} · {{ w.received_date|d }} · {{ w.accepted_kg|num }} kg</label>{% endfor %}
     <div class="small" style="margin:6px 0">Belgilangan jami: <b class="pq-sum">0</b> kg · PQ-17 da {{ d.netto|num }} kg</div>
     <button class="btn btn-light btn-sm">Belgilanganlarni shu PQ-17 ga birlashtirish</button></form></details>{% endif %}
   </div>{% endfor %}

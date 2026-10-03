@@ -108,12 +108,13 @@ def pq17():
     free = _free_trips(year)
     return render_template('acct_pq17.html', ov=ov, tot=ov['tot'], clusters=cl, year=year, fin=fin,
                            farq=[r for r in ov['rows'] if r['state'] == 'farq'], guess=_pq_guess(ov, free),
-                           free=free, near=_pq_near(ov, free))
+                           free=_candidates(free), near=_pq_near(ov, free))
 
 
 def _free_trips(year):
     """Received trips no PQ-17 covers yet (alone, or through their umumiy yuk)."""
-    return q("""SELECT wb.id, tl.trip_no, nr.accepted_kg, nr.received_date, g.number grp FROM waybills wb
+    return q("""SELECT wb.id, tl.trip_no, tl.method, nr.accepted_kg, nr.received_date, g.number grp, g.accepted_kg grp_kg,
+                       (SELECT COUNT(*) FROM load_group_items j WHERE j.group_id=g.id) grp_n FROM waybills wb
                 JOIN trailer_loads tl ON tl.id=wb.load_id JOIN nayman_receipts nr ON nr.waybill_id=wb.id
                 LEFT JOIN load_group_items i ON i.waybill_id=wb.id LEFT JOIN load_groups g ON g.id=i.group_id
                 WHERE wb.status<>'BEKOR' AND wb.season_year=?
@@ -127,6 +128,20 @@ def _pq_day(d):
     return _d.fromisoformat((d['doc_date'] or d['uploaded_at'] or '')[:10] or _d.today().isoformat())
 
 
+def _candidates(free):
+    """Free trips as the punkt weighed them: a trip alone, or a whole umumiy yuk (UY) as ONE line with its total —
+    a PQ-17 covers the whole UY, never one trailer of it."""
+    out, seen = [], set()
+    for w in free:
+        if not w['grp']:
+            out.append(dict(w, label=w['trip_no'], single=True))
+        elif w['grp'] not in seen:
+            seen.add(w['grp'])
+            out.append(dict(w, accepted_kg=w['grp_kg'], single=False,
+                            label=f'{w["grp"]} (umumiy yuk, {w["grp_n"]} ta telashka)'))
+    return out
+
+
 def _pq_near(ov, free):
     """For each unmatched PQ-17: the free trips received around its date (±2 days; for one whose date is unknown,
     the week before its upload), closest weight first — the list to tick when one yuk xati carried several trips."""
@@ -135,7 +150,7 @@ def _pq_near(ov, free):
     for d in ov['orphans']:
         day = _pq_day(d)
         lo, hi = (day.toordinal() - 2, day.toordinal() + 2) if d['doc_date'] else (day.toordinal() - 7, day.toordinal())
-        rs = [w for w in free if not w['grp'] and w['received_date'] and lo <= _d.fromisoformat(w['received_date']).toordinal() <= hi]
+        rs = [w for w in _candidates(free) if w['received_date'] and lo <= _d.fromisoformat(w['received_date']).toordinal() <= hi]
         out[d['id']] = sorted(rs, key=lambda w: abs((w['accepted_kg'] or 0) - d['netto']))
     return out
 
