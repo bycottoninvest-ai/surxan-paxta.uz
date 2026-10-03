@@ -242,6 +242,11 @@ def hosil_qabuli():
         if request.form.get('action') == 'assign':
             H.assign(actor, request.form.get('load_no', ''), parse_int(request.form.get('waybill_id'), 'Reys'))
             return done('Yuk xati № reysga yozildi.', url_for('acct.hosil_qabuli'))
+        if request.form.get('action') == 'correct':
+            require('nayman.write')
+            trips, kg = H.correct(actor, request.form.get('load_no', ''), request.form.getlist('waybill_ids'))
+            return done(f'Tuzatildi: {", ".join(trips)} → yuk xati {request.form.get("load_no")} · klaster netto {kg:g} kg.',
+                        url_for('acct.hosil_qabuli'))
         if request.form.get('action') == 'notify':
             people, n = H.send_notices(actor)
             return done(f'Telegram’ga yuborildi: {n} ta muammo direktorga, {people} ta xodimga o‘z savollari.' if n

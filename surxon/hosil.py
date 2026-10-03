@@ -231,6 +231,86 @@ def assign(actor, load_no, waybill_id):
     rematch()
 
 
+def correct(actor, load_no, waybill_ids):
+    """The cluster's weighing is the truth: put this yuk xati's netto on the trip(s) the office picked — the punkt kg
+    becomes the table's netto (shared over several trailers by their field kg), the number is written, the PQ-17 ties
+    itself. Several trips received one by one (or a received UY plus trips) become one umumiy yuk. Only the office
+    (nayman.write) may do it; old values stay in the audit with the reason, nothing is deleted."""
+    if not actor or not actor.can('nayman.write'):
+        raise UserError('Bu amal uchun huquqingiz yo‘q.')
+    import secrets
+    from .groups import split
+    from .pq17 import rematch
+    h = q('SELECT * FROM hq_loads WHERE load_no=?', (load_no,), one=True)
+    if not h or not h['netto']:
+        raise UserError('Bu yuk xati jadvalda yo‘q yoki hali tortib bo‘linmagan.')
+    ids = sorted({int(i) for i in waybill_ids if str(i).isdigit()})
+    if not ids:
+        raise UserError('Reysni belgilang.')
+    reason = f'hosil-qabuli.uz yuk xati {load_no} bo‘yicha tuzatildi (klaster netto {h["netto"]:g} kg)'
+    ts = now_str()
+    trip_sql = """SELECT wb.id, wb.net_kg, tl.trip_no, nr.id rid, nr.accepted_kg, nr.load_no,
+                         (SELECT group_id FROM load_group_items i WHERE i.waybill_id=wb.id) gid,
+                         (SELECT code FROM pq17_docs p WHERE p.waybill_id=wb.id) pq
+                  FROM waybills wb JOIN trailer_loads tl ON tl.id=wb.load_id
+                  LEFT JOIN nayman_receipts nr ON nr.waybill_id=wb.id WHERE wb.id=? AND wb.status<>'BEKOR'"""
+    with tx() as db:
+        trips = []
+        for wid in ids:
+            r = db.execute(trip_sql, (wid,)).fetchone()
+            if not r or not r['rid']:
+                raise UserError('Belgilangan reyslardan biri punktda qabul qilinmagan.')
+            trips.append(dict(r))
+        gids = {t['gid'] for t in trips if t['gid']}
+        if len(gids) > 1:
+            raise UserError('Ikki xil umumiy yuk belgilangan — bittasini tanlang.')
+        gid = next(iter(gids), None)
+        if gid:                                 # a picked UY comes whole — all its trailers
+            g = db.execute('SELECT * FROM load_groups WHERE id=?', (gid,)).fetchone()
+            if g['status'] != 'QABUL':
+                raise UserError(f'{g["number"]} hali qabul qilinmagan.')
+            if db.execute('SELECT 1 FROM pq17_docs WHERE group_id=?', (gid,)).fetchone():
+                raise UserError(f'{g["number"]} ga PQ-17 biriktirilgan — tegilmadi.')
+            for i in db.execute('SELECT waybill_id FROM load_group_items WHERE group_id=? ORDER BY added_at, waybill_id', (gid,)):
+                if i['waybill_id'] not in ids:
+                    ids.append(i['waybill_id'])
+                    trips.append(dict(db.execute(trip_sql, (i['waybill_id'],)).fetchone()))
+        for t in trips:
+            if t['load_no'] and t['load_no'] != load_no:
+                raise UserError(f'{t["trip_no"]} ga boshqa yuk xati ({t["load_no"]}) yozilgan — tegilmadi.')
+            if t['pq']:
+                raise UserError(f'{t["trip_no"]} ga {t["pq"]} biriktirilgan — tegilmadi.')
+        clash = db.execute(f"""SELECT tl.trip_no FROM nayman_receipts nr JOIN waybills wb ON wb.id=nr.waybill_id
+                               JOIN trailer_loads tl ON tl.id=wb.load_id WHERE nr.load_no=? AND wb.status<>'BEKOR'
+                               AND nr.waybill_id NOT IN ({','.join('?' * len(ids))})""", [load_no] + ids).fetchone()
+        if clash:
+            raise UserError(f'Yuk xati {load_no} allaqachon {clash["trip_no"]} ga yozilgan.')
+        old = {t['trip_no']: t['accepted_kg'] for t in trips}
+        shares = split(h['netto'], [t['net_kg'] or 0 for t in trips])
+        if len(trips) > 1 and not gid:          # trips received one by one → one umumiy yuk now
+            batch = (db.execute('SELECT MAX(batch) b FROM load_groups').fetchone()['b'] or 0) + 1
+            gid = db.execute("""INSERT INTO load_groups(number, token, batch, status, created_by, created_at, received_by, received_at)
+                                VALUES (?,?,?,'QABUL',?,?,?,?)""", (f'YX-{load_no}', secrets.token_urlsafe(9), batch,
+                                                                  actor.user_id, ts, actor.user_id, ts)).lastrowid
+        for t, kg in zip(trips, shares):
+            if gid and not t['gid']:
+                db.execute('INSERT INTO load_group_items(group_id, waybill_id, added_by, added_at) VALUES (?,?,?,?)',
+                           (gid, t['id'], actor.user_id, ts))
+            db.execute('''UPDATE nayman_receipts SET accepted_kg=?, diff_kg=?, load_no=?,
+                            diff_reason=COALESCE(diff_reason || ' · ', '') || ?, updated_at=? WHERE id=?''',
+                       (kg, round(kg - (t['net_kg'] or 0), 1), load_no, reason, ts, t['rid']))
+        if gid:
+            sent = round(sum(t['net_kg'] or 0 for t in trips), 1)
+            db.execute('''UPDATE load_groups SET accepted_kg=?, sent_kg=?, gross_kg=?, tare_kg=?, load_no=?, diff_kg=?,
+                            diff_reason=COALESCE(diff_reason || ' · ', '') || ? WHERE id=?''',
+                       (h['netto'], sent, h['brutto'], h['tara'], load_no, round(h['netto'] - sent, 1), reason, gid))
+        audit(db, actor, 'CORRECT', 'nayman_receipt', ids[0], old={'kg': old},
+              new={'load_no': load_no, 'netto': h['netto'], 'group_id': gid,
+                   'shares': dict(zip([t['trip_no'] for t in trips], shares))}, reason=reason)
+    rematch()
+    return [t['trip_no'] for t in trips], h['netto']
+
+
 def _kg(v):
     return f'{v:,.0f}'.replace(',', ' ') if v is not None else '—'
 

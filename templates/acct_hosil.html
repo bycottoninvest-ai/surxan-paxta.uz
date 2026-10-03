@@ -46,7 +46,13 @@
           <span class="tiny muted">(kiritgan: {{ r.cand.who or '—' }})</span>
           <button class="btn btn-light btn-sm">Raqamni yozish</button></form>
       {% elif r.state == 'tarozida' %}<span class="muted">hali tarozida (tara tortilmagan)</span>
-      {% else %}<span style="color:#b91c1c">✗ bizda bu yuk topilmadi — punkt daftarini tekshiring</span>{% endif %}
+      {% else %}<span style="color:#b91c1c">✗ bizda bu yuk topilmadi — punkt daftarini tekshiring</span>
+        {% if cmp.orphans and can('nayman.write') %}<details><summary class="link small">Bu yuk bizdagi qaysi reys(lar)? — klaster kg i bilan tuzatish</summary>
+        <form method="post" style="margin-top:4px">{{ csrf() }}<input type="hidden" name="action" value="correct"><input type="hidden" name="load_no" value="{{ r.load_no }}">
+          {% for c in cmp.orphans %}<label style="display:block"><input type="checkbox" name="waybill_ids" value="{{ c.wid }}"> {{ c.label }} · {{ c.day|d }} · {{ c.kg|num }} kg <span class="tiny muted">({{ c.who or '—' }})</span></label>{% endfor %}
+          <div class="tiny muted">Belgilangan reys(lar)ning punkt kg i {{ r.netto|num }} kg ga tenglashtiriladi (bir nechta bo‘lsa — dala kg iga qarab bo‘linadi), yuk xati yoziladi, PQ-17 o‘zi bog‘lanadi. Eski kg tarixda qoladi.</div>
+          <button class="btn btn-light btn-sm">Klaster kg i bilan tuzatish</button></form></details>{% endif %}
+      {% endif %}
     </td></tr>
   {% else %}<tr><td colspan="9" class="muted">Hali jadval yuklanmagan.</td></tr>{% endfor %}</tbody>
 </table></div></section>

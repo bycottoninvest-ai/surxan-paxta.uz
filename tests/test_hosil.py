@@ -98,6 +98,49 @@ def test_problems_go_to_who_entered_them(app, world):
     assert '7001' in texts and '555003' in texts and 'klaster jadvalida' in texts
 
 
+def test_correct_by_the_cluster_weighing(app, world):
+    """311058-like: one trip with the field kg left → the table's netto; 289603-like: two trips received apart → one
+    umumiy yuk with the table's netto shared by field kg; the PQ-17 then ties itself and the money follows it."""
+    tally, yunus, ali, st = setup(app, world)
+    bux = world['bux']
+    w1 = received_trip(app, world, tally, yunus, kg='480')
+    w2 = received_trip(app, world, tally, yunus, kg='480', trailer='TL-02')
+    w3 = received_trip(app, world, tally, yunus, kg='480', trailer='TL-03')
+    with app.app_context():
+        day = q("SELECT MAX(received_date) d FROM nayman_receipts", one=True)['d']
+    dd = f'{day[8:10]}.{day[5:7]}.{day[:4]} 12:00:00'
+    bux.c.post('/buxgalteriya/hosil-qabuli', data={'file': (io.BytesIO(hq_xlsx([('311058', dd, 560, 'Qo‘lda'),
+                                                                                 ('289603', dd, 1000, 'Qo‘lda')])), 'hq.xlsx'),
+                                                   '_csrf': bux.csrf()}, content_type='multipart/form-data')
+    assert 'Klaster kg i bilan tuzatish' in bux.get('/buxgalteriya/hosil-qabuli').get_data(as_text=True)
+    r = bux.post('/buxgalteriya/hosil-qabuli', {'action': 'correct', 'load_no': '311058', 'waybill_ids': [w1]}).get_json()
+    assert r['ok'], r
+    r = bux.post('/buxgalteriya/hosil-qabuli', {'action': 'correct', 'load_no': '289603', 'waybill_ids': [w2, w3]}).get_json()
+    assert r['ok'], r
+    # the same number never twice, a trip already corrected is not taken again
+    assert not bux.post('/buxgalteriya/hosil-qabuli', {'action': 'correct', 'load_no': '311058', 'waybill_ids': [w2]}).get_json()['ok']
+    with app.app_context():
+        r1 = q('SELECT * FROM nayman_receipts WHERE waybill_id=?', (w1,), one=True)
+        assert (r1['accepted_kg'], r1['load_no']) == (560, '311058') and 'hosil-qabuli.uz' in r1['diff_reason']
+        g = q("SELECT * FROM load_groups WHERE number='YX-289603'", one=True)
+        assert g['accepted_kg'] == 1000 and g['status'] == 'QABUL'
+        from surxon.groups import next_number
+        assert next_number() < 1000                       # “YX-289603” never moves the UY paper numbers
+        kgs = [x['accepted_kg'] for x in q('SELECT accepted_kg FROM nayman_receipts WHERE waybill_id IN (?,?)', (w2, w3))]
+        assert sum(kgs) == 1000
+        assert q("SELECT COUNT(*) n FROM audit_logs WHERE action='CORRECT'", one=True)['n'] == 2
+        from surxon.hosil import compare
+        st_ = {x['load_no']: x['state'] for x in compare()['rows']}
+    assert st_ == {'311058': 'mos', '289603': 'mos'}
+    # a PQ-17 for the group arrives → it ties to the whole group by the number
+    bux.c.post('/buxgalteriya/pq17', data={'files': [(io.BytesIO(pq17_pdf('XH2000000001', '289603', netto=1000, deduction=20)), 'a.pdf')],
+                                           '_csrf': bux.csrf()}, content_type='multipart/form-data', headers={'X-Requested-With': 'fetch'})
+    with app.app_context():
+        assert q("SELECT group_id FROM pq17_docs WHERE code='XH2000000001'", one=True)['group_id'] == g['id']
+    assert world['juma'].post('/buxgalteriya/hosil-qabuli', {'action': 'correct', 'load_no': '311058',
+                                                             'waybill_ids': [w1]}).status_code in (302, 403)
+
+
 def test_punkt_needs_the_load_number(app, world):
     tally, yunus, ali, st = setup(app, world)
     with app.app_context():

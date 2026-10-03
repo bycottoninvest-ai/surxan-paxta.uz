@@ -24,7 +24,7 @@ FIRST_NUMBER = 8          # UY-0001 … UY-0007 were already used on paper befor
 
 def next_number():
     """The number the next UY paper gets: after the highest one printed, never below FIRST_NUMBER."""
-    top = q("SELECT MAX(CAST(substr(number, 4) AS INTEGER)) m FROM load_groups", one=True)['m']
+    top = q("SELECT MAX(CAST(substr(number, 4) AS INTEGER)) m FROM load_groups WHERE number LIKE 'UY-%'", one=True)['m']
     return max((top or 0) + 1, FIRST_NUMBER)
 
 
@@ -48,7 +48,8 @@ def create_batch(actor, count, start=None):
         if start < 1 or start + count - 1 > 9999:
             raise UserError('Raqam 1 dan 9999 gacha bo‘lishi kerak.')
     with tx() as db:
-        busy = db.execute("SELECT number FROM load_groups WHERE CAST(substr(number, 4) AS INTEGER) BETWEEN ? AND ? ORDER BY number LIMIT 1",
+        busy = db.execute("SELECT number FROM load_groups WHERE number LIKE 'UY-%' AND CAST(substr(number, 4) AS INTEGER) BETWEEN ? AND ? "
+                          "ORDER BY number LIMIT 1",
                           (start, start + count - 1)).fetchone()
         if busy:
             raise UserError(f'{busy["number"]} allaqachon bor — boshqa raqamdan boshlang (keyingi bo‘sh: UY-{nxt:04d}).')

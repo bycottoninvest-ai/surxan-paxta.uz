@@ -391,7 +391,8 @@ def blanks_print():
 def group_blanks_print():
     from ..pdfdoc import build_group_blanks_pdf
     a, b = _range_args()
-    rows = q("SELECT * FROM load_groups WHERE CAST(substr(number, 4) AS INTEGER) BETWEEN ? AND ? ORDER BY number", (a, b))
+    rows = q("SELECT * FROM load_groups WHERE number LIKE 'UY-%' AND CAST(substr(number, 4) AS INTEGER) BETWEEN ? AND ? "
+             "ORDER BY number", (a, b))
     if not rows:
         abort(404)
     pdf = build_group_blanks_pdf(rows, company=get_setting('company_name'), domain=current_app.config['SURXON'].DOMAIN,
