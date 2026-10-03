@@ -1,4 +1,4 @@
-"""SURXON PAXTA HISOB TIZIMI — Flask application factory."""
+"""SURXON PAXTA HISOB TIZIMI вЂ” Flask application factory."""
 import json
 import os
 import secrets
@@ -14,7 +14,7 @@ from .config import BASE_DIR, Config
 from .security import (PERMISSIONS, ROLES, brigadier_scope, can, csrf_token, load_user, wants_json)
 from .utils import UserError, fmt_date, fmt_money, fmt_num, now_str, today_str, weekday_name
 
-VERSION = '2.29.2'
+VERSION = '2.30.0'
 
 
 def create_app(**overrides):
@@ -45,9 +45,9 @@ def create_app(**overrides):
             saved = dbmod.backup_before_upgrade(conn)
         except Exception as e:      # e.g. another service (worker/backup) made the same copy this second
             saved = None
-            app.logger.warning('Yangilashdan oldingi nusxa olinmadi (%s) — boshqa xizmat olgan bo‘lishi mumkin.', e)
+            app.logger.warning('Yangilashdan oldingi nusxa olinmadi (%s) вЂ” boshqa xizmat olgan boвЂlishi mumkin.', e)
         if saved:
-            app.logger.warning('Baza yangi versiyaga o‘tishdan oldin saqlandi: %s', saved)
+            app.logger.warning('Baza yangi versiyaga oвЂtishdan oldin saqlandi: %s', saved)
         dbmod.migrate(conn)
         seed(conn, cfg)
 
@@ -127,7 +127,7 @@ def seed(conn, cfg):
             if generated and not cfg.TESTING:
                 path = cfg.DATA_DIR / 'BIRINCHI_ADMIN_PAROLI.txt'
                 path.write_text(f'Login: {cfg.ADMIN_USER}\nParol: {password}\n'
-                                'Birinchi kirishda parolni almashtiring, keyin bu faylni o‘chiring.\n', encoding='utf-8')
+                                'Birinchi kirishda parolni almashtiring, keyin bu faylni oвЂchiring.\n', encoding='utf-8')
                 os.chmod(path, 0o600)
         if not conn.execute('SELECT 1 FROM brigadiers LIMIT 1').fetchone():
             for name in ('Juma ota', 'Nurim ota', 'Bayram ota'):
@@ -264,9 +264,9 @@ def register_errors(app):
         if app.config['TESTING']:
             raise e
         if wants_json():
-            return jsonify(ok=False, error='Serverda xatolik. Ma’lumot saqlanmadi — qayta urinib ko‘ring.'), 500
+            return jsonify(ok=False, error='Serverda xatolik. MaвЂ™lumot saqlanmadi вЂ” qayta urinib koвЂring.'), 500
         return render_template('error.html', code=500,
-                               message='Kutilmagan xatolik. Ma’lumot saqlanmadi. Qayta urinib ko‘ring yoki Adminga xabar bering.'), 500
+                               message='Kutilmagan xatolik. MaвЂ™lumot saqlanmadi. Qayta urinib koвЂring yoki Adminga xabar bering.'), 500
 
 
 def register_cli(app):
@@ -285,7 +285,7 @@ def register_cli(app):
         from .services import change_password
         user = dbmod.q('SELECT * FROM users WHERE username=?', (username.lower(),), one=True)
         if not user:
-            raise click.ClickException('Bunday login yo‘q')
+            raise click.ClickException('Bunday login yoвЂq')
         change_password(Actor(None, 'system', source='cli'), user['id'], password)
         dbmod.get_db().execute('UPDATE users SET must_change_password=1, active=1 WHERE id=?', (user['id'],))
         click.echo('Parol yangilandi (birinchi kirishda almashtirish talab qilinadi).')
@@ -305,9 +305,9 @@ def register_cli(app):
             name, _, role = row.rpartition(':')
             name, role = name.strip(), STAFF_ROLE_ALIASES.get(role.strip().lower(), role.strip().lower())
             if not name or role not in STAFF_ROLE_ALIASES.values():
-                raise click.ClickException(f'“{row}” — format: "Ism:rol" (rol: {", ".join(sorted(STAFF_ROLE_ALIASES))})')
+                raise click.ClickException(f'вЂњ{row}вЂќ вЂ” format: "Ism:rol" (rol: {", ".join(sorted(STAFF_ROLE_ALIASES))})')
             if dbmod.q('SELECT 1 FROM users WHERE lower(full_name)=lower(?) AND role=?', (name, role), one=True):
-                click.echo(f'  = {name}: allaqachon bor, o‘zgartirilmadi')
+                click.echo(f'  = {name}: allaqachon bor, oвЂzgartirilmadi')
                 continue
             _uid, username, pw = quick_add_user(actor, name, role)
             out.append((name, ROLES.get(role, role), username, pw))
@@ -319,7 +319,7 @@ def register_cli(app):
             fh.write('\n'.join(lines) + '\n')
         os.chmod(path, 0o600)
         click.echo('\n'.join(lines))
-        click.echo(f'\nSaqlandi: {path}. Har kim birinchi kirganda o‘z parolini qo‘yadi.')
+        click.echo(f'\nSaqlandi: {path}. Har kim birinchi kirganda oвЂz parolini qoвЂyadi.')
 
     @app.cli.command('set-webhook')
     def set_webhook():
@@ -327,19 +327,19 @@ def register_cli(app):
         from .telegram_bot import tg_api
         cfg = app.config['SURXON']
         if not cfg.TELEGRAM_WEBHOOK_SECRET:
-            raise click.ClickException('TELEGRAM_WEBHOOK_SECRET o‘rnatilmagan')
+            raise click.ClickException('TELEGRAM_WEBHOOK_SECRET oвЂrnatilmagan')
         url = f'https://{cfg.DOMAIN}/telegram/webhook/{cfg.TELEGRAM_WEBHOOK_SECRET}'
         res = tg_api('setWebhook', {'url': url, 'allowed_updates': ['message', 'edited_message', 'callback_query', 'my_chat_member', 'chat_member', 'channel_post'],
                                     'secret_token': cfg.TELEGRAM_WEBHOOK_SECRET, 'drop_pending_updates': False})
         click.echo(json.dumps(res, ensure_ascii=False))
 
     @app.cli.command('demo-data')
-    @click.option('--yes', is_flag=True, help='Bo‘sh bazaga namunaviy ma’lumot yozish')
+    @click.option('--yes', is_flag=True, help='BoвЂsh bazaga namunaviy maвЂ™lumot yozish')
     def demo_data(yes):
         """Fill an EMPTY database with sample data (for training/demo only)."""
         from .demo import fill_demo
         if app.config['SURXON'].APP_MODE != 'test':
-            raise click.ClickException('Namunaviy ma’lumot faqat TEST rejimida (APP_MODE=test, alohida data-test papkasi) yoziladi.')
+            raise click.ClickException('Namunaviy maвЂ™lumot faqat TEST rejimida (APP_MODE=test, alohida data-test papkasi) yoziladi.')
         if not yes:
             raise click.ClickException('Faqat sinov bazasi uchun. Tasdiqlash: flask demo-data --yes')
         click.echo(fill_demo())
@@ -362,22 +362,22 @@ def register_cli(app):
             rows.append(('Baza', 'OK', str(cfg.DB_PATH)))
         except Exception as exc:
             rows.append(('Baza', 'XATO', str(exc)))
-        rows.append(('HTTPS cookie', 'OK' if cfg.COOKIE_SECURE else 'O‘CHIQ', 'COOKIE_SECURE'))
+        rows.append(('HTTPS cookie', 'OK' if cfg.COOKIE_SECURE else 'OвЂCHIQ', 'COOKIE_SECURE'))
         if cfg.TELEGRAM_BOT_TOKEN:
             try:
                 from .telegram_bot import tg_api
                 info = tg_api('getWebhookInfo')['result']
                 ok = info.get('url', '').startswith(f'https://{cfg.DOMAIN}/telegram/webhook/')
                 rows.append(('Telegram webhook', 'OK' if ok else 'SOZLANMAGAN',
-                             (info.get('url') or 'yo‘q').split('/webhook/')[0] + f' · kutilayotgan: {info.get("pending_update_count")}'
-                             + (f' · oxirgi xato: {info.get("last_error_message")}' if info.get('last_error_message') else '')))
+                             (info.get('url') or 'yoвЂq').split('/webhook/')[0] + f' В· kutilayotgan: {info.get("pending_update_count")}'
+                             + (f' В· oxirgi xato: {info.get("last_error_message")}' if info.get('last_error_message') else '')))
             except Exception as exc:
                 rows.append(('Telegram webhook', 'XATO', str(exc)))
         else:
-            rows.append(('Telegram bot', 'ULANMAGAN', 'TELEGRAM_BOT_TOKEN yo‘q'))
+            rows.append(('Telegram bot', 'ULANMAGAN', 'TELEGRAM_BOT_TOKEN yoвЂq'))
         for ch, label in CHANNELS.items():
             if not configured(ch):
-                rows.append((label, 'ULANMAGAN', 'sozlama yo‘q'))
+                rows.append((label, 'ULANMAGAN', 'sozlama yoвЂq'))
                 continue
             if send_tests:
                 try:
@@ -387,7 +387,7 @@ def register_cli(app):
                     rows.append((label, 'XATO', str(exc)[:200]))
             else:
                 st = next(s for s in status() if s['channel'] == ch)
-                rows.append((label, st['state'].upper(), f'oxirgi muvaffaqiyat: {st["last_ok_at"] or "hali yo‘q"}'))
+                rows.append((label, st['state'].upper(), f'oxirgi muvaffaqiyat: {st["last_ok_at"] or "hali yoвЂq"}'))
         for name, state, note in rows:
             click.echo(f'{name:40} {state:12} {note}')
 
@@ -408,7 +408,7 @@ def register_cli(app):
             except Exception as exc:
                 with dbmod.tx() as db:
                     record_result(name, False, exc, db)
-                click.echo(f'{"TASHQI" if off else "SERVER"} zaxiradan tiklash: XATO — {exc}')
+                click.echo(f'{"TASHQI" if off else "SERVER"} zaxiradan tiklash: XATO вЂ” {exc}')
                 continue
             click.echo(f'\n{"TASHQI JOYDAN" if off else "SERVERDAGI"} zaxiradan alohida bazaga tiklandi: {res["source"]}')
             for label, got, live, same in res['rows']:
@@ -418,28 +418,28 @@ def register_cli(app):
             ok = res['all_equal']
             with dbmod.tx() as db:
                 record_result(name, ok, None if ok else 'farq: ' + '; '.join(res['problems'] or ['sonlar mos emas']), db)
-            click.echo('  NATIJA: ' + ('ISHLAYDI — tiklangan baza ishchi baza bilan bir xil.' if ok else 'XATO — yuqoridagi farqlarni ko‘ring.'))
+            click.echo('  NATIJA: ' + ('ISHLAYDI вЂ” tiklangan baza ishchi baza bilan bir xil.' if ok else 'XATO вЂ” yuqoridagi farqlarni koвЂring.'))
 
     @app.cli.command('sheets-inspect')
     def sheets_inspect_cmd():
         """Read-only: list the spreadsheet's tabs, header rows and formula cells before syncing anything."""
         from .outbox import configured, sheets_inspect, tab_name
         if not configured('sheets'):
-            raise click.ClickException('Google Sheets ulanmagan (GOOGLE_SHEETS_ID yoki xizmat akkaunti fayli yo‘q).')
+            raise click.ClickException('Google Sheets ulanmagan (GOOGLE_SHEETS_ID yoki xizmat akkaunti fayli yoвЂq).')
         info = sheets_inspect()
         click.echo(f'Jadval: {info["title"]}')
         for t in info['tabs']:
             mine = t['title'].startswith(tab_name(''))
-            click.echo(f'\n[{t["title"]}] {"(tizim varag‘i)" if mine else "(qo‘lda — tizim YOZMAYDI)"} '
+            click.echo(f'\n[{t["title"]}] {"(tizim varagвЂi)" if mine else "(qoвЂlda вЂ” tizim YOZMAYDI)"} '
                        f'{t["filled_rows"]} qator, formulali katak: {t["formula_cells"]}')
             click.echo('  sarlavha: ' + ' | '.join(str(x) for x in t['header'][:20]))
             for r, c, f in t['formula_samples']:
                 click.echo(f'  formula {r}-qator {c}-ustun: {f[:80]}')
 
     @app.cli.command('sheets-sinov')
-    @click.option('--katak', multiple=True, help="Dashboarddagi katak, masalan \"Umumiy hisob!B4\" (qadamlarda o‘qib ko‘rsatiladi)")
+    @click.option('--katak', multiple=True, help="Dashboarddagi katak, masalan \"Umumiy hisob!B4\" (qadamlarda oвЂqib koвЂrsatiladi)")
     def sheets_sinov(katak):
-        """Live proof: 1 000 so‘m test income → Sheets row + dashboard change → resend (no double) → void (back)."""
+        """Live proof: 1 000 soвЂm test income в†’ Sheets row + dashboard change в†’ resend (no double) в†’ void (back)."""
         from .accounting import add_income
         from .outbox import configured, run_once, sheets_read, tab_name
         from .reporting import maybe_refresh_sheet_summary
@@ -466,7 +466,7 @@ def register_cli(app):
             for k in katak:
                 sh, rng = k.split('!', 1)
                 v = sheets_read(sh, rng)
-                extra += f' | {k} = {v[0][0] if v and v[0] else "(bo‘sh)"}'
+                extra += f' | {k} = {v[0][0] if v and v[0] else "(boвЂsh)"}'
             click.echo(f'{title:38} SPX qatorlari: {len(rows) - 1:>4} | {doc} qatori: {len(mine)} '
                        f'({mine[0][9] if mine and len(mine[0]) > 9 else "-"}) | KASSA_QOLDIQ = {summary.get("KASSA_QOLDIQ")}{extra}')
             return len(rows), len(mine), summary.get('KASSA_QOLDIQ')
@@ -474,24 +474,24 @@ def register_cli(app):
         sync()
         n0, _, k0 = look('0) Boshlanish', '-')
         with app.test_request_context():
-            cid, doc = add_income(actor, amount=1000, source='SINOV', note='Google Sheets sinovi — darhol bekor qilinadi')
+            cid, doc = add_income(actor, amount=1000, source='SINOV', note='Google Sheets sinovi вЂ” darhol bekor qilinadi')
         sync()
-        n1, m1, k1 = look('1) 1 000 so‘m sinov kirimi yozildi', doc)
+        n1, m1, k1 = look('1) 1 000 soвЂm sinov kirimi yozildi', doc)
         dbmod.get_db().execute("UPDATE outbox SET status='pending', next_try_at=0 WHERE channel='sheets' AND ref LIKE ?",
                                (f'KASSA KIRIM-CHIQIM:{doc}:%',))
         sync()
-        n2, m2, k2 = look('2) O‘sha yozuv qayta yuborildi', doc)
+        n2, m2, k2 = look('2) OвЂsha yozuv qayta yuborildi', doc)
         with app.test_request_context():
             void_cash_entry(actor, cid, 'Google Sheets sinovi tugadi')
         sync()
         n3, m3, k3 = look('3) Sinov yozuvi bekor qilindi', doc)
         ok = m1 == 1 and m2 == 1 and n2 == n1 and m3 == 1 and str(k3) == str(k0)
-        click.echo('NATIJA: ' + ('ISHLAYDI — qator bitta, qayta yuborishda ko‘paymadi, bekor qilinganda jami qaytdi.' if ok
-                                 else 'XATO — yuqoridagi qadamlarni ko‘ring.'))
+        click.echo('NATIJA: ' + ('ISHLAYDI вЂ” qator bitta, qayta yuborishda koвЂpaymadi, bekor qilinganda jami qaytdi.' if ok
+                                 else 'XATO вЂ” yuqoridagi qadamlarni koвЂring.'))
 
     @app.cli.command('holat')
     def holat():
-        """Every part of the system: ISHLAYDI / ULANMAGAN / TEKSHIRILMAGAN / XATO — honest, from real checks only."""
+        """Every part of the system: ISHLAYDI / ULANMAGAN / TEKSHIRILMAGAN / XATO вЂ” honest, from real checks only."""
         import urllib.request
         from .outbox import CHANNELS, status
         cfg = app.config['SURXON']
@@ -501,14 +501,14 @@ def register_cli(app):
             rows.append((name, state, note))
         try:
             n = dbmod.scalar('SELECT COUNT(*) FROM users')
-            add('Server va baza', 'ISHLAYDI', f'{cfg.DB_PATH} · v{VERSION} · {cfg.APP_MODE}')
+            add('Server va baza', 'ISHLAYDI', f'{cfg.DB_PATH} В· v{VERSION} В· {cfg.APP_MODE}')
         except Exception as exc:
             add('Server va baza', 'XATO', str(exc))
         try:
             with urllib.request.urlopen(f'https://{cfg.DOMAIN}/health', timeout=15) as r:
                 add('HTTPS', 'ISHLAYDI' if r.status == 200 else 'XATO', f'https://{cfg.DOMAIN}')
         except urllib.error.HTTPError as e:
-            # the temporary address is behind a password (401) — HTTPS itself works
+            # the temporary address is behind a password (401) вЂ” HTTPS itself works
             add('HTTPS', 'ISHLAYDI' if e.code in (401, 200) else 'XATO', f'https://{cfg.DOMAIN} (javob {e.code})')
         except Exception as exc:
             add('HTTPS', 'XATO', f'https://{cfg.DOMAIN}: {exc}')
@@ -519,23 +519,23 @@ def register_cli(app):
                 info = tg_api('getWebhookInfo')['result']
                 ok = info.get('url', '').startswith(f'https://{cfg.DOMAIN}/telegram/webhook/')
                 add('Telegram bot', 'ISHLAYDI' if ok and not info.get('last_error_message') else 'XATO',
-                    f'@{me.get("username")} · webhook {"to‘g‘ri" if ok else "sozlanmagan"}'
-                    + (f' · oxirgi xato: {info["last_error_message"]}' if info.get('last_error_message') else ''))
+                    f'@{me.get("username")} В· webhook {"toвЂgвЂri" if ok else "sozlanmagan"}'
+                    + (f' В· oxirgi xato: {info["last_error_message"]}' if info.get('last_error_message') else ''))
             except Exception as exc:
                 add('Telegram bot', 'XATO', str(exc)[:200])
         else:
-            add('Telegram bot', 'ULANMAGAN', 'TELEGRAM_BOT_TOKEN yo‘q')
+            add('Telegram bot', 'ULANMAGAN', 'TELEGRAM_BOT_TOKEN yoвЂq')
         word = {'working': 'ISHLAYDI', 'not_connected': 'ULANMAGAN', 'configured_untested': 'TEKSHIRILMAGAN', 'error': 'XATO'}
         for st in status():
             add(st['label'], word[st['state']], (f'oxirgi muvaffaqiyat {st["last_ok_at"]}' if st['last_ok_at'] else '')
-                + (f' · navbatda {st["pending"]}' if st['pending'] else '') + (f' · xato: {st["last_error"][:120]}' if st['state'] == 'error' else ''))
+                + (f' В· navbatda {st["pending"]}' if st['pending'] else '') + (f' В· xato: {st["last_error"][:120]}' if st['state'] == 'error' else ''))
         backups = sorted(cfg.BACKUP_DIR.glob('surxon_db_*.sqlite3'))
         if backups:
             import time as _t
             age = (_t.time() - backups[-1].stat().st_mtime) / 3600
-            add('Serverdagi kunlik zaxira', 'ISHLAYDI' if age < 26 else 'XATO', f'{backups[-1].name} · {age:.1f} soat oldin')
+            add('Serverdagi kunlik zaxira', 'ISHLAYDI' if age < 26 else 'XATO', f'{backups[-1].name} В· {age:.1f} soat oldin')
         else:
-            add('Serverdagi kunlik zaxira', 'TEKSHIRILMAGAN', 'hali zaxira yo‘q — flask backup-verify')
+            add('Serverdagi kunlik zaxira', 'TEKSHIRILMAGAN', 'hali zaxira yoвЂq вЂ” flask backup-verify')
         for key, label in (('restore_local', 'Zaxiradan tiklash (server nusxasi)'), ('restore_offsite', 'Zaxiradan tiklash (tashqi nusxa)')):
             r = dbmod.q('SELECT * FROM channel_status WHERE channel=?', (key,), one=True)
             if not r:
@@ -548,16 +548,16 @@ def register_cli(app):
         erp_on = dbmod.q("SELECT value FROM settings WHERE key='erp_enabled'", one=True)
         erp_used = dbmod.scalar("SELECT COUNT(*) FROM integration_log WHERE status < 300")
         add('Azizbek ERP API', 'ISHLAYDI' if erp and erp_on and erp_on['value'] == '1' and erp_used else
-            ('TEKSHIRILMAGAN' if erp else 'ULANMAGAN'), f'faol kalit: {erp}, muvaffaqiyatli so‘rov: {erp_used}')
+            ('TEKSHIRILMAGAN' if erp else 'ULANMAGAN'), f'faol kalit: {erp}, muvaffaqiyatli soвЂrov: {erp_used}')
         tv = dbmod.scalar("SELECT COUNT(*) FROM integration_clients WHERE kind='tv' AND revoked_at IS NULL")
         add('TV ekran', 'TEKSHIRILMAGAN' if tv else 'ULANMAGAN', f'faol TV kaliti: {tv}')
-        add('Elektron tarozi', 'ULANMAGAN', 'kg qo‘lda kiritiladi (tarozi modeli/porti berilmagan)')
+        add('Elektron tarozi', 'ULANMAGAN', 'kg qoвЂlda kiritiladi (tarozi modeli/porti berilmagan)')
         for name, state, note in rows:
             click.echo(f'{name:42} {state:15} {note}')
 
     @app.cli.command('narx')
-    @click.option('--qol', type=int, help='Qo‘l terimi narxi, so‘m/kg')
-    @click.option('--kombayn-tonna', type=int, help='Barcha kombaynlar uchun narx, so‘m/tonna')
+    @click.option('--qol', type=int, help='QoвЂl terimi narxi, soвЂm/kg')
+    @click.option('--kombayn-tonna', type=int, help='Barcha kombaynlar uchun narx, soвЂm/tonna')
     def narx(qol, kombayn_tonna):
         """Set the current pay rates (from now on; earlier weighings keep their own rate). Audited."""
         from .accounting import set_combine_tariff
@@ -567,11 +567,11 @@ def register_cli(app):
         with app.test_request_context():
             if qol:
                 save_settings(actor, {'worker_rate_hand': str(qol)})
-                click.echo(f'Qo‘l terimi: {qol:,} so‘m/kg (shu paytdan boshlab)'.replace(',', ' '))
+                click.echo(f'QoвЂl terimi: {qol:,} soвЂm/kg (shu paytdan boshlab)'.replace(',', ' '))
             if kombayn_tonna:
                 for c in dbmod.q("SELECT id, code FROM equipment WHERE kind='kombayn' AND active=1"):
                     set_combine_tariff(actor, c['id'], tariff_type='tonna', tariff_rate=kombayn_tonna)
-                    click.echo(f'{c["code"]}: {kombayn_tonna:,} so‘m/tonna'.replace(',', ' '))
+                    click.echo(f'{c["code"]}: {kombayn_tonna:,} soвЂm/tonna'.replace(',', ' '))
 
     @app.cli.command('permissions')
     def permissions():

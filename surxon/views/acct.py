@@ -242,6 +242,10 @@ def hosil_qabuli():
         if request.form.get('action') == 'assign':
             H.assign(actor, request.form.get('load_no', ''), parse_int(request.form.get('waybill_id'), 'Reys'))
             return done('Yuk xati № reysga yozildi.', url_for('acct.hosil_qabuli'))
+        if request.form.get('action') == 'notify':
+            people, n = H.send_notices(actor)
+            return done(f'Telegram’ga yuborildi: {n} ta muammo direktorga, {people} ta xodimga o‘z savollari.' if n
+                        else 'Muammo yo‘q — hech narsa yuborilmadi.', url_for('acct.hosil_qabuli'))
         f = request.files.get('file')
         if not f or not f.filename:
             raise UserError('hosil-qabuli.uz dan yuklab olingan Excel faylni tanlang.')

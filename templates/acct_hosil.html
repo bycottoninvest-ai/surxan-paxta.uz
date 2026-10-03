@@ -20,6 +20,11 @@
   <div class="card"><div class="card-b"><small class="muted">Raqami yozilmagan</small><div class="b" style="font-size:20px;color:#1d4ed8">{{ t.raqamsiz }}</div></div></div>
   <div class="card"><div class="card-b"><small class="muted">Bizda yo‘q</small><div class="b" style="font-size:20px;color:#b91c1c">{{ t.yoq }}</div></div></div>
 </div>
+{% if t.farq or t.yoq or t.orphans %}
+<form method="post" style="margin:0 0 12px">{{ csrf() }}<input type="hidden" name="action" value="notify">
+  <button class="btn btn-primary btn-sm">📨 Xodimlarga Telegram’da yuborish</button>
+  <span class="tiny muted">har xato o‘sha qabulni kiritgan xodimga savol bo‘lib boradi, to‘liq ro‘yxat — direktorga</span></form>
+{% endif %}
 
 <section class="card"><div class="card-b" style="overflow-x:auto">
 <table class="table small">

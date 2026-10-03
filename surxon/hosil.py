@@ -145,17 +145,18 @@ def compare():
     """Every yuk xati of the table beside our receipt for it (by number, else a same-day exact-netto candidate)."""
     ours = {}
     for r in q('''SELECT nr.load_no, nr.waybill_id, nr.accepted_kg, nr.received_date, tl.trip_no, tl.method, g.number grp,
-                         g.accepted_kg grp_kg, g.id gid, nr.receiver_name, nr.created_at, nr.station_gross_kg, nr.station_tare_kg
+                         g.accepted_kg grp_kg, g.id gid, nr.receiver_name, nr.created_at, nr.station_gross_kg, nr.station_tare_kg,
+                         nr.created_by
                   FROM nayman_receipts nr JOIN waybills wb ON wb.id=nr.waybill_id JOIN trailer_loads tl ON tl.id=wb.load_id
                   LEFT JOIN load_group_items i ON i.waybill_id=wb.id LEFT JOIN load_groups g ON g.id=i.group_id AND g.status='QABUL'
                   WHERE wb.status<>'BEKOR' AND nr.load_no IS NOT NULL'''):
         o = ours.setdefault(r['load_no'], {'label': r['grp'] or r['trip_no'], 'kg': 0.0, 'wid': r['waybill_id'], 'gid': r['gid'],
-                                           'who': r['receiver_name'], 'at': r['created_at'],
+                                           'who': r['receiver_name'], 'at': r['created_at'], 'by': r['created_by'],
                                            'copied': r['station_gross_kg'] is None})
         o['kg'] = r['grp_kg'] if r['grp'] else o['kg'] + (r['accepted_kg'] or 0)
     for p in q('''SELECT p.load_no, COALESCE(g.number, tl.trip_no) label, COALESCE(g.accepted_kg, nr.accepted_kg) kg,
                          COALESCE(p.waybill_id, (SELECT MIN(i.waybill_id) FROM load_group_items i WHERE i.group_id=p.group_id)) wid,
-                         p.group_id gid, nr.receiver_name, nr.created_at, nr.station_gross_kg
+                         p.group_id gid, nr.receiver_name, nr.created_at, nr.station_gross_kg, nr.created_by
                   FROM pq17_docs p LEFT JOIN waybills wb ON wb.id=p.waybill_id LEFT JOIN trailer_loads tl ON tl.id=wb.load_id
                   LEFT JOIN load_groups g ON g.id=p.group_id
                   LEFT JOIN nayman_receipts nr ON nr.waybill_id=COALESCE(p.waybill_id,
@@ -163,11 +164,11 @@ def compare():
                   WHERE p.waybill_id IS NOT NULL OR p.group_id IS NOT NULL'''):
         if p['load_no'] not in ours:
             ours[p['load_no']] = {'label': p['label'], 'kg': p['kg'], 'wid': p['wid'], 'gid': p['gid'], 'who': p['receiver_name'],
-                                  'at': p['created_at'], 'copied': p['station_gross_kg'] is None}
+                                  'at': p['created_at'], 'by': p['created_by'], 'copied': p['station_gross_kg'] is None}
     taken_w = {o['wid'] for o in ours.values()}
     taken_g = {o['gid'] for o in ours.values() if o['gid']}
     free = q('''SELECT wb.id, tl.trip_no, tl.method, nr.accepted_kg, nr.received_date, g.number grp, g.accepted_kg grp_kg, g.id gid,
-                       nr.receiver_name, nr.created_at, wb.net_kg
+                       nr.receiver_name, nr.created_at, wb.net_kg, nr.created_by
                 FROM nayman_receipts nr JOIN waybills wb ON wb.id=nr.waybill_id JOIN trailer_loads tl ON tl.id=wb.load_id
                 LEFT JOIN load_group_items i ON i.waybill_id=wb.id LEFT JOIN load_groups g ON g.id=i.group_id AND g.status='QABUL'
                 WHERE wb.status<>'BEKOR' AND nr.load_no IS NULL ORDER BY wb.id''')
@@ -180,7 +181,8 @@ def compare():
                 continue
             seen.add(w['grp'])
         cands.append({'wid': w['id'], 'label': w['grp'] or w['trip_no'], 'kg': w['grp_kg'] if w['grp'] else w['accepted_kg'],
-                      'day': w['received_date'], 'method': w['method'], 'who': w['receiver_name'], 'at': w['created_at']})
+                      'day': w['received_date'], 'method': w['method'], 'who': w['receiver_name'], 'at': w['created_at'],
+                      'by': w['created_by']})
     pq = {r['load_no']: r for r in q('SELECT load_no, code, netto FROM pq17_docs')}
     rows = []
     for h in q('SELECT * FROM hq_loads ORDER BY dt DESC, load_no DESC'):
@@ -227,3 +229,58 @@ def assign(actor, load_no, waybill_id):
             db.execute('UPDATE load_groups SET load_no=? WHERE id=?', (load_no, g['id']))
         audit(db, actor, 'UPDATE', 'nayman_receipt', waybill_id, new={'load_no': load_no, 'from': 'hosil-qabuli.uz'})
     rematch()
+
+
+def _kg(v):
+    return f'{v:,.0f}'.replace(',', ' ') if v is not None else '—'
+
+
+def notices(cmp=None):
+    """What to tell whom: {user_id: [line]} for the people who entered a wrong / unexplained receipt, and the
+    director's list of every problem (who, where, how much)."""
+    cmp = cmp or compare()
+    person, boss = {}, []
+    for r in cmp['rows']:
+        day = (r['dt'] or '')[:16]
+        if r['state'] == 'farq':
+            o = r['ours']
+            line = (f'⚠ Yuk xati {r["load_no"]} ({day}): klaster tarozisida {_kg(r["netto"])} kg, tizimda {o["label"]} '
+                    f'{_kg(o["kg"])} kg yozilgan (farq {_kg(o["kg"] - r["netto"])} kg).')
+            person.setdefault(o['by'], []).append(line + ' Chekdagi brutto/tarani qayta tekshirib, buxgalterga yozing.')
+            boss.append(line + f' Kiritgan: {o["who"] or "—"}.')
+        elif r['state'] == 'yoq':
+            boss.append(f'✗ Yuk xati {r["load_no"]} ({day}, {_kg(r["netto"])} kg): klaster tortgan, bizning tizimda yo‘q.')
+    for c in cmp['orphans']:
+        line = (f'❓ {c["label"]} ({c["day"]}, {_kg(c["kg"])} kg): klaster jadvalida bunday kg li yuk topilmadi.')
+        person.setdefault(c['by'], []).append(
+            line + ' Bu yuk qaysi yuk xati raqami bilan tortilgan, chekda brutto va tara qancha edi? '
+                   'Shu UY qog‘ozida yana qaysi telashkalar bor edi? Javobni buxgalterga yozing.')
+        boss.append(line + f' Kiritgan: {c["who"] or "—"}.')
+    return person, boss
+
+
+def send_notices(actor):
+    """Queue the questions on Telegram: each person gets their own lines, the director the whole list.
+    Returns (people reached, problems)."""
+    if not actor or not actor.can('nayman.write'):
+        raise UserError('Bu amal uchun huquqingiz yo‘q.')
+    from .outbox import enqueue
+    from .yordamchi import DIRECTOR_ROLES, _send
+    person, boss = notices()
+    if not boss:
+        return 0, 0
+    ts = now_str()
+    reached = 0
+    with tx() as db:
+        for uid, lines in person.items():
+            u = db.execute('SELECT id, full_name, telegram_id FROM users WHERE id=? AND active=1', (uid,)).fetchone() if uid else None
+            if u and u['telegram_id']:
+                enqueue(db, 'telegram_report', 'sverka', f'sverka:{ts}:u{u["id"]}',
+                        {'text': '📋 hosil-qabuli.uz bilan sverka — sizning qabullaringiz:\n\n' + '\n\n'.join(lines),
+                         'chat_id': u['telegram_id'], 'main_bot': True})
+                reached += 1
+            else:
+                boss.append(f'(Telegram ulanmagan: {u["full_name"] if u else "noma’lum xodim"} — savollar unga bormadi)')
+        _send(db, 'sverka', f'sverka:{ts}', '📋 hosil-qabuli.uz bilan sverka — muammolar:\n\n' + '\n'.join(boss), DIRECTOR_ROLES)
+        audit(db, actor, 'NOTIFY', 'hq_loads', 0, new={'people': reached, 'problems': len(boss)})
+    return reached, len(boss)

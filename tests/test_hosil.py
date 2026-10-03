@@ -79,6 +79,25 @@ def test_hosil_table_compares_and_writes_the_number(app, world):
     assert not r['ok'] and 'allaqachon' in r['error']
 
 
+def test_problems_go_to_who_entered_them(app, world):
+    tally, yunus, ali, st = setup(app, world)
+    bux = world['bux']
+    received_trip(app, world, tally, yunus, kg='400', load_no='555003')           # kg wrong
+    received_trip(app, world, tally, yunus, kg='470', trailer='TL-02')            # nothing in the table explains it
+    with app.app_context():
+        day = q("SELECT MAX(received_date) d FROM nayman_receipts", one=True)['d']
+        get_db().execute("UPDATE users SET telegram_id='7001' WHERE username='yunus'")
+    dd = f'{day[8:10]}.{day[5:7]}.{day[:4]} 12:00:00'
+    bux.c.post('/buxgalteriya/hosil-qabuli', data={'file': (io.BytesIO(hq_xlsx([('555003', dd, 450, 'Qo‘lda')])), 'hq.xlsx'),
+                                                   '_csrf': bux.csrf()}, content_type='multipart/form-data')
+    r = bux.post('/buxgalteriya/hosil-qabuli', {'action': 'notify'}).get_json()
+    assert r['ok'] and '1 ta xodimga' in r['message']
+    with app.app_context():
+        jobs = q("SELECT payload_json FROM outbox WHERE kind='sverka'")
+    texts = ' '.join(j['payload_json'] for j in jobs)
+    assert '7001' in texts and '555003' in texts and 'klaster jadvalida' in texts
+
+
 def test_punkt_needs_the_load_number(app, world):
     tally, yunus, ali, st = setup(app, world)
     with app.app_context():
