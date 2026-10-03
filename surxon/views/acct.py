@@ -113,7 +113,7 @@ def pq17():
 
 def _free_trips(year):
     """Received trips no PQ-17 covers yet (alone, or through their umumiy yuk)."""
-    return q("""SELECT wb.id, tl.trip_no, tl.method, nr.accepted_kg, nr.received_date, g.number grp, g.accepted_kg grp_kg,
+    return q("""SELECT wb.id, tl.trip_no, tl.method, nr.accepted_kg, nr.received_date, CASE WHEN g.status='QABUL' THEN g.number END grp, g.accepted_kg grp_kg,
                        (SELECT COUNT(*) FROM load_group_items j WHERE j.group_id=g.id) grp_n FROM waybills wb
                 JOIN trailer_loads tl ON tl.id=wb.load_id JOIN nayman_receipts nr ON nr.waybill_id=wb.id
                 LEFT JOIN load_group_items i ON i.waybill_id=wb.id LEFT JOIN load_groups g ON g.id=i.group_id
@@ -144,12 +144,12 @@ def _candidates(free):
 
 def _pq_near(ov, free):
     """For each unmatched PQ-17: the free trips received around its date (±2 days; for one whose date is unknown,
-    the week before its upload), closest weight first — the list to tick when one yuk xati carried several trips."""
+    a week either side of its upload — the trip may be received after the PQ-17 came), closest weight first — the list to tick when one yuk xati carried several trips."""
     from datetime import date as _d
     out = {}
     for d in ov['orphans']:
         day = _pq_day(d)
-        lo, hi = (day.toordinal() - 2, day.toordinal() + 2) if d['doc_date'] else (day.toordinal() - 7, day.toordinal())
+        lo, hi = (day.toordinal() - 2, day.toordinal() + 2) if d['doc_date'] else (day.toordinal() - 7, day.toordinal() + 7)
         rs = [w for w in _candidates(free) if w['received_date'] and lo <= _d.fromisoformat(w['received_date']).toordinal() <= hi]
         out[d['id']] = sorted(rs, key=lambda w: abs((w['accepted_kg'] or 0) - d['netto']))
     return out
