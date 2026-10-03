@@ -2,7 +2,7 @@
 {% from 'macros.html' import icon, csrf, empty with context %}
 {% set page_title = 'Dalalar' %}
 {% block content %}
-<div class="page-h"><h1>{{ icon('field','lg') }} Dalalar va maydon ({{ year }})</h1>{% if can('masterdata.write') %}<a class="btn btn-primary btn-sm" style="margin-left:auto" href="{{ url_for('admin.fields_import') }}">{{ icon('map','sm') }} KML / GeoJSON import</a>
+<div class="page-h"><h1>{{ icon('field','lg') }} Dalalar va maydon ({{ year }})</h1><a class="btn btn-light btn-sm" style="margin-left:auto" target="_blank" href="{{ url_for('admin.fields_atlas_pdf', season=year) }}">{{ icon('doc','sm') }} Xarita PDF (A4)</a>{% if can('masterdata.write') %}<a class="btn btn-primary btn-sm" href="{{ url_for('admin.fields_import') }}">{{ icon('map','sm') }} KML / GeoJSON import</a>
   <a class="btn btn-light btn-sm" href="{{ url_for('admin.field_draw') }}">{{ icon('plus','sm') }} Xaritada chizish</a>{% endif %}</div>
 {% set diff = known_total - total_area %}
 <div class="notice mb">{{ icon('alert') }}<div><b>Tasdiqlanmagan maydon:</b> tizimdagi faol dalalar jami <b>{{ total_area|num(1) }} ga</b>.

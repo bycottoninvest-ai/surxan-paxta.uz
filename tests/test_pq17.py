@@ -8,7 +8,7 @@ from test_punkt import add, setup
 
 
 def pq17_pdf(code='XH1000000001', load_no='555001', method='Qoʻlda', netto=480, deduction=9, price=8066.41,
-             base=7862, coef=1.026, date='27092026', inn='311720284'):
+             base=7862, coef=1.026, date='27092026', inn='311720284', date_text=None):
     """A PDF with the same text as a real PQ-17 (made-up numbers)."""
     from reportlab.lib.pagesizes import A4
     from reportlab.pdfgen import canvas
@@ -17,7 +17,7 @@ def pq17_pdf(code='XH1000000001', load_no='555001', method='Qoʻlda', netto=480,
     kond = netto - deduction
     amount = round(kond * price, 2)
     lines = ['Taxiatosh код 1735228 Туман Қишлоқ кенгаши', f'SURXON TAXIATOSH TEXTILE MCHJ {inn}',
-             'Жамоа, ширкат ва фермер хўжалиги куноййил ўлчов бирлиги', f'{date[:7]} {date[7]} кг ҚАБУЛ ВАРАҚАСИ № {code}',
+             'Жамоа, ширкат ва фермер хўжалиги куноййил ўлчов бирлиги', (date_text if date_text is not None else f'{date[:7]} {date[7]}') + f' кг ҚАБУЛ ВАРАҚАСИ № {code}',
              '2026 йилги пахта ҳариди учун I.Қабул қилинган пахтанинг табиий оғирлиги',
              'Накладной номери Терим тури Жамланган тўда номери Селекцион нави Сорти Синфи Соф табиий вазни',
              f'{load_no} {method} 10 Xin Lu Zao 52 1 1 {netto}', 'II. Пахтани жамланган тўдалари',
@@ -157,3 +157,54 @@ def test_pq17_strip_on_dashboard(app, world, admin):
     page = admin.get(f'/?view=full&batafsil=1&date={doc_date}').get_data(as_text=True).replace(' ', ' ').replace('\xa0', ' ')
     assert 'Klaster (PQ-17)' in page and 'Klaster to‘laydi' in page and '471' in page and 'namlik ' in page and '✓ mos' in page
     assert 'so‘m' not in page.split('kpi-pq')[1].split('</a>')[0]          # kg only, no money
+
+
+def test_pq17_date_in_any_layout():
+    """pypdf splits the boxed date differently from form to form — every way must give the same day."""
+    from surxon.pq17 import parse, parse_date
+    for t in ('куноййил ўлчов бирлиги 0110202 6 кг ҚАБУЛ ВАРАҚАСИ № XI1',
+              'бирлиги 01 10 2026 кг ҚАБУЛ ВАРАҚАСИ № XI1', 'бирлиги 0 1 1 0 2 0 2 6 кг ҚАБУЛ ВАРАҚАСИ № XI1',
+              'бирлиги 01.10.2026 ҚАБУЛ ВАРАҚАСИ № XI1', 'ҚАБУЛ ВАРАҚАСИ № XI1 ... Sana: 01.10.2026 22:53'):
+        assert parse_date(t) == '2026-10-01', t
+    assert parse_date('бирлиги кг ҚАБУЛ ВАРАҚАСИ № XI1') is None
+    assert parse(pq17_pdf(date_text='01 10 2026'))['doc_date'] == '2026-10-01'
+
+
+def test_pq17_without_date_far_weight_and_two_trips(app, world):
+    """A PQ-17 whose date is not on the form gets the day of the trip it is tied to; a far weight is never
+    pre-selected; one yuk xati that carried two of our trips (received one by one) is tied to both."""
+    tally, yunus, ali, st = setup(app, world)
+    bux = world['bux']
+    w1 = received_trip(app, world, tally, yunus, kg='240')
+    w2 = received_trip(app, world, tally, yunus, kg='240', trailer='TL-02')
+    w3 = received_trip(app, world, tally, yunus, kg='470', trailer='TL-03')
+    files = [(io.BytesIO(pq17_pdf('XI1000000001', '777001', netto=480, date_text='')), 'a.pdf'),
+             (io.BytesIO(pq17_pdf('XI1000000002', '777002', netto=470, date_text='')), 'b.pdf')]
+    r = bux.c.post('/buxgalteriya/pq17', data={'files': files, '_csrf': bux.csrf()}, content_type='multipart/form-data',
+                   headers={'X-Requested-With': 'fetch', 'Accept': 'application/json'}).get_json()
+    assert r['ok'], r
+    with app.app_context():
+        d1 = q("SELECT * FROM pq17_docs WHERE code='XI1000000001'", one=True)
+        d2 = q("SELECT * FROM pq17_docs WHERE code='XI1000000002'", one=True)
+        rec = q('SELECT received_date FROM nayman_receipts WHERE waybill_id=?', (w3,), one=True)['received_date']
+    assert d2['waybill_id'] == w3                                    # same netto in the upload week → tied
+    assert d1['waybill_id'] is None and d1['group_id'] is None       # 480 = 240 + 240 → nobody alone
+    page = bux.get('/buxgalteriya/pq17').get_data(as_text=True)
+    assert f'value="{w1}" selected' not in page and f'value="{w2}" selected' not in page   # 240 kg not pre-picked for 480
+    assert 'bir nechta reys' in page
+    with app.app_context():
+        assert q("SELECT doc_date FROM pq17_docs WHERE id=?", (d2['id'],), one=True)['doc_date'] == rec   # trip's day
+    # too far in kg → refused
+    r = bux.post('/buxgalteriya/pq17', {'action': 'link_many', 'doc_id': d1['id'], 'waybill_ids': [w1, w3]}).get_json()
+    assert not r['ok']
+    r = bux.post('/buxgalteriya/pq17', {'action': 'link_many', 'doc_id': d1['id'], 'waybill_ids': [w1, w2]}).get_json()
+    assert r['ok'], r
+    with app.app_context():
+        from surxon.pq17 import by_waybill
+        d1 = q("SELECT * FROM pq17_docs WHERE code='XI1000000001'", one=True)
+        assert d1['group_id'] and d1['doc_date'] == rec
+        bw = by_waybill()
+        assert round(bw[w1]['kond_kg'] + bw[w2]['kond_kg'], 1) == d1['kond_kg']
+        assert round(bw[w1]['amount'] + bw[w2]['amount'], 2) == round(d1['amount'], 2)
+    cl = bux.get('/buxgalteriya/pq17/klaster/311919351').get_data(as_text=True)
+    assert 'bizning reys topilmadi' not in cl and '✓ mos' in cl

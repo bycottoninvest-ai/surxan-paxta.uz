@@ -3,6 +3,17 @@
 Oxirgi yangilanish: 2026-09-25 (kech, v2.5.0 — ikki bot). Yozgan: Claude (bulutdagi sessiya “Yangi loya qilash”).
 
 
+## QO‘SHIMCHA 03.10.2026 — v2.28.0 (main’da, production’ga “tasdiqlayman” kutilmoqda)
+
+- FAYZ AGROKLASTER sverkasi tekshirildi: 25 yuk, netto 50 040, konditsion 47 605, summa 375 570 775 — hosil-qabuli.uz bilan mos.
+- PQ-17 sanasi: yangi (XI…) shakllarda sana o‘qilmay “—” chiqardi → `pq17.parse_date` raqamlarni har xil bo‘linishda o‘qiydi;
+  baribir topilmasa bog‘langan reysning punkt sanasi qo‘yiladi (`refresh_dates`, sahifa ochilganda).
+  Haqiqiy XI PDF namunasi bilan tekshirilmagan — serverdagi saqlangan PDF lar sahifa ochilganda qayta o‘qiladi.
+- Bog‘lanmagan PQ-17 uchun taklif faqat kg ±1% bo‘lsa (oldin 5 800 kg ga 2 9xx kg reys taklif qilinardi).
+- Bitta yuk xatida bir nechta reys: `pq17.link_many` → “PQ-<kod>” nomli umumiy yuk (QABUL), PQ-17 kg/summasi reyslarga bo‘linadi.
+- Dalalar xaritasi PDF (A4): `/admin/dalalar/xarita.pdf` (`?dala=` / `?brigadir=`), `surxon/atlas.py`, Esri tile’lar
+  `UPLOAD_DIR/tiles` da keshlanadi (47 dala: birinchi marta ~1 daqiqa, keyin ~8 s).
+
 ## QO‘SHIMCHA 27.09.2026 (kunduzi) — v2.18.3 production’da
 
 - Texnika + zapravka QR: Admin → Texnikalar → “QR kodlar (A4, har biri alohida)” (`/admin/texnikalar/qr.pdf`, ?turi=).

@@ -79,6 +79,9 @@ def pq17():
             P.link(actor, parse_int(request.form.get('doc_id'), 'PQ-17'),
                    parse_int(request.form.get('waybill_id'), 'Reys', required=False))
             return done('Saqlandi.', url_for('acct.pq17'))
+        if request.form.get('action') == 'link_many':
+            n, kg = P.link_many(actor, parse_int(request.form.get('doc_id'), 'PQ-17'), request.form.getlist('waybill_ids'))
+            return done(f'{n} ta reys bitta yuk xatiga birlashtirildi ({kg:g} kg).', url_for('acct.pq17'))
         files = [f for f in request.files.getlist('files') if f and f.filename]
         if not files:
             raise UserError('PQ-17 PDF fayl(lar)ini tanlang.')
@@ -96,31 +99,56 @@ def pq17():
             raise UserError(msg.strip())
         return done(msg.strip(), url_for('acct.pq17'))
     year = season_arg()
+    P.refresh_dates()
     ov = P.overview(year)
     fin = queries.finance_summary(year)
     cl = P.clusters()
     for c in cl:        # payments are not split by buyer yet: with one cluster every payment is theirs
         c['received'] = fin['received'] if len(cl) == 1 else None
+    free = _free_trips(year)
     return render_template('acct_pq17.html', ov=ov, tot=ov['tot'], clusters=cl, year=year, fin=fin,
-                           farq=[r for r in ov['rows'] if r['state'] == 'farq'], guess=_pq_guess(ov, _free_trips(year)),
-                           free=_free_trips(year))
+                           farq=[r for r in ov['rows'] if r['state'] == 'farq'], guess=_pq_guess(ov, free),
+                           free=free, near=_pq_near(ov, free))
 
 
 def _free_trips(year):
-    return q("""SELECT wb.id, tl.trip_no, nr.accepted_kg, nr.received_date FROM waybills wb JOIN trailer_loads tl ON tl.id=wb.load_id
-                JOIN nayman_receipts nr ON nr.waybill_id=wb.id WHERE wb.status<>'BEKOR' AND wb.season_year=?
-                AND NOT EXISTS (SELECT 1 FROM pq17_docs p WHERE p.waybill_id=wb.id) ORDER BY nr.received_date DESC""", (year,))
+    """Received trips no PQ-17 covers yet (alone, or through their umumiy yuk)."""
+    return q("""SELECT wb.id, tl.trip_no, nr.accepted_kg, nr.received_date, g.number grp FROM waybills wb
+                JOIN trailer_loads tl ON tl.id=wb.load_id JOIN nayman_receipts nr ON nr.waybill_id=wb.id
+                LEFT JOIN load_group_items i ON i.waybill_id=wb.id LEFT JOIN load_groups g ON g.id=i.group_id
+                WHERE wb.status<>'BEKOR' AND wb.season_year=?
+                  AND NOT EXISTS (SELECT 1 FROM pq17_docs p WHERE p.waybill_id=wb.id)
+                  AND NOT EXISTS (SELECT 1 FROM pq17_docs p WHERE p.group_id=i.group_id)
+                ORDER BY nr.received_date DESC""", (year,))
+
+
+def _pq_day(d):
+    from datetime import date as _d
+    return _d.fromisoformat((d['doc_date'] or d['uploaded_at'] or '')[:10] or _d.today().isoformat())
+
+
+def _pq_near(ov, free):
+    """For each unmatched PQ-17: the free trips received around its date (±2 days; for one whose date is unknown,
+    the week before its upload), closest weight first — the list to tick when one yuk xati carried several trips."""
+    from datetime import date as _d
+    out = {}
+    for d in ov['orphans']:
+        day = _pq_day(d)
+        lo, hi = (day.toordinal() - 2, day.toordinal() + 2) if d['doc_date'] else (day.toordinal() - 7, day.toordinal())
+        rs = [w for w in free if not w['grp'] and w['received_date'] and lo <= _d.fromisoformat(w['received_date']).toordinal() <= hi]
+        out[d['id']] = sorted(rs, key=lambda w: abs((w['accepted_kg'] or 0) - d['netto']))
+    return out
 
 
 def _pq_guess(ov, free):
-    """An unmatched PQ-17 → the free trip received within a day with the closest weight (only a suggestion)."""
-    from datetime import date as _d
+    """An unmatched PQ-17 → a free trip only when its punkt kg is really the same (within 1 % / 15 kg) and it was
+    received around the document date. A far weight is never pre-selected (5 800 kg ≠ a 2 900 kg trip)."""
     guess = {}
     for d in ov['orphans']:
-        near = [w for w in free if d['doc_date'] and w['received_date']
-                and abs((_d.fromisoformat(w['received_date']) - _d.fromisoformat(d['doc_date'])).days) <= 1]
+        tol = max(15, d['netto'] * 0.01)
+        near = [w for w in _pq_near(ov, free)[d['id']] if abs((w['accepted_kg'] or 0) - d['netto']) <= tol]
         if near:
-            guess[d['id']] = min(near, key=lambda w: abs((w['accepted_kg'] or 0) - d['netto']))['id']
+            guess[d['id']] = near[0]['id']
     return guess
 
 
@@ -140,6 +168,7 @@ def pq17_cluster(inn):
         n = P.set_status(post_actor(), ids, invoice_no=request.form.get('invoice_no') if act.startswith('inv_') else None, **kw)
         return done(f'{n} ta PQ-17 holati saqlandi.', url_for('acct.pq17_cluster', inn=inn))
     year = season_arg()
+    P.refresh_dates()
     c = next((x for x in P.clusters() if x['inn'] == inn), None)
     if not c:
         abort(404)

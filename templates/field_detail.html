@@ -2,7 +2,7 @@
 {% from 'macros.html' import icon, csrf, status, photo_card, empty with context %}
 {% set page_title = f.name %}
 {% block content %}
-<div class="page-h"><a href="{{ url_for('admin.fields') }}" class="icon-btn">{{ icon('chev-left') }}</a><h1>{{ f.code }} · {{ f.name }}</h1><span class="badge b-blue">{{ f.area_ha|num(2) }} ga</span>{% if f.area_source == 'xarita' %}<span class="badge b-orange">xaritadan hisoblangan — tasdiqlanmagan</span>{% endif %}<span class="badge b-gray">{{ f.brigadier_name or 'brigadir yo‘q' }}</span></div>
+<div class="page-h"><a href="{{ url_for('admin.fields') }}" class="icon-btn">{{ icon('chev-left') }}</a><h1>{{ f.code }} · {{ f.name }}</h1><span class="badge b-blue">{{ f.area_ha|num(2) }} ga</span>{% if f.area_source == 'xarita' %}<span class="badge b-orange">xaritadan hisoblangan — tasdiqlanmagan</span>{% endif %}<span class="badge b-gray">{{ f.brigadier_name or 'brigadir yo‘q' }}</span>{% if f.polygon_json %}<a class="btn btn-light btn-sm" style="margin-left:auto" target="_blank" href="{{ url_for('admin.fields_atlas_pdf', dala=f.id, season=year) }}">{{ icon('doc','sm') }} Xarita PDF (A4)</a>{% endif %}</div>
 {% set conf = f.area_source != 'xarita' %}
 <section class="card mb"><div class="card-h"><h3>{{ icon('chart') }} {{ year }} mavsumi — shu dala bo‘yicha</h3></div>
   <div class="card-b"><div class="a-tiles">

@@ -195,6 +195,27 @@ def fields():
                            map_center=get_setting('map_center'))
 
 
+@bp.get('/dalalar/xarita.pdf')
+@perm_required('masterdata.write', 'reports.view')
+def fields_atlas_pdf():
+    """All fields on A4 (overview, table, a page per field) — or one brigadier's (?brigadir=) or one field (?dala=)."""
+    from ..atlas import build_atlas_pdf
+    from ..pdfdoc import _date
+    from ..utils import now_str
+    year = season_arg()
+    rows = [dict(r) for r in queries.field_yields(year, parse_int(request.args.get('brigadir'), 'Brigadir', required=False))]
+    one = parse_int(request.args.get('dala'), 'Dala', required=False)
+    if one:
+        rows = [r for r in rows if r['id'] == one]
+    if not rows:
+        abort(404)
+    extra = f' · {rows[0]["code"]}' if one else (f' · {rows[0]["brigadier_name"]}' if request.args.get('brigadir') else '')
+    pdf = build_atlas_pdf(rows, company=get_setting('company_name'), year=year, printed=_date(now_str()), title_extra=extra)
+    name = f'dala_{rows[0]["code"]}_{year}.pdf' if one else f'dalalar_xaritasi_{year}.pdf'
+    return Response(pdf, mimetype='application/pdf', headers={'Content-Disposition': f'inline; filename="{name}"',
+                                                              'Cache-Control': 'private, no-store'})
+
+
 @bp.route('/dalalar/import', methods=['GET', 'POST'])
 @perm_required('masterdata.write')
 def fields_import():

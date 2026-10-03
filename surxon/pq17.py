@@ -26,6 +26,32 @@ def _num(s):
     return float(str(s).replace(' ', '').replace(',', '.'))
 
 
+def _valid_date(dd, mm, yyyy):
+    try:
+        d = date(int(yyyy), int(mm), int(dd))
+    except ValueError:
+        return None
+    return d.isoformat() if 2020 <= d.year <= 2040 else None
+
+
+def parse_date(flat):
+    """The document date. In the PDF it stands in boxes before “кг ҚАБУЛ ВАРАҚАСИ” and pypdf splits the digits in
+    different ways from one form to another (“2709202 6”, “27 09 2026”, “2 7 0 9 2 0 2 6”, “27.09.2026”), so the
+    digits just before that heading are joined and the last eight read as DDMMYYYY. Else the first DD.MM.YYYY."""
+    m = re.search(r'([\d\s./-]{8,40}?)\s*(?:кг\s+)?(?:ҚАБУЛ|QABUL)\s+(?:ВАРАҚАСИ|VARAQASI)', flat, re.I)
+    if m:
+        digits = re.sub(r'\D', '', m.group(1))
+        if len(digits) >= 8:
+            got = _valid_date(digits[-8:-6], digits[-6:-4], digits[-4:])
+            if got:
+                return got
+    for m in re.finditer(r'\b(\d{2})[./-](\d{2})[./-](\d{4})\b', flat):
+        got = _valid_date(*m.groups())
+        if got:
+            return got
+    return None
+
+
 def parse(data):
     """PDF bytes → dict. Raises UserError when it is not a PQ-17 or a number is missing."""
     try:
@@ -72,8 +98,7 @@ def parse(data):
     out['farmer_name'], out['farmer_inn'] = (m.group(1).strip(), m.group(2)) if m else (None, None)
     m = re.search(r'Туман\s+([A-Z][A-Z0-9 "\'.-]{3,80}?(?:MCHJ|MChJ|XK|AJ|QK))\s+Ташкилот\s+\S*\s*(\d{9})', flat)
     out['cluster_name'], out['cluster_inn'] = (m.group(1).strip(), m.group(2)) if m else (None, None)
-    m = re.search(r'(\d{2})(\d{2})(\d{3})\s?(\d)\s+кг\s+ҚАБУЛ', flat)
-    out['doc_date'] = f'{m.group(3)}{m.group(4)}-{m.group(2)}-{m.group(1)}' if m else None
+    out['doc_date'] = parse_date(flat)
     if abs(out['netto'] * out['price'] - out['amount']) > max(50, out['amount'] * 0.002) and \
             abs(out['kond_kg'] * out['price'] - out['amount']) > max(50, out['amount'] * 0.002):
         raise UserError('PQ-17 dagi summa narx × og‘irlikka to‘g‘ri kelmadi — faylni tekshiring.')
@@ -179,6 +204,9 @@ def link(actor, doc_id, waybill_id):
             if busy:
                 raise UserError(f'Bu reysga {busy["code"]} allaqachon biriktirilgan.')
             db.execute('UPDATE nayman_receipts SET load_no=? WHERE waybill_id=?', (doc['load_no'], waybill_id))
+            if not doc['doc_date']:         # the form hid its date: the day our punkt received this load
+                db.execute('UPDATE pq17_docs SET doc_date=(SELECT received_date FROM nayman_receipts WHERE waybill_id=?) '
+                           'WHERE id=?', (waybill_id, doc_id))
         db.execute("UPDATE pq17_docs SET waybill_id=?, group_id=NULL, match_how=? WHERE id=?",
                    (waybill_id, 'qo‘lda' if waybill_id else None, doc_id))
         audit(db, actor, 'UPDATE', 'pq17', doc_id, old={'waybill_id': doc['waybill_id']}, new={'waybill_id': waybill_id})
@@ -246,8 +274,89 @@ def clusters():
         c['to_invoice'] += st in ('inv0', 'inv')
         c['invoices'] += st == 'done'
         c['unmatched'] += d['waybill_id'] is None and d['group_id'] is None
-        c['last'] = d['doc_date'] or c['last']
+        if d['doc_date']:
+            c['first'] = min(c['first'] or d['doc_date'], d['doc_date'])
+            c['last'] = max(c['last'] or d['doc_date'], d['doc_date'])
     return list(out.values())
+
+
+def refresh_dates():
+    """PQ-17s stored without a date (older reader): read the date from the kept PDF again; if the form still hides
+    it, take the day our punkt received the matched trip (the same load). Returns how many got a date."""
+    n = 0
+    base = Path(current_app.config['SURXON'].UPLOAD_DIR)
+    with tx() as db:
+        for d in db.execute('SELECT id, file_path, waybill_id, group_id FROM pq17_docs WHERE doc_date IS NULL').fetchall():
+            day = None
+            try:
+                from pypdf import PdfReader
+                reader = PdfReader(str(base / d['file_path']))
+                day = parse_date(re.sub(r'\s+', ' ', '\n'.join((p.extract_text() or '') for p in reader.pages)))
+            except Exception:
+                pass
+            if not day and d['waybill_id']:
+                r = db.execute('SELECT received_date FROM nayman_receipts WHERE waybill_id=?', (d['waybill_id'],)).fetchone()
+                day = r and r['received_date']
+            if not day and d['group_id']:
+                r = db.execute('SELECT substr(received_at,1,10) day FROM load_groups WHERE id=?', (d['group_id'],)).fetchone()
+                day = r and r['day']
+            if day:
+                db.execute('UPDATE pq17_docs SET doc_date=? WHERE id=?', (day, d['id']))
+                n += 1
+    return n
+
+
+def link_many(actor, doc_id, waybill_ids):
+    """One yuk xati that carried several of our trips which the punkt received one by one (e.g. 5 800 kg = two
+    trailers of 2 900): the trips become one umumiy yuk (number PQ-<code>, already received) and the PQ-17 is tied
+    to it — its kg and sum are then shared over the trips by their punkt kg, like any umumiy yuk."""
+    if not actor or not actor.can('nayman.write'):
+        raise UserError('Bu amal uchun huquqingiz yo‘q.')
+    ids = sorted({int(i) for i in waybill_ids if str(i).isdigit()})
+    if len(ids) < 2:
+        raise UserError('Kamida ikkita reysni belgilang (bitta reys bo‘lsa — yuqoridagi ro‘yxatdan tanlang).')
+    import secrets
+    with tx() as db:
+        doc = db.execute('SELECT * FROM pq17_docs WHERE id=?', (doc_id,)).fetchone()
+        if not doc:
+            raise UserError('PQ-17 topilmadi.')
+        if doc['waybill_id'] or doc['group_id']:
+            raise UserError(f'{doc["code"]} allaqachon reysga biriktirilgan.')
+        total, days = 0.0, []
+        for wid in ids:
+            r = db.execute("""SELECT tl.trip_no, nr.accepted_kg, nr.received_date,
+                                     (SELECT code FROM pq17_docs p WHERE p.waybill_id=wb.id) busy,
+                                     (SELECT group_id FROM load_group_items i WHERE i.waybill_id=wb.id) grp
+                              FROM waybills wb JOIN trailer_loads tl ON tl.id=wb.load_id
+                              LEFT JOIN nayman_receipts nr ON nr.waybill_id=wb.id
+                              WHERE wb.id=? AND wb.status<>'BEKOR'""", (wid,)).fetchone()
+            if not r or r['accepted_kg'] is None:
+                raise UserError('Belgilangan reyslardan biri hali punktda qabul qilinmagan.')
+            if r['busy']:
+                raise UserError(f'{r["trip_no"]} ga {r["busy"]} allaqachon biriktirilgan.')
+            if r['grp']:
+                raise UserError(f'{r["trip_no"]} umumiy yuk ichida — o‘sha umumiy yukni yuqoridagi ro‘yxatdan tanlang.')
+            total += r['accepted_kg']
+            days.append(r['received_date'])
+        if abs(total - doc['netto']) > max(30, doc['netto'] * 0.02):
+            raise UserError(f'Belgilangan reyslar jami {total:g} kg, PQ-17 da {doc["netto"]:g} kg — farq katta. '
+                            'Reyslarni qayta tekshiring.')
+        ts = now_str()
+        batch = (db.execute('SELECT MAX(batch) b FROM load_groups').fetchone()['b'] or 0) + 1
+        cur = db.execute("""INSERT INTO load_groups(number, token, batch, status, accepted_kg, sent_kg, load_no, diff_reason,
+                              received_by, received_at, created_by, created_at) VALUES (?,?,?,'QABUL',?,?,?,?,?,?,?,?)""",
+                         (f'PQ-{doc["code"]}', secrets.token_urlsafe(9), batch, round(total, 1), round(total, 1), doc['load_no'],
+                          'PQ-17 bo‘yicha birlashtirildi (punktda alohida qabul qilingan)', actor.user_id,
+                          ts, actor.user_id, ts))
+        gid = cur.lastrowid
+        for wid in ids:
+            db.execute('INSERT INTO load_group_items(group_id, waybill_id, added_by, added_at) VALUES (?,?,?,?)',
+                       (gid, wid, actor.user_id, ts))
+            db.execute('UPDATE nayman_receipts SET load_no=COALESCE(load_no, ?) WHERE waybill_id=?', (doc['load_no'], wid))
+        db.execute("UPDATE pq17_docs SET waybill_id=NULL, group_id=?, match_how='qo‘lda (bir nechta reys)', "
+                   "doc_date=COALESCE(doc_date, ?) WHERE id=?", (gid, max(d for d in days if d) if any(days) else None, doc_id))
+        audit(db, actor, 'UPDATE', 'pq17', doc_id, new={'group_id': gid, 'waybill_ids': ids, 'kg': total})
+    return len(ids), total
 
 
 def rematch():
