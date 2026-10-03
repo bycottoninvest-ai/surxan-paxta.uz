@@ -23,6 +23,7 @@ def app(tmp_path):
         get_db().execute('UPDATE users SET must_change_password=0')
         # most tests exercise the weighbridge path; the field-sum auto waybill has its own tests
         get_db().execute("INSERT INTO settings(key, value, updated_at) VALUES ('auto_waybill_hand','0','x')")
+        get_db().execute("INSERT INTO settings(key, value, updated_at) VALUES ('punkt_require_load_no','0','x')")
     yield app
 
 

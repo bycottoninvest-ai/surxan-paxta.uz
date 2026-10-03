@@ -10,7 +10,7 @@ from contextlib import contextmanager
 
 from flask import current_app, g
 
-SCHEMA_VERSION = 21
+SCHEMA_VERSION = 22
 
 SCHEMA = r'''
 CREATE TABLE IF NOT EXISTS brigadiers (
@@ -1098,6 +1098,10 @@ def migrate(db):
     db.execute('''CREATE TABLE IF NOT EXISTS nazorat_alerts (
                     key TEXT PRIMARY KEY, level TEXT NOT NULL, title TEXT NOT NULL,
                     first_at TEXT NOT NULL, resolved_at TEXT)''')
+    # v22: hosil-qabuli.uz table (every load the cluster weighed for us) — compared with our punkt receipts
+    db.execute('''CREATE TABLE IF NOT EXISTS hq_loads (
+                    load_no TEXT PRIMARY KEY, dt TEXT, brutto REAL, tara REAL, netto REAL, kond REAL, dirt REAL, moist REAL,
+                    method TEXT, pq_no TEXT, imported_at TEXT NOT NULL, imported_by INTEGER REFERENCES users(id))''')
     # Future column changes go here as: if version < N: ALTER TABLE ...
     db.execute('UPDATE schema_version SET version=? WHERE version < ?', (SCHEMA_VERSION, SCHEMA_VERSION))
 

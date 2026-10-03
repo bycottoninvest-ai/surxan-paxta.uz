@@ -12,7 +12,7 @@ from ..scale import scale_reading
 from ..security import perm_required, wants_json
 from ..services import (OTHER_REASON, STATION_DIFF_REASONS, after_waybill_change, diff_level, mark_arrived,
                         receive_at_station)
-from ..settings import get_float
+from ..settings import get_float, get_setting
 from ..utils import UserError, parse_int, parse_number, today_str
 from . import done, post_actor, season_arg
 
@@ -106,7 +106,7 @@ def trip(waybill_id):
     wb = _trip_or_404(waybill_id)
     level = diff_level(wb['net_kg'], wb['accepted_kg']) if wb['accepted_kg'] is not None else None
     from .. import blanks as BL
-    return render_template('punkt_trip.html', wb=wb, state=queries.trip_state(wb), level=level,
+    return render_template('punkt_trip.html', need_load_no=get_setting('punkt_require_load_no') != '0', wb=wb, state=queries.trip_state(wb), level=level,
                            blank=BL.of_waybill(waybill_id), blank_required=BL.required(),
                            blank_code=request.args.get('blanka', ''),
                            reasons=STATION_DIFF_REASONS, other_reason=OTHER_REASON, warn=get_float('punkt_warn_pct', 1),
@@ -148,6 +148,8 @@ def receive(waybill_id):
         gross = parse_number(request.form.get('gross_kg'), 'Brutto (kg)', max_value=max_kg)
         tare = parse_number(request.form.get('tare_kg'), 'Tara (kg)', max_value=max_kg, allow_zero=True)
         kg = None
+    from ..pq17 import clean_load_no
+    load_no = None if wb['receipt_id'] else clean_load_no(request.form.get('load_no'), waybill_ids=[waybill_id])
     from .. import blanks as BL
     have = BL.of_waybill(waybill_id)
     if BL.required() and not wb['receipt_id'] and not (have and have['photo_id']):
@@ -162,8 +164,7 @@ def receive(waybill_id):
                              reason=request.form.get('reason', ''), note=request.form.get('note', ''),
                              photo=read_upload(request.files.get('photo')))
     kg = res['station_kg']
-    load_no = ''.join(ch for ch in (request.form.get('load_no') or '') if ch.isdigit())[:12]
-    if load_no:        # the punkt scale's load number (hosil-qabuli.uz yuk xati) — ties the PQ-17 to this trip exactly
+    if load_no and not res['already']:        # the punkt scale's load number (hosil-qabuli.uz yuk xati) — ties the PQ-17 to this trip exactly
         from ..db import tx
         with tx() as db:
             db.execute('UPDATE nayman_receipts SET load_no=? WHERE waybill_id=?', (load_no, waybill_id))
@@ -296,7 +297,7 @@ def group(token):
     if g0['status'] == 'BOSH' and can('station.receive'):
         g0 = G.open_group(current_actor(), token)
     d = G.detail(g0['id'])
-    return render_template('punkt_group.html', g=d['group'], items=d['items'], sent_kg=d['sent_kg'],
+    return render_template('punkt_group.html', need_load_no=get_setting('punkt_require_load_no') != '0', g=d['group'], items=d['items'], sent_kg=d['sent_kg'],
                            cands=G.candidates(my_station()) if d['group']['status'] == 'OCHIQ' else [],
                            reasons=STATION_DIFF_REASONS, other_reason=OTHER_REASON, warn=get_float('punkt_warn_pct', 1),
                            alert=get_float('punkt_alert_pct', 3), pick_blank=request.args.get('blanka', ''))
@@ -365,7 +366,9 @@ def group_receive(gid):
         gross = parse_number(request.form.get('gross_kg'), 'Brutto (kg)', max_value=max_kg)
         tare = parse_number(request.form.get('tare_kg'), 'Tara (kg)', max_value=max_kg, allow_zero=True)
         kg = None
-    res = G.receive(actor, gid, gross_kg=gross, tare_kg=tare, station_kg=kg, load_no=request.form.get('load_no', ''),
+    from ..pq17 import clean_load_no
+    load_no = request.form.get('load_no', '') if G.get(gid)['status'] == 'QABUL' else         (clean_load_no(request.form.get('load_no'), group_id=gid) or '')
+    res = G.receive(actor, gid, gross_kg=gross, tare_kg=tare, station_kg=kg, load_no=load_no,
                     reason=request.form.get('reason', ''), note=request.form.get('note', ''),
                     photo=read_upload(request.files.get('photo')))
     g0 = res['group']

@@ -232,6 +232,24 @@ def _pq_kg(rows):
     return out
 
 
+@bp.route('/buxgalteriya/hosil-qabuli', methods=['GET', 'POST'])
+@perm_required('nayman.write', 'reports.finance')
+def hosil_qabuli():
+    """hosil-qabuli.uz Excel beside our punkt receipts: every yuk xati — ours or not, kg the same or not."""
+    from .. import hosil as H
+    if request.method == 'POST':
+        actor = post_actor()
+        if request.form.get('action') == 'assign':
+            H.assign(actor, request.form.get('load_no', ''), parse_int(request.form.get('waybill_id'), 'Reys'))
+            return done('Yuk xati № reysga yozildi.', url_for('acct.hosil_qabuli'))
+        f = request.files.get('file')
+        if not f or not f.filename:
+            raise UserError('hosil-qabuli.uz dan yuklab olingan Excel faylni tanlang.')
+        new, upd = H.import_file(actor, f.read(), f.filename)
+        return done(f'Jadval qabul qilindi: {new} ta yangi, {upd} ta yangilandi.', url_for('acct.hosil_qabuli'))
+    return render_template('acct_hosil.html', cmp=H.compare())
+
+
 @bp.get('/buxgalteriya/pq17/<int:doc_id>.pdf')
 @perm_required('nayman.write', 'reports.finance')
 def pq17_file(doc_id):

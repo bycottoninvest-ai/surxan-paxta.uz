@@ -22,6 +22,8 @@ DEFAULTS = {
     'director_report_time': ('23:00', 'Direktor hisoboti va buxgalterga faktura ro‘yxati Telegram shaxsiy chatga (HH:MM)'),
     'auto_waybill_hand': ('1', '“Tugatish” bosilganda telashka yopiladi, nakladnoy dala vazni bilan avtomatik chiqadi '
                                 'va “PUNKTGA YO‘LDA” bo‘ladi (1). 0 — eski tartib: avval umumiy tarozida brutto/tara.'),
+    'punkt_require_load_no': ('1', 'Punkt qabulida yuk xati № (klaster tarozisi chekidagi / hosil-qabuli.uz dagi raqam) majburiy (1/0) — '
+                                   'shu raqam bilan PQ-17 reysga xatosiz bog‘lanadi'),
     'punkt_warn_pct': ('1', 'Punkt farqi: shu % gacha normal (yashil), sabab so‘ralmaydi'),
     'scale_adapter': ('manual', 'Punkt tarozisi ulanishi: manual = kg qo‘lda (elektron tarozi hali ulanmagan)'),
     'punkt_alert_pct': ('3', 'Punkt farqi: shu % dan katta — “Katta farq” (qizil)'),

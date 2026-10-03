@@ -2,7 +2,7 @@
 {% from 'macros.html' import icon, csrf, empty with context %}
 {% set page_title = 'Agroklaster sverkasi' %}
 {% block content %}
-<div class="page-h"><h1>{{ icon('doc','lg') }} Agroklaster sverkasi</h1><span class="sub">Klaster qabul varaqalari (PQ-17) (hosil-qabuli.uz) bizning reyslar bilan</span></div>
+<div class="page-h"><h1>{{ icon('doc','lg') }} Agroklaster sverkasi</h1><span class="sub">Klaster qabul varaqalari (PQ-17) (hosil-qabuli.uz) bizning reyslar bilan</span><a class="btn btn-light btn-sm" style="margin-left:auto" href="{{ url_for('acct.hosil_qabuli') }}">{{ icon('doc','sm') }} hosil-qabuli.uz jadvali bilan solishtirish</a></div>
 
 <section class="card pq-up"><div class="card-b">
   <form method="post" enctype="multipart/form-data" class="pq-upf">{{ csrf() }}

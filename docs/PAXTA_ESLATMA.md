@@ -3,6 +3,16 @@
 Oxirgi yangilanish: 2026-09-25 (kech, v2.5.0 — ikki bot). Yozgan: Claude (bulutdagi sessiya “Yangi loya qilash”).
 
 
+## QO‘SHIMCHA 03.10.2026 (kech) — v2.29.0
+
+- Sabab topildi: 3 ta PQ-17 bog‘lanmadi, chunki punktda yuk xati № yozilmagan va punkt kg o‘rniga dala kg qolgan
+  (TL-000038, TL-000059, UY-0013 da farq 0). Endi punkt qabulida yuk xati № majburiy (`punkt_require_load_no`, testlarda 0),
+  bir raqam ikki reysga yozilmaydi (`pq17.clean_load_no`).
+- hosil-qabuli.uz Excel → `/buxgalteriya/hosil-qabuli` (`surxon/hosil.py`, jadval `hq_loads`, sxema 22): mos / kg farq /
+  raqamsiz (bir tugma bilan raqam yoziladi) / bizda yo‘q. Jadval sanasi sanasiz PQ-17 ga qo‘yiladi.
+  Haqiqiy Excel namunasi bilan tekshirilmagan — sarlavha kalit so‘zlar bo‘yicha topiladi.
+- FAYZ: 353717→TL-000061, 322034→TL-000043 biriktirildi. Ochiq: 289603 (5 800), 311058 (3 080), 353283 (1 270).
+
 ## QO‘SHIMCHA 03.10.2026 — v2.28.0 (main’da, production’ga “tasdiqlayman” kutilmoqda)
 
 - FAYZ AGROKLASTER sverkasi tekshirildi: 25 yuk, netto 50 040, konditsion 47 605, summa 375 570 775 — hosil-qabuli.uz bilan mos.

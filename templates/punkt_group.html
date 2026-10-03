@@ -43,7 +43,7 @@
   <form method="post" action="{{ url_for('punkt.group_receive', gid=g.id) }}" enctype="multipart/form-data" class="d-form" id="uy-rcv" data-sent="{{ sent_kg }}" data-warn="{{ warn }}">
     {{ csrf() }}
     <input type="hidden" name="station_kg" id="uy-n">
-    <label class="d-l">Yuk xati № <span class="tiny muted">(punkt tarozisi chekidagi raqam)</span></label><input name="load_no" inputmode="numeric" class="d-num" autocomplete="off">
+    <label class="d-l">Yuk xati № <span class="tiny muted">(klaster tarozisi chekidagi raqam{{ ' — majburiy' if need_load_no }})</span></label><input name="load_no" inputmode="numeric" class="d-num" placeholder="311058" autocomplete="off" {{ 'required' if need_load_no }}>
     <button type="button" class="btn btn-green btn-block d-big" id="uy-dala" style="margin-top:10px">✓ Dala jami bilan — {{ sent_kg|num }} kg</button>
     <div class="tiny muted" style="text-align:center;margin:4px 0 12px">Odatda shu. Ko‘chadagi tarozida tortilgan bo‘lsa — brutto va tarani yozing.</div>
     <label class="d-l">Brutto (kg)</label><input name="gross_kg" id="uy-g" inputmode="decimal" class="d-num" autocomplete="off">

@@ -115,6 +115,31 @@ def _save_file(data, code):
     return rel
 
 
+def clean_load_no(raw, *, waybill_ids=(), group_id=None):
+    """The punkt's yuk xati № typed at receipt: digits only; required unless the setting is off; never one already
+    written on another trip / umumiy yuk (one weighing = one number). Returns the number or None."""
+    from .settings import get_setting
+    load_no = ''.join(ch for ch in (raw or '') if ch.isdigit())[:12] or None
+    if not load_no:
+        if (get_setting('punkt_require_load_no') or '1') != '0':
+            raise UserError('Yuk xati № ni yozing — klaster tarozisi chekidagi (hosil-qabuli.uz dagi) raqam, masalan 311058. '
+                            'Shu raqam bilan PQ-17 reysga xatosiz bog‘lanadi.')
+        return None
+    if not 4 <= len(load_no) <= 10:
+        raise UserError(f'Yuk xati № {load_no} — raqam noto‘g‘ri ko‘rinadi (odatda 6 ta raqam).')
+    ids = [int(i) for i in waybill_ids] or [0]
+    marks = ','.join('?' * len(ids))
+    r = q(f"""SELECT tl.trip_no FROM nayman_receipts nr JOIN waybills wb ON wb.id=nr.waybill_id JOIN trailer_loads tl ON tl.id=wb.load_id
+              WHERE nr.load_no=? AND wb.status<>'BEKOR' AND nr.waybill_id NOT IN ({marks})
+                AND NOT EXISTS (SELECT 1 FROM load_group_items i WHERE i.waybill_id=nr.waybill_id AND i.group_id IS ?)""",
+          [load_no] + ids + [group_id], one=True)
+    g = q("SELECT number FROM load_groups WHERE load_no=? AND status='QABUL' AND id IS NOT ?", (load_no, group_id), one=True)
+    if r or g:
+        raise UserError(f'Yuk xati № {load_no} allaqachon {r["trip_no"] if r else g["number"]} ga yozilgan — '
+                        'raqamni chekdan qayta tekshiring.')
+    return load_no
+
+
 def find_trip(db, d):
     """Our received trip — or umumiy yuk (several trailers weighed once) — for this PQ-17: the load number the punkt
     typed, else one with the same netto within a day of the document date. Returns (waybill_id, how, group_id)."""
@@ -158,6 +183,9 @@ def import_pdf(actor, data, source='web'):
         old = db.execute('SELECT * FROM pq17_docs WHERE code=?', (d['code'],)).fetchone()
         if old:
             return old['id'], d, True, None
+        if not d['doc_date']:            # the form hides its date: the yuk xati's day from the hosil-qabuli.uz table
+            h = db.execute('SELECT substr(dt,1,10) day FROM hq_loads WHERE load_no=? AND dt IS NOT NULL', (d['load_no'],)).fetchone()
+            d['doc_date'] = h['day'] if h else None
         wid, how, gid = find_trip(db, d)
         cur = db.execute("""INSERT INTO pq17_docs(code, doc_date, load_no, method, harvest_raw, lot, variety, grade, klass,
                               netto, dirt_pct, moist_pct, deduction_kg, bonus_kg, kond_kg, base_price, coef, price, amount, vat,
@@ -281,19 +309,21 @@ def clusters():
 
 
 def refresh_dates():
-    """PQ-17s stored without a date (older reader): read the date from the kept PDF again; if the form still hides
+    """PQ-17s stored without a date: the yuk xati's day from the hosil-qabuli.uz table; else the kept PDF read again; if it still hides
     it, take the day our punkt received the matched trip (the same load). Returns how many got a date."""
     n = 0
     base = Path(current_app.config['SURXON'].UPLOAD_DIR)
     with tx() as db:
-        for d in db.execute('SELECT id, file_path, waybill_id, group_id FROM pq17_docs WHERE doc_date IS NULL').fetchall():
-            day = None
-            try:
-                from pypdf import PdfReader
-                reader = PdfReader(str(base / d['file_path']))
-                day = parse_date(re.sub(r'\s+', ' ', '\n'.join((p.extract_text() or '') for p in reader.pages)))
-            except Exception:
-                pass
+        for d in db.execute('SELECT id, file_path, waybill_id, group_id, load_no FROM pq17_docs WHERE doc_date IS NULL').fetchall():
+            h = db.execute('SELECT substr(dt,1,10) day FROM hq_loads WHERE load_no=? AND dt IS NOT NULL', (d['load_no'],)).fetchone()
+            day = h['day'] if h else None
+            if not day:
+                try:
+                    from pypdf import PdfReader
+                    reader = PdfReader(str(base / d['file_path']))
+                    day = parse_date(re.sub(r'\s+', ' ', '\n'.join((p.extract_text() or '') for p in reader.pages)))
+                except Exception:
+                    pass
             if not day and d['waybill_id']:
                 r = db.execute('SELECT received_date FROM nayman_receipts WHERE waybill_id=?', (d['waybill_id'],)).fetchone()
                 day = r and r['received_date']
