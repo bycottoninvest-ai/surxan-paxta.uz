@@ -175,8 +175,16 @@ def _send_report(job, payload):
                         token=cfg.TELEGRAM_BOT_TOKEN if personal else (cfg.TELEGRAM_REPORT_BOT_TOKEN or cfg.TELEGRAM_BOT_TOKEN))
         return
     if payload.get('chat_id'):          # a personal message (Nazorat) — through the main bot the person linked
-        telegram_upload('sendMessage', {'chat_id': payload['chat_id'], 'text': payload['text'][:4000]}, {},
-                        token=cfg.TELEGRAM_BOT_TOKEN if payload.get('main_bot') else (cfg.TELEGRAM_REPORT_BOT_TOKEN or cfg.TELEGRAM_BOT_TOKEN))
+        token = cfg.TELEGRAM_BOT_TOKEN if payload.get('main_bot') else (cfg.TELEGRAM_REPORT_BOT_TOKEN or cfg.TELEGRAM_BOT_TOKEN)
+        photos = [cfg.UPLOAD_DIR / p for p in payload.get('photos') or [] if (cfg.UPLOAD_DIR / p).exists()]
+        if photos and len(payload['text']) <= 1000:      # the question as the first photo's caption: one message
+            telegram_upload('sendPhoto', {'chat_id': payload['chat_id'], 'caption': payload['text']},
+                            {'photo': (photos[0].name, photos[0].read_bytes(), 'image/jpeg')}, token=token)
+            photos = photos[1:]
+        else:
+            telegram_upload('sendMessage', {'chat_id': payload['chat_id'], 'text': payload['text'][:4000]}, {}, token=token)
+        for ph in photos:
+            telegram_upload('sendPhoto', {'chat_id': payload['chat_id']}, {'photo': (ph.name, ph.read_bytes(), 'image/jpeg')}, token=token)
         return
     telegram_upload('sendMessage', {'chat_id': chat_id('telegram_report'), 'text': payload['text'][:4000]}, {},
                     token=cfg.TELEGRAM_REPORT_BOT_TOKEN or cfg.TELEGRAM_BOT_TOKEN)

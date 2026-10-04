@@ -24,7 +24,7 @@
   <h4 style="margin:14px 0 6px">Oxirgi xabarlar</h4>
   <table class="t"><thead><tr><th>Vaqt</th><th>Nima</th><th>Kimga</th><th>Holat</th></tr></thead><tbody>
   {% for j in ds.jobs %}<tr><td class="nowrap">{{ j.created_at[5:16] }}</td>
-    <td>{{ {'director':'Direktor hisoboti','faktura':'Faktura ro‘yxati','akt':'Kombayn akt PDF','remind':'Eslatma','alert':'Nazorat'}[j.kind] }}</td>
+    <td>{{ {'director':'Direktor hisoboti','faktura':'Faktura ro‘yxati','akt':'Kombayn akt PDF','remind':'Eslatma','alert':'Nazorat','xodim':'Xodimga savol (rasm bilan)','sverka':'Sverka savoli'}.get(j.kind, j.kind) }}</td>
     <td>{{ j.to }}</td>
     <td>{% if j.status == 'sent' %}<span class="yd-ok">✓ yetkazildi {{ (j.sent_at or '')[11:16] }}</span>{% elif j.last_error %}<span class="yd-bad">✗ xato: {{ j.last_error[:120] }}</span>{% else %}<span class="muted">⏳ navbatda</span>{% endif %}</td></tr>
   {% else %}<tr><td colspan="4" class="muted">Hali xabar yuborilmagan.</td></tr>{% endfor %}

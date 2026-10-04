@@ -332,7 +332,7 @@ def delivery_state():
     names = {str(p['telegram_id']): p['full_name'] for p in people if p['telegram_id']}
     jobs = []
     for j in q("""SELECT kind, ref, status, attempts, last_error, created_at, sent_at, payload_json FROM outbox
-                  WHERE channel='telegram_report' AND kind IN ('director','faktura','akt','remind','alert')
+                  WHERE channel='telegram_report' AND kind IN ('director','faktura','akt','remind','alert','xodim','sverka')
                   ORDER BY id DESC LIMIT 15"""):
         import json
         pl = json.loads(j['payload_json'] or '{}')
