@@ -668,6 +668,13 @@ def void_waybill(actor, waybill_id, reason):
 NAYMAN_DIFF_REASONS = ['Namlik / tabiiy kamayish', 'Ifloslik (chiqindi)', 'Tarozi farqi', 'Yo‘lda to‘kilgan', 'Boshqa']
 
 
+def too_heavy(punkt_kg, field_kg, db=None):
+    """A punkt weight that cannot be right: more than half again the field kg AND more than punkt_max_over_kg (1 000)
+    over it. Anything below is accepted with a reason — the field scale is often short."""
+    over = punkt_kg - (field_kg or 0)
+    return punkt_kg > (field_kg or 0) * 1.5 and over > (get_float('punkt_max_over_kg', 1000, db) or 0)
+
+
 def record_nayman(actor, waybill_id, *, accepted_kg, received_date, receiver_name='', diff_reason='', note='',
                   price_per_kg=None, photo=None, edit_reason=''):
     _need(actor, 'nayman.write')
@@ -678,7 +685,7 @@ def record_nayman(actor, waybill_id, *, accepted_kg, received_date, receiver_nam
         assert_season_open(db, wb['season_year'])
         if accepted_kg is None or accepted_kg < 0:
             raise UserError('Qabul qilingan kg noto‘g‘ri.')
-        if accepted_kg > wb['net_kg'] * 1.2:
+        if too_heavy(accepted_kg, wb['net_kg'], db):
             raise UserError(f'Qabul qilingan kg ({accepted_kg:g}) jo‘natilgandan ({wb["net_kg"]:g}) ancha katta. Tekshiring.')
         diff = round(accepted_kg - wb['net_kg'], 1)
         diff_reason = clean_text(diff_reason, 200)
@@ -778,7 +785,7 @@ def receive_at_station(actor, waybill_id, *, station_kg=None, reason='', note=''
         max_g = get_float('max_gross_kg', 40000, db)
         if station_kg is None or station_kg <= 0 or station_kg > max_g:
             raise UserError(f'Punkt tarozisi kg 0 va {max_g:g} oralig‘ida bo‘lishi kerak.')
-        if station_kg > wb['net_kg'] * 1.5:
+        if too_heavy(station_kg, wb['net_kg'], db):
             raise UserError(f'Punkt vazni ({station_kg:g} kg) daladagidan ({wb["net_kg"]:g} kg) juda katta. Tekshiring.')
         diff, pct, level = diff_level(wb['net_kg'], station_kg, db)
         reason = clean_text(reason, 60)

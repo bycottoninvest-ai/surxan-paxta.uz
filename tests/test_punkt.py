@@ -265,3 +265,16 @@ def test_office_enters_punkt_kg_from_stamped_paper(app, world):
     text = norm(pdf_text(bux.get(f'/punkt/yuk/{wid}/qabul.pdf').data))
     assert 'korxona kiritdi' in text and '198 kg' in text and 'pechatli qog‘oz rasmi tizimda' in text
     assert world['juma'].post(f'/nakladnoy/{wid}/pechat', files={'photo': jpeg()}).status_code in (302, 403)
+
+
+def test_punkt_may_accept_up_to_1000_kg_over_field(app, world):
+    """The field scale is often short: up to punkt_max_over_kg (1 000) over the field kg is accepted with a reason."""
+    from test_combine_akt import _close
+    tally, yunus, ali, st = setup(app, world)
+    with app.app_context():
+        k1 = q("SELECT id FROM equipment WHERE code='K-01'", one=True)['id']
+    w = _close(app, tally, world, 'TL-01', [('600', k1)])
+    r = yunus.post(f'/punkt/yuk/{w}/qabul', {'station_kg': '1700', 'reason': 'Tarozilar farqi'}).get_json()
+    assert not r['ok'] and 'juda katta' in r['error']                     # 1 100 kg over — a typo
+    r = yunus.post(f'/punkt/yuk/{w}/qabul', {'station_kg': '1500', 'reason': 'Tarozilar farqi'}).get_json()
+    assert r['ok'], r                                                     # 900 kg over (2.5×) — allowed with a reason

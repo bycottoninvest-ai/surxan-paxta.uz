@@ -238,7 +238,8 @@ def receive(actor, gid, *, gross_kg=None, tare_kg=None, station_kg=None, load_no
     sent = round(sum(i['net_kg'] for i in items), 1)
     if not station_kg or station_kg <= 0:
         raise UserError('Punkt netto kg ni kiriting.')
-    if station_kg > get_float('max_gross_kg', 40000) or station_kg > sent * 1.5:
+    from .services import too_heavy
+    if station_kg > get_float('max_gross_kg', 40000) or too_heavy(station_kg, sent):
         raise UserError(f'Punkt vazni ({station_kg:g} kg) jo‘natilgandan ({sent:g} kg) juda katta. Tekshiring.')
     if not photo:
         raise UserError('Muhrlangan umumiy nakladnoyni (UY) rasmga oling — rasmsiz qabul yopilmaydi.')
