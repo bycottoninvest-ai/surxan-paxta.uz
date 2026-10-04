@@ -56,6 +56,12 @@ def _dt(v):
     return d + (f' {int(m.group(4)):02d}:{m.group(5)}' if m.group(4) else '')
 
 
+def _pq_no(v):
+    """“PQ-3141\nyuklab olish” (the cell also holds the download link's text) → “PQ-3141”; “-” / empty → None."""
+    m = re.search(r'PQ\s*-?\s*(\d+)', str(v or ''), re.I)
+    return f'PQ-{m.group(1)}' if m else None
+
+
 def parse(data, filename=''):
     """Excel (or CSV) bytes → [row dict]. The header may span several rows with merged cells (as on the site)."""
     rows = _read(data, filename)
@@ -97,7 +103,7 @@ def parse(data, filename=''):
                     'netto': _num(get('netto')), 'kond': _num(get('kond')), 'dirt': _num(get('dirt')),
                     'moist': _num(get('moist')),
                     'method': 'hand' if ('qo' in term or 'қўл' in term) else 'combine' if ('mash' in term or 'komb' in term) else None,
-                    'pq_no': (str(get('pq_no') or '').strip() or None) if str(get('pq_no') or '').strip() not in ('-', '') else None})
+                    'pq_no': _pq_no(get('pq_no'))})
     if not out:
         raise UserError('Jadvalda yuk qatorlari topilmadi.')
     return out

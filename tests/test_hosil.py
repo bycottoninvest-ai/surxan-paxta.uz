@@ -151,3 +151,9 @@ def test_punkt_needs_the_load_number(app, world):
     received_trip(app, world, tally, yunus, kg='480', trailer='TL-02', load_no='777001')
     with pytest.raises(AssertionError):
         received_trip(app, world, tally, yunus, kg='480', trailer='TL-03', load_no='777001')   # same number twice
+
+
+def test_pq_number_cell_with_download_text():
+    from surxon.hosil import _pq_no
+    assert _pq_no('PQ-3141\nyuklab olish') == 'PQ-3141'
+    assert _pq_no('-') is None and _pq_no(None) is None and _pq_no('pq 2936') == 'PQ-2936'
