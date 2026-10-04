@@ -62,3 +62,21 @@ def test_hosil_session_closed_tells_on_telegram(app, world):
         from surxon.nazorat import issues
         assert any(i['title'] == 'PQ-17 avtomatik yuklash ishlamayapti' for i in issues())
     assert world['juma'].get('/buxgalteriya/hosil-holat').status_code in (302, 403)
+
+
+def test_cluster_load_we_have_not_received_goes_to_the_punkt(app, world):
+    """A PQ-17 for a load the punkt has not received yet → Yunus is told on Telegram which yuk xati to receive."""
+    tally, yunus, ali, st = setup(app, world)
+    bux = world['bux']
+    bux.c.post('/buxgalteriya/pq17', data={'files': [(io.BytesIO(pq17_pdf('XH1000000009', '388190')), 'x.pdf')], '_csrf': bux.csrf()},
+               content_type='multipart/form-data', headers={'X-Requested-With': 'fetch'})
+    with app.app_context():
+        from surxon.nazorat import tick
+        tick(force=True)                       # found before Yunus linked Telegram — still told once he has
+        get_db().execute("UPDATE users SET telegram_id='777' WHERE username='yunus'")
+        get_db().commit()
+        tick(force=True)
+        tick(force=True)
+        assert len(q("SELECT 1 FROM outbox WHERE kind='xodim'")) == 1
+        rows = [json.loads(r['payload_json']) for r in q("SELECT payload_json FROM outbox WHERE kind='xodim'")]
+        assert any(p['chat_id'] == '777' and '388190' in p['text'] and 'QABUL QILING' in p['text'] for p in rows)

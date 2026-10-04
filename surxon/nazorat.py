@@ -65,11 +65,17 @@ def issues(year=None):
         out.append({'key': key, 'level': level, 'title': title, 'detail': detail, 'url': url,
                     'who': who, 'photos': photos or [], 'ask': ask})
 
+    punkt = [r['id'] for r in q("SELECT id FROM users WHERE active=1 AND role='station'")]   # who receives at the punkt
+
     # 1. a PQ-17 the system could not tie to a trip — its kg and money belong to nobody yet
-    for p in q('''SELECT id, code, load_no, netto, doc_date FROM pq17_docs WHERE waybill_id IS NULL AND group_id IS NULL'''):
+    for p in q('''SELECT id, code, load_no, netto, doc_date, method FROM pq17_docs WHERE waybill_id IS NULL AND group_id IS NULL'''):
+        what = 'kombayn' if p['method'] == 'combine' else 'qo‘l terimi' if p['method'] == 'hand' else 'paxta'
         add(f'pq:unmatched:{p["id"]}', 'red', f'PQ-17 {p["code"]} hech bir reysga bog‘lanmagan',
             f'yuk xati {p["load_no"] or "—"} · {_kg(p["netto"] or 0)} kg · {p["doc_date"] or ""} — qaysi reys ekanini tanlang',
-            _u('acct.pq17'))
+            _u('acct.pq17'), who=punkt,
+            ask=f'Klaster yuk xati {p["load_no"] or "—"} ni tortgan ({what}, {_kg(p["netto"] or 0)} kg), lekin tizimda bu yuk qabul '
+                f'qilinmagan. Punkt ekranida shu telashkani QABUL QILING va yuk xati № {p["load_no"] or ""} ni yozing. '
+                'Bir nechta telashka birga tortilgan bo‘lsa — umumiy yuk (UY) qilib qabul qiling.')
 
     # 2. the cluster's netto and our punkt kg differ
     lim_pct = get_float('nazorat_pq_pct', 1.0) or 1.0
@@ -112,7 +118,7 @@ def issues(year=None):
                   WHERE wb.status='YARATILDI' AND wb.arrived_at IS NULL AND wb.created_at < ?''', (_ago(hours),)):
         add(f'road:{r["id"]}', 'yellow', f'{r["number"]}: {hours} soatdan ko‘p yo‘lda',
             f'{r["trip_no"]} · jo‘natilgan {r["created_at"][:16]} — punktga yetdimi?', _u('ops.waybill_detail', waybill_id=r['id']),
-            who=r['created_by'], photos=evidence(r['id'], load_id=r['load_id']),
+            who=[r['created_by']] + punkt, photos=evidence(r['id'], load_id=r['load_id']),
             ask='Bu telashka punktga yetib bordimi? Bekor bo‘lgan bo‘lsa yoki boshqa yuk bilan birga tortilgan bo‘lsa — yozing.')
     for r in q('''SELECT tl.id, tl.trip_no, tl.opened_at, tl.opened_by, e.code FROM trailer_loads tl JOIN equipment e ON e.id=tl.trailer_id
                   WHERE tl.status='OCHIQ' AND tl.opened_at < ?''', (_ago(hours),)):
@@ -158,7 +164,9 @@ def issues(year=None):
             elif r['state'] == 'yoq':
                 add(f'hq:yoq:{r["load_no"]}', 'red', f'Yuk xati {r["load_no"]}: klaster tortgan ({_kg(r["netto"])} kg), bizda yo‘q',
                     f'{(r["dt"] or "")[:16]} — bu yuk punktda qabul qilinmagan yoki raqami yozilmagan',
-                    _u('acct.hosil_qabuli'))
+                    _u('acct.hosil_qabuli'), who=punkt,
+                    ask=f'Klaster tarozisida {(r["dt"] or "")[:16]} da yuk xati {r["load_no"]} ({_kg(r["netto"])} kg) tortilgan. Tizimda '
+                        'bu raqamli qabul yo‘q. Qaysi telashka(lar) edi? Punkt ekranida qabul qiling yoki raqamini yozing.')
         for c in cmp['orphans']:
             if first and (c['day'] or '') >= first:
                 add(f'hq:orphan:{c["wid"]}', 'yellow', f'{c["label"]}: klaster jadvalida topilmadi ({_kg(c["kg"])} kg)',
@@ -221,6 +229,7 @@ def tick(force=False):
             db.execute('UPDATE nazorat_alerts SET resolved_at=? WHERE key=?', (now_str(), k))
         if new:
             _tell(db, new)
+        _tell_people(db, found)
     return {'found': len(found), 'new': len(new)}
 
 
@@ -239,15 +248,20 @@ def _tell(db, new):
                            AND role IN ('admin','manager','accountant')""").fetchall():
         enqueue(db, 'telegram_report', 'alert', f'nazorat:{stamp}:u{u["id"]}',
                 {'text': f'SURXAN-PAXTA.UZ\n{text}', 'chat_id': u['telegram_id'], 'main_bot': True})
-    # and each problem to the person who entered it — with the photos, and what to check / fix
-    for i in new:
-        if not i.get('who'):
-            continue
-        u = db.execute('SELECT id, telegram_id FROM users WHERE id=? AND active=1', (i['who'],)).fetchone()
-        if not u or not u['telegram_id']:
-            continue
-        msg = '\n'.join(['SURXAN-PAXTA.UZ', f'{"🔴" if i["level"] == "red" else "🟡"} Siz kiritgan yozuvda tekshirish kerak:',
-                         i['title'], i['detail'], '', f'❓ {i["ask"]}' if i.get('ask') else '',
-                         '📷 Rasmlar quyida.' if i.get('photos') else ''])
-        enqueue(db, 'telegram_report', 'xodim', f'nazorat:{i["key"]}:u{u["id"]}',
-                {'text': msg.strip(), 'chat_id': u['telegram_id'], 'main_bot': True, 'photos': i.get('photos') or []})
+
+
+def _tell_people(db, found):
+    """Each open problem to the person who must act on it — with the photos and what to check / fix. Once per problem
+    and person (the outbox key), also for problems that were open before this was switched on."""
+    from .outbox import enqueue
+    for i in found:
+        who = i.get('who')
+        for uid in dict.fromkeys(who if isinstance(who, (list, tuple)) else [who]):
+            u = db.execute('SELECT id, telegram_id FROM users WHERE id=? AND active=1', (uid,)).fetchone() if uid else None
+            if not u or not u['telegram_id']:
+                continue
+            msg = '\n'.join(['SURXAN-PAXTA.UZ', f'{"🔴" if i["level"] == "red" else "🟡"} Sizdan harakat kerak:',
+                             i['title'], i['detail'], '', f'❓ {i["ask"]}' if i.get('ask') else '',
+                             '📷 Rasmlar quyida.' if i.get('photos') else ''])
+            enqueue(db, 'telegram_report', 'xodim', f'nazorat:{i["key"]}:u{u["id"]}',
+                    {'text': msg.strip(), 'chat_id': u['telegram_id'], 'main_bot': True, 'photos': i.get('photos') or []})
