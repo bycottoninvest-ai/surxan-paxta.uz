@@ -121,6 +121,8 @@
     const v = netto();
     if (mode.value !== 'netto' && num(g) !== null && num(t) !== null && num(g) <= num(t)) { alert('Brutto taradan katta bo‘lishi kerak.'); return; }
     if (v === null || v <= 0) { alert('Og‘irlikni kiriting.'); return; }
+    const ln = f.querySelector('input[name=load_no]');
+    if (ln && ln.required && !ln.value.trim()) { alert('Yuk xati № ni yozing (klaster tarozisi chekidagi raqam).'); ln.focus(); return; }
     const d = Math.round((v - sent) * 10) / 10, pct = sent ? Math.abs(d) / sent * 100 : 0;
     const box = document.getElementById('pk-diff');
     box.className = 'pk-diff ' + (d === 0 ? 'pk-d0' : 'pk-d1');
@@ -138,6 +140,9 @@
     n.value = sent; g.value = ''; t.value = ''; show(); document.getElementById('pk-next').click(); });
   f.querySelectorAll('input[name=reason]').forEach(r => r.addEventListener('change', () => {
     const other = r.value === {{ other_reason|tojson }}; note.hidden = !other; note.required = other; if (other) note.focus(); }));
+  // a required field on the hidden weight step (yuk xati №) must not block the button silently: show it
+  f.addEventListener('invalid', e => { if (s2.hidden && s2.contains(e.target)) { s3.hidden = true; s2.hidden = false;
+    setTimeout(() => { e.target.focus(); alert('Yuk xati № ni yozing (klaster tarozisi chekidagi raqam).'); }, 50); } }, true);
   f.addEventListener('submit', e => { if (!navigator.onLine) { e.preventDefault(); alert('Internet yo‘q — qabul hali saqlanmadi. Internet kelganda yana “Qabulni tasdiqlash” ni bosing.'); } });
   const sr = document.getElementById('scale-read');
   if (sr) sr.addEventListener('click', async () => {

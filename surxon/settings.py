@@ -27,7 +27,7 @@ DEFAULTS = {
                                    'shu raqam bilan PQ-17 reysga xatosiz bog‘lanadi'),
     'punkt_warn_pct': ('1', 'Punkt farqi: shu % gacha normal (yashil), sabab so‘ralmaydi'),
     'scale_adapter': ('manual', 'Punkt tarozisi ulanishi: manual = kg qo‘lda (elektron tarozi hali ulanmagan)'),
-    'punkt_max_over_kg': ('1000', 'Punkt kg dala kg idan shuncha kg gacha ko‘p bo‘lsa ham qabul o‘tadi (sabab so‘raladi); undan ko‘pi — xato deb to‘xtatiladi'),
+    'punkt_max_over_kg': ('1000', 'Punkt kg dala kg idan shuncha kg gacha ko‘p bo‘lsa ham qabul o‘tadi (sabab so‘raladi); undan ko‘pi — xato deb to‘xtatiladi. 0 = cheksiz'),
     'punkt_alert_pct': ('3', 'Punkt farqi: shu % dan katta — “Katta farq” (qizil)'),
     'diff_threshold_pct': ('2', 'Ichki hisob va tarozi farqi shu % dan oshsa sabab majburiy'),
     'nayman_diff_reason_required': ('1', 'Nayman qabulida farq bo‘lsa sabab majburiy (1/0)'),

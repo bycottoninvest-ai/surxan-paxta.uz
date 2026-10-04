@@ -278,3 +278,7 @@ def test_punkt_may_accept_up_to_1000_kg_over_field(app, world):
     assert not r['ok'] and 'juda katta' in r['error']                     # 1 100 kg over — a typo
     r = yunus.post(f'/punkt/yuk/{w}/qabul', {'station_kg': '1500', 'reason': 'Tarozilar farqi'}).get_json()
     assert r['ok'], r                                                     # 900 kg over (2.5×) — allowed with a reason
+    assert world['admin'].post('/admin/sozlamalar', {'set_punkt_max_over_kg': '0'}).get_json()['ok']   # 0 = cheksiz
+    w2 = _close(app, tally, world, 'TL-02', [('500', k1)])
+    r = yunus.post(f'/punkt/yuk/{w2}/qabul', {'station_kg': '3000', 'reason': 'Tarozilar farqi'}).get_json()
+    assert r['ok'], r

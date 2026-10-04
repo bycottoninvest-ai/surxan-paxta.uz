@@ -671,8 +671,11 @@ NAYMAN_DIFF_REASONS = ['Namlik / tabiiy kamayish', 'Ifloslik (chiqindi)', 'Taroz
 def too_heavy(punkt_kg, field_kg, db=None):
     """A punkt weight that cannot be right: more than half again the field kg AND more than punkt_max_over_kg (1 000)
     over it. Anything below is accepted with a reason — the field scale is often short."""
+    limit = get_float('punkt_max_over_kg', 1000, db)
+    if limit is not None and limit <= 0:          # 0 = cheksiz: the punkt scale is always right
+        return False
     over = punkt_kg - (field_kg or 0)
-    return punkt_kg > (field_kg or 0) * 1.5 and over > (get_float('punkt_max_over_kg', 1000, db) or 0)
+    return punkt_kg > (field_kg or 0) * 1.5 and over > (limit or 1000)
 
 
 def record_nayman(actor, waybill_id, *, accepted_kg, received_date, receiver_name='', diff_reason='', note='',
