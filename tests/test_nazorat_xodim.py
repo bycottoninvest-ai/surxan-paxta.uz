@@ -28,7 +28,7 @@ def test_mistake_goes_to_who_entered_it_with_photos(app, world):
         rows = q("SELECT payload_json FROM outbox WHERE kind='xodim'")
         assert len(rows) == 1
         p = json.loads(rows[0]['payload_json'])
-        assert p['chat_id'] == '777' and 'PQ-17 dan farq' in p['text'] and 'brutto va tara' in p['text'] and p['photos']
+        assert p['chat_id'] == '777' and 'PQ-17 dan farq' in p['text'] and 'brutto, tara' in p['text'] and '1️⃣' in p['text'] and '/punkt/yuk/' in p['text'] and p['photos']
         tick(force=True)                                                  # told once, not on every check
         assert len(q("SELECT 1 FROM outbox WHERE kind='xodim'")) == 1
         import surxon.outbox as O
@@ -79,4 +79,4 @@ def test_cluster_load_we_have_not_received_goes_to_the_punkt(app, world):
         tick(force=True)
         assert len(q("SELECT 1 FROM outbox WHERE kind='xodim'")) == 1
         rows = [json.loads(r['payload_json']) for r in q("SELECT payload_json FROM outbox WHERE kind='xodim'")]
-        assert any(p['chat_id'] == '777' and '388190' in p['text'] and 'QABUL QILING' in p['text'] for p in rows)
+        assert any(p['chat_id'] == '777' and '388190' in p['text'] and 'QABUL QILINMAGAN' in p['text'] and '388190 ni yozing' in p['text'] for p in rows)

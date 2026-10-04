@@ -61,9 +61,14 @@ def issues(year=None):
     year = year or current_season(get_db())
     out = []
 
-    def add(key, level, title, detail, url, who=None, photos=None, ask=None):
+    def add(key, level, title, detail, url, who=None, photos=None, ask=None, steps=None, link=None):
         out.append({'key': key, 'level': level, 'title': title, 'detail': detail, 'url': url,
-                    'who': who, 'photos': photos or [], 'ask': ask})
+                    'who': who, 'photos': photos or [], 'ask': ask, 'steps': steps or [], 'link': link})
+
+    fix_receipt = ['Rasmdagi punkt chekiga qarang: brutto, tara va yuk xati raqami.',
+                   'Qabul BUGUN bo‘lgan bo‘lsa: havolani oching → “↩ Qabulni bekor qilish” → qaytadan to‘g‘ri kg va '
+                   'yuk xati № bilan qabul qiling.',
+                   'Eski kun bo‘lsa: chek rasmini buxgalterga Telegram’da yuboring — u tizimda tuzatadi.']
 
     punkt = [r['id'] for r in q("SELECT id FROM users WHERE active=1 AND role='station'")]   # who receives at the punkt
 
@@ -72,10 +77,12 @@ def issues(year=None):
         what = 'kombayn' if p['method'] == 'combine' else 'qo‘l terimi' if p['method'] == 'hand' else 'paxta'
         add(f'pq:unmatched:{p["id"]}', 'red', f'PQ-17 {p["code"]} hech bir reysga bog‘lanmagan',
             f'yuk xati {p["load_no"] or "—"} · {_kg(p["netto"] or 0)} kg · {p["doc_date"] or ""} — qaysi reys ekanini tanlang',
-            _u('acct.pq17'), who=punkt,
-            ask=f'Klaster yuk xati {p["load_no"] or "—"} ni tortgan ({what}, {_kg(p["netto"] or 0)} kg), lekin tizimda bu yuk qabul '
-                f'qilinmagan. Punkt ekranida shu telashkani QABUL QILING va yuk xati № {p["load_no"] or ""} ni yozing. '
-                'Bir nechta telashka birga tortilgan bo‘lsa — umumiy yuk (UY) qilib qabul qiling.')
+            _u('acct.pq17'), who=punkt, link='/punkt',
+            ask=f'Klaster yuk xati {p["load_no"] or "—"} ni tortgan ({what}, {_kg(p["netto"] or 0)} kg), lekin tizimda bu yuk QABUL QILINMAGAN.',
+            steps=['Havolani bosing — punktdagi telashkalar ro‘yxati ochiladi.',
+                   f'Shu yukni toping ({what}, taxminan {_kg(p["netto"] or 0)} kg) va oching.',
+                   f'“Yuk xati №” katagiga {p["load_no"] or ""} ni yozing va “Qabulni tasdiqlash” ni bosing.',
+                   'Bir nechta telashka birga tortilgan bo‘lsa — “Umumiy yuk (UY)” qilib qabul qiling.'])
 
     # 2. the cluster's netto and our punkt kg differ
     lim_pct = get_float('nazorat_pq_pct', 1.0) or 1.0
@@ -91,8 +98,8 @@ def issues(year=None):
             add(f'pq:diff:{p["id"]}:{d}', 'red', f'{p["what"]}: punkt kg PQ-17 dan farq qiladi',
                 f'bizda {_kg(p["ours"])} kg, PQ-17 {p["code"]} da {_kg(p["netto"])} kg (farq {d:+,.0f} kg)'.replace(',', ' '),
                 _u('acct.pq17'), who=p['who'], photos=evidence(p['waybill_id'], p['group_id']),
-                ask='Rasmdagi punkt qog‘ozida brutto va tara qancha? Tizimda noto‘g‘ri yozilgan bo‘lsa, qabulni ochib tuzating '
-                    'yoki to‘g‘ri raqamni shu yerga yozing.')
+                ask='Klaster (PQ-17) kg i bilan punkt kg i bir xil emas.', steps=fix_receipt,
+                link=f'/punkt/yuk/{p["waybill_id"]}' if p['waybill_id'] else '/punkt/uy')
 
     # 3. received long ago and still no PQ-17 — the combine's sum is only an estimate
     days = int(get_float('nazorat_pq17_days', 3) or 3)
@@ -119,13 +126,18 @@ def issues(year=None):
         add(f'road:{r["id"]}', 'yellow', f'{r["number"]}: {hours} soatdan ko‘p yo‘lda',
             f'{r["trip_no"]} · jo‘natilgan {r["created_at"][:16]} — punktga yetdimi?', _u('ops.waybill_detail', waybill_id=r['id']),
             who=[r['created_by']] + punkt, photos=evidence(r['id'], load_id=r['load_id']),
-            ask='Bu telashka punktga yetib bordimi? Bekor bo‘lgan bo‘lsa yoki boshqa yuk bilan birga tortilgan bo‘lsa — yozing.')
+            ask='Bu telashka punktga yetib bordimi?', link=f'/punkt/yuk/{r["id"]}',
+            steps=['Yetib borgan bo‘lsa (punkt xodimi): havolani bosing → kg va yuk xati № ni yozing → “Qabulni tasdiqlash”.',
+                   'Boshqa telashkalar bilan birga tortilgan bo‘lsa — “Umumiy yuk (UY)” ga qo‘shing.',
+                   'Yetib bormagan yoki bekor bo‘lgan bo‘lsa — rahbarga ayting.'])
     for r in q('''SELECT tl.id, tl.trip_no, tl.opened_at, tl.opened_by, e.code FROM trailer_loads tl JOIN equipment e ON e.id=tl.trailer_id
                   WHERE tl.status='OCHIQ' AND tl.opened_at < ?''', (_ago(hours),)):
         add(f'open:{r["id"]}', 'yellow', f'{r["code"]}: reys {hours} soatdan ko‘p ochiq turibdi',
             f'{r["trip_no"]} · ochilgan {r["opened_at"][:16]} — yopilmagan yoki keraksiz bo‘lsa bekor qiling',
             _u('ops.load_detail', load_id=r['id']), who=r['opened_by'],
-            ask='Bu reys hali ochiq. Telashka to‘lgan bo‘lsa “Tugatish” ni bosing, keraksiz bo‘lsa rahbarga ayting — bekor qilinadi.')
+            ask='Bu reys hali ochiq turibdi.', link=f'/dala/reys/{r["id"]}',
+            steps=['Havolani bosing — reys ochiladi.', 'Telashka to‘lgan bo‘lsa — “Tugatish” ni bosing.',
+                   'Keraksiz (adashib ochilgan) bo‘lsa — rahbarga ayting, u bekor qiladi.'])
 
     # 5. the trip's waybill must equal its field weighings; an umumiy yuk's shares must equal its punkt kg
     for r in q('''SELECT wb.id, wb.number, wb.net_kg, wb.created_by, wb.load_id, (SELECT COALESCE(SUM(h.kg),0) FROM harvests h WHERE h.load_id=wb.load_id
@@ -136,7 +148,9 @@ def issues(year=None):
             add(f'wb:sum:{r["id"]}:{r["field"]}', 'red', f'{r["number"]}: nakladnoy kg tortishlar yig‘indisiga teng emas',
                 f'nakladnoyda {_kg(r["net_kg"])} kg, tortishlar {_kg(r["field"])} kg', _u('ops.waybill_detail', waybill_id=r['id']),
                 who=r['created_by'], photos=evidence(r['id'], load_id=r['load_id']),
-                ask='Dala daftaringizdagi har bir tortishni tekshirib, qaysi biri noto‘g‘ri ekanini yozing.')
+                ask='Nakladnoydagi kg tortishlar yig‘indisiga teng emas.', link=f'/dala/reys/{r["load_id"]}',
+                steps=['Havolani bosing — reysdagi barcha tortishlar chiqadi.', 'Dala daftaringiz bilan bittalab solishtiring.',
+                       'Xato tortishni rahbarga ayting — tuzatishni rahbar qiladi.'])
     for g in q('''SELECT g.id, g.number, g.token, g.accepted_kg, g.received_by, (SELECT COALESCE(SUM(nr.accepted_kg),0) FROM load_group_items i
                          JOIN nayman_receipts nr ON nr.waybill_id=i.waybill_id WHERE i.group_id=g.id) shared
                   FROM load_groups g WHERE g.status='QABUL' '''):
@@ -144,7 +158,10 @@ def issues(year=None):
             add(f'uy:sum:{g["id"]}', 'red', f'{g["number"]}: telashkalarga bo‘lingan kg jamiga teng emas',
                 f'jami {_kg(g["accepted_kg"])} kg, bo‘lingani {_kg(g["shared"])} kg', _u('punkt.group', token=g['token']),
                 who=g['received_by'], photos=evidence(None, g['id']),
-                ask='Rasmdagi umumiy yuk qog‘ozini tekshiring: qaysi telashkalar birga tortilgan va jami netto qancha?')
+                ask='Umumiy yukdagi telashkalarga bo‘lingan kg jamiga teng emas.', link=f'/punkt/uy/{g["token"]}',
+                steps=['Rasmdagi umumiy yuk qog‘ozini tekshiring: qaysi telashkalar birga tortilgan, jami netto qancha.',
+                       'Havolani bosing — umumiy yuk ochiladi. Telashkalar ro‘yxati qog‘oz bilan bir xilmi?',
+                       'Farq bo‘lsa — qog‘oz rasmini buxgalterga yuboring.'])
 
     # 6. the cluster's own table (hosil-qabuli.uz): a receipt whose kg differs, or one the table does not know
     try:
@@ -160,19 +177,24 @@ def issues(year=None):
                 add(f'hq:farq:{r["load_no"]}:{o["kg"]}', 'red', f'Yuk xati {r["load_no"]}: klaster {_kg(r["netto"])} kg, bizda {_kg(o["kg"])} kg',
                     f'{o["label"]} · kiritgan {o["who"] or "—"} · farq {_kg(o["kg"] - r["netto"])} kg', _u('acct.hosil_qabuli'),
                     who=o['by'], photos=evidence(o['wid'], o['gid']),
-                    ask='Rasmdagi punkt chekida brutto va tara qancha? To‘g‘ri raqamni yozing — tizim klaster kg i bilan tuzatiladi.')
+                    ask='Klaster tarozisi bilan bizdagi kg bir xil emas.', steps=fix_receipt,
+                    link=f'/punkt/yuk/{o["wid"]}' if o.get('wid') else '/punkt')
             elif r['state'] == 'yoq':
                 add(f'hq:yoq:{r["load_no"]}', 'red', f'Yuk xati {r["load_no"]}: klaster tortgan ({_kg(r["netto"])} kg), bizda yo‘q',
                     f'{(r["dt"] or "")[:16]} — bu yuk punktda qabul qilinmagan yoki raqami yozilmagan',
                     _u('acct.hosil_qabuli'), who=punkt,
-                    ask=f'Klaster tarozisida {(r["dt"] or "")[:16]} da yuk xati {r["load_no"]} ({_kg(r["netto"])} kg) tortilgan. Tizimda '
-                        'bu raqamli qabul yo‘q. Qaysi telashka(lar) edi? Punkt ekranida qabul qiling yoki raqamini yozing.')
+                    ask=f'Klaster tarozisida {(r["dt"] or "")[:16]} da yuk xati {r["load_no"]} ({_kg(r["netto"])} kg) tortilgan, '
+                        'tizimda bu raqamli qabul yo‘q.', link='/punkt',
+                    steps=['Havolani bosing — punktdagi telashkalar ro‘yxati ochiladi.',
+                           f'Shu vaqtda kelgan telashkani toping va “Yuk xati №” ga {r["load_no"]} ni yozib qabul qiling.',
+                           'Allaqachon raqamsiz qabul qilingan bo‘lsa — chek rasmini buxgalterga yuboring.'])
         for c in cmp['orphans']:
             if first and (c['day'] or '') >= first:
                 add(f'hq:orphan:{c["wid"]}', 'yellow', f'{c["label"]}: klaster jadvalida topilmadi ({_kg(c["kg"])} kg)',
                     f'{c["day"]} · kiritgan {c["who"] or "—"} — yuk xati № yozilmagan yoki kg boshqacha',
                     _u('acct.hosil_qabuli'), who=c['by'], photos=evidence(c['wid']),
-                    ask='Bu yuk qaysi yuk xati raqami bilan tortilgan? Rasmdagi chekda brutto va tara qancha edi?')
+                    ask='Bu yuk klaster jadvalida topilmadi — yuk xati raqami yozilmagan yoki kg boshqacha.', steps=fix_receipt,
+                    link=f'/punkt/yuk/{c["wid"]}')
 
     # the office computer's daily PQ-17 task: is hosil-qabuli.uz signed in, and is the task running at all?
     st, at = get_setting('hq_session_state') or '', get_setting('hq_session_at') or ''
@@ -250,6 +272,33 @@ def _tell(db, new):
                 {'text': f'SURXAN-PAXTA.UZ\n{text}', 'chat_id': u['telegram_id'], 'main_bot': True})
 
 
+NUM = ['1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣']
+
+
+def _abs(path):
+    try:
+        from flask import current_app
+        domain = current_app.config['SURXON'].DOMAIN
+    except Exception:
+        domain = 'surxan-paxta.uz'
+    return f'https://{domain}{path}'
+
+
+def person_text(i):
+    """What one worker reads on Telegram: what is wrong, then numbered simple steps, a link that opens the exact page,
+    and the photos under it."""
+    lines = ['SURXAN-PAXTA.UZ', f'{"🔴" if i["level"] == "red" else "🟡"} SIZDAN HARAKAT KERAK', '', f'📌 {i["title"]}', i['detail']]
+    if i.get('ask'):
+        lines += ['', i['ask']]
+    if i.get('steps'):
+        lines += ['', 'Nima qilish kerak:'] + [f'{NUM[n] if n < len(NUM) else f"{n + 1}."} {t}' for n, t in enumerate(i['steps'])]
+    if i.get('link'):
+        lines += ['', f'👉 Ochish: {_abs(i["link"])}']
+    if i.get('photos'):
+        lines += ['', '📷 Rasm(lar) shu xabarda.']
+    return '\n'.join(lines)
+
+
 def _tell_people(db, found):
     """Each open problem to the person who must act on it — with the photos and what to check / fix. Once per problem
     and person (the outbox key), also for problems that were open before this was switched on."""
@@ -260,8 +309,6 @@ def _tell_people(db, found):
             u = db.execute('SELECT id, telegram_id FROM users WHERE id=? AND active=1', (uid,)).fetchone() if uid else None
             if not u or not u['telegram_id']:
                 continue
-            msg = '\n'.join(['SURXAN-PAXTA.UZ', f'{"🔴" if i["level"] == "red" else "🟡"} Sizdan harakat kerak:',
-                             i['title'], i['detail'], '', f'❓ {i["ask"]}' if i.get('ask') else '',
-                             '📷 Rasmlar quyida.' if i.get('photos') else ''])
+            msg = person_text(i)
             enqueue(db, 'telegram_report', 'xodim', f'nazorat:{i["key"]}:u{u["id"]}',
                     {'text': msg.strip(), 'chat_id': u['telegram_id'], 'main_bot': True, 'photos': i.get('photos') or []})
