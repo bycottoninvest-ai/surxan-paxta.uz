@@ -166,6 +166,17 @@ def issues(year=None):
                     _u('acct.hosil_qabuli'), who=c['by'], photos=evidence(c['wid']),
                     ask='Bu yuk qaysi yuk xati raqami bilan tortilgan? Rasmdagi chekda brutto va tara qancha edi?')
 
+    # the office computer's daily PQ-17 task: is hosil-qabuli.uz signed in, and is the task running at all?
+    st, at = get_setting('hq_session_state') or '', get_setting('hq_session_at') or ''
+    if st == 'yopiq':
+        add(f'hq:yopiq:{at}', 'red', 'hosil-qabuli.uz yopilgan — ERI bilan qayta kiring',
+            f'{at[:16]} dan beri PQ-17 avtomatik yuklanmayapti. Kompyuterda Chrome’da hosil-qabuli.uz ni oching va ERI kalit bilan kiring.',
+            _u('acct.hosil_holat'))
+    elif at and at < _ago(int(get_float('hq_task_hours', 14) or 14)):
+        add(f'hq:jim:{at}', 'yellow', 'PQ-17 avtomatik yuklash ishlamayapti',
+            f'kompyuterdagi vazifa oxirgi marta {at[:16]} da ishlagan — kompyuter yoki Chrome yopiq bo‘lishi mumkin',
+            _u('acct.hosil_holat'))
+
     # 7. the combine owners' money
     for c in combine_balances(year):
         url = _u('acct.combine_statement', cid=c['id'])

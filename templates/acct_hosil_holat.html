@@ -1,0 +1,19 @@
+{% extends 'base.html' %}
+{% from 'macros.html' import csrf with context %}
+{% set page_title = 'hosil-qabuli.uz holati' %}
+{% block content %}
+<div class="page-h"><h1>🔐 hosil-qabuli.uz holati</h1>
+  <span class="sub">Kompyuterdagi PQ-17 vazifasi har safar shu yerda belgilaydi. Yopiq bo‘lsa — Telegram’ga darhol xabar ketadi.</span></div>
+<section class="card"><div class="card-b hh">
+  <div class="hh-now {{ 'bad' if state == 'yopiq' else 'ok' if state else '' }}">
+    {% if state == 'yopiq' %}🔐 YOPIQ — ERI bilan qayta kirish kerak{% elif state %}✓ OCHIQ{% else %}— hali belgilanmagan{% endif %}
+    {% if at %}<small>oxirgi belgi: {{ at[:16] }}</small>{% endif %}</div>
+  <form method="post">{{ csrf() }}
+    <button class="btn btn-green btn-xl" name="holat" value="ochiq" id="hh-ochiq">✓ hosil-qabuli ochiq</button>
+    <button class="btn btn-red btn-xl" name="holat" value="yopiq" id="hh-yopiq">🔐 hosil-qabuli yopiq (ERI so‘rayapti)</button>
+  </form>
+</div></section>
+<style>.hh{display:flex;flex-direction:column;gap:16px}.hh form{display:flex;gap:12px;flex-wrap:wrap}
+.hh-now{font-size:22px;font-weight:800;padding:14px 16px;border-radius:12px;background:#f1f5f9}.hh-now small{display:block;font-size:13px;font-weight:400;color:#64748b}
+.hh-now.ok{background:#dcfce7;color:#166534}.hh-now.bad{background:#fee2e2;color:#991b1b}</style>
+{% endblock %}

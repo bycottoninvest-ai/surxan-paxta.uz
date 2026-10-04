@@ -232,6 +232,28 @@ def _pq_kg(rows):
     return out
 
 
+@bp.route('/buxgalteriya/hosil-holat', methods=['GET', 'POST'])
+@perm_required('nayman.write')
+def hosil_holat():
+    """The daily PQ-17 task on the office computer tells here whether hosil-qabuli.uz is still signed in (ERI).
+    “Yopiq” → the director / accountant are told on Telegram at once to sign in again."""
+    from ..db import tx
+    from ..utils import now_str
+    if request.method == 'POST':
+        post_actor()
+        state = 'yopiq' if request.form.get('holat') == 'yopiq' else 'ochiq'
+        with tx() as db:
+            for k, v in (('hq_session_state', state), ('hq_session_at', now_str())):
+                db.execute("INSERT INTO settings(key, value, updated_at) VALUES (?, ?, ?) "
+                           "ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at", (k, v, now_str()))
+        from ..nazorat import tick
+        tick(force=True)
+        return done('Belgilandi: hosil-qabuli.uz ' + ('YOPIQ — Telegram’ga xabar ketdi.' if state == 'yopiq' else 'ochiq.'),
+                    url_for('acct.hosil_holat'))
+    return render_template('acct_hosil_holat.html', state=get_setting('hq_session_state') or '',
+                           at=get_setting('hq_session_at') or '')
+
+
 @bp.route('/buxgalteriya/hosil-qabuli', methods=['GET', 'POST'])
 @perm_required('nayman.write', 'reports.finance')
 def hosil_qabuli():

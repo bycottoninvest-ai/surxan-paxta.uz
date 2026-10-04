@@ -39,3 +39,26 @@ def test_mistake_goes_to_who_entered_it_with_photos(app, world):
         finally:
             O.telegram_upload = real
         assert sent[0][0] == 'sendPhoto' and sent[0][1].startswith('SURXAN-PAXTA.UZ')    # the question rides on the photo
+
+
+def test_hosil_session_closed_tells_on_telegram(app, world):
+    """The office computer's PQ-17 task marks hosil-qabuli.uz closed → director and accountant are told at once;
+    marked open again → the problem closes; silent for too long → a warning."""
+    admin, bux = world['admin'], world['bux']
+    with app.app_context():
+        get_db().execute("UPDATE users SET telegram_id='111' WHERE username='admin'")
+        get_db().commit()
+    assert '— hali belgilanmagan' in bux.get('/buxgalteriya/hosil-holat').get_data(as_text=True)
+    assert bux.post('/buxgalteriya/hosil-holat', {'holat': 'yopiq'}).get_json()['ok']
+    with app.app_context():
+        msgs = [m['payload_json'] for m in q("SELECT payload_json FROM outbox WHERE kind='alert'")]
+        assert any('hosil-qabuli.uz yopilgan' in m and '"111"' in m for m in msgs)
+        assert q("SELECT 1 FROM nazorat_alerts WHERE key LIKE 'hq:yopiq:%' AND resolved_at IS NULL", one=True)
+    assert bux.post('/buxgalteriya/hosil-holat', {'holat': 'ochiq'}).get_json()['ok']
+    with app.app_context():
+        assert not q("SELECT 1 FROM nazorat_alerts WHERE key LIKE 'hq:yopiq:%' AND resolved_at IS NULL", one=True)
+        get_db().execute("UPDATE settings SET value='2026-01-01 08:00:00' WHERE key='hq_session_at'")
+        get_db().commit()
+        from surxon.nazorat import issues
+        assert any(i['title'] == 'PQ-17 avtomatik yuklash ishlamayapti' for i in issues())
+    assert world['juma'].get('/buxgalteriya/hosil-holat').status_code in (302, 403)
