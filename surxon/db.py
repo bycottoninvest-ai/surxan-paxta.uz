@@ -10,7 +10,7 @@ from contextlib import contextmanager
 
 from flask import current_app, g
 
-SCHEMA_VERSION = 22
+SCHEMA_VERSION = 23
 
 SCHEMA = r'''
 CREATE TABLE IF NOT EXISTS brigadiers (
@@ -1102,6 +1102,8 @@ def migrate(db):
     db.execute('''CREATE TABLE IF NOT EXISTS hq_loads (
                     load_no TEXT PRIMARY KEY, dt TEXT, brutto REAL, tara REAL, netto REAL, kond REAL, dirt REAL, moist REAL,
                     method TEXT, pq_no TEXT, imported_at TEXT NOT NULL, imported_by INTEGER REFERENCES users(id))''')
+    # v23: a group leader (“guruh boshlig‘i”) — one weighing for his whole team (he shares the money himself)
+    _add_column(db, 'workers', 'group_size', 'INTEGER')
     # Future column changes go here as: if version < N: ALTER TABLE ...
     db.execute('UPDATE schema_version SET version=? WHERE version < ?', (SCHEMA_VERSION, SCHEMA_VERSION))
 

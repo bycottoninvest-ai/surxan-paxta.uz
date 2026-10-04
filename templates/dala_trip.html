@@ -124,7 +124,7 @@
       const t = name.value.trim();
       if (t.length < 2) { sugg.innerHTML = ''; return; }
       const show = ws => { if (name.value.trim() !== t) return;
-        sugg.innerHTML = ws.slice(0, 6).map(w => `<button type="button" class="d-pick" data-id="${w.id || ''}" data-name="${esc(w.name)}">${esc(w.name)} <span class="tiny muted">${esc(w.phone || (w.id ? '#' + w.id : 'yangi'))}</span></button>`).join('')
+        sugg.innerHTML = ws.slice(0, 6).map(w => `<button type="button" class="d-pick" data-id="${w.id || ''}" data-name="${esc(w.name)}">${esc(w.name)}${w.group ? ' <b class="d-grp">👥 guruh ' + w.group + ' kishi</b>' : ''} <span class="tiny muted">${esc(w.phone || (w.id ? '#' + w.id : 'yangi'))}</span></button>`).join('')
           + `<button type="button" class="d-pick d-add" data-new="1">+ Yangi odam: <b>${esc(t)}</b></button>`; };
       const local = localSearch(t), haveList = localList().length > 0;
       if (haveList) show(local);                        // instant, from the list on the phone (“+ Yangi odam” too)

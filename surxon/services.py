@@ -193,6 +193,23 @@ def update_worker(actor, worker_id, full_name, phone, active, photo=None):
               new={'full_name': full_name, 'phone': phone, 'active': bool(active)})
 
 
+def set_group_leader(actor, worker_id, size):
+    """Admin / rahbar: this worker writes his team's picking as one weighing and shares the money himself
+    (size = how many people; 0 / empty = an ordinary worker again)."""
+    _need(actor, 'workers.write')
+    if actor.role not in ('admin', 'manager'):
+        raise UserError('Guruh boshlig‘ini faqat Admin yoki Rahbar belgilaydi.')
+    size = int(size) if str(size or '').strip().isdigit() else 0
+    if size < 0 or size > 500:
+        raise UserError('Odam soni 1 dan 500 gacha bo‘lsin.')
+    with tx() as db:
+        old = db.execute('SELECT * FROM workers WHERE id=?', (worker_id,)).fetchone()
+        if not old:
+            raise UserError('Ishchi topilmadi.')
+        db.execute('UPDATE workers SET group_size=? WHERE id=?', (size or None, worker_id))
+        audit(db, actor, 'GROUP_LEADER', 'worker', worker_id, old={'group_size': old['group_size']}, new={'group_size': size or None})
+
+
 # ------------------------------------------------------------------ trailer loads
 
 def open_load(actor, *, trailer_id, field_id, brigadier_id, tractor_id=None, vehicle_plate='', driver_name='',
@@ -276,7 +293,7 @@ def add_harvest(actor, *, load_id, method, kg, worker_id=None, worker_name=None,
         max_kg = get_float('max_hand_kg' if method == 'hand' else 'max_combine_kg', 250 if method == 'hand' else 15000, db)
         if kg is None or kg <= 0:
             raise UserError('Kg 0 dan katta bo‘lishi kerak.')
-        if kg > max_kg:
+        if kg > max_kg and method != 'hand':
             raise UserError(f'{kg:g} kg juda katta (chegara {max_kg:g} kg). Raqamni tekshiring.')
         created_worker = False
         if method == 'hand':
@@ -290,6 +307,12 @@ def add_harvest(actor, *, load_id, method, kg, worker_id=None, worker_name=None,
             w = db.execute('SELECT * FROM workers WHERE id=?', (worker_id,)).fetchone()
             if not w or not w['active']:
                 raise UserError('Ishchi topilmadi yoki faol emas.')
+            if w['group_size']:          # a group leader writes his whole team at once
+                max_kg = get_float('max_group_kg', 3000, db)
+            if kg > max_kg:
+                raise UserError(f'{kg:g} kg juda katta (chegara {max_kg:g} kg). Raqamni tekshiring.' + (
+                    '' if w['group_size'] else f' Agar {w["full_name"]} o‘z guruhi terganini bitta yozsa — Admin uni Ishchilar '
+                                               '→ ismi → “Guruh boshlig‘i” qilib belgilasin.'))
             combine_id = None
         else:
             _equipment(db, combine_id, 'kombayn', 'Kombayn')

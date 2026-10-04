@@ -264,15 +264,15 @@ def api_workers():
     term = (request.args.get('q') or '').strip()
     if request.args.get('all') == '1':
         # the whole active list, kept on the tally's phone so names can be found without internet
-        return jsonify(workers=[{'id': r['id'], 'name': r['full_name'], 'phone': r['phone']} for r in
-                                q('SELECT id, full_name, phone FROM workers WHERE active=1 ORDER BY full_name LIMIT 20000')])
+        return jsonify(workers=[{'id': r['id'], 'name': r['full_name'], 'phone': r['phone'], 'group': r['group_size']} for r in
+                                q('SELECT id, full_name, phone, group_size FROM workers WHERE active=1 ORDER BY full_name LIMIT 20000')])
     from ..utils import name_key
     key = name_key(term)
     if len(key) < 1:
-        rows = q('''SELECT w.id, w.full_name, w.phone, w.photo_id FROM workers w WHERE w.active=1
+        rows = q('''SELECT w.id, w.full_name, w.phone, w.photo_id, w.group_size FROM workers w WHERE w.active=1
                     ORDER BY (SELECT MAX(id) FROM harvests h WHERE h.worker_id=w.id) DESC, w.full_name LIMIT 15''')
     else:
-        rows = q('''SELECT id, full_name, phone, photo_id FROM workers
+        rows = q('''SELECT id, full_name, phone, photo_id, group_size FROM workers
                     WHERE active=1 AND (name_key LIKE ? OR name_key LIKE ? OR phone LIKE ?)
                     ORDER BY CASE WHEN name_key LIKE ? THEN 0 ELSE 1 END, full_name LIMIT 15''',
                  (key + '%', '% ' + key + '%', '%' + term + '%', key + '%'))
@@ -282,7 +282,7 @@ def api_workers():
         if r['photo_id']:
             p = q('SELECT thumb_path FROM photos WHERE id=?', (r['photo_id'],), one=True)
             thumb = url_for('main.media', path=p['thumb_path']) if p else None
-        out.append({'id': r['id'], 'name': r['full_name'], 'phone': r['phone'] or '', 'thumb': thumb})
+        out.append({'id': r['id'], 'name': r['full_name'], 'phone': r['phone'] or '', 'thumb': thumb, 'group': r['group_size']})
     return jsonify(workers=out)
 
 

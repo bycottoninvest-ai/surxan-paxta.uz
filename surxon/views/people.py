@@ -5,7 +5,7 @@ from .. import queries
 from ..db import q
 from ..photos import read_upload
 from ..security import can, perm_required, require
-from ..services import create_worker, update_worker
+from ..services import create_worker, set_group_leader, update_worker
 from ..settings import get_float
 from ..utils import today_str
 from . import PER_PAGE, checkbox, done, page_arg, paginate, post_actor, scope, season_arg
@@ -48,6 +48,9 @@ def worker_detail(worker_id):
           (worker_id,), one=True)
     if not w:
         abort(404)
+    if request.method == 'POST' and request.form.get('action') == 'group':
+        set_group_leader(post_actor(), worker_id, (request.form.get('group_size') or '1') if checkbox('is_group') else 0)
+        return done('Saqlandi.', url_for('people.worker_detail', worker_id=worker_id))
     if request.method == 'POST':
         require('workers.write')
         update_worker(post_actor(), worker_id, request.form.get('full_name'), request.form.get('phone', ''),
@@ -69,7 +72,8 @@ def worker_detail(worker_id):
     return render_template('worker_detail.html', w=w, days=days, rate=None, cash=cash if show else [], total_kg=total_kg,
                            paid=(bal['paid'] + bal['advances']) if bal and show else 0,
                            earned=bal['earned'] if bal and show and bal['earned'] else None, year=year,
-                           history=queries.history('worker', worker_id))
+                           history=queries.history('worker', worker_id),
+                           max_group=get_float('max_group_kg', 3000), max_hand=get_float('max_hand_kg', 250))
 
 
 @bp.get('/ishchilar/hisob-kitob')
