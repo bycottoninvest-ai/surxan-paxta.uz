@@ -3,6 +3,16 @@
 Oxirgi yangilanish: 2026-09-25 (kech, v2.5.0 — ikki bot). Yozgan: Claude (bulutdagi sessiya “Yangi loya qilash”).
 
 
+## PQ-17 avtomatik yuklash (04.10.2026, v2.33.0)
+hosil-qabuli.uz ga kirish ERI kalit (E-IMZO) bilan — server o‘zi kira olmaydi. Yo‘l: foydalanuvchi kompyuterida
+hosil-qabuli.uz va surxan-paxta.uz Chrome’da ochiq turadi, Claude ilovasidagi kunlik vazifa (`kunlik-paxta-sverka`,
+yoki yangi `pq17-yuklash`, kuniga 2 marta) quyidagini qiladi:
+1. hosil-qabuli.uz → PQ-17 ro‘yxati: oxirgi 3 kundagi har bir PQ-17 ning PDF ini yuklab oladi (FAQAT O‘QISH — imzolash,
+   tasdiqlash tugmalariga tegmaydi).
+2. surxan-paxta.uz → Buxgalteriya → Agroklaster sverkasi → hammasini birga tanlab yuklaydi (takrori o‘zi tashlanadi).
+3. Natija (nechta yangi, nechta takror, nechta bog‘lanmadi) ni yozib qo‘yadi.
+Sessiya muddati tugasa (ERI qayta so‘rasa) — foydalanuvchiga “hosil-qabuli.uz ga qayta kiring” deydi.
+
 ## ⏸ TO‘XTATILGAN JOY — 04.10.2026 (tun), v2.31.0 (main = production’ga push qilingan, server olishi kutilgan)
 
 Foydalanuvchi boshqa loyihaga o‘tdi. Davom ettirganda AVVAL saytdagi versiyani tekshir (pastda v2.31.0 bo‘lishi kerak), keyin
