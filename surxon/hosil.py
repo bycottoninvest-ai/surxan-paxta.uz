@@ -16,7 +16,7 @@ from datetime import date, datetime, timedelta
 
 from .db import q, tx
 from .security import audit
-from .utils import UserError, now_str
+from .utils import UserError, clean_text, now_str
 
 COLS = {          # our field: words that must be in the column's (multi-row) header, lower case
     'load_no': (('yuk', 'raqam'), ('nakladnoy', 'raqam'), ('yuk xati',)),
@@ -213,7 +213,15 @@ def compare():
     tot['orphans'] = len(orphans)
     tot['n'] = len(rows)
     tot['last'] = q('SELECT MAX(imported_at) m FROM hq_loads', one=True)['m']
-    return {'rows': rows, 'tot': tot, 'orphans': orphans}
+    onroad = [dict(r) for r in q('''SELECT wb.id wid, wb.number, tl.trip_no, e.code trailer, wb.net_kg kg,
+                                          substr(wb.created_at,1,10) day, g.number grp
+                                   FROM waybills wb JOIN trailer_loads tl ON tl.id=wb.load_id
+                                   LEFT JOIN equipment e ON e.id=tl.trailer_id
+                                   LEFT JOIN load_group_items i ON i.waybill_id=wb.id LEFT JOIN load_groups g ON g.id=i.group_id
+                                   WHERE wb.status='YARATILDI' AND NOT EXISTS (SELECT 1 FROM nayman_receipts nr WHERE nr.waybill_id=wb.id)
+                                   ORDER BY wb.created_at, wb.id''')]
+    tot['onroad'] = len(onroad)
+    return {'rows': rows, 'tot': tot, 'orphans': orphans, 'onroad': onroad}
 
 
 def assign(actor, load_no, waybill_id):
@@ -264,9 +272,36 @@ def correct(actor, load_no, waybill_ids):
         trips = []
         for wid in ids:
             r = db.execute(trip_sql, (wid,)).fetchone()
-            if not r or not r['rid']:
-                raise UserError('Belgilangan reyslardan biri punktda qabul qilinmagan.')
+            if not r:
+                raise UserError('Belgilangan reyslardan biri topilmadi yoki bekor qilingan.')
             trips.append(dict(r))
+        # a trip still on the road (its umumiy yuk was never closed / received at the punkt): the cluster's weighing
+        # is its receipt — it leaves that open UY (an emptied UY is cancelled, nothing was received on it)
+        emptied = set()
+        for t in trips:
+            if t['rid']:
+                continue
+            if t['gid']:
+                og = db.execute('SELECT * FROM load_groups WHERE id=?', (t['gid'],)).fetchone()
+                if og['status'] == 'QABUL':
+                    raise UserError(f'{t["trip_no"]}: {og["number"]} qabul qilingan, lekin reysning qabuli yo‘q — rahbarga ayting.')
+                db.execute('DELETE FROM load_group_items WHERE group_id=? AND waybill_id=?', (t['gid'], t['id']))
+                emptied.add(t['gid'])
+                t['gid'] = None
+            st = db.execute('''SELECT s.name FROM trailer_loads tl JOIN waybills wb ON wb.load_id=tl.id
+                               LEFT JOIN stations s ON s.id=tl.station_id WHERE wb.id=?''', (t['id'],)).fetchone()
+            t['rid'] = db.execute('''INSERT INTO nayman_receipts(accepted_kg, diff_kg, diff_reason, received_date, receiver_name,
+                                       waybill_id, created_by, created_at, load_no) VALUES (?,?,?,?,?,?,?,?,?)''',
+                                  (t['net_kg'], 0, None, (h['dt'] or ts)[:10],
+                                   clean_text(f'{actor.name} (klaster jadvali{", " + st["name"] if st and st["name"] else ""})', 80),
+                                   t['id'], actor.user_id, ts, None)).lastrowid
+            t['accepted_kg'] = None
+            db.execute("UPDATE waybills SET status='QABUL', arrived_at=COALESCE(arrived_at, ?), updated_at=? WHERE id=?",
+                       (ts, ts, t['id']))
+        for og in emptied:
+            if not db.execute('SELECT 1 FROM load_group_items WHERE group_id=?', (og,)).fetchone():
+                db.execute("UPDATE load_groups SET status='BEKOR', spoiled_reason=? WHERE id=?",
+                           (f'telashkalari yuk xati {load_no} ga o‘tkazildi (hosil-qabuli.uz)', og))
         gids = {t['gid'] for t in trips if t['gid']}
         if len(gids) > 1:
             raise UserError('Ikki xil umumiy yuk belgilangan — bittasini tanlang.')

@@ -157,3 +157,42 @@ def test_pq_number_cell_with_download_text():
     from surxon.hosil import _pq_no
     assert _pq_no('PQ-3141\nyuklab olish') == 'PQ-3141'
     assert _pq_no('-') is None and _pq_no(None) is None and _pq_no('pq 2936') == 'PQ-2936'
+
+
+def test_correct_takes_trips_left_on_the_road_in_open_uys(app, world):
+    """07.10: three trailers sat in two umumiy yuks that were never closed at the punkt, while the cluster weighed them
+    together (one yuk xati). Picking them under that yuk xati receives all three with the cluster netto, shared by
+    field kg, in one new umumiy yuk; the emptied UYs are cancelled."""
+    from surxon.db import get_db, q
+    from test_combine_akt import _close
+    from test_punkt import setup
+    tally, yunus, ali, st = setup(app, world)
+    admin, bux = world['admin'], world['bux']
+    with app.app_context():
+        k1 = q("SELECT id FROM equipment WHERE code='K-01'", one=True)['id']
+    w1 = _close(app, tally, world, 'TL-02', [('1200', k1)])
+    w2 = _close(app, tally, world, 'TL-01', [('1300', k1)])
+    w3 = _close(app, tally, world, 'TL-03', [('1350', k1)])
+    admin.post('/admin/uy-blankalar', {'count': '2'})
+    with app.app_context():
+        g1, g2 = q('SELECT * FROM load_groups ORDER BY id')
+    for g, ws in ((g1, [w1, w3]), (g2, [w2])):
+        yunus.get(f'/punkt/uy/{g["token"]}')
+        for w in ws:
+            assert yunus.post(f'/punkt/uy/{g["id"]}/qosh', {'waybill_id': w}).get_json()['ok']
+    with app.app_context():
+        get_db().execute("""INSERT INTO hq_loads(load_no, dt, brutto, tara, netto, kond, method, imported_at)
+                            VALUES ('463926', '2026-10-07 21:33', 14360, 10100, 4260, 3888, 'combine', '2026-10-08 00:00:00')""")
+        get_db().commit()
+    page = bux.get('/buxgalteriya/hosil-qabuli').get_data(as_text=True)
+    assert 'yo‘lda' in page and 'Punktda qabul qilinmagan' in page
+    r = bux.post('/buxgalteriya/hosil-qabuli', {'action': 'correct', 'load_no': '463926', 'waybill_ids': [w1, w2, w3]}).get_json()
+    assert r['ok'], r
+    with app.app_context():
+        rec = {x['waybill_id']: x for x in q('SELECT * FROM nayman_receipts')}
+        assert set(rec) == {w1, w2, w3} and round(sum(x['accepted_kg'] for x in rec.values()), 1) == 4260
+        assert all(x['load_no'] == '463926' for x in rec.values())
+        assert all(x['status'] == 'QABUL' for x in q('SELECT status FROM waybills WHERE id IN (?,?,?)', (w1, w2, w3)))
+        new = q("SELECT * FROM load_groups WHERE number='YX-463926'", one=True)
+        assert new['status'] == 'QABUL' and new['accepted_kg'] == 4260
+        assert {x['status'] for x in q('SELECT status FROM load_groups WHERE id IN (?,?)', (g1['id'], g2['id']))} == {'BEKOR'}

@@ -47,9 +47,11 @@
           <button class="btn btn-light btn-sm">Raqamni yozish</button></form>
       {% elif r.state == 'tarozida' %}<span class="muted">hali tarozida (tara tortilmagan)</span>
       {% else %}<span style="color:#b91c1c">✗ bizda bu yuk topilmadi — punkt daftarini tekshiring</span>
-        {% if cmp.orphans and can('nayman.write') %}<details><summary class="link small">Bu yuk bizdagi qaysi reys(lar)? — klaster kg i bilan tuzatish</summary>
+        {% if (cmp.orphans or cmp.onroad) and can('nayman.write') %}<details><summary class="link small">Bu yuk bizdagi qaysi reys(lar)? — klaster kg i bilan tuzatish</summary>
         <form method="post" style="margin-top:4px">{{ csrf() }}<input type="hidden" name="action" value="correct"><input type="hidden" name="load_no" value="{{ r.load_no }}">
           {% for c in cmp.orphans %}<label style="display:block"><input type="checkbox" name="waybill_ids" value="{{ c.wid }}"> {{ c.label }} · {{ c.day|d }} · {{ c.kg|num }} kg <span class="tiny muted">({{ c.who or '—' }})</span></label>{% endfor %}
+          {% if cmp.onroad %}<div class="tiny b" style="margin-top:6px">Punktda qabul qilinmagan (“yo‘lda” qolgan) reyslar:</div>
+          {% for c in cmp.onroad %}<label style="display:block"><input type="checkbox" name="waybill_ids" value="{{ c.wid }}"> {{ c.number }} · {{ c.trailer or '' }} · {{ c.day|d }} · dala {{ c.kg|num }} kg{% if c.grp %} <span class="tiny muted">({{ c.grp }}, yopilmagan)</span>{% endif %} <span class="tiny" style="color:#b45309">yo‘lda</span></label>{% endfor %}{% endif %}
           <div class="tiny muted">Belgilangan reys(lar)ning punkt kg i {{ r.netto|num }} kg ga tenglashtiriladi (bir nechta bo‘lsa — dala kg iga qarab bo‘linadi), yuk xati yoziladi, PQ-17 o‘zi bog‘lanadi. Eski kg tarixda qoladi.</div>
           <button class="btn btn-light btn-sm">Klaster kg i bilan tuzatish</button></form></details>{% endif %}
       {% endif %}
