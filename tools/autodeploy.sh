@@ -30,11 +30,33 @@ healthy() {
   return 1
 }
 
+running_ver() { docker compose exec -T app python -c "import surxon;print(surxon.VERSION)" 2>/dev/null | tr -d '\r'; }
+code_ver() { sed -n "s/^VERSION = '\(.*\)'.*/\1/p" surxon/__init__.py | head -1; }
+build() {  # rebuild + start; on a build error write its last lines to the status
+  if ! docker compose up -d --build >> "$LOG" 2>&1; then
+    ERR=$(tail -n 3 "$LOG" | tr -d '"\\' | tr '\n' ' ' | cut -c1-220)
+    return 1
+  fi
+  return 0
+}
+
 git fetch -q origin "$BRANCH" 2>>"$LOG" || { status fail "GitHub bilan aloqa yo'q (git fetch)"; exit 1; }
 OLD=$(git rev-parse HEAD)
 NEW=$(git rev-parse "origin/$BRANCH")
 if [ "$OLD" = "$NEW" ]; then
-  [ -n "${MANUAL:-}" ] && status ok "Tekshirildi: yangi versiya yo'q, server eng oxirgi versiyada"
+  RUN=$(running_ver); CODE=$(code_ver)
+  if [ -n "$RUN" ] && [ -n "$CODE" ] && [ "$RUN" != "$CODE" ]; then
+    # the code was pulled but the app was never rebuilt (an earlier build failed): build it now
+    say "kod v$CODE, ishlayotgani v$RUN — qayta qurilmoqda"
+    if build && healthy && [ "$(running_ver)" = "$CODE" ]; then
+      docker compose exec -T app flask --app app set-webhook >> "$LOG" 2>&1 || true
+      status ok "Yangilandi: v$CODE (qayta qurildi)"
+    else
+      status fail "v$CODE qurilmadi, v$RUN ishlab turibdi. ${ERR:-sog'liq tekshiruvi o'tmadi}"
+    fi
+    exit 0
+  fi
+  [ -n "${MANUAL:-}" ] && status ok "Tekshirildi: yangi versiya yo'q, server eng oxirgi versiyada (v${RUN:-?})"
   exit 0
 fi
 if [ -z "$MANUAL" ] && [ "$(cat data/deploy_failed 2>/dev/null)" = "$NEW" ]; then
@@ -48,8 +70,8 @@ docker compose exec -T app flask --app app backup >> "$LOG" 2>&1 || { status fai
 if ! git merge -q --ff-only "$NEW" >> "$LOG" 2>&1; then
   status fail "Kod olinmadi (serverda qo'lda o'zgartirilgan fayl bor)"; exit 1
 fi
-docker compose up -d --build >> "$LOG" 2>&1
-if healthy; then
+BUILT=1; build || BUILT=""
+if [ -n "$BUILT" ] && healthy && [ "$(running_ver)" = "$(code_ver)" ]; then
   docker compose exec -T app flask --app app set-webhook >> "$LOG" 2>&1 || true
   VER=$(docker compose exec -T app python -c "import surxon;print(surxon.VERSION)" 2>/dev/null | tr -d '\r')
   rm -f data/deploy_failed
@@ -59,5 +81,5 @@ else
   git reset -q --hard "$OLD" >> "$LOG" 2>&1
   docker compose up -d --build >> "$LOG" 2>&1
   echo "$NEW" > data/deploy_failed
-  status fail "Yangi versiya ishlamadi — avtomatik eski versiyaga qaytarildi"
+  status fail "Yangi versiya ishlamadi — avtomatik eski versiyaga qaytarildi. ${ERR:-}"
 fi
