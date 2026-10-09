@@ -116,16 +116,18 @@
   if (window.surxonQueue) window.surxonQueue.all().then(items => showPending(items.filter(i => i.action === ACTION)));
   if (name) {
     let timer;
-    const pick = (id, label, isNew) => { wid.value = id || ''; nw.value = isNew ? '1' : ''; name.value = label; sugg.innerHTML = isNew
-      ? `<div class="tiny" style="color:var(--green)">+ Yangi odam qo‘shiladi: <b>${esc(label)}</b></div>` : `<div class="tiny" style="color:var(--green)">✓ Tanlandi</div>`; kg.focus(); };
+    const pick = (id, label, isNew) => { wid.value = id || ''; nw.value = isNew ? String(isNew) : ''; name.value = label; sugg.innerHTML = isNew === 2
+      ? `<div class="tiny" style="color:#1d4ed8">👥 Yangi starshi qo‘shiladi: <b>${esc(label)}</b> — butun guruhining kg ini bitta yozing</div>`
+      : isNew ? `<div class="tiny" style="color:var(--green)">+ Yangi odam qo‘shiladi: <b>${esc(label)}</b></div>` : `<div class="tiny" style="color:var(--green)">✓ Tanlandi</div>`; kg.focus(); };
     name.addEventListener('input', () => {
       wid.value = ''; nw.value = ''; dup.hidden = true;
       clearTimeout(timer);
       const t = name.value.trim();
       if (t.length < 2) { sugg.innerHTML = ''; return; }
       const show = ws => { if (name.value.trim() !== t) return;
-        sugg.innerHTML = ws.slice(0, 6).map(w => `<button type="button" class="d-pick" data-id="${w.id || ''}" data-name="${esc(w.name)}">${esc(w.name)}${w.group ? ' <b class="d-grp">👥 guruh ' + w.group + ' kishi</b>' : ''} <span class="tiny muted">${esc(w.phone || (w.id ? '#' + w.id : 'yangi'))}</span></button>`).join('')
-          + `<button type="button" class="d-pick d-add" data-new="1">+ Yangi odam: <b>${esc(t)}</b></button>`; };
+        sugg.innerHTML = ws.slice(0, 6).map(w => `<button type="button" class="d-pick" data-id="${w.id || ''}" data-name="${esc(w.name)}">${esc(w.name)}${w.group ? ' <b class="d-grp">👥 starshi' + (w.group > 1 ? ' · ' + w.group + ' kishi' : '') + '</b>' : ''} <span class="tiny muted">${esc(w.phone || (w.id ? '#' + w.id : 'yangi'))}</span></button>`).join('')
+          + `<button type="button" class="d-pick d-add" data-new="1">+ Yangi odam: <b>${esc(t)}</b></button>`
+          + `<button type="button" class="d-pick d-add d-addg" data-new="2">👥 Yangi starshi (guruh): <b>${esc(t)}</b></button>`; };
       const local = localSearch(t), haveList = localList().length > 0;
       if (haveList) show(local);                        // instant, from the list on the phone (“+ Yangi odam” too)
       timer = setTimeout(async () => {
@@ -139,7 +141,7 @@
       }, haveList ? 350 : 150);
     });
     sugg.addEventListener('click', e => { const b = e.target.closest('.d-pick'); if (!b) return;
-      if (b.dataset.new) pick('', name.value.trim(), true); else pick(b.dataset.id, b.dataset.name, false); });
+      if (b.dataset.new) pick('', name.value.trim(), +b.dataset.new); else pick(b.dataset.id, b.dataset.name, false); });
   }
   const comb = form.querySelector('[name=combine_id]');
   let keepComb = comb ? comb.value : null;
@@ -152,7 +154,8 @@
   form.addEventListener('failed', e => { if (/takror|hozirgina/.test((e.detail && e.detail.error) || '')) dup.hidden = false; });
   form.addEventListener('queued', e => { const en = (e.detail && e.detail.entries) || [];
     const nm = (en.find(x => x[0] === 'worker_name') || [])[1];
-    if (nm && (en.find(x => x[0] === 'new_worker') || [])[1] === '1') addLocal({ id: '', name: nm, phone: '' });   // typed again → the same person
+    const nwv = (en.find(x => x[0] === 'new_worker') || [])[1];
+    if (nm && (nwv === '1' || nwv === '2')) addLocal({ id: '', name: nm, phone: '', group: nwv === '2' ? 1 : null });   // typed again → the same person
     showPending([{ entries: en }]);
     if (sugg) sugg.innerHTML = ''; if (wid) { wid.value = ''; nw.value = ''; }
     (name || kg).focus(); });

@@ -197,8 +197,8 @@ def set_group_leader(actor, worker_id, size):
     """Admin / rahbar: this worker writes his team's picking as one weighing and shares the money himself
     (size = how many people; 0 / empty = an ordinary worker again)."""
     _need(actor, 'workers.write')
-    if actor.role not in ('admin', 'manager'):
-        raise UserError('Guruh boshlig‘ini faqat Admin yoki Rahbar belgilaydi.')
+    if actor.role not in ('admin', 'manager', 'tally'):
+        raise UserError('Starshini (guruh boshlig‘ini) Admin, Rahbar yoki terim hisobchisi belgilaydi.')
     size = int(size) if str(size or '').strip().isdigit() else 0
     if size < 0 or size > 500:
         raise UserError('Odam soni 1 dan 500 gacha bo‘lsin.')
@@ -275,7 +275,7 @@ def open_load(actor, *, trailer_id, field_id, brigadier_id, tractor_id=None, veh
 
 
 def add_harvest(actor, *, load_id, method, kg, worker_id=None, worker_name=None, combine_id=None, note='',
-                client_uuid=None, source='web', confirm_duplicate=False, new_worker=False):
+                client_uuid=None, source='web', confirm_duplicate=False, new_worker=False, new_group=False):
     """Record one weighing next to the trailer. Returns (harvest_id, info dict)."""
     _need(actor, 'harvest.write')
     if method not in ('hand', 'combine'):
@@ -300,6 +300,9 @@ def add_harvest(actor, *, load_id, method, kg, worker_id=None, worker_name=None,
             if not worker_id and worker_name and new_worker:
                 # "+ Yangi odam": a different person, even if someone with the same name already exists
                 worker_id, created_worker = _new_worker(db, actor, worker_name, load['brigadier_id']), True
+                if new_group:          # “+ Yangi starshi”: the team's leader — his whole group's kg in one line
+                    db.execute('UPDATE workers SET group_size=1 WHERE id=?', (worker_id,))
+                    audit(db, actor, 'GROUP_LEADER', 'worker', worker_id, new={'group_size': 1, 'from': 'dala'})
             elif not worker_id and worker_name:
                 worker_id, created_worker = find_or_create_worker(db, actor, worker_name, brigadier_id=load['brigadier_id'])
             if not worker_id:
@@ -308,7 +311,7 @@ def add_harvest(actor, *, load_id, method, kg, worker_id=None, worker_name=None,
             if not w or not w['active']:
                 raise UserError('Ishchi topilmadi yoki faol emas.')
             if w['group_size']:          # a group leader writes his whole team at once
-                max_kg = get_float('max_group_kg', 3000, db)
+                max_kg = get_float('max_group_kg', 20000, db)
             if kg > max_kg:
                 raise UserError(f'{kg:g} kg juda katta (chegara {max_kg:g} kg). Raqamni tekshiring.' + (
                     '' if w['group_size'] else f' Agar {w["full_name"]} o‘z guruhi terganini bitta yozsa — Admin uni Ishchilar '

@@ -73,7 +73,7 @@ def worker_detail(worker_id):
                            paid=(bal['paid'] + bal['advances']) if bal and show else 0,
                            earned=bal['earned'] if bal and show and bal['earned'] else None, year=year,
                            history=queries.history('worker', worker_id),
-                           max_group=get_float('max_group_kg', 3000), max_hand=get_float('max_hand_kg', 250))
+                           max_group=get_float('max_group_kg', 20000), max_hand=get_float('max_hand_kg', 250))
 
 
 @bp.get('/ishchilar/hisob-kitob')

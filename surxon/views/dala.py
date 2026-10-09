@@ -168,7 +168,8 @@ def weigh(load_id):
                             kg=parse_number(request.form.get('kg'), 'Kg'),
                             worker_id=worker_id if method == 'hand' else None,
                             worker_name=(request.form.get('worker_name') or '').strip() if method == 'hand' else None,
-                            new_worker=request.form.get('new_worker') == '1',
+                            new_worker=request.form.get('new_worker') in ('1', '2'),
+                            new_group=request.form.get('new_worker') == '2',
                             combine_id=parse_int(request.form.get('combine_id'), 'Kombayn', required=False),
                             client_uuid=form_uuid(), confirm_duplicate=request.form.get('confirm_duplicate') == '1')
     gps = _gps()
@@ -179,9 +180,12 @@ def weigh(load_id):
     row = q('''SELECT h.kg, COALESCE(w.full_name, 'Kombayn ' || e.code) name FROM harvests h
                LEFT JOIN workers w ON w.id=h.worker_id LEFT JOIN equipment e ON e.id=h.combine_id WHERE h.id=?''', (hid,), one=True)
     msg = ('Bu yozuv avval saqlangan (takror yuborilmadi).' if info.get('duplicate')
-           else f'Saqlandi: {row["name"]} — {row["kg"]:g} kg' + (' (yangi odam)' if info.get('created_worker') else ''))
+           else f'Saqlandi: {row["name"]} — {row["kg"]:g} kg' + (
+               (' (yangi starshi 👥)' if request.form.get('new_worker') == '2' else ' (yangi odam)') if info.get('created_worker') else ''))
     return done(msg, url_for('dala.trip', load_id=load_id), totals=t, recent=_recent(load_id),
-                worker={'id': info['worker_id'], 'name': row['name'], 'phone': ''} if method == 'hand' and info.get('worker_id') else None)
+                worker={'id': info['worker_id'], 'name': row['name'], 'phone': '',
+                        'group': q('SELECT group_size g FROM workers WHERE id=?', (info['worker_id'],), one=True)['g']}
+                if method == 'hand' and info.get('worker_id') else None)
 
 
 @bp.get('/dala/reys/<int:load_id>/holat')

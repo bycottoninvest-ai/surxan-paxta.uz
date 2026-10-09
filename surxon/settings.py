@@ -33,7 +33,7 @@ DEFAULTS = {
     'nayman_diff_reason_required': ('1', 'Nayman qabulida farq bo‘lsa sabab majburiy (1/0)'),
     'toldi_min_photos': ('1', 'TOLDI uchun kamida nechta rasm majburiy'),
     'max_hand_kg': ('250', 'Bitta qo‘l terimi yozuvi uchun maksimal kg (xatoni ushlash uchun)'),
-    'max_group_kg': ('3000', 'Guruh boshlig‘i (o‘z odamlari terganini bir yozuvda kiritadigan ishchi) uchun bitta yozuvda maksimal kg'),
+    'max_group_kg': ('20000', 'Guruh boshlig‘i (o‘z odamlari terganini bir yozuvda kiritadigan ishchi) uchun bitta yozuvda maksimal kg'),
     'max_combine_kg': ('15000', 'Bitta kombayn yozuvi uchun maksimal kg'),
     'max_gross_kg': ('40000', 'Tarozi brutto uchun maksimal kg'),
     'payment_rule_enabled': ('0', 'To‘lov qoidasi yoqilganmi (1/0) — shartnoma tasdiqlangach yoqing'),

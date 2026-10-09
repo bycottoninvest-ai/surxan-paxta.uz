@@ -598,6 +598,7 @@ a.a-tile:active{transform:scale(.98)}
 .d-seg input:checked+span{background:var(--blue);border-color:var(--blue);color:#fff}
 .d-kg{position:relative}.d-kg span{position:absolute;right:14px;top:50%;transform:translateY(-50%);font-weight:800;color:var(--muted)}
 .d-sugg{display:grid;gap:6px}
+.d-addg{border-color:#93c5fd!important;background:#eff6ff!important}
 .d-grp{color:#1d4ed8;font-size:13px;margin-left:4px}
 .d-pick{text-align:left;min-height:48px;border:1px solid var(--line);border-radius:10px;background:#f7f9fc;padding:8px 12px;font-size:16px;cursor:pointer}
 .d-pick.d-add{background:#e9f7ee;border-color:#bfe6cc;color:#15803d}
