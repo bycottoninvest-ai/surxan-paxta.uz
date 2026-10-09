@@ -5,7 +5,7 @@ from .. import queries
 from ..db import q
 from ..photos import read_upload
 from ..security import can, perm_required, require
-from ..services import create_worker, set_group_leader, update_worker
+from ..services import create_worker, set_group_leader, set_worker_rate, update_worker
 from ..settings import get_float
 from ..utils import today_str
 from . import PER_PAGE, checkbox, done, page_arg, paginate, post_actor, scope, season_arg
@@ -48,6 +48,9 @@ def worker_detail(worker_id):
           (worker_id,), one=True)
     if not w:
         abort(404)
+    if request.method == 'POST' and request.form.get('action') == 'rate':
+        set_worker_rate(post_actor(), worker_id, request.form.get('rate'))
+        return done('Shaxsiy narx saqlandi. Bundan keyingi tortishlarga qo‘llanadi.', url_for('people.worker_detail', worker_id=worker_id))
     if request.method == 'POST' and request.form.get('action') == 'group':
         set_group_leader(post_actor(), worker_id, (request.form.get('group_size') or '1') if checkbox('is_group') else 0)
         return done('Saqlandi.', url_for('people.worker_detail', worker_id=worker_id))

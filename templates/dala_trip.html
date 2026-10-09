@@ -94,6 +94,9 @@
     if (/takror|hozirgina/.test(d.data.error || '') && !kg.value) {
       if (name) { name.value = get('worker_name'); wid.value = get('worker_id'); nw.value = get('new_worker'); }
       kg.value = get('kg'); dup.hidden = false;
+    }
+    if (name && /Starshi qilib saqlash/.test(d.data.error || '') && !kg.value) {
+      name.value = get('worker_name'); wid.value = get('worker_id'); nw.value = get('new_worker'); kg.value = get('kg'); offerGroup();
     } });
   function showPending(items) {
     items.forEach(it => {
@@ -151,7 +154,14 @@
   form.addEventListener('saved', e => { if (e.detail && e.detail.totals) render(e.detail.totals, e.detail.recent);
     dup.hidden = true; if (sugg) sugg.innerHTML = ''; if (wid) { wid.value = ''; nw.value = ''; }
     (name || kg).focus(); });
-  form.addEventListener('failed', e => { if (/takror|hozirgina/.test((e.detail && e.detail.error) || '')) dup.hidden = false; });
+  form.addEventListener('failed', e => { const err = (e.detail && e.detail.error) || '';
+    if (/takror|hozirgina/.test(err)) dup.hidden = false;
+    if (name && /Starshi qilib saqlash/.test(err)) offerGroup(); });
+  // over 250 kg for an ordinary person: one tap makes him a starshi (new or already in the list) and saves the same kg
+  function offerGroup() {
+    sugg.innerHTML = `<button type="button" class="d-pick d-add d-addg" id="d-mkgrp">👥 <b>${esc(name.value.trim())}</b> — starshi qilib saqlash (${esc(kg.value)} kg)</button>`;
+    document.getElementById('d-mkgrp').addEventListener('click', () => { nw.value = '2'; sugg.innerHTML = ''; form.requestSubmit(); });
+  }
   form.addEventListener('queued', e => { const en = (e.detail && e.detail.entries) || [];
     const nm = (en.find(x => x[0] === 'worker_name') || [])[1];
     const nwv = (en.find(x => x[0] === 'new_worker') || [])[1];

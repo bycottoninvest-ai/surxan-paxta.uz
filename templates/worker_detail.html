@@ -4,7 +4,7 @@
 {% block content %}
 <div class="page-h"><a href="{{ url_for('people.workers') }}" class="icon-btn">{{ icon('chev-left') }}</a>
   <div class="avatar" style="width:52px;height:52px">{% if w.thumb_path %}<img src="{{ photo_url(w.thumb_path) }}" data-full="{{ photo_url(w.photo_path) }}" alt="">{% else %}{{ w.full_name[:1] }}{% endif %}</div>
-  <h1>{{ w.full_name }}</h1>{% if w.group_size %}<span class="badge b-blue">👥 Starshi{% if w.group_size > 1 %} · {{ w.group_size }} kishi{% endif %}</span>{% endif %}{% if not w.active %}<span class="badge b-gray">Faol emas</span>{% endif %}</div>
+  <h1>{{ w.full_name }}</h1>{% if w.rate %}<span class="badge b-orange">💰 {{ w.rate|num }} so‘m/kg</span>{% endif %}{% if w.group_size %}<span class="badge b-blue">👥 Starshi{% if w.group_size > 1 %} · {{ w.group_size }} kishi{% endif %}</span>{% endif %}{% if not w.active %}<span class="badge b-gray">Faol emas</span>{% endif %}</div>
 <div class="kpis" style="grid-template-columns:repeat(4,minmax(0,1fr))">
   <div class="kpi"><div class="sq bg-green">{{ icon('cotton') }}</div><div><div class="label">Mavsum jami ({{ year }})</div><div class="value num">{{ total_kg|num(1) }} <small>kg</small></div></div></div>
   <div class="kpi"><div class="sq bg-blue">{{ icon('calendar') }}</div><div><div class="label">Ish kunlari</div><div class="value">{{ days|length }}</div></div></div>
@@ -28,6 +28,14 @@
       <div class="f"><label class="check"><input type="checkbox" name="active" value="1" {{ 'checked' if w.active }}> Faol</label></div>
       <div class="f">{{ file_input('photo', 'Rasmni yangilash') }}</div>
       <div class="f"><button class="btn btn-primary">Saqlash</button></div></form></div>
+    {% endif %}
+    {% if current_user['role'] in ('admin', 'manager') %}
+    <div class="card-h"><h3>💰 Shaxsiy narx (qo‘l terimi)</h3></div>
+    <div class="card-b"><form method="post" class="form">{{ csrf() }}<input type="hidden" name="action" value="rate">
+      <div class="f"><label>So‘m/kg — faqat shu odamga (bo‘sh = reys narxi, hamma qatori)</label>
+        <input name="rate" inputmode="numeric" value="{{ w.rate or '' }}" placeholder="masalan 4000"></div>
+      <div class="f"><div class="tiny muted">Bundan keyingi tortishlarga qo‘llanadi; oldin yozilganlari o‘z narxida qoladi. Faqat Admin / Rahbar o‘zgartiradi.</div></div>
+      <div class="f"><button class="btn btn-light">Saqlash</button></div></form></div>
     {% endif %}
     {% if current_user['role'] in ('admin', 'manager', 'tally') %}
     <div class="card-h"><h3>👥 Guruh boshlig‘i (starshi)</h3></div>

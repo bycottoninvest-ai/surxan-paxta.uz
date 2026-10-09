@@ -210,6 +210,24 @@ def set_group_leader(actor, worker_id, size):
         audit(db, actor, 'GROUP_LEADER', 'worker', worker_id, old={'group_size': old['group_size']}, new={'group_size': size or None})
 
 
+def set_worker_rate(actor, worker_id, rate):
+    """Owner only: this person's own hand rate, so‘m/kg (empty = the trip's rate like everybody). Money — so only Admin or
+    Rahbar; every change is in the audit. Weighings already written keep the rate they were frozen with."""
+    _need(actor, 'workers.write')
+    if actor.role not in ('admin', 'manager'):
+        raise UserError('Shaxsiy narxni faqat Admin yoki Rahbar qo‘yadi.')
+    txt = str(rate or '').replace(' ', '').strip()
+    val = int(round(float(txt.replace(',', '.')))) if txt else None
+    if val is not None and (val <= 0 or val > 100000):
+        raise UserError('Narx 1 dan 100 000 so‘m/kg gacha bo‘lsin.')
+    with tx() as db:
+        old = db.execute('SELECT * FROM workers WHERE id=?', (worker_id,)).fetchone()
+        if not old:
+            raise UserError('Ishchi topilmadi.')
+        db.execute('UPDATE workers SET rate=? WHERE id=?', (val, worker_id))
+        audit(db, actor, 'RATE', 'worker', worker_id, old={'rate': old['rate']}, new={'rate': val})
+
+
 # ------------------------------------------------------------------ trailer loads
 
 def open_load(actor, *, trailer_id, field_id, brigadier_id, tractor_id=None, vehicle_plate='', driver_name='',
@@ -310,12 +328,19 @@ def add_harvest(actor, *, load_id, method, kg, worker_id=None, worker_name=None,
             w = db.execute('SELECT * FROM workers WHERE id=?', (worker_id,)).fetchone()
             if not w or not w['active']:
                 raise UserError('Ishchi topilmadi yoki faol emas.')
-            if w['group_size']:          # a group leader writes his whole team at once
+            group = w['group_size']
+            if new_group and not group:  # “👥 Starshi qilib saqlash” on a person already in the list
+                if actor.role not in ('admin', 'manager', 'tally'):
+                    raise UserError('Starshini faqat hisobchi, Admin yoki Rahbar belgilaydi.')
+                db.execute('UPDATE workers SET group_size=1 WHERE id=?', (worker_id,))
+                audit(db, actor, 'GROUP_LEADER', 'worker', worker_id, old={'group_size': None}, new={'group_size': 1, 'from': 'dala'})
+                group = 1
+            if group:                    # a group leader writes his whole team at once
                 max_kg = get_float('max_group_kg', 20000, db)
             if kg > max_kg:
                 raise UserError(f'{kg:g} kg juda katta (chegara {max_kg:g} kg). Raqamni tekshiring.' + (
-                    '' if w['group_size'] else f' Agar {w["full_name"]} o‘z guruhi terganini bitta yozsa — Admin uni Ishchilar '
-                                               '→ ismi → “Guruh boshlig‘i” qilib belgilasin.'))
+                    '' if group else f' Agar {w["full_name"]} starshi bo‘lsa (o‘z guruhi terganini bitta yozsa) — pastdagi '
+                                     '“👥 Starshi qilib saqlash” tugmasini bosing.'))
             combine_id = None
         else:
             _equipment(db, combine_id, 'kombayn', 'Kombayn')
@@ -337,7 +362,7 @@ def add_harvest(actor, *, load_id, method, kg, worker_id=None, worker_name=None,
         if load['method'] and load['method'] != method:
             raise UserError('Bu telashka ' + ('qo‘l terimi' if load['method'] == 'hand' else 'kombayn') +
                             ' uchun ochilgan. Boshqa turdagi terim uchun alohida telashka oching.')
-        rate, rate_unit, amount = price_harvest(db, method, kg, combine_id, load)     # frozen: never recalculated later
+        rate, rate_unit, amount = price_harvest(db, method, kg, combine_id, load, worker_id)     # frozen: never recalculated later
         cur = db.execute(
             '''INSERT INTO harvests(season_year, work_date, load_id, worker_id, field_id, brigadier_id, trailer_id,
                    tractor_id, combine_id, method, kg, note, source, client_uuid, entered_by, created_at, rate, rate_unit, amount)

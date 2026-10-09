@@ -66,12 +66,16 @@ def check_combine_rate(actor, rate_kg, db=None):
                         f'Admin o‘zi yozadi.'.replace(',', ' '))
 
 
-def price_harvest(db, method, kg, combine_id, load=None):
+def price_harvest(db, method, kg, combine_id, load=None, worker_id=None):
     """(rate, unit, amount) to freeze on a new harvest row. None amount = no rate set yet ("hisoblanmagan").
     A trip opened with its own rate (so‘m/kg, hand or combine) prices every weighing of that trip at that rate —
     except a combine with its own tariff per tonne: the accountant's tariff wins over the rate typed in the field.
     (A combine's money is not this amount: see combine_rows — it is paid on the punkt kg.)"""
     keys = load.keys() if load is not None else ()
+    if method == 'hand' and worker_id:      # the owner gave this person his own rate (e.g. one starshi at 4 000)
+        w = db.execute('SELECT rate FROM workers WHERE id=?', (worker_id,)).fetchone()
+        if w and w['rate']:
+            return w['rate'], 'kg', int(round(kg * w['rate']))
     if method == 'combine':
         eq = db.execute('SELECT tariff_type, tariff_rate FROM equipment WHERE id=?', (combine_id,)).fetchone()
         if eq and eq['tariff_type'] == 'tonna' and eq['tariff_rate']:

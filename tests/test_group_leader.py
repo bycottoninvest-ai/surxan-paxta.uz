@@ -9,7 +9,7 @@ def test_group_leader_writes_team_kg_at_once(app, world):
     tally = make_user(app, admin, 'hisob1', 'tally')
     lid = open_trip(tally, world)
     r = weigh(tally, lid, '600', name='Mirjalol', new=True)              # an ordinary worker: 600 kg is a typo
-    assert not r['ok'] and 'chegara 250' in r['error'] and 'Guruh boshlig‘i' in r['error']
+    assert not r['ok'] and 'chegara 250' in r['error'] and 'Starshi qilib saqlash' in r['error']
     assert weigh(tally, lid, '40', name='Mirjalol', new=True)['ok']
     with app.app_context():
         wid = q("SELECT id FROM workers WHERE full_name='Mirjalol'", one=True)['id']
@@ -51,3 +51,56 @@ def test_tally_adds_a_new_starshi_from_the_field(app, world):
     # an ordinary new person still keeps the 250 kg check
     data = {'kg': '4200', 'worker_name': 'Oddiy odam', 'new_worker': '1', 'client_uuid': __import__('uuid').uuid4().hex}
     assert not tally.post(f'/dala/reys/{lid}/tortish', data).get_json()['ok']
+
+
+def test_personal_hand_rate_only_for_that_person(app, world):
+    """Admin gives one person (e.g. “Yunus-3”) his own hand rate: his weighings freeze at 4 000 so‘m/kg, everybody else on
+    the same trip keeps the trip's rate; the tally cannot change it; clearing it brings the trip rate back."""
+    admin = world['admin']
+    tally = make_user(app, admin, 'hisob3', 'tally')
+    lid = open_trip(tally, world, rate='1500')
+    assert weigh(tally, lid, '30', name='Yunus-3', new=True)['ok']
+    with app.app_context():
+        wid = q("SELECT id FROM workers WHERE full_name='Yunus-3'", one=True)['id']
+    r = tally.post(f'/ishchi/{wid}', {'action': 'rate', 'rate': '9000'})
+    assert r.status_code in (302, 403, 422) or not r.get_json()['ok']
+    assert not admin.post(f'/ishchi/{wid}', {'action': 'rate', 'rate': '-5'}).get_json()['ok']
+    assert admin.post(f'/ishchi/{wid}', {'action': 'rate', 'rate': '4 000'}).get_json()['ok']
+    assert 'Shaxsiy narx' in admin.get(f'/ishchi/{wid}').get_data(as_text=True)
+    assert weigh(tally, lid, '50', worker_id=wid)['ok']
+    assert weigh(tally, lid, '40', name='Boshqa terimchi', new=True)['ok']
+    with app.app_context():
+        rows = q('''SELECT w.full_name n, h.kg, h.rate, h.amount FROM harvests h JOIN workers w ON w.id=h.worker_id
+                    WHERE h.load_id=? ORDER BY h.id''', (lid,))
+        assert [(x['n'], x['rate'], x['amount']) for x in rows] == [
+            ('Yunus-3', 1500, 45000),               # written before: keeps its frozen rate
+            ('Yunus-3', 4000, 200000),
+            ('Boshqa terimchi', 1500, 60000)]
+        assert q("SELECT 1 FROM audit_logs WHERE action='RATE' AND entity_id=?", (wid,), one=True)
+    assert admin.post(f'/ishchi/{wid}', {'action': 'rate', 'rate': ''}).get_json()['ok']
+    assert weigh(tally, lid, '20', worker_id=wid)['ok']
+    with app.app_context():
+        assert q('SELECT rate FROM harvests WHERE load_id=? ORDER BY id DESC LIMIT 1', (lid,), one=True)['rate'] == 1500
+
+
+def test_one_tap_makes_a_person_starshi_from_the_field(app, world):
+    """“👥 Starshi qilib saqlash” after the 250 kg message: works for a new name and for a person already in the list."""
+    admin = world['admin']
+    tally = make_user(app, admin, 'hisob4', 'tally')
+    lid = open_trip(tally, world, rate='4000')
+    r = weigh(tally, lid, '1000', name='Yunus 3', new=True)
+    assert not r['ok'] and 'Starshi qilib saqlash' in r['error']
+    uid = __import__('uuid').uuid4().hex
+    r = tally.post(f'/dala/reys/{lid}/tortish', {'kg': '1000', 'worker_name': 'Yunus 3', 'new_worker': '2', 'client_uuid': uid}).get_json()
+    assert r['ok'], r
+    assert weigh(tally, lid, '30', name='Odil', new=True)['ok']
+    with app.app_context():
+        oid = q("SELECT id FROM workers WHERE full_name='Odil'", one=True)['id']
+    assert not weigh(tally, lid, '900', worker_id=oid)['ok']
+    r = tally.post(f'/dala/reys/{lid}/tortish', {'kg': '900', 'worker_id': oid, 'worker_name': 'Odil', 'new_worker': '2',
+                                                 'client_uuid': __import__('uuid').uuid4().hex}).get_json()
+    assert r['ok'], r
+    with app.app_context():
+        assert q('SELECT group_size FROM workers WHERE id=?', (oid,), one=True)['group_size'] == 1
+        assert q("SELECT COUNT(*) n FROM workers WHERE full_name='Odil'", one=True)['n'] == 1     # no second Odil
+        assert q("SELECT 1 FROM audit_logs WHERE action='GROUP_LEADER' AND entity_id=?", (oid,), one=True)
