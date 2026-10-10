@@ -1,0 +1,41 @@
+{% extends 'base.html' %}
+{% from 'macros.html' import icon, csrf with context %}
+{% set page_title = 'TEZ-PUL talonlari' %}
+{% block content %}
+<div class="page-h"><h1>🧾 SURXON TEZ-PUL — talonlar</h1><span class="sub">Raqamli QR talonlar: dalada kg yoziladi, kassada bir marta to‘lanadi · 1 kg = {{ rate|num }} so‘m · bitta talonga {{ max_kg|num }} kg dan ko‘pi — rahbar tasdig‘i bilan</span>
+  <a class="btn btn-light btn-sm" href="{{ url_for('tezpul.panel') }}">📊 Bugungi panel</a></div>
+<div class="grid">
+  <section class="card s4"><div class="card-h"><h3>🖨 Yangi talonlar</h3></div><div class="card-b">
+    <form method="post" class="form">{{ csrf() }}<input type="hidden" name="action" value="create">
+      <div class="f"><label>Nechta talon?</label><input class="input" name="count" placeholder="masalan 1000" inputmode="numeric" required></div>
+      <div class="f"><label>Brigada (ixtiyoriy — pachka kimga beriladi)</label><select class="input" name="brigadier_id"><option value="">—</option>{% for b in brigades %}<option value="{{ b.id }}">{{ b.name }}</option>{% endfor %}</select></div>
+      <div class="f"><button class="btn btn-primary btn-block">Talonlar yaratish</button></div>
+      <div class="tiny muted">A4 varaqqa 2 ta talon (har biri o‘z raqami bilan). PDF ni ochib chop eting, chiziqdan qirqing.</div></form>
+  </div></section>
+  <section class="card s4"><div class="card-h"><h3>👥 Pachkani brigadaga berish</h3></div><div class="card-b">
+    <form method="post" class="form">{{ csrf() }}<input type="hidden" name="action" value="assign">
+      <div class="f h"><label>Dan</label><input class="input" name="first" placeholder="000201" inputmode="numeric" required></div>
+      <div class="f h"><label>Gacha</label><input class="input" name="last" placeholder="000500" inputmode="numeric" required></div>
+      <div class="f"><label>Brigada</label><select class="input" name="brigadier_id">{% for b in brigades %}<option value="{{ b.id }}">{{ b.name }}</option>{% endfor %}</select></div>
+      <div class="f"><button class="btn btn-light btn-block">Saqlash</button></div>
+      <div class="tiny muted">Rahbar panelida har kuni brigada bo‘yicha to‘langan kg ko‘rinadi.</div></form>
+  </div></section>
+  <section class="card s4"><div class="card-h"><h3>🚫 Talonni bekor qilish</h3></div><div class="card-b">
+    <form method="post" class="form">{{ csrf() }}<input type="hidden" name="action" value="void">
+      <div class="f"><label>Talon №</label><input class="input" name="number" placeholder="000274" inputmode="numeric" required></div>
+      <div class="f"><label>Sabab</label><input class="input" name="reason" placeholder="yo‘qolgan / yirtilgan / o‘g‘irlangan pachka" required></div>
+      <div class="f"><button class="btn btn-light btn-block">Bekor qilish</button></div>
+      <div class="tiny muted">Bekor qilingan talon skanerlansa — qizil “BEKOR QILINGAN”, pul berilmaydi.</div></form>
+  </div></section>
+  <section class="card s8"><div class="card-h"><h3>Partiyalar</h3></div><div class="card-b">
+    {% if batches %}<div class="table-wrap"><table class="t"><thead><tr><th>Partiya</th><th>Raqamlar</th><th class="num">Soni</th><th class="num">To‘langan</th><th class="num">Bekor</th><th>Yaratilgan</th><th></th></tr></thead><tbody>
+    {% for bt in batches %}<tr {% if new == bt.batch %}style="background:#ecfdf5"{% endif %}><td>{{ bt.batch }}</td><td class="b">{{ num(bt.a) }} … {{ num(bt.b) }}</td><td class="num">{{ bt.n }}</td>
+      <td class="num">{{ bt.paid }}</td><td class="num">{{ bt.void }}</td><td>{{ bt.created_at[:16] }}</td>
+      <td><a class="btn btn-primary btn-sm" href="{{ url_for('tezpul.talons_pdf', batch=bt.batch) }}" target="_blank">{{ icon('printer','sm') }} PDF</a></td></tr>{% endfor %}
+    </tbody></table></div>{% else %}<div class="muted">Hali talon yo‘q. Chapda soni yozib yarating.</div>{% endif %}
+  </div></section>
+  <section class="card s4"><div class="card-h"><h3>Qaysi raqam qaysi brigadada</h3></div><div class="card-b">
+    {% for r in ranges %}<div class="small">{{ num(r.a) }} … {{ num(r.b) }} · <b>{{ r.name }}</b> <span class="muted">({{ r.n }} ta)</span></div>{% else %}<div class="muted small">—</div>{% endfor %}
+  </div></section>
+</div>
+{% endblock %}

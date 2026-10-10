@@ -93,7 +93,10 @@ def trailer_qr(token):
 def dashboard():
     if g.user['role'] == 'station':
         return redirect(url_for('punkt.home'))
-    if g.user['role'] in ('accountant', 'cashier') and not request.args.get('view'):
+    if g.user['role'] == 'cashier' and not request.args.get('view'):
+        from ..tezpul import in_use
+        return redirect(url_for('tezpul.kassa' if in_use() else 'hamyon.home'))   # TEZ-PUL: the camera opens at once
+    if g.user['role'] == 'accountant' and not request.args.get('view'):
         return redirect(url_for('hamyon.home'))
     if g.user['role'] == 'tally':
         return redirect(url_for('dala.home'))

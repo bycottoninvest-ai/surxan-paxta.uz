@@ -144,6 +144,12 @@ def director_text(day=None):
     exp = scalar('SELECT COALESCE(SUM(amount),0) FROM expenses WHERE voided_at IS NULL AND expense_date=?', (day,))
     lines += ['', '💰 PUL (bugun)', f'Kassa kirim {_n(cash["i"])} · chiqim {_n(cash["o"])} · xarajat {_n(exp)} so‘m',
               f'Kassa qoldig‘i: {_n(total_balance(db))} so‘m']
+    tp = db.execute('''SELECT COUNT(*) n, COALESCE(SUM(kg),0) kg, COALESCE(SUM(amount),0) amount FROM tezpul_talons
+                       WHERE status='TOLANDI' AND pay_date=?''', (day,)).fetchone()
+    tp_wait = db.execute("SELECT COUNT(*) FROM tezpul_talons WHERE status='KUTILMOQDA'").fetchone()[0]
+    if tp['n'] or tp_wait:          # SURXON TEZ-PUL: talons paid in cash (one line, never one message per talon)
+        lines.append(f'TEZ-PUL talon: {tp["n"]} ta · {_n(tp["kg"])} kg · {_n(tp["amount"])} so‘m berildi'
+                     + (f' · ⏳ {tp_wait} ta rahbar tasdig‘ini kutmoqda' if tp_wait else ''))
 
     todo = []
     from .nazorat import issues

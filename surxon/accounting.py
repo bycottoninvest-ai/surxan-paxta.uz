@@ -151,8 +151,9 @@ def _assert_cash(db, cashbox_id, amount):
 
 def book_cash(db, actor, *, direction, category, amount, entry_date=None, cashbox_id=None, worker_id=None,
               combine_id=None, payout_id=None, debt_id=None, expense_id=None, counterparty='', source='', note='',
-              doc_no=None, client_uuid=None, check_balance=True):
-    """Insert one cash movement with its document number (caller holds the transaction)."""
+              doc_no=None, client_uuid=None, check_balance=True, feed=True):
+    """Insert one cash movement with its document number (caller holds the transaction). feed=False: no line in the
+    report channel (TEZ-PUL talons — hundreds a day; the panel and the daily report sum them)."""
     season = season_of(db)
     entry_date = entry_date or today_str()
     cashbox_id = cashbox_id or default_cashbox(db)
@@ -171,7 +172,8 @@ def book_cash(db, actor, *, direction, category, amount, entry_date=None, cashbo
           new={'doc_no': doc_no, 'direction': direction, 'category': category, 'amount': amount, 'cashbox_id': cashbox_id,
                'worker_id': worker_id, 'combine_id': combine_id, 'payout_id': payout_id, 'source': source})
     mirror_cash(db, cid)
-    _feed_cash(db, cid)
+    if feed:
+        _feed_cash(db, cid)
     return cid, doc_no
 
 

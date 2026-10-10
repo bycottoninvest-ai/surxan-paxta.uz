@@ -57,6 +57,8 @@ PERMISSIONS = {
     'payouts.view': {'manager', 'accountant', 'cashier'},
     'payouts.prepare': {'accountant'},
     'payouts.pay': {'accountant', 'cashier'},
+    'tezpul.panel': {'manager', 'accountant'},      # SURXON TEZ-PUL: the day's talon figures (read)
+    'tezpul.manage': {'manager'},                  # print talons, hand packs to brigades, approve big kg, cancel a talon
     'combine.finance': {'accountant'},
     'debts.write': {'accountant'},
     'loans.view': {'manager', 'accountant'},        # credits, leasing, contracts, schedules
@@ -205,6 +207,10 @@ CASHIER_ENDPOINTS = STATION_ENDPOINTS | {'acct.cashier', 'acct.payout_pay', 'acc
                                          'acct.expense_new', 'main.media'}
 
 
+# SURXON TEZ-PUL: the cashier's two-step screen
+TEZPUL_CASHIER = {'tezpul.home', 'tezpul.kassa', 'tezpul.lookup', 'tezpul.pay'}
+
+
 # Field clerk: only the four-step field screens (and the few trip endpoints they use) — no reports, money, staff,
 # equipment/field admin or the general photo archive, whatever URL is typed.
 TALLY_ENDPOINTS = STATION_ENDPOINTS | {'main.api_workers', 'main.api_position', 'main.media', 'ops.harvest', 'ops.load_open', 'ops.load_full',
@@ -226,7 +232,7 @@ def station_gate():
         return None
     if user['role'] == 'station' and (ep in STATION_ENDPOINTS or ep in STATION_EXTRA or ep.startswith('punkt.')):
         return None
-    if user['role'] == 'cashier' and (ep in CASHIER_ENDPOINTS or ep.startswith('hamyon.')):
+    if user['role'] == 'cashier' and (ep in CASHIER_ENDPOINTS or ep.startswith('hamyon.') or ep in TEZPUL_CASHIER):
         return None
     if user['role'] == 'fuel' and (ep in FUEL_ENDPOINTS or ep.startswith('yoqilgi.op_') or ep == 'yoqilgi.home'):
         return None

@@ -10,7 +10,7 @@ from contextlib import contextmanager
 
 from flask import current_app, g
 
-SCHEMA_VERSION = 24
+SCHEMA_VERSION = 25
 
 SCHEMA = r'''
 CREATE TABLE IF NOT EXISTS brigadiers (
@@ -675,6 +675,44 @@ CREATE TABLE IF NOT EXISTS punkt_blanks (   -- v14: numbered paper forms printed
   photo_id INTEGER REFERENCES photos(id),
   spoiled_reason TEXT                       -- torn / written wrong: kept in the list, never reused
 );
+
+CREATE TABLE IF NOT EXISTS tezpul_talons (  -- v25: SURXON TEZ-PUL — numbered paper talons for hand picking, paid once in cash
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  number INTEGER NOT NULL UNIQUE,           -- printed 000274
+  code TEXT NOT NULL,                       -- random, in the QR next to the number (a home-made QR does not know it)
+  batch INTEGER NOT NULL,
+  brigadier_id INTEGER REFERENCES brigadiers(id),   -- the pack was handed to this brigade (daily check by brigade)
+  created_by INTEGER REFERENCES users(id),
+  created_at TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'BOSH' CHECK (status IN ('BOSH','KUTILMOQDA','TAYYOR','TOLANDI','BEKOR')),
+  kg REAL CHECK (kg IS NULL OR kg > 0),
+  rate INTEGER,                             -- so‘m/kg frozen at payment
+  amount INTEGER,
+  entered_by INTEGER REFERENCES users(id),
+  entered_at TEXT,
+  approved_by INTEGER REFERENCES users(id), -- rahbar: big kg on one talon
+  approved_at TEXT,
+  paid_by INTEGER REFERENCES users(id),
+  paid_at TEXT,
+  pay_date TEXT,
+  pay_uuid TEXT UNIQUE,                     -- the cashier's tap: sent twice = paid once
+  cashbox_id INTEGER REFERENCES cashboxes(id),
+  cash_entry_id INTEGER REFERENCES cash_entries(id),
+  void_reason TEXT,
+  voided_by INTEGER REFERENCES users(id),
+  voided_at TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_tezpul_paydate ON tezpul_talons(pay_date, status);
+CREATE INDEX IF NOT EXISTS idx_tezpul_batch ON tezpul_talons(batch);
+CREATE TABLE IF NOT EXISTS tezpul_events (  -- v25: refused scans (fake QR, already paid, cancelled) for the rahbar
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  created_at TEXT NOT NULL,
+  user_id INTEGER REFERENCES users(id),
+  code TEXT,
+  kind TEXT NOT NULL,
+  talon_id INTEGER REFERENCES tezpul_talons(id),
+  note TEXT
+);
 CREATE TABLE IF NOT EXISTS trackers (
   imei TEXT PRIMARY KEY,
   equipment_id INTEGER REFERENCES equipment(id),
@@ -1106,6 +1144,7 @@ def migrate(db):
     _add_column(db, 'workers', 'group_size', 'INTEGER')
     # v24: a worker's own hand rate (so‘m/kg) — set by the owner, wins over the trip's rate for that person only
     _add_column(db, 'workers', 'rate', 'INTEGER')
+    # v25: SURXON TEZ-PUL tables (tezpul_talons, tezpul_events) — created above by SCHEMA, nothing to alter
     # Future column changes go here as: if version < N: ALTER TABLE ...
     db.execute('UPDATE schema_version SET version=? WHERE version < ?', (SCHEMA_VERSION, SCHEMA_VERSION))
 
@@ -1143,7 +1182,7 @@ def doc_number(db, prefix, year):
 def cash_prefix(direction, category):
     if direction == 'IN':
         return 'INC'
-    if category in ('worker_pay', 'advance', 'combine_pay'):
+    if category in ('worker_pay', 'advance', 'combine_pay', 'tezpul_pay'):
         return 'PAY'
     if category in ('adjust_in', 'adjust_out'):
         return 'ADJ'

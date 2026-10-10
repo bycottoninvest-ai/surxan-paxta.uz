@@ -1131,3 +1131,113 @@ def build_combine_statement_pdf(st, *, company, year, tariff_name='', generated_
     footer()
     c.save()
     return buf.getvalue()
+
+
+def build_tezpul_talons_pdf(talons, *, company):
+    """SURXON TEZ-PUL “PAXTA TERIM TALONI” — the owner's design, TWO different talons per A4 page (cut on the dashed
+    line). The QR holds only the talon number and its random code (no kg, no money); the code is also printed small
+    under the QR for typing by hand when the camera does not work. The kg is written by hand in the field."""
+    from .tezpul import number_text, qr_text
+    _fonts()
+    buf = io.BytesIO()
+    c = canvas.Canvas(buf, pagesize=A4)
+    W, H = A4
+    c.setTitle('PAXTA TERIM TALONI')
+    c.setAuthor(company)
+    logo = Path(current_app.static_folder) / 'img' / 'logo-dark.png'
+    navy, red, pink = colors.HexColor('#0b2a55'), colors.HexColor('#e0284f'), colors.HexColor('#fde4ea')
+    half = H / 2
+
+    def spaced(x, y, text, size, font='DejaVu', color=navy, gap=1.6, align='l'):
+        c.setFont(font, size)
+        c.setFillColor(color)
+        w = sum(c.stringWidth(ch, font, size) + gap for ch in text) - gap
+        if align == 'c':
+            x -= w / 2
+        elif align == 'r':
+            x -= w
+        for ch in text:
+            c.drawString(x, y, ch)
+            x += c.stringWidth(ch, font, size) + gap
+
+    def one(t, top):
+        x0, x1, y0, y1 = 10 * mm, W - 10 * mm, top - half + 8 * mm, top - 8 * mm
+        c.setStrokeColor(navy)
+        c.setLineWidth(1.6)
+        c.roundRect(x0, y0, x1 - x0, y1 - y0, 6 * mm)
+        # header: slogans and the logo
+        yh = y1 - 22 * mm
+        spaced(x0 + 9 * mm, yh + 9 * mm, 'TOZA MEHNAT', 7)
+        spaced(x0 + 9 * mm, yh + 4.5 * mm, 'YUKSAK NATIJA', 7)
+        c.setStrokeColor(red); c.setLineWidth(1.2)
+        c.line(x0 + 9 * mm, yh + 1.5 * mm, x0 + 25 * mm, yh + 1.5 * mm)
+        if logo.exists():
+            c.drawImage(str(logo), W / 2 - 40 * mm, yh - 2 * mm, width=80 * mm, height=21 * mm, mask='auto',
+                        preserveAspectRatio=True, anchor='c')
+        c.line(x1 - 35 * mm, yh - 1 * mm, x1 - 35 * mm, yh + 15 * mm)
+        for i, w in enumerate(('SIFATLI', 'PAXTA', 'BARQAROR', 'KELAJAK')):
+            spaced(x1 - 32 * mm, yh + 12 * mm - i * 4.2 * mm, w, 7)
+        # the title band
+        yb = yh - 22 * mm
+        c.setFillColor(navy)
+        c.roundRect(x0 + 6 * mm, yb, x1 - x0 - 12 * mm, 18 * mm, 3.5 * mm, stroke=0, fill=1)
+        c.setFillColor(colors.white)
+        c.setFont('DejaVu-Bold', 26)
+        c.drawCentredString(W / 2, yb + 7.2 * mm, 'PAXTA TERIM TALONI')
+        spaced(W / 2, yb + 2.4 * mm, 'BIRGALIKDA YANADA YUKSAK SARI', 6.5, color=colors.white, gap=2.6, align='c')
+        # QR · kg box · number
+        ym = yb - 58 * mm
+        _qr(c, qr_text(t), x0 + 5 * mm, ym + 4 * mm, 42 * mm)
+        spaced(x0 + 26 * mm, ym + 1 * mm, 'SKANER QILING', 6.5, 'DejaVu-Bold', align='c')
+        c.setStrokeColor(red); c.setLineWidth(1)
+        c.line(x0 + 19 * mm, ym - 0.6 * mm, x0 + 33 * mm, ym - 0.6 * mm)
+        spaced(x0 + 26 * mm, ym - 4.5 * mm, 'TEZ • ANIQ • ISHONCHLI', 6, 'DejaVu-Bold', align='c', gap=1)
+        c.setFillColor(colors.HexColor('#6b7c93')); c.setFont('DejaVu', 6.5)
+        c.drawCentredString(x0 + 26 * mm, ym - 9 * mm, f'Kod: {t["code"]}')
+        c.setFillColor(navy); c.setFont('DejaVu-Bold', 16)
+        c.drawString(x0 + 54 * mm, ym + 43 * mm, 'Sof vazn (kg):')
+        c.setStrokeColor(navy); c.setLineWidth(1.4)
+        c.roundRect(x0 + 52 * mm, ym + 8 * mm, 80 * mm, 30 * mm, 2.5 * mm)
+        c.setFont('DejaVu-Bold', 26)
+        c.drawRightString(x0 + 128 * mm, ym + 17 * mm, 'KG')
+        c.setFillColor(pink)
+        c.roundRect(x1 - 49 * mm, ym + 26 * mm, 43 * mm, 21 * mm, 3 * mm, stroke=0, fill=1)
+        c.setFillColor(navy); c.setFont('DejaVu-Bold', 10)
+        c.drawCentredString(x1 - 27.5 * mm, ym + 41.5 * mm, 'Talon №')
+        c.setFillColor(red); c.setFont('DejaVu-Bold', 25)
+        c.drawCentredString(x1 - 27.5 * mm, ym + 30 * mm, number_text(t['number']))
+        c.setFillColor(navy); c.setFont('DejaVu-Bold', 9.5)
+        c.drawString(x1 - 49 * mm, ym + 17 * mm, 'Sana:')
+        c.setFont('DejaVu', 10)
+        c.drawString(x1 - 49 * mm, ym + 9 * mm, '____.____.20____')
+        # footer
+        spaced(x0 + 9 * mm, y0 + 14 * mm, 'O‘Z YERIMIZNING BOYLIGI', 6.5)
+        c.setStrokeColor(red); c.setLineWidth(1.2)
+        c.line(x0 + 9 * mm, y0 + 11.5 * mm, x0 + 25 * mm, y0 + 11.5 * mm)
+        c.line(x1 - 52 * mm, y0 + 13 * mm, x1 - 52 * mm, y0 + 21 * mm)
+        spaced(x1 - 49 * mm, y0 + 18 * mm, 'PAXTADAN –', 6.5)
+        spaced(x1 - 49 * mm, y0 + 14 * mm, 'YORQIN ERTANGA!', 6.5)
+        p = c.beginPath()                                     # the navy corner band with its red stripe
+        p.moveTo(x1 - 85 * mm, y0); p.lineTo(x1 - 78 * mm, y0 + 9 * mm); p.lineTo(x1, y0 + 9 * mm); p.lineTo(x1, y0 + 6 * mm)
+        p.arcTo(x1 - 12 * mm, y0, x1, y0 + 12 * mm, startAng=0, extent=-90); p.close()
+        c.setFillColor(navy); c.drawPath(p, stroke=0, fill=1)
+        c.setStrokeColor(red); c.setLineWidth(2)
+        c.line(x1 - 89 * mm, y0 + 0.6 * mm, x1 - 82 * mm, y0 + 9 * mm)
+        spaced(x1 - 70 * mm, y0 + 3.2 * mm, 'MEHNAT QADRLANADI', 6.5, color=colors.white, gap=1.8)
+
+    for i, t in enumerate(talons):
+        if i % 2 == 0:
+            one(t, H)
+            c.setStrokeColor(navy); c.setDash(4, 3); c.setLineWidth(0.6)
+            c.line(6 * mm, half, W - 6 * mm, half)
+            c.setDash()
+            c.setFillColor(navy); c.setFont('DejaVu', 9)
+            c.drawString(4 * mm, half - 1.2 * mm, '✂')
+            c.drawRightString(W - 4 * mm, half - 1.2 * mm, '✂')
+        else:
+            one(t, half)
+            c.showPage()
+    if len(talons) % 2:
+        c.showPage()
+    c.save()
+    return buf.getvalue()

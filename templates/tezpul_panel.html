@@ -1,0 +1,60 @@
+{% extends 'base.html' %}
+{% from 'macros.html' import icon, csrf with context %}
+{% set page_title = 'TEZ-PUL panel' %}
+{% block content %}
+<div class="page-h"><h1>💵 SURXON TEZ-PUL — {{ p.day[8:10] }}.{{ p.day[5:7] }}.{{ p.day[:4] }}</h1>
+  <span class="sub">Talon bo‘yicha qo‘l terimi · 1 kg = {{ p.rate|num }} so‘m · <span id="tp-at">yangilanadi har 20 soniyada</span></span>
+  <form method="get" style="display:flex;gap:6px"><input class="input" type="date" name="kun" value="{{ p.day }}"><button class="btn btn-light btn-sm">Ko‘rish</button></form>
+  <a class="btn btn-light btn-sm" href="{{ url_for('tezpul.panel', kun=p.day, format='xlsx') }}">⬇ Excel</a>
+  <a class="btn btn-light btn-sm" href="javascript:print()">🖨 PDF / chop</a>
+  {% if can('tezpul.manage') %}<a class="btn btn-light btn-sm" href="{{ url_for('tezpul.talons') }}">🧾 Talonlar</a>{% endif %}</div>
+<div class="kpis" style="grid-template-columns:repeat(4,minmax(0,1fr))">
+  <div class="kpi"><div class="sq bg-green">{{ icon('cotton') }}</div><div><div class="label">Qabul qilingan paxta (to‘langan talonlar)</div><div class="value"><span id="k-kg">{{ p.today.kg|num(1) }}</span> <small>kg</small></div><div class="tiny muted"><span id="k-n">{{ p.today.n }}</span> ta talon</div></div></div>
+  <div class="kpi"><div class="sq bg-blue">{{ icon('cash') }}</div><div><div class="label">Kassadan berilgan naqd pul</div><div class="value"><span id="k-sum">{{ p.today.amount|num }}</span> <small>so‘m</small></div></div></div>
+  <div class="kpi"><div class="sq bg-orange">⏳</div><div><div class="label">Tasdiq kutayotgan / to‘lanmagan</div><div class="value">{{ p.wait_amount|num }} <small>so‘m</small></div><div class="tiny muted">{{ p.waiting|length }} ta talon (katta kg)</div></div></div>
+  <div class="kpi"><div class="sq bg-purple">🧾</div><div><div class="label">Mavsum jami</div><div class="value">{{ p.season.kg|num(0) }} <small>kg</small></div><div class="tiny muted">{{ p.season.amount|num }} so‘m · {{ p.season.n }} talon · qo‘lda bo‘sh {{ p.counts.get('BOSH', 0) }}</div></div></div>
+</div>
+<div class="grid">
+  {% if p.waiting %}<section class="card s12"><div class="card-h"><h3>⏳ Rahbar tasdig‘i kerak — bitta talonga {{ p.max_kg|num }} kg dan ko‘p</h3></div><div class="card-b">
+    <div class="tiny muted" style="margin-bottom:8px">Daftardan talon raqami bo‘yicha tekshiring. To‘g‘ri bo‘lsa — Tasdiqlash (kerak bo‘lsa kg ni tuzating); xato yozilgan bo‘lsa — Rad etish (kassir qayta yozadi).</div>
+    <div class="table-wrap"><table class="t"><thead><tr><th>Talon</th><th>Brigada</th><th class="num">Kg</th><th class="num">Summa</th><th>Kassir</th><th>Holat</th><th></th></tr></thead><tbody>
+    {% for w in p.waiting %}<tr><td class="b">№{{ num(w.number) }}</td><td>{{ w.brigade or '—' }}</td><td class="num">{{ w.kg|num(1) }}</td><td class="num">{{ (w.kg * p.rate)|round|int|num }}</td>
+      <td>{{ w.entered_name or '' }} <span class="tiny muted">{{ (w.entered_at or '')[11:16] }}</span></td><td><span class="badge {{ status[w.status][1] }}">{{ status[w.status][0] }}</span></td>
+      <td>{% if w.status == 'KUTILMOQDA' and can('tezpul.manage') %}
+        <form method="post" action="{{ url_for('tezpul.approve') }}" style="display:inline-flex;gap:4px">{{ csrf() }}<input type="hidden" name="number" value="{{ w.number }}"><input class="input" name="kg" value="{{ w.kg }}" style="width:80px"><button class="btn btn-primary btn-sm">Tasdiqlash</button></form>
+        <form method="post" action="{{ url_for('tezpul.reject') }}" style="display:inline">{{ csrf() }}<input type="hidden" name="number" value="{{ w.number }}"><button class="btn btn-light btn-sm">Rad etish</button></form>{% endif %}</td></tr>{% endfor %}
+    </tbody></table></div></div></section>{% endif %}
+  <section class="card s6"><div class="card-h"><h3>👥 Brigadalar natijasi</h3></div><div class="card-b">
+    <div class="table-wrap"><table class="t"><thead><tr><th>Brigada</th><th class="num">Talon</th><th class="num">To‘langan kg</th><th class="num">Summa</th><th class="num">Punkt qabul (qo‘l)</th><th class="num">Farq</th></tr></thead><tbody>
+    {% for b in p.brigades %}<tr><td class="b">{{ b.name }}</td><td class="num">{{ b.n }}</td><td class="num">{{ b.kg|num(1) }}</td><td class="num">{{ b.amount|num }}</td>
+      <td class="num">{{ b.punkt_kg|num(0) if b.punkt_kg else '—' }}</td>
+      <td class="num">{% if b.punkt_kg %}{% set d = b.kg - b.punkt_kg %}<span class="badge {{ 'b-red' if d > b.punkt_kg * 0.03 else 'b-green' }}">{{ d|num(0) }}</span>{% else %}—{% endif %}</td></tr>
+    {% else %}<tr><td colspan="6" class="muted">Bugun hali to‘lov yo‘q.</td></tr>{% endfor %}
+    </tbody></table></div>
+    <div class="tiny muted" style="margin-top:6px">Farq = to‘langan kg − punkt shu kuni shu brigadadan qabul qilgan qo‘l terimi kg. Musbat va katta bo‘lsa — daftar va talonlarni tekshiring.</div>
+  </div></section>
+  <section class="card s6"><div class="card-h"><h3>💵 Kassirlar hisoboti</h3></div><div class="card-b">
+    <div class="table-wrap"><table class="t"><thead><tr><th>Kassir</th><th>Kassa</th><th class="num">Talon</th><th class="num">Berildi</th><th class="num">Kassa qoldig‘i</th><th>Oxirgi</th></tr></thead><tbody>
+    {% for c in p.cashiers %}<tr><td class="b">{{ c.name }}</td><td>{{ c.box or '' }}</td><td class="num">{{ c.n }}</td><td class="num">{{ c.amount|num }}</td><td class="num">{{ c.balance|num }}</td><td>{{ c.last_at[11:16] }}</td></tr>
+    {% else %}<tr><td colspan="6" class="muted">—</td></tr>{% endfor %}
+    </tbody></table></div></div></section>
+  <section class="card s6"><div class="card-h"><h3>⚠️ Xatoliklar (rad etilgan skanerlar)</h3></div><div class="card-b">
+    {% for e in p.errors %}<div class="small">{{ e.created_at[11:16] }} · <b>{{ {'soxta': 'Soxta / tanilmagan QR', 'takror': 'Qayta skaner — allaqachon to‘langan', 'bekor': 'Bekor qilingan talon'}.get(e.kind, e.kind) }}</b>
+      · {{ e.code }} · {{ e.name or '' }}</div>{% else %}<div class="muted small">Bugun xato yo‘q.</div>{% endfor %}
+  </div></section>
+  <section class="card s6"><div class="card-h"><h3>🕘 Oxirgi to‘lovlar</h3></div><div class="card-b">
+    {% for r in p.recent %}<div class="small">{{ r.paid_at[11:16] }} · <b>№{{ num(r.number) }}</b> · {{ r.kg|num(1) }} kg · {{ r.amount|num }} so‘m · {{ r.paid_name or '' }}{% if r.brigade %} · {{ r.brigade }}{% endif %}</div>{% else %}<div class="muted small">—</div>{% endfor %}
+  </div></section>
+</div>
+<script>
+(() => { if ({{ (p.day != today)|tojson }}) return;
+  const nf = v => Math.round(v).toLocaleString('ru-RU').replace(/ |,/g, ' ');
+  setInterval(async () => { try {
+    const j = await (await fetch({{ url_for('tezpul.panel_json')|tojson }}, { headers: { 'X-Requested-With': 'fetch' } })).json();
+    if (!j.ok) return;
+    document.getElementById('k-kg').textContent = (Math.round(j.today.kg * 10) / 10).toString().replace('.', ',');
+    document.getElementById('k-n').textContent = j.today.n; document.getElementById('k-sum').textContent = nf(j.today.amount);
+    document.getElementById('tp-at').textContent = 'yangilandi ' + j.at;
+  } catch (_) {} }, 20000); })();
+</script>
+{% endblock %}

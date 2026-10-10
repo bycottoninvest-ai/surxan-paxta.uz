@@ -48,6 +48,7 @@
       {{ nav('yoqilgi.op_history', 'Tarix', 'history') }}
       {{ nav('auth.change_password', 'Parolni almashtirish', 'shield') }}
       {% elif current_user['role'] == 'cashier' %}
+      {{ nav('tezpul.kassa', 'TEZ-PUL (talon)', 'camera') }}
       {{ nav('hamyon.home', 'Mening kassam', 'wallet', None, ['hamyon.home', 'hamyon.pay', 'hamyon.order', 'hamyon.expense', 'hamyon.entry', 'hamyon.fix']) }}
       {{ nav('hamyon.today', 'Bugungi amallar', 'list') }}
       {{ nav('acct.cashier', 'Pul beriladiganlar', 'cash') }}
@@ -76,6 +77,8 @@
       {{ nav('acct.home', 'Buxgalteriya (bosh)', 'calc', 'acct.view', ['acct.home', 'acct.income', 'acct.workers', 'acct.worker', 'acct.combines', 'acct.cotton', 'acct.cash', 'acct.day_close', 'acct.debts', 'acct.report', 'acct.expenses']) }}
       {% if current_user['role'] == 'accountant' %}{{ nav('hamyon.home', 'Mening kassam', 'wallet', None, ['hamyon.home', 'hamyon.pay', 'hamyon.pay_worker', 'hamyon.expense', 'hamyon.income', 'hamyon.entry', 'hamyon.fix']) }}
       {{ nav('hamyon.today', 'Bugungi amallar', 'list') }}{% endif %}
+      {{ nav('tezpul.panel', 'TEZ-PUL (talon to‘lovlari)', 'cash', 'tezpul.panel', ['tezpul.panel', 'tezpul.talons']) }}
+      {% if current_user['role'] == 'accountant' %}{{ nav('tezpul.kassa', 'TEZ-PUL kassa (skaner)', 'camera') }}{% endif %}
       {{ nav('acct.cashier', 'Kassir', 'cash', 'payouts.pay', ['acct.cashier']) }}
       {{ nav('acct.payouts', 'Ishchilarga to‘lovlar', 'card', 'payouts.view', ['acct.payouts']) }}
       {{ nav('finance.payments', 'To‘lovlar', 'card', 'payments.view') }}
