@@ -15,8 +15,8 @@ def test_each_section_has_its_own_installable_app(app, world):
     m = anon.get('/ilova/kassa/manifest.webmanifest').get_json()
     assert m['id'] == '/ilova/kassa' and m['start_url'] == '/ilova/kassa/ochish' and m['display'] == 'standalone'
     assert {i['sizes'] for i in m['icons']} == {'192x192', '512x512'}
-    ids = {anon.get(f'/ilova/{k}/manifest.webmanifest').get_json()['id'] for k in ('terim', 'kassa', 'buxgalter', 'punkt', 'rahbar')}
-    assert len(ids) == 5                                       # five apps can sit side by side on one phone
+    ids = {anon.get(f'/ilova/{k}/manifest.webmanifest').get_json()['id'] for k in ('terim', 'kassa', 'buxgalter', 'punkt', 'rahbar', 'admin')}
+    assert len(ids) == 6                                       # five apps can sit side by side on one phone
     from PIL import Image
     png = anon.get('/ilova/terim/icon-512.png')
     assert png.status_code == 200 and Image.open(io.BytesIO(png.data)).size == (512, 512)
@@ -29,6 +29,10 @@ def test_each_section_has_its_own_installable_app(app, world):
     tally = make_user(app, world['admin'], 'terim1', 'tally')
     assert tally.get('/ilova/terim/ochish').headers['Location'].endswith('/dala')
     assert tally.get('/ilova/kassa/ochish').headers['Location'].endswith('/')         # not theirs: home as usual
+    assert tally.get('/ilova/admin/ochish').headers['Location'].endswith('/')
+    assert world['rahbar'].get('/ilova/rahbar/ochish').headers['Location'].endswith('/rahbar')
+    assert world['admin'].get('/ilova/admin/ochish').headers['Location'].endswith('/')
+    assert '/ilova/admin/manifest.webmanifest' in world['admin'].get('/').get_data(as_text=True)
     # the section's pages link their own app, so the installed icon and name stay
     assert '/ilova/terim/manifest.webmanifest' in tally.get('/dala').get_data(as_text=True)
     assert '/ilova/buxgalter/manifest.webmanifest' in world['bux'].get('/hamyon').get_data(as_text=True)

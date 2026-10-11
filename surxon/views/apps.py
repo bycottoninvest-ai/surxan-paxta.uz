@@ -1,4 +1,4 @@
-"""Separate phone apps for each section (SURXON Terim, Kassa, Buxgalter, Punkt, Rahbar).
+"""Separate phone apps for each section (SURXON Terim, Kassir, Buxgalter, Punkt, Rahbar, Admin).
 
 The admin sends a section's link in Telegram (/ilova/kassa); the worker opens it and taps “O‘RNATISH”, and the phone
 gets an icon of its own that opens straight on that section's screen. Each app is the same site with its own install
@@ -26,7 +26,9 @@ APPS = {
     'punkt': {'name': 'SURXON Punkt', 'label': 'PUNKT', 'color': '#7b3fd1', 'who': 'Punkt (Yunus)',
               'opens': 'Punkt ekrani: keladigan telashkalar'},
     'rahbar': {'name': 'SURXON Rahbar', 'label': 'RAHBAR', 'color': '#0b2a55', 'who': 'Rahbar, direktor',
-               'opens': 'Rahbar paneli'},
+               'opens': 'Direktor paneli (faqat ko‘rish)'},
+    'admin': {'name': 'SURXON Admin', 'label': 'ADMIN', 'color': '#c01b43', 'who': 'Admin',
+              'opens': 'Butun tizim: bosh sahifa, sozlamalar, xodimlar'},
 }
 
 
@@ -44,6 +46,8 @@ def _start(key):
         return url_for('punkt.home')
     if key == 'rahbar' and can('reports.finance'):
         return url_for('rahbar.home')
+    if key == 'admin' and user['role'] == 'admin':
+        return url_for('main.dashboard')
     return None
 
 
@@ -67,6 +71,9 @@ def app_for_page():
         return 'punkt'
     if ep.startswith('rahbar.'):
         return 'rahbar'
+    user = g.get('user')
+    if user and user['role'] == 'admin' and (ep == 'main.dashboard' or ep.startswith('admin.')):
+        return 'admin'
     return None
 
 
