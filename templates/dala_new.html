@@ -12,7 +12,10 @@
   <form method="post" class="d-form" id="d-open">{{ csrf() }}{{ uuid_field() }}
     <input type="hidden" name="lat" id="d-lat"><input type="hidden" name="lon" id="d-lon"><input type="hidden" name="acc" id="d-acc">
     {% if tezpul %}
-    <label class="d-l" style="font-size:18px">Telashkani tanlang</label>
+    <label class="d-l" style="font-size:18px">1) Terim turi</label>
+    <div class="d-seg d-seg-big"><label><input type="radio" name="method" value="hand" checked data-rate="{{ rate_hand }}"><span>✋ Qo‘l terimi (talon)</span></label>
+      <label><input type="radio" name="method" value="combine" data-rate="{{ rate_combine }}"><span>🚜 Kombayn</span></label></div>
+    <label class="d-l" style="font-size:18px">2) Telashkani tanlang</label>
     <input type="hidden" name="trailer_id" id="d-trailer" required>
     <div class="d-trl">{% for t in trailers %}<button type="button" data-id="{{ t.id }}">{{ t.code }}{% if t.plate %}<small>{{ t.plate }}</small>{% endif %}</button>{% endfor %}</div>
     <div class="tiny muted" id="d-auto" style="margin:8px 0 4px"></div>
@@ -27,9 +30,6 @@
     <script id="d-rounds" type="application/json">{{ rounds|tojson }}</script>
     {% if stations|length > 1 %}<label class="d-l">Qaysi punktga?</label>
     <select name="station_id" required>{% for st in stations %}<option value="{{ st.id }}">{{ st.name }}</option>{% endfor %}</select>{% endif %}
-    <label class="d-l">Terim turi</label>
-    <div class="d-seg"><label><input type="radio" name="method" value="hand" checked data-rate="{{ rate_hand }}"><span>Qo‘l terimi</span></label>
-      <label><input type="radio" name="method" value="combine" data-rate="{{ rate_combine }}"><span>Kombayn</span></label></div>
     <label class="d-l">Brigadir</label>
     <select name="brigadier_id" required id="d-brig"><option value="">— tanlang —</option>{% for b in brigadiers %}<option value="{{ b.id }}">{{ b.name }}</option>{% endfor %}</select>
     <label class="d-l">Terim narxi <span class="muted">(so‘m/kg)</span></label>
@@ -68,7 +68,9 @@
 {% endblock %}
 {% block scripts %}<style>.d-trl{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
 .d-trl button{background:#1e9e4a;color:#fff;border:0;border-radius:16px;min-height:74px;font-size:24px;font-weight:900;box-shadow:0 4px 12px rgba(30,158,74,.3)}
-.d-trl button small{display:block;font-size:12px;font-weight:600;opacity:.85}</style><link rel="stylesheet" href="{{ url_for('static', filename='vendor/leaflet/leaflet.css') }}">
+.d-trl button small{display:block;font-size:12px;font-weight:600;opacity:.85}
+.d-seg-big span{min-height:56px;font-size:17px!important;font-weight:800}
+.d-trl.cmb button{background:#b45309;box-shadow:0 4px 12px rgba(180,83,9,.3)}</style><link rel="stylesheet" href="{{ url_for('static', filename='vendor/leaflet/leaflet.css') }}">
 <script src="{{ url_for('static', filename='vendor/leaflet/leaflet.js') }}"></script>
 <script src="{{ url_for('static', filename='js/basemap.js') }}"></script>
 <script id="d-fields" type="application/json">[{% for f in fields if f.polygon_json %}{"id": {{ f.id }}, "label": {{ (f.code ~ ' · ' ~ f.name)|tojson }}, "poly": {{ f.polygon_json|safe }}}{{ ',' if not loop.last }}{% endfor %}]</script>
@@ -164,6 +166,9 @@
     const say = () => { const o = f.selectedOptions[0], bo = b.selectedOptions[0];
       auto.textContent = `${o ? o.textContent : ''} · ${bo && b.value ? bo.textContent : 'brigada tanlanmagan'} · ${r.value ? r.value + ' so‘m/kg' : 'narx yozilmagan'}`; };
     [f, b, r].forEach(x => x.addEventListener('change', say)); setInterval(say, 1500); say();
+    const trl = document.querySelector('.d-trl');      // combine chosen: the trailer buttons turn orange
+    document.querySelectorAll('input[name=method]').forEach(m => m.addEventListener('change', () =>
+      trl.classList.toggle('cmb', document.querySelector('input[name=method]:checked').value === 'combine')));
     document.querySelectorAll('.d-trl button').forEach(btn => btn.addEventListener('click', () => {
       document.getElementById('d-trailer').value = btn.dataset.id;
       const form = document.getElementById('d-open');
