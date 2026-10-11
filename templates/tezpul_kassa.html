@@ -126,10 +126,14 @@ button{font:inherit;border:0;cursor:pointer}
   function online() { const on = navigator.onLine; $('net').classList.toggle('on', !on); paint(); return on; }
   window.addEventListener('online', online); window.addEventListener('offline', online);
 
-  async function post(url, pairs) {
+  // slow internet: never wait forever; a PUL BERILDI that got no answer is pressed again with the same id (paid once)
+  async function post(url, pairs, ms) {
     const fd = new FormData(); fd.append('_csrf', CSRF);
     pairs.forEach(([k, v]) => fd.append(k, v == null ? '' : v));
-    const r = await fetch(url, { method: 'POST', body: fd, credentials: 'same-origin', headers: { 'X-Requested-With': 'fetch' } });
+    const ctl = window.AbortController ? new AbortController() : null, t = ctl && setTimeout(() => ctl.abort(), ms || 15000);
+    let r;
+    try { r = await fetch(url, { method: 'POST', body: fd, credentials: 'same-origin', headers: { 'X-Requested-With': 'fetch' }, signal: ctl && ctl.signal }); }
+    finally { if (t) clearTimeout(t); }
     let j = {}; try { j = await r.json(); } catch (_) { j = { ok: false, error: 'Serverdan javob kelmadi.' }; }
     if (r.status === 401) { location.reload(); }
     return j;
@@ -151,7 +155,7 @@ button{font:inherit;border:0;cursor:pointer}
     if (stop) { stop(); stop = null; }
     if (!online()) { refusedView('net', 'Internet yo‘q', 'Talonni tekshirib bo‘lmaydi. Aloqa kelishini kuting.'); return; }
     let j;
-    try { j = await post(URL_LOOK, [['code', code], ['manual_code', manual]]); }
+    try { j = await post(URL_LOOK, [['code', code], ['manual_code', manual]], 12000); }
     catch (_) { refusedView('net', 'Internet yo‘q', 'Server javob bermadi. Qayta urinib ko‘ring.'); return; }
     if (!j.ok) { if (j.refused) refused(j); else refusedView('soxta', 'Xato', j.error || 'Talon tanilmadi.'); return; }
     $('toast').classList.remove('on');
@@ -191,7 +195,7 @@ button{font:inherit;border:0;cursor:pointer}
     const pairs = [['client_uuid', payId]];
     basket.forEach(x => { pairs.push(['code', x.code]); pairs.push(['manual_code', x.manual]); });
     let j;
-    try { j = await post(URL_PAY, pairs); }
+    try { j = await post(URL_PAY, pairs, 25000); }
     catch (_) {
       busy = false; paint();
       err('Javob kelmadi. Pul berilganmi — bilinmadi. Internet kelgach yana PUL BERILDI ni bosing: ikki marta yozilmaydi.');

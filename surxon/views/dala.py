@@ -89,7 +89,9 @@ def home():
                   WHERE f.active=1 AND f.polygon_json IS NOT NULL'''
                + (' AND (f.brigadier_id=? OR f.brigadier_id IS NULL)' if brig else '') + ' ORDER BY f.code',
                ((current_season(get_db()),) * 2) + ((brig,) if brig else ()))
+    from ..tezpul import in_use
     return render_template('dala_home.html', open_trips=open_trips, done_trips=done_trips, today=today, fields=fields,
+                           tezpul=in_use(),
                            map_center=get_setting('map_center'))
 
 

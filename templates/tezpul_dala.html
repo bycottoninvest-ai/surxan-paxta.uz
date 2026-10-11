@@ -119,10 +119,14 @@ button{font:inherit;border:0;cursor:pointer}
   function online() { $('net').classList.toggle('on', !navigator.onLine); return navigator.onLine; }
   window.addEventListener('online', () => { online(); flush(); }); window.addEventListener('offline', online);
 
-  async function post(url, data) {
+  // slow internet: never wait forever — after `ms` the request is given up (a save goes to the phone's queue)
+  async function post(url, data, ms) {
     const fd = new FormData(); fd.append('_csrf', CSRF);
     Object.entries(data).forEach(([k, v]) => fd.append(k, v == null ? '' : v));
-    const r = await fetch(url, { method: 'POST', body: fd, credentials: 'same-origin', headers: { 'X-Requested-With': 'fetch' } });
+    const ctl = window.AbortController ? new AbortController() : null, t = ctl && setTimeout(() => ctl.abort(), ms || 10000);
+    let r;
+    try { r = await fetch(url, { method: 'POST', body: fd, credentials: 'same-origin', headers: { 'X-Requested-With': 'fetch' }, signal: ctl && ctl.signal }); }
+    finally { if (t) clearTimeout(t); }
     if (r.status === 401) { location.reload(); }
     let j = {}; try { j = await r.json(); } catch (_) { throw new Error('net'); }
     return j;
@@ -145,7 +149,7 @@ button{font:inherit;border:0;cursor:pointer}
     if (!no) { msg('soxta', 'TALON TANILMADI', 'Bu bizning talon emas yoki QR buzilgan.'); return; }
     if (online()) {
       try {
-        const j = await post(URL_LOOK, { code, manual_code: manual });
+        const j = await post(URL_LOOK, { code, manual_code: manual }, 4000);   // slow: skip the check, the save checks again
         if (!j.ok) { if (j.refused) { refused(j); return; } msg('soxta', 'Xato', j.error || ''); return; }
       } catch (_) { /* no answer: write it on the phone, the server checks it later */ }
     }
@@ -182,7 +186,7 @@ button{font:inherit;border:0;cursor:pointer}
   async function send(item, fromQueue) {
     if (!navigator.onLine) { if (!fromQueue) enqueue(item); return 'queued'; }
     let j;
-    try { j = await post(URL_SAVE, item); }
+    try { j = await post(URL_SAVE, item, fromQueue ? 20000 : 8000); }
     catch (_) { if (!fromQueue) enqueue(item); return 'queued'; }
     if (j.ok) { counter(j.count); if (navigator.vibrate) navigator.vibrate(60); return 'ok'; }
     if (j.refused) {

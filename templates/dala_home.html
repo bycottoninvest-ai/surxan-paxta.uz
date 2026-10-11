@@ -7,7 +7,7 @@
   <div class="small muted">Bugun siz yozdingiz: <b>{{ today.kg|num }} kg</b> · {{ today.people }} kishi</div>
 
   {% for t in open_trips %}
-  <a class="d-continue" href="{{ url_for('dala.trip', load_id=t.id) }}">
+  <a class="d-continue" href="{{ url_for('tezpul.dala', load_id=t.id) if tezpul and t.method != 'combine' else url_for('dala.trip', load_id=t.id) }}">
     <div class="small">Ochiq telashka</div>
     <b>{{ t.trip_no }} · {{ t.trailer_code }}</b>
     <div class="small">{{ t.field_name }} · {{ t.brigadier_name }} · {{ 'Kombayn' if t.method == 'combine' else 'Qo‘l terimi' }}{% if t.rate %} · {{ t.rate|num }} so‘m/kg{% endif %}</div>
@@ -40,6 +40,11 @@
 </div>
 {% endblock %}
 {% block scripts %}<script src="{{ url_for('static', filename='js/qrscan.js') }}?v={{ version }}"></script>
+{% if tezpul %}<script>
+// keep the talon scanner of every open hand trailer on the phone, so it opens without internet too
+if (navigator.onLine) {{ (open_trips|selectattr('method', 'ne', 'combine')|map(attribute='id')|list)|tojson }}.forEach(id =>
+  fetch('/tezpul/dala/' + id, { headers: { 'X-SPX-Prefetch': '1' }, credentials: 'same-origin' }).catch(() => {}));
+</script>{% endif %}
 <script>
 (() => {   // the QR stuck on a trailer: opens its trip (or the opening page with this trailer chosen)
   const btn = document.getElementById('d-tqbtn'), box = document.getElementById('d-tq'), msg = document.getElementById('d-tq-msg');

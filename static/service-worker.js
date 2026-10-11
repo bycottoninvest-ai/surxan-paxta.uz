@@ -1,9 +1,9 @@
 /* SURXON PAXTA service worker.
-   Public static assets are cached. Of the logged-in pages only the tally's field pages (/dala…) are kept, so the
+   Public static assets are cached. Of the logged-in pages only the tally's field pages (/dala…, /tezpul/dala…) are kept, so the
    work can go on without internet; they are deleted on logout / login, so the next person on a shared phone never
    sees them. API responses and photos are never stored.
    Offline data entry is handled by the IndexedDB queue in app.js, not by this cache. */
-const VERSION = 'surxon-static-v4';
+const VERSION = 'surxon-static-v5';
 const PAGES = 'surxon-field-pages';        // the tally's own field pages, so they open without internet
 const ASSETS = [
   '/static/css/app.css', '/static/js/app.js', '/static/icons.svg',
@@ -45,16 +45,17 @@ self.addEventListener('fetch', e => {
     e.respondWith(caches.delete(PAGES).then(() => fetch(req)).catch(() => caches.match('/offline')));
     return;
   }
-  if ((req.mode === 'navigate' || req.headers.get('X-SPX-Prefetch')) && /^\/dala(\/|$)/.test(url.pathname) && !url.pathname.endsWith('.pdf')) {
-    // field pages: network first; the last copy opens when there is no internet (entries go to the offline queue)
+  if ((req.mode === 'navigate' || req.headers.get('X-SPX-Prefetch')) && /^\/(dala|tezpul\/dala)(\/|$)/.test(url.pathname) && !url.pathname.endsWith('.pdf')) {
+    // field pages (and the TEZ-PUL talon scanner): network first; with no internet — or internet so slow that nothing
+    // comes in 5 s — the last copy opens at once (entries go to the offline queue and are sent later)
     e.respondWith(caches.open(PAGES).then(async cache => {
-      try {
-        const res = await fetch(req);
-        if (res.ok && !res.redirected) cache.put(url.pathname, res.clone());
-        return res;
-      } catch (_) {
-        return (await cache.match(url.pathname)) || (await caches.match('/offline'));
+      const net = fetch(req).then(res => { if (res.ok && !res.redirected) cache.put(url.pathname, res.clone()); return res; });
+      const cached = await cache.match(url.pathname);
+      if (!cached) {
+        try { return await net; } catch (_) { return (await caches.match('/offline')); }
       }
+      try { return await Promise.race([net, new Promise((_, no) => setTimeout(() => no(new Error('slow')), 5000))]); }
+      catch (_) { return cached; }
     }));
     return;
   }
