@@ -9,18 +9,18 @@
       .pr-row{display:flex;gap:10px;margin:10px 0}.pr-row label{display:block;font-size:13px;color:#5b6b80;margin-bottom:4px}.pr-row>div{flex:1}
       .pr-row input{width:100%;font-size:22px;padding:8px 10px;border:1px solid var(--line,#d6dde7);border-radius:10px}.pr .btn{width:100%}</style>
     <div class="pr-wrap">
-      <form method="get" action="{{ url_for('admin.blanks_print') }}" target="_blank" class="pr">
+      <form method="get" action="{{ url_for('admin.blanks_print') }}" target="_blank" class="pr" data-prefix="PB" data-per="2">
         <b>Dala nakladnoyi (PB)</b> <span class="tiny muted">— A4 da 2 ta, hisobchilarga · chap nazorat qismi bizda qoladi</span>
         <div class="pr-row"><div><label>Qaysi raqamdan</label><input name="dan" value="{{ first_free }}" inputmode="numeric"></div>
           <div><label>Nechta</label><input name="soni" value="10" inputmode="numeric"></div></div>
         <button class="btn btn-primary">{{ icon('printer','sm') }} PDF ochish</button>
-        <div class="tiny muted" style="margin-top:6px">1 dan 10 ta → PB-0001 … PB-0010 (5 varaq). PDF ochilgach Ctrl + P.</div></form>
-      <form method="get" action="{{ url_for('admin.group_blanks_print') }}" target="_blank" class="pr">
+        <div class="tiny muted pr-hint" style="margin-top:6px">PDF ochilgach Ctrl + P.</div></form>
+      <form method="get" action="{{ url_for('admin.group_blanks_print') }}" target="_blank" class="pr" data-prefix="UY" data-per="1">
         <b>Umumiy nakladnoy (UY)</b> <span class="tiny muted">— A4 da 1 ta, Yunusga</span>
         <div class="pr-row"><div><label>Qaysi raqamdan</label><input name="dan" value="{{ uy_free }}" inputmode="numeric"></div>
           <div><label>Nechta</label><input name="soni" value="10" inputmode="numeric"></div></div>
         <button class="btn btn-primary">{{ icon('printer','sm') }} PDF ochish</button>
-        <div class="tiny muted" style="margin-top:6px">8 dan 10 ta → UY-0008 … UY-0017.</div></form>
+        <div class="tiny muted pr-hint" style="margin-top:6px"></div></form>
     </div>
     {% if uy.received %}<div style="margin-top:12px"><b class="small">Oxirgi umumiy yuklar</b>{% for g in uy.received[:15] %}<div class="small"><a class="link" href="{{ url_for('punkt.group', token=g.token) }}">{{ g.number }}</a> · {{ g.n }} ta · {{ {'OCHIQ': 'ochiq', 'YUBORILDI': 'punktga kirdi', 'QABUL': 'qabul ' ~ (g.accepted_kg|num) ~ ' kg', 'BEKOR': 'bekor'}.get(g.status, g.status) }}</div>{% endfor %}</div>{% endif %}
     <details style="margin-top:14px"><summary class="small link">Yangi raqamlar yaratish — faqat blanklar tugaganda (bor: PB {{ ov.total }} ta, UY {{ uy.batches|sum(attribute='n') }} ta)</summary>
@@ -68,4 +68,16 @@
     </tbody></table></div>
   </div></section>
 </div>
+<script>
+document.querySelectorAll('form.pr[data-prefix]').forEach(function (f) {
+  var hint = f.querySelector('.pr-hint'), p = f.dataset.prefix, per = +f.dataset.per;
+  function pad(n) { return p + '-' + String(n).padStart(4, '0'); }
+  function show() {       // what will be printed, so a wrong start number is seen before printing
+    var a = parseInt(f.dan.value, 10), n = parseInt(f.soni.value, 10);
+    if (!(a > 0 && n > 0)) { hint.textContent = 'Raqam va sonini yozing.'; return; }
+    hint.textContent = pad(a) + ' … ' + pad(a + n - 1) + ' — ' + n + ' ta, ' + Math.ceil(n / per) + ' varaq. PDF ochilgach Ctrl + P.';
+  }
+  f.dan.addEventListener('input', show); f.soni.addEventListener('input', show); show();
+});
+</script>
 {% endblock %}
