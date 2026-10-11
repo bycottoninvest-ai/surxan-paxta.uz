@@ -15,6 +15,8 @@
   <div class="kpi"><div class="sq bg-purple">🧾</div><div><div class="label">Mavsum: to‘langan</div><div class="value">{{ p.season.amount|num }} <small>so‘m</small></div><div class="tiny muted">{{ p.season.n }} talon · {{ p.season.kg|num(0) }} kg · bo‘sh talon {{ p.blank }}</div></div></div>
 </div>
 {% if p.legacy %}<div class="notice">⚠️ {{ p.legacy }} ta talon eski tartibda (kassir kg yozgan) qolgan — Talonlar sahifasida bekor qiling.</div>{% endif %}
+{% for s in p.self_paid %}<div class="notice" style="background:#fde9ee;border-color:#f3a3b5;color:#a0153a">🔴 <b>{{ s.name }}</b> o‘zi kg yozib, o‘zi pul bergan:
+  {{ s.n }} talon · {{ s.kg|num(1) }} kg · {{ s.amount|num }} so‘m — talonlar: {% for x in (s.numbers or '').split(',')[:30] %}{{ num(x|int) }}{% if not loop.last %}, {% endif %}{% endfor %}{% if s.n > 30 %} …{% endif %}. Daftar va punkt bilan solishtiring.</div>{% endfor %}
 <div class="grid">
   <section class="card s6"><div class="card-h"><h3>👥 Brigadalar natijasi</h3></div><div class="card-b">
     <div class="table-wrap"><table class="t"><thead><tr><th>Brigada</th><th class="num">Talon</th><th class="num">Kg</th><th class="num">Hisoblangan</th><th class="num">Berildi</th><th class="num">Punkt qabul (qo‘l)</th><th class="num">Farq</th></tr></thead><tbody>

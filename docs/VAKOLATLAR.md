@@ -74,3 +74,14 @@ Qolgan bo‘limlar “Boshqa” menyusida. Kompyuterda to‘liq dashboard ochila
 
 - **Azizbek ERP** — alohida kalit, faqat GET, faqat Admin belgilagan ma’lumot turlari (`docs/ERP_API.md`).
 - **TV ekran** — alohida kalit. Faqat ishlab chiqarish ko‘rsatkichlari ko‘rinadi, pul va ishchi ismlari ko‘rinmaydi.
+
+## O‘rinbosar (v2.39)
+Hisobchi yoki kassir kelmay qolsa: Admin → Xodimlar → odam yonida **🔁 Kassir o‘rniga** / **🔁 Hisobchi o‘rniga**.
+Muddat: bugun, 2, 3 yoki 7 kun — oxirgi kun tugashi bilan o‘zi o‘chadi (yoki “O‘rinbosarlikni olish”).
+Hisobchiga kassa berilsa, qaysi kassadan pul berishi tanlanadi. Faqat hisobchi ↔ kassir juftligi.
+Bir odam o‘zi kg yozib, o‘zi pul bersa — TEZ-PUL panelida qizil qatorda ko‘rinadi (talon raqamlari bilan).
+
+## Telefon ilovalari (v2.39)
+Har bo‘limning o‘z ilovasi: SURXON Terim, Kassir, Buxgalter, Punkt, Rahbar — havola `/ilova/<nom>`.
+Admin → Xodimlar → “Telefon ilovalari” → “Telegramga yuborish”. Xodim havolani Chrome’da ochib “O‘RNATISH” ni bosadi
+(iPhone: Safari → Ulashish → Ekranga qo‘shish). Bitta telefonda bir nechta ilova bitta login bilan ishlaydi.

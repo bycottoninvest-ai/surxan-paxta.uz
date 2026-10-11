@@ -2,6 +2,8 @@
 {% from 'macros.html' import icon, csrf with context %}
 {% set page_title = 'Xodimlar' %}
 {% block content %}
+<style>.s-standin summary{list-style:none;display:inline-block}.s-standin summary::-webkit-details-marker{display:none}
+.s-standin-f{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:6px;max-width:420px}.s-standin-f select{min-height:36px}</style>
 <div class="page-h"><h1>{{ icon('users','lg') }} Xodimlar va loginlar</h1><span class="sub">Rol yonida ismni yozing → login va parol o‘zi chiqadi. Odam almashsa: eskisini “O‘chirish”, yangisini qo‘shing.</span></div>
 
 {% if issued %}
@@ -14,6 +16,22 @@
 </div>
 {% endif %}
 
+<section class="card no-print" id="ilovalar">
+  <div class="card-h"><h3>📲 Telefon ilovalari</h3></div>
+  <div class="card-b">
+    <div class="small muted" style="margin-bottom:8px">Har bo‘limning o‘z ilovasi bor. Havolani xodimga Telegramda yuboring — u ochib “O‘RNATISH” ni bosadi, telefonida o‘z belgisi paydo bo‘ladi.</div>
+    {% for k, a in apps.items() %}
+    {% set link = base_url ~ url_for('apps.install', key=k) %}
+    <div class="s-person">
+      <div style="display:flex;gap:10px;align-items:center"><img src="{{ url_for('apps.icon', key=k, size=192) }}" alt="" width="40" height="40" style="border-radius:10px">
+        <div><b>{{ a.name }}</b> <span class="muted small">— {{ a.who }}</span><div class="tiny muted">{{ link }}</div></div></div>
+      <div class="row"><a class="btn btn-primary btn-sm" href="https://t.me/share/url?url={{ link|urlencode }}&text={{ (a.name ~ ' — telefoningizga o‘rnating')|urlencode }}" target="_blank" rel="noopener">Telegramga yuborish</a>
+        <a class="btn btn-light btn-sm" href="{{ url_for('apps.install', key=k) }}">Ochish</a></div>
+    </div>
+    {% endfor %}
+  </div>
+</section>
+
 {% for key, title, desc in groups %}
 {% set members = people|selectattr('role', 'equalto', key)|list %}
 <section class="card s-role">
@@ -23,10 +41,21 @@
     {% for u in members %}
     <div class="s-person {{ 'off' if not u.active }}">
       <div><b>{{ u.full_name }}</b> <span class="muted small">login: {{ u.username }}{% if u.station_name %} · {{ u.station_name }}{% endif %}</span>
+        {% set si = standin_of(u) %}{% if si and u.active %}<span class="badge b-orange">🔁 {{ role_labels[si] }} o‘rnida · {{ u.standin_until|d }} gacha</span>{% endif %}
         {% if not u.active %}<span class="badge b-gray">o‘chirilgan</span>{% elif u.last_login_at %}<span class="tiny muted"> · oxirgi kirish {{ u.last_login_at[:16] }}</span>{% else %}<span class="tiny muted"> · hali kirmagan</span>{% endif %}</div>
       <div class="row no-print">
         {% if u.active %}
         <form method="post">{{ csrf() }}<input type="hidden" name="action" value="reset"><input type="hidden" name="uid" value="{{ u.id }}"><button class="btn btn-light btn-sm">Yangi parol</button></form>
+        {% if u.role in ('tally', 'cashier') %}
+        {% if si %}<form method="post">{{ csrf() }}<input type="hidden" name="action" value="standin_off"><input type="hidden" name="uid" value="{{ u.id }}"><button class="btn btn-light btn-sm">🔁 O‘rinbosarlikni olish</button></form>
+        {% else %}<details class="s-standin"><summary class="btn btn-light btn-sm">🔁 {{ 'Kassir' if u.role == 'tally' else 'Hisobchi' }} o‘rniga</summary>
+          <form method="post" class="s-standin-f">{{ csrf() }}<input type="hidden" name="action" value="standin"><input type="hidden" name="uid" value="{{ u.id }}">
+            <div class="tiny muted">{{ 'Kassir kelmasa: shu hisobchi pul ham beradi.' if u.role == 'tally' else 'Hisobchi kelmasa: shu kassir kg ham yozadi.' }} Muddat tugasa o‘zi o‘chadi.</div>
+            {% if u.role == 'tally' %}<select name="cashbox_id" required><option value="">Qaysi kassadan?</option>{% for b in cashboxes %}<option value="{{ b.id }}">{{ b.name }}</option>{% endfor %}</select>{% endif %}
+            <select name="days"><option value="1">Faqat bugun</option><option value="2">2 kun</option><option value="3">3 kun</option><option value="7">7 kun</option></select>
+            <button class="btn btn-primary btn-sm">Berish</button>
+          </form></details>{% endif %}
+        {% endif %}
         {% if u.id != current_user['id'] %}<form method="post" data-confirm="{{ u.full_name }} o‘chirilsinmi? U endi kira olmaydi, lekin yozgan hamma ma’lumoti saqlanadi.">{{ csrf() }}<input type="hidden" name="action" value="off"><input type="hidden" name="uid" value="{{ u.id }}"><button class="btn btn-ghost btn-sm" style="color:var(--red)">O‘chirish</button></form>{% endif %}
         {% else %}
         <form method="post">{{ csrf() }}<input type="hidden" name="action" value="on"><input type="hidden" name="uid" value="{{ u.id }}"><button class="btn btn-ghost btn-sm">Qaytarish</button></form>

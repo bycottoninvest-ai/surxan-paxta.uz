@@ -15,7 +15,7 @@ from .outbox import enqueue
 from .photos import store_photo
 from .security import ROLES, audit
 from .settings import get_bool, get_float, get_setting
-from .utils import UserError, clean_text, name_key, now_str, today_str
+from .utils import UserError, clean_text, name_key, now_str, parse_int, today_str
 
 WAYBILL_PREFIX = 'PA-'
 
@@ -1421,6 +1421,47 @@ def set_user_active(actor, uid, active):
     return u['full_name']
 
 
+def set_standin(actor, uid, days, cashbox_id=None):
+    """O‘rinbosar: a field clerk gets the cashier's screens (with the kassa they pay from) — or a cashier the clerk's —
+    for `days` days counting today; it ends by itself. Talons written and paid by the same person show in red on the
+    rahbar panel."""
+    from datetime import date, timedelta
+    from .security import STANDIN_MAX_DAYS, STANDIN_PAIRS
+    _need(actor, 'users.manage')
+    days = parse_int(days, 'Necha kun') or 1
+    if not 1 <= days <= STANDIN_MAX_DAYS:
+        raise UserError(f'O‘rinbosarlik 1 dan {STANDIN_MAX_DAYS} kungacha beriladi.')
+    with tx() as db:
+        u = db.execute('SELECT * FROM users WHERE id=? AND active=1', (uid,)).fetchone()
+        if not u or u['role'] not in STANDIN_PAIRS:
+            raise UserError('O‘rinbosarlik faqat hisobchi (terim) va kassirga beriladi.')
+        role = STANDIN_PAIRS[u['role']]
+        box = u['cashbox_id']
+        if role == 'cashier':
+            box = parse_int(cashbox_id, 'Kassa', required=False)
+            if not box or not db.execute('SELECT 1 FROM cashboxes WHERE id=? AND active=1', (box,)).fetchone():
+                raise UserError('Qaysi kassadan pul berishini tanlang.')
+        until = (date.fromisoformat(today_str()) + timedelta(days=days - 1)).isoformat()
+        db.execute('UPDATE users SET standin_role=?, standin_until=?, cashbox_id=? WHERE id=?', (role, until, box, uid))
+        audit(db, actor, 'STANDIN', 'user', uid, old={'standin_role': u['standin_role'], 'standin_until': u['standin_until']},
+              new={'standin_role': role, 'standin_until': until, 'cashbox_id': box})
+    return u['full_name'], role, until
+
+
+def clear_standin(actor, uid):
+    _need(actor, 'users.manage')
+    with tx() as db:
+        u = db.execute('SELECT * FROM users WHERE id=?', (uid,)).fetchone()
+        if not u:
+            raise UserError('Xodim topilmadi.')
+        db.execute('UPDATE users SET standin_role=NULL, standin_until=NULL WHERE id=?', (uid,))
+        if u['role'] == 'tally':               # the kassa was lent with the stand-in only
+            db.execute('UPDATE users SET cashbox_id=NULL WHERE id=?', (uid,))
+        audit(db, actor, 'STANDIN', 'user', uid, old={'standin_role': u['standin_role'], 'standin_until': u['standin_until']},
+              new={'standin_role': None})
+    return u['full_name']
+
+
 def change_password(actor, uid, new_password):
     validate_password(new_password)
     with tx() as db:
@@ -1676,7 +1717,7 @@ def clerk_continue_trip(actor, load_id):
         raise UserError('Bu amal uchun huquqingiz yo‘q.')
     with tx() as db:
         load = load_row(db, load_id)
-        if actor.role == 'tally' and load['opened_by'] != actor.user_id:
+        if actor.acts_as('tally') and load['opened_by'] != actor.user_id:
             raise UserError('Faqat o‘zingiz ochgan telashkani davom ettira olasiz.')
         wb = db.execute("SELECT * FROM waybills WHERE load_id=? AND status<>'BEKOR'", (load_id,)).fetchone()
         if wb and wb['arrived_at']:

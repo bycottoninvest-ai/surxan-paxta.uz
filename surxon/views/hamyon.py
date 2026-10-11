@@ -11,7 +11,7 @@ from .. import accounting as A
 from .. import wallet as W
 from ..db import q
 from ..photos import read_upload
-from ..security import can, current_actor, perm_required
+from ..security import acts_as, can, current_actor, perm_required
 from ..settings import get_setting
 from ..utils import UserError, now_str, parse_int, parse_money, today_str
 from . import done, form_uuid, post_actor, season_arg
@@ -42,7 +42,7 @@ def home():
         ready = q(f"SELECT COUNT(*) n FROM payouts WHERE status='TAYYOR' AND (cashbox_id IS NULL OR cashbox_id IN "
                   f"({','.join('?' * len(boxes)) or 'NULL'}))", boxes, one=True)['n']
     return render_template('hamyon_home.html', boxes=W.boxes_with_balance(g.user), pending=pending, ready=ready,
-                           own_box=g.user['role'] == 'cashier' and bool(g.user['cashbox_id']))
+                           own_box=acts_as(g.user, 'cashier') and bool(g.user['cashbox_id']))
 
 
 # ------------------------------------------------------------------ pay a worker

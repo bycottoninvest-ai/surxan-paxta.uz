@@ -11,7 +11,7 @@ from ..db import q, scalar
 from ..exports import to_xlsx
 from ..photos import read_upload
 from ..reporting import PERIODS, finance_summary, period_range, summary_pdf
-from ..security import can, perm_required, require
+from ..security import acts_as, can, perm_required, require
 from ..services import EXPENSE_CATEGORIES, add_expense
 from ..settings import get_setting
 from ..utils import UserError, parse_date, parse_int, parse_money, parse_number, today_str
@@ -32,7 +32,7 @@ def _ctx(**kw):
 
 
 def _my_box():
-    return g.user['cashbox_id'] if g.user['role'] == 'cashier' and g.user['cashbox_id'] else None
+    return g.user['cashbox_id'] if acts_as(g.user, 'cashier') and g.user['cashbox_id'] else None
 
 
 # ------------------------------------------------------------------ accountant home
@@ -478,7 +478,7 @@ def payouts():
 @perm_required('payouts.pay')
 def payout_pay(payout_id):
     res = A.pay_payout(post_actor(), payout_id)
-    back = request.form.get('next') or (url_for('acct.cashier') if g.user['role'] == 'cashier' else url_for('acct.payouts'))
+    back = request.form.get('next') or (url_for('acct.cashier') if acts_as(g.user, 'cashier') else url_for('acct.payouts'))
     if res['already']:
         return done(f'{res["doc_no"]} allaqachon berilgan — ikkinchi marta berilmadi.', back, already=True)
     return done(f'{A.fmt_som(res["amount"])} berildi: {res["to"]} ({res["doc_no"]}).', back, doc_no=res['doc_no'])

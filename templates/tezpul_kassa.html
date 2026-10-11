@@ -3,8 +3,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <meta name="theme-color" content="#0a2c5a"><title>SURXON TEZ-PUL · Kassa</title>
 <link rel="icon" href="{{ url_for('static', filename='img/favicon.png') }}">
-<link rel="manifest" href="{{ url_for('main.manifest') }}">
-<link rel="apple-touch-icon" href="{{ url_for('static', filename='img/apple-touch-icon.png') }}">
+{% if page_app %}<link rel="manifest" href="{{ url_for('apps.manifest', key=page_app) }}">
+<link rel="apple-touch-icon" href="{{ url_for('apps.icon', key=page_app, size=180) }}">{% else %}<link rel="manifest" href="{{ url_for('main.manifest') }}">
+<link rel="apple-touch-icon" href="{{ url_for('static', filename='img/apple-touch-icon.png') }}">{% endif %}
 <style>
 :root{--navy:#0a2c5a;--navy9:#071f40;--green:#1e9e4a;--green2:#2fb45f;--red:#e0284f;--bg:#eef3f9;--line:#e3eaf3;--muted:#6b7c93;--text:#0d2a4a}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -72,7 +73,7 @@ button{font:inherit;border:0;cursor:pointer}
 .bar.on{display:flex}.bar button{background:#1d4ed8;color:#fff;border-radius:10px;padding:8px 12px;font-weight:800;font-size:14px}
 </style></head>
 <body><div class="app">
-  <div class="top"><div class="brand">SURXON <b>TEZ-PUL</b></div><a href="{{ url_for('hamyon.home') }}">Kassa ›</a></div>
+  <div class="top"><div class="brand">SURXON <b>TEZ-PUL</b></div>{% if standin == 'tally' %}<a href="{{ url_for('dala.home') }}">🔁 Terim ›</a>{% endif %}<a href="{{ url_for('hamyon.home') }}">Kassa ›</a></div>
   <div class="net" id="net">📡 Internet yo‘q — pul berish yopiq. Aloqa kelishini kuting.</div>
   <div class="ctx"><span>{{ box_name }}</span><span>Talon → summa → PUL BERILDI</span></div>
   <div class="toast" id="toast"></div>

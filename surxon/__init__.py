@@ -11,10 +11,10 @@ from werkzeug.security import generate_password_hash
 
 from . import db as dbmod
 from .config import BASE_DIR, Config
-from .security import (PERMISSIONS, ROLES, brigadier_scope, can, csrf_token, load_user, wants_json)
+from .security import (PERMISSIONS, ROLES, acts_as, brigadier_scope, can, csrf_token, load_user, standin, wants_json)
 from .utils import UserError, fmt_date, fmt_money, fmt_num, now_str, today_str, weekday_name
 
-VERSION = '2.38.0'
+VERSION = '2.39.0'
 
 
 def create_app(**overrides):
@@ -51,9 +51,9 @@ def create_app(**overrides):
         dbmod.migrate(conn)
         seed(conn, cfg)
 
-    from .views import acct, admin, auth, dala, finance, hamyon, integrations, kuzatuv, loans, main, ops, people, punkt, reports, yoqilgi, rahbar, tezpul
+    from .views import acct, admin, apps, auth, dala, finance, hamyon, integrations, kuzatuv, loans, main, ops, people, punkt, reports, yoqilgi, rahbar, tezpul
     for bp in (auth.bp, main.bp, ops.bp, people.bp, finance.bp, reports.bp, admin.bp, integrations.bp, punkt.bp, acct.bp,
-               kuzatuv.bp, dala.bp, hamyon.bp, yoqilgi.bp, rahbar.bp, loans.bp, tezpul.bp):
+               kuzatuv.bp, dala.bp, hamyon.bp, yoqilgi.bp, rahbar.bp, loans.bp, tezpul.bp, apps.bp):
         app.register_blueprint(bp)
     from .telegram_bot import bp as tg_bp
     app.register_blueprint(tg_bp)
@@ -186,7 +186,9 @@ def register_template_helpers(app):
             notes = notifications(user, year)
         seasons = [r['year'] for r in dbmod.q('SELECT year FROM seasons ORDER BY year DESC')] if user else []
         return {
-            'current_user': user, 'role_labels': ROLES, 'csrf_token': csrf_token, 'can': can,
+            'current_user': user, 'role_labels': ROLES, 'csrf_token': csrf_token, 'can': can, 'acts_as': acts_as,
+            'page_app': _page_app(),
+            'standin': standin(user),
             'season': year, 'seasons': seasons, 'today': today_str(), 'now_time': now_str()[11:16],
             'domain': app.config['SURXON'].DOMAIN, 'version': VERSION, 'notifications': notes,
             'photo_categories': CATEGORIES, 'my_brigade': brigadier_scope(),
@@ -214,6 +216,13 @@ def register_template_helpers(app):
             return dbmod.scalar('SELECT COUNT(*) FROM nazorat_alerts WHERE resolved_at IS NULL') or 0
         except Exception:
             return 0
+
+    def _page_app():
+        try:
+            from .views.apps import app_for_page
+            return app_for_page()
+        except Exception:
+            return None
 
     def _gmaps_key():
         # server .env wins; otherwise the key the admin saved on the Integrations page

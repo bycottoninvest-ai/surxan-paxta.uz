@@ -112,8 +112,8 @@ def default_cashbox(db):
 
 
 def _cashbox(db, actor, cashbox_id):
-    """Cashier: always their own box. Others: the chosen one or the default."""
-    if actor.role == 'cashier':
+    """Cashier (or a clerk standing in for one): always their own box. Others: the chosen one or the default."""
+    if actor.acts_as('cashier'):
         own = db.execute('SELECT cashbox_id FROM users WHERE id=?', (actor.user_id,)).fetchone()
         if own and own['cashbox_id']:
             return own['cashbox_id']
@@ -671,7 +671,7 @@ def pay_payout(actor, payout_id, check=None):
         if p['status'] != 'TAYYOR':
             raise UserError('Bu to‘lov bekor qilingan.')
         box = _cashbox(db, actor, p['cashbox_id'])
-        if actor.role == 'cashier' and box != p['cashbox_id'] and p['cashbox_id']:
+        if actor.acts_as('cashier') and box != p['cashbox_id'] and p['cashbox_id']:
             raise UserError('Bu to‘lov boshqa kassadan beriladi.')
         if check:
             check(db, p, box)

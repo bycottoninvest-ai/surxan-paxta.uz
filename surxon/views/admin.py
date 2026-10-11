@@ -4,7 +4,7 @@ from flask import (Blueprint, Response, abort, current_app, flash, make_response
 
 from .. import queries
 from ..db import q, scalar
-from ..security import PERMISSIONS, ROLES, perm_required
+from ..security import PERMISSIONS, ROLES, perm_required, standin
 from ..services import (close_season, reopen_season, save_brigadier, save_cashbox, save_equipment, save_field, save_settings, save_station,
                         save_user, telegram_link_code, unlink_telegram)
 from ..settings import all_settings, get_setting
@@ -59,7 +59,7 @@ STAFF_ROLES = [
 @bp.route('/xodimlar', methods=['GET', 'POST'])
 @perm_required('users.manage')
 def staff():
-    from ..services import quick_add_user, reset_password_random, set_user_active
+    from ..services import clear_standin, quick_add_user, reset_password_random, set_standin, set_user_active
     issued = None
     if request.method == 'POST':
         actor = post_actor()
@@ -72,6 +72,13 @@ def staff():
             elif action == 'reset':
                 name, login, pw = reset_password_random(actor, uid)
                 issued = {'name': name, 'login': login, 'password': pw, 'reset': True}
+            elif action == 'standin':
+                name, role, until = set_standin(actor, uid, request.form.get('days'), request.form.get('cashbox_id'))
+                flash(f'{name}: {ROLES[role]} o‘rnida — {until[8:10]}.{until[5:7]} kuni oxirigacha. Keyin o‘zi tugaydi.', 'success')
+                return redirect(url_for('admin.staff'))
+            elif action == 'standin_off':
+                flash(f'{clear_standin(actor, uid)}: o‘rinbosarlik olib qo‘yildi.', 'success')
+                return redirect(url_for('admin.staff'))
             elif action in ('off', 'on'):
                 name = set_user_active(actor, uid, action == 'on')
                 flash(f'{name}: ' + ('qayta faollashtirildi.' if action == 'on' else 'o‘chirildi (kira olmaydi, tarixi saqlanadi).'),
@@ -82,8 +89,10 @@ def staff():
             return redirect(url_for('admin.staff'))
     people = q('SELECT u.*, st.name station_name FROM users u LEFT JOIN stations st ON st.id=u.station_id '
                'ORDER BY u.active DESC, u.full_name')
+    from .apps import APPS
     resp = make_response(render_template('admin_staff.html', groups=STAFF_ROLES, people=people, issued=issued,
-                                         base_url=request.host_url.rstrip('/')))
+                                         base_url=request.host_url.rstrip('/'), standin_of=standin, apps=APPS,
+                                         cashboxes=q('SELECT * FROM cashboxes WHERE active=1 ORDER BY id')))
     resp.headers['Cache-Control'] = 'no-store'
     return resp
 

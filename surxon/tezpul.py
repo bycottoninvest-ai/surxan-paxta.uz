@@ -406,8 +406,15 @@ def panel(day=None):
                            FROM tezpul_talons t LEFT JOIN brigadiers b ON b.id=t.brigadier_id LEFT JOIN users u ON u.id=t.paid_by
                            WHERE t.status='TOLANDI' AND t.pay_date=? GROUP BY COALESCE(t.pay_batch, t.id)
                            ORDER BY paid_at DESC LIMIT 30''', (day,)).fetchall()
+    # one person both wrote the kg and paid the money (an o‘rinbosar day) — shown in red for the rahbar to check
+    self_paid = db.execute('''SELECT u.full_name name, COUNT(*) n, SUM(t.kg) kg, SUM(t.amount) amount,
+                                     GROUP_CONCAT(t.number, ',') numbers
+                              FROM tezpul_talons t LEFT JOIN users u ON u.id=t.paid_by
+                              WHERE t.status='TOLANDI' AND t.pay_date=? AND t.paid_by=t.entered_by
+                              GROUP BY t.paid_by ORDER BY n DESC''', (day,)).fetchall()
     return {'day': day, 'entered': dict(entered), 'paid': dict(paid), 'unpaid': dict(unpaid), 'season': dict(season),
             'counts': counts, 'brigades': brigades, 'cashiers': cashiers, 'clerks': clerks, 'errors': errors,
+            'self_paid': self_paid,
             'recent': recent, 'issued': sum(counts.values()), 'blank': counts.get('BOSH', 0),
             'legacy': counts.get('KUTILMOQDA', 0)}
 

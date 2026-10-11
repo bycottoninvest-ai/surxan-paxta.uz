@@ -9,7 +9,7 @@ from functools import wraps
 from flask import abort, flash, g, jsonify, redirect, request, session, url_for
 
 from .db import get_db, q
-from .utils import now_str
+from .utils import now_str, today_str
 
 ROLES = {
     'admin': 'Admin',
@@ -26,7 +26,8 @@ ROLES = {
 
 # Punkt operators get a closed, minimal app: only these endpoints (checked on every request).
 STATION_ENDPOINTS = {'static', 'auth.login', 'auth.logout', 'auth.change_password', 'main.health', 'main.verify_receipt', 'main.manifest',
-                     'main.service_worker', 'main.offline', 'main.dashboard', 'main.trailer_qr'}
+                     'main.service_worker', 'main.offline', 'main.dashboard', 'main.trailer_qr',
+                     'apps.install', 'apps.open_app', 'apps.manifest', 'apps.icon'}
 # trip photos on the punkt cards (checked per photo in main.media: only trips sent to that punkt)
 STATION_EXTRA = {'main.media'}
 
@@ -85,12 +86,33 @@ PERMISSIONS = {
 }
 
 
+# O‘rinbosar: while a colleague is away the admin lends a field clerk the cashier's role (or a cashier the clerk's) for
+# a few days. Only this pair; it ends by itself after the last day.
+STANDIN_PAIRS = {'tally': 'cashier', 'cashier': 'tally'}
+STANDIN_MAX_DAYS = 7
+
+
+def standin(user):
+    """The role this person also holds today as a stand-in, or None."""
+    if not user:
+        return None
+    keys = user.keys() if hasattr(user, 'keys') else user
+    if 'standin_role' not in keys or not user['standin_role'] or STANDIN_PAIRS.get(user['role']) != user['standin_role']:
+        return None
+    return user['standin_role'] if (user['standin_until'] or '') >= today_str() else None
+
+
+def acts_as(user, role):
+    return bool(user) and (user['role'] == role or standin(user) == role)
+
+
 def has_perm(user, perm):
     if not user:
         return False
     if user['role'] == 'admin':
         return True
-    return user['role'] in PERMISSIONS.get(perm, set())
+    roles = PERMISSIONS.get(perm, set())
+    return user['role'] in roles or standin(user) in roles
 
 
 def can(perm):
@@ -114,6 +136,8 @@ class Actor:
     ip: str | None = None
     name: str = ''
     station_id: int | None = None       # punkt operator: the only receiving point they may act on
+    standin_role: str | None = None     # o‘rinbosar: the second role held today (see standin())
+    standin_until: str | None = None
 
     @classmethod
     def from_user(cls, user, source='web', ip=None):
@@ -121,10 +145,18 @@ class Actor:
         return cls(user['id'], user['role'],
                    user['brigadier_id'] if user['role'] == 'brigadier' else None,
                    source, ip, user['full_name'],
-                   user['station_id'] if user['role'] == 'station' and 'station_id' in keys else None)
+                   user['station_id'] if user['role'] == 'station' and 'station_id' in keys else None,
+                   user['standin_role'] if 'standin_role' in keys else None,
+                   user['standin_until'] if 'standin_until' in keys else None)
+
+    def _as_user(self):
+        return {'role': self.role, 'standin_role': self.standin_role, 'standin_until': self.standin_until}
 
     def can(self, perm):
-        return has_perm({'role': self.role}, perm)
+        return has_perm(self._as_user(), perm)
+
+    def acts_as(self, role):
+        return acts_as(self._as_user(), role)
 
 
 def current_actor():
@@ -222,20 +254,26 @@ TALLY_ENDPOINTS = STATION_ENDPOINTS | {'main.api_workers', 'main.api_position', 
 FUEL_ENDPOINTS = STATION_ENDPOINTS | {'main.media', 'main.api_position'}
 
 
+def _gate_open(role, ep):
+    if role == 'tally':
+        return ep in TALLY_ENDPOINTS or ep.startswith('dala.') or ep in TEZPUL_FIELD
+    if role == 'station':
+        return ep in STATION_ENDPOINTS or ep in STATION_EXTRA or ep.startswith('punkt.')
+    if role == 'cashier':
+        return ep in CASHIER_ENDPOINTS or ep.startswith('hamyon.') or ep in TEZPUL_CASHIER
+    if role == 'fuel':
+        return ep in FUEL_ENDPOINTS or ep.startswith('yoqilgi.op_') or ep == 'yoqilgi.home'
+    return False
+
+
 def station_gate():
     """Punkt operator and cashier logins open only their own screens — enforced here for every request, not just
-    hidden menus."""
+    hidden menus. A stand-in also opens the screens of the role they hold today."""
     user = g.get('user')
     ep = request.endpoint or ''
     if not user or user['role'] not in ('station', 'cashier', 'tally', 'fuel'):
         return None
-    if user['role'] == 'tally' and (ep in TALLY_ENDPOINTS or ep.startswith('dala.') or ep in TEZPUL_FIELD):
-        return None
-    if user['role'] == 'station' and (ep in STATION_ENDPOINTS or ep in STATION_EXTRA or ep.startswith('punkt.')):
-        return None
-    if user['role'] == 'cashier' and (ep in CASHIER_ENDPOINTS or ep.startswith('hamyon.') or ep in TEZPUL_CASHIER):
-        return None
-    if user['role'] == 'fuel' and (ep in FUEL_ENDPOINTS or ep.startswith('yoqilgi.op_') or ep == 'yoqilgi.home'):
+    if _gate_open(user['role'], ep) or _gate_open(standin(user), ep):
         return None
     if wants_json():
         return jsonify(ok=False, error='Bu amal uchun huquqingiz yo‘q.'), 403

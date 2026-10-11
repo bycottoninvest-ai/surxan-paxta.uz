@@ -9,7 +9,7 @@ from flask import Blueprint, Response, abort, g, jsonify, redirect, render_templ
 from .. import queries
 from ..db import q, tx
 from ..photos import uploads_from_request
-from ..security import can, perm_required
+from ..security import acts_as, can, perm_required
 from ..services import add_harvest, after_waybill_change, clerk_continue_trip, mark_full, open_load
 from ..settings import get_setting
 from ..utils import UserError, now_str, parse_int, parse_number, today_str
@@ -24,7 +24,7 @@ def _trip(load_id):
     if not ld:
         abort(404)
     user = g.user
-    if user['role'] == 'tally':
+    if acts_as(user, 'tally'):
         mine = ld['opened_by'] == user['id'] or q('SELECT 1 FROM harvests WHERE load_id=? AND entered_by=? LIMIT 1',
                                                    (load_id, user['id']), one=True)
         if not mine:

@@ -13,7 +13,7 @@ import json
 
 from . import accounting as A
 from .db import doc_number, get_db, q, scalar, tx
-from .security import audit
+from .security import acts_as, audit
 from .services import CASH_CATEGORIES, EXPENSE_CATEGORIES, NOT_EXPENSES, add_expense
 from .utils import UserError, clean_text, now_str, today_str
 
@@ -45,7 +45,7 @@ def _box_name(db, box):
 
 def visible_boxes(user):
     """The boxes this login works with: a cashier only their own; others every active box."""
-    if user['role'] == 'cashier' and user['cashbox_id']:
+    if acts_as(user, 'cashier') and user['cashbox_id']:
         return [user['cashbox_id']]
     return [b['id'] for b in A.cashboxes()]
 
@@ -186,7 +186,7 @@ def order_preview(actor, payout_id):
     if not p:
         raise UserError('To‘lov topilmadi.')
     box = A._cashbox(db, actor, p['cashbox_id'])
-    if actor.role == 'cashier' and p['cashbox_id'] and box != p['cashbox_id']:
+    if actor.acts_as('cashier') and p['cashbox_id'] and box != p['cashbox_id']:
         raise UserError('Bu to‘lov boshqa kassadan beriladi.')
     return p, (_order_check(db, actor, p, box) if p['status'] == 'TAYYOR' else None)
 
@@ -332,7 +332,7 @@ def get_entry(user, cash_id):
     row = q(f'{ENTRY_SELECT} WHERE ce.id=?', (cash_id,), one=True)
     if not row:
         return None
-    if user['role'] == 'cashier' and row['cashbox_id'] not in visible_boxes(user):
+    if acts_as(user, 'cashier') and row['cashbox_id'] not in visible_boxes(user):
         return None
     return describe(row)
 
