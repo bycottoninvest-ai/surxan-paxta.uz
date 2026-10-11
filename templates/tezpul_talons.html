@@ -9,18 +9,18 @@
     <form method="post" class="form">{{ csrf() }}<input type="hidden" name="action" value="create">
       <div class="f"><label>Nechta talon?</label><input class="input" name="count" placeholder="masalan 1000" inputmode="numeric" required></div>
       <div class="f"><button class="btn btn-primary btn-block">Talonlar yaratish</button></div>
-      <div class="tiny muted">A4 varaqqa 2 ta talon. PDF ni ochib chop eting, chiziqdan qirqing. Ishlatilmay qolganlari keyingi kunlarga qoladi — yo‘qolmaydi.</div></form>
+      <div class="f"><div class="tiny muted">A4 varaqqa 2 ta talon. PDF ni ochib chop eting, chiziqdan qirqing. Ishlatilmay qolganlari keyingi kunlarga qoladi — yo‘qolmaydi.</div></div></form>
   </div></section>
   <section class="card s4"><div class="card-h"><h3>🚫 Talonni bekor qilish</h3></div><div class="card-b">
     <form method="post" class="form">{{ csrf() }}<input type="hidden" name="action" value="void">
       <div class="f"><label>Talon №</label><input class="input" name="number" placeholder="000274" inputmode="numeric" required></div>
       <div class="f"><label>Sabab</label><input class="input" name="reason" placeholder="yo‘qolgan / yirtilgan pachka" required></div>
       <div class="f"><button class="btn btn-light btn-block">Bekor qilish</button></div>
-      <div class="tiny muted">Faqat bo‘sh (kg yozilmagan) talon. Bekor qilingani skanerlansa — qizil “BEKOR QILINGAN”.</div></form>
+      <div class="f"><div class="tiny muted">Faqat bo‘sh (kg yozilmagan) talon. Bekor qilingani skanerlansa — qizil “BEKOR QILINGAN”.</div></div></form>
   </div></section>
   <section class="card s4"><div class="card-h"><h3>Qanday ishlaydi</h3></div><div class="card-b small">
-    1) Daftar: talon № — ism.<br>2) Terim hisobchisi: telashka → <b>📷 TALON SKANERI</b> → kg → SAQLASH (guruh bo‘lsa “👥 Starshi”).<br>
-    3) Kassir: skaner → summa chiqadi → <b>PUL BERILDI</b>.</div></section>
+    1) Daftar: talon № — ism.<br>2) Terim hisobchisi: telashkani tanlaydi → skaner → kg → <b>SAQLASH</b>.<br>
+    3) Kassir: skaner → summa chiqadi → <b>PUL BERILDI</b>.<br>4) Starshi guruhining talonlarini olib kelsa: skaner → <b>“+ Yana talon”</b> → … → bitta <b>PUL BERILDI</b>.</div></section>
   <section class="card s12"><div class="card-h"><h3>Partiyalar</h3></div><div class="card-b">
     {% if batches %}<div class="table-wrap"><table class="t"><thead><tr><th>Partiya</th><th>Raqamlar</th><th class="num">Soni</th><th class="num">Bo‘sh</th><th class="num">To‘langan</th><th class="num">Bekor</th><th>Yaratilgan</th><th></th></tr></thead><tbody>
     {% for bt in batches %}<tr {% if new == bt.batch %}style="background:#ecfdf5"{% endif %}><td>{{ bt.batch }}</td><td class="b">{{ num(bt.a) }} … {{ num(bt.b) }}</td><td class="num">{{ bt.n }}</td>
