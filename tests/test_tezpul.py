@@ -243,3 +243,26 @@ def test_trailer_qr_opens_the_trip_or_its_opening_page(app, world):
     assert r.status_code == 302 and r.headers['Location'].endswith(f'/dala/reys/{lid}')
     assert tally.get(f'/dala/reys/{lid}').headers['Location'].endswith(f'/tezpul/dala/{lid}')
     assert 'Telashka QR' in tally.get('/dala').get_data(as_text=True)
+
+
+def test_trailer_qr_after_another_clerks_trip(app, world):
+    """The trailer's trip belongs to another clerk: while it is live a clear message, once weighed at the punkt the
+    QR opens a new trip — never a 403."""
+    admin = world['admin']
+    tally = make_user(app, admin, 'terim1', 'tally')
+    other = make_user(app, admin, 'terim2', 'tally')
+    with app.app_context():
+        e = q("SELECT id, qr_token FROM equipment WHERE code='TL-03'", one=True)
+        if not e['qr_token']:
+            from surxon.db import get_db
+            get_db().execute("UPDATE equipment SET qr_token='tq-test-03' WHERE id=?", (e['id'],))
+        tok = q('SELECT qr_token FROM equipment WHERE id=?', (e['id'],), one=True)['qr_token']
+    lid = open_trip(other, world, rate='2000', trailer='TL-03')
+    r = tally.get(f'/tq/{tok}', follow_redirects=True)
+    assert r.status_code == 200 and 'boshqa hisobchi ochgan' in r.get_data(as_text=True)
+    with app.app_context():
+        from surxon.db import get_db
+        get_db().execute("UPDATE trailer_loads SET status='TORTILDI' WHERE id=?", (lid,))
+    r = tally.get(f'/tq/{tok}')
+    assert r.status_code == 302 and r.headers['Location'].endswith(f'/dala/yangi?telashka={e["id"]}')
+    assert tally.get(f'/dala/yangi?telashka={e["id"]}').status_code == 200

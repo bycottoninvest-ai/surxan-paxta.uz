@@ -78,6 +78,16 @@ def trailer_qr(token):
         return redirect(url_for(home))
     if role in ('cashier', 'fuel'):
         return redirect(url_for(home))
+    if role == 'tally':                # the clerk works only on the trailer's live trip; a finished one is no use here
+        ld = q("""SELECT id, opened_by FROM trailer_loads WHERE trailer_id=? AND status IN ('OCHIQ','TOLDI')
+                  ORDER BY id DESC LIMIT 1""", (e['id'],), one=True)
+        if not ld:
+            return redirect(url_for('dala.new_trip', telashka=e['id']))
+        if ld['opened_by'] != g.user['id'] and not q('SELECT 1 FROM harvests WHERE load_id=? AND entered_by=? LIMIT 1',
+                                                     (ld['id'], g.user['id']), one=True):
+            flash(f'{e["code"]} hozir ochiq — uni boshqa hisobchi ochgan. U yopgandan keyin skanerlang.', 'error')
+            return redirect(url_for(home))
+        return redirect(url_for('dala.trip', load_id=ld['id']))
     ld = q("""SELECT id FROM trailer_loads WHERE trailer_id=? AND status<>'BEKOR'
               ORDER BY (status IN ('OCHIQ','TOLDI')) DESC, id DESC LIMIT 1""", (e['id'],), one=True)
     if not ld:
@@ -85,8 +95,6 @@ def trailer_qr(token):
             return redirect(url_for('dala.new_trip', telashka=e['id']))
         flash(f'{e["code"]}: hali reys yo‘q — yangi reys oching.', 'info')
         return redirect(url_for(home))
-    if role == 'tally':
-        return redirect(url_for('dala.trip', load_id=ld['id']))
     return redirect(url_for('ops.load_detail', load_id=ld['id']))
 
 
