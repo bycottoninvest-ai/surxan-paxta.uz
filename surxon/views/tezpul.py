@@ -55,8 +55,7 @@ def dala_save(load_id):
     _trip(load_id)                                   # brigade scope + existence
     try:
         r = T.enter(post_actor(), load_id, request.form.get('code'), request.form.get('kg'),
-                    group=request.form.get('group') == '1', manual_code=request.form.get('manual_code', ''),
-                    client_uuid=form_uuid())
+                    manual_code=request.form.get('manual_code', ''), client_uuid=form_uuid())
     except T.Refused as err:
         return _refused(err)
     return jsonify(ok=True, result=r, count=T.trip_counter(load_id))
@@ -88,7 +87,7 @@ def lookup():
 @perm_required('payouts.pay')
 def pay():
     try:
-        r = T.pay(post_actor(), request.form.get('code'), manual_code=request.form.get('manual_code', ''),
+        r = T.pay(post_actor(), request.form.getlist('code'), manual_codes=request.form.getlist('manual_code'),
                   client_uuid=form_uuid())
     except T.Refused as err:
         return _refused(err)
@@ -114,12 +113,11 @@ def _xlsx(day):
                 LEFT JOIN users e ON e.id=t.entered_by LEFT JOIN trailer_loads tl ON tl.id=t.load_id
                 WHERE substr(t.entered_at,1,10)=? OR t.pay_date=? ORDER BY t.number''', (day, day))
     spec = {'title': f'SURXON TEZ-PUL — {day[8:10]}.{day[5:7]}.{day[:4]} talonlar',
-            'columns': [('number', 'Talon №', 'text'), ('kind', 'Turi', 'text'), ('kg', 'Kg', 'kg'), ('rate', 'Narx, so‘m/kg', 'money'),
+            'columns': [('number', 'Talon №', 'text'), ('kg', 'Kg', 'kg'), ('rate', 'Narx, so‘m/kg', 'money'),
                         ('amount', 'Summa, so‘m', 'money'), ('status', 'Holat', 'text'), ('brigade', 'Brigada', 'text'),
                         ('trip_no', 'Telashka', 'text'), ('clerk', 'Hisobchi', 'text'), ('entered_at', 'Kg yozilgan', 'text'),
                         ('cashier', 'Kassir', 'text'), ('paid_at', 'To‘langan', 'text')],
-            'rows': [dict(r, number=T.number_text(r['number']), kind='Starshi' if r['kind'] == 'guruh' else 'Odam',
-                          status=T.STATUS[r['status']][0]) for r in rows],
+            'rows': [dict(r, number=T.number_text(r['number']), status=T.STATUS[r['status']][0]) for r in rows],
             'totals': {'kg': sum(r['kg'] or 0 for r in rows), 'amount': sum(r['amount'] or 0 for r in rows)}}
     return Response(to_xlsx(spec), mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
                     headers={'Content-Disposition': f'attachment; filename=tezpul_{day}.xlsx'})

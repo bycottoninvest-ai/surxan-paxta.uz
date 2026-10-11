@@ -1150,6 +1150,7 @@ def migrate(db):
     _add_column(db, 'tezpul_talons', 'worker_id', 'INTEGER')
     _add_column(db, 'tezpul_talons', 'harvest_id', 'INTEGER')
     _add_column(db, 'tezpul_talons', 'load_id', 'INTEGER')
+    _add_column(db, 'tezpul_talons', 'pay_batch', 'TEXT')      # one PUL BERILDI for several talons (a starshi's team)
     _add_column(db, 'workers', 'talon_no', 'INTEGER')
     # Future column changes go here as: if version < N: ALTER TABLE ...
     db.execute('UPDATE schema_version SET version=? WHERE version < ?', (SCHEMA_VERSION, SCHEMA_VERSION))

@@ -11,9 +11,12 @@ Tasdiqlangan dizaynni o‘zgartirish faqat egasining roziligi bilan; o‘zgarsa 
 2. **Daftar:** “talon № — ism”. Ism telefonga kiritilmaydi.
 3. **Terim hisobchisi (2 qadam):** telashka ochilsa — darhol talon skaneri: QR → kg → **SAQLASH** → kamera o‘zi keyingi talonga.
    Kg asosiy **Qo‘l terimi**ga shu telashkaning oddiy tortishi bo‘lib yoziladi (telashka narxi bilan).
-   50–100 kishilik guruh — **“👥 Starshi (guruh)”** (bitta talon, 20 000 kg gacha); oddiy talon — 250 kg gacha.
+   Har odamning taloni alohida yoziladi (bitta talonga 250 kg gacha).
    Internet bo‘lmasa — telefonda navbatga turadi va keyin o‘zi yuboriladi (bir marta yoziladi).
-4. **Kassir (2 qadam):** QR → summa o‘zi chiqadi → **PUL BERILDI**. Pul mavjud kassadan oddiy “Ishchiga to‘lov” (PAY-…) bo‘lib chiqadi.
+4. **Kassir (2 qadam), ikki rejim:**
+   - bitta odam: QR → summa o‘zi chiqadi → **PUL BERILDI**;
+   - starshi o‘z guruhining 50–60 talonini olib keladi: QR → “📷 + Yana talon” → QR … → jami summa → bitta **PUL BERILDI (N)**.
+   Hammasi bitta tranzaksiyada: yo hamma talon to‘lanadi, yo hech biri. Pul mavjud kassadan oddiy “Ishchiga to‘lov” (PAY-…) bo‘lib chiqadi.
 5. **Rahbar:** Buxgalteriya → TEZ-PUL panel: bugun yozilgan kg / hisoblangan summa, berilgan pul, to‘lanmagan, brigadalar
    (punkt qabuli bilan farq), kassirlar va kassa qoldig‘i, hisobchilar, rad etilgan skanerlar; Excel / chop.
 

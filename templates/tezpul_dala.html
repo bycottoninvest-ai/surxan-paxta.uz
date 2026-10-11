@@ -62,10 +62,6 @@ button{font:inherit;border:0;cursor:pointer}
 .net.on{display:block}
 .toast{position:fixed;left:12px;right:12px;top:58px;max-width:456px;margin:0 auto;background:#e5f6eb;border:2px solid var(--green2);color:#0f6b31;border-radius:14px;padding:11px 12px;font-size:16px;font-weight:800;z-index:9;box-shadow:0 6px 16px rgba(0,0,0,.18);display:none}
 .toast.on{display:block}
-.tog{margin:6px 14px;display:flex;gap:8px}
-.tog button{flex:1;height:50px;border-radius:14px;background:#fff;border:2px solid #d4deea;font-size:17px;font-weight:800;color:var(--text)}
-.tog button.on{border-color:var(--navy);background:var(--navy);color:#fff}
-.tog button.g.on{border-color:#1d4ed8;background:#1d4ed8}
 .queue{display:none;margin:0 14px 8px;background:#fff4e0;color:#8a4a00;border-radius:12px;padding:8px 12px;font-size:14px;font-weight:700}.queue.on{display:block}
 .bad{display:none;margin:0 14px 8px;background:#fde9ee;color:#a0153a;border-radius:12px;padding:8px 12px;font-size:14px;font-weight:700}.bad.on{display:block}
 </style></head>
@@ -91,7 +87,6 @@ button{font:inherit;border:0;cursor:pointer}
   <!-- 2: kg + SAQLASH -->
   <section class="view" id="v-kg">
     <div class="who"><small>Talon</small><b id="k-no">№ 000000</b><button type="button" class="x" id="k-x">✕</button></div>
-    <div class="tog"><button type="button" class="on" id="t-one">👤 Bitta odam</button><button type="button" class="g" id="t-grp">👥 Starshi (guruh)</button></div>
     <div class="step" style="padding-top:2px"><div class="num g">2</div><div class="st">Talondagi kg ni yozing</div></div>
     <div class="kg"><b id="k-kg" class="ph">0</b><span>kg</span></div>
     <div class="err" id="k-err"></div>
@@ -118,7 +113,7 @@ button{font:inherit;border:0;cursor:pointer}
     const r = Math.random() * 16 | 0; return (c === 'x' ? r : (r & 3 | 8)).toString(16); }));
   const load = k => { try { return JSON.parse(localStorage.getItem(k) || '[]'); } catch (_) { return []; } };
   const keep = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (_) {} };
-  let stop = null, cur = null, kg = '', group = false, busy = false, backTimer = null;
+  let stop = null, cur = null, kg = '', busy = false, backTimer = null;
 
   function show(v) { ['v-scan', 'v-kg', 'v-msg'].forEach(x => $(x).classList.toggle('on', x === v)); }
   function online() { $('net').classList.toggle('on', !navigator.onLine); return navigator.onLine; }
@@ -136,7 +131,7 @@ button{font:inherit;border:0;cursor:pointer}
   const qrNo = t => { const m = /^SPX-T:(\d{6}):([0-9A-F]{8})$/i.exec((t || '').trim()); return m ? m[1] : null; };
 
   function scan() {
-    clearTimeout(backTimer); cur = null; kg = ''; group = false; busy = false;
+    clearTimeout(backTimer); cur = null; kg = ''; busy = false;
     show('v-scan'); $('mform').classList.remove('on'); $('m-no').value = ''; $('m-code').value = '';
     paintQueue();
     if (stop) stop();
@@ -153,14 +148,11 @@ button{font:inherit;border:0;cursor:pointer}
         if (!j.ok) { if (j.refused) { refused(j); return; } msg('soxta', 'Xato', j.error || ''); return; }
       } catch (_) { /* no answer: write it on the phone, the server checks it later */ }
     }
-    cur = { code, manual, no, uuid: uuid() }; kg = ''; group = false;
+    cur = { code, manual, no, uuid: uuid() }; kg = '';
     $('toast').classList.remove('on');
-    $('k-no').textContent = '№ ' + no; $('k-err').classList.remove('on'); tog(); paint(); show('v-kg');
+    $('k-no').textContent = '№ ' + no; $('k-err').classList.remove('on'); paint(); show('v-kg');
   }
 
-  function tog() { $('t-one').classList.toggle('on', !group); $('t-grp').classList.toggle('on', group); }
-  $('t-one').addEventListener('click', () => { group = false; tog(); });
-  $('t-grp').addEventListener('click', () => { group = true; tog(); });
   function kgValue() { const v = parseFloat(kg.replace(',', '.')); return isFinite(v) ? v : 0; }
   function paint() {
     $('k-kg').textContent = kg || '0'; $('k-kg').classList.toggle('ph', !kg);
@@ -176,11 +168,11 @@ button{font:inherit;border:0;cursor:pointer}
 
   $('k-go').addEventListener('click', async () => {
     if (busy || !cur || !(kgValue() > 0)) return;
-    const item = { code: cur.code, manual_code: cur.manual, kg: kg.replace(',', '.'), group: group ? '1' : '', client_uuid: cur.uuid, no: cur.no };
+    const item = { code: cur.code, manual_code: cur.manual, kg: kg.replace(',', '.'), client_uuid: cur.uuid, no: cur.no };
     busy = true; paint();
     const r = await send(item);
     busy = false;
-    if (r === 'ok') { toast(`✓ Saqlandi: № ${item.no} — ${kgfmt(item.kg)} kg${group ? ' · 👥 starshi' : ''}`); scan(); return; }
+    if (r === 'ok') { toast(`✓ Saqlandi: № ${item.no} — ${kgfmt(item.kg)} kg`); scan(); return; }
     if (r === 'queued') { toast(`📥 № ${item.no} — ${kgfmt(item.kg)} kg telefonda saqlandi, internet kelganda yuboriladi`); scan(); return; }
     paint(); $('k-err').textContent = r; $('k-err').classList.add('on');
   });

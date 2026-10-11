@@ -18,7 +18,7 @@
 <div class="grid">
   <section class="card s6"><div class="card-h"><h3>👥 Brigadalar natijasi</h3></div><div class="card-b">
     <div class="table-wrap"><table class="t"><thead><tr><th>Brigada</th><th class="num">Talon</th><th class="num">Kg</th><th class="num">Hisoblangan</th><th class="num">Berildi</th><th class="num">Punkt qabul (qo‘l)</th><th class="num">Farq</th></tr></thead><tbody>
-    {% for b in p.brigades %}<tr><td class="b">{{ b.name }}{% if b.groups %} <span class="tiny muted">(👥 {{ b.groups }})</span>{% endif %}</td><td class="num">{{ b.n }}</td><td class="num">{{ b.kg|num(1) }}</td>
+    {% for b in p.brigades %}<tr><td class="b">{{ b.name }}</td><td class="num">{{ b.n }}</td><td class="num">{{ b.kg|num(1) }}</td>
       <td class="num">{{ (b.amount or 0)|num }}</td><td class="num">{{ (b.paid or 0)|num }}</td>
       <td class="num">{{ b.punkt_kg|num(0) if b.punkt_kg else '—' }}</td>
       <td class="num">{% if b.punkt_kg %}{% set d = b.kg - b.punkt_kg %}<span class="badge {{ 'b-red' if d > b.punkt_kg * 0.03 else 'b-green' }}">{{ d|num(0) }}</span>{% else %}—{% endif %}</td></tr>
@@ -38,7 +38,8 @@
       · {{ e.code }} · {{ e.name or '' }}</div>{% else %}<div class="muted small">Bugun xato yo‘q.</div>{% endfor %}
   </div></section>
   <section class="card s6"><div class="card-h"><h3>🕘 Oxirgi to‘lovlar</h3></div><div class="card-b">
-    {% for r in p.recent %}<div class="small">{{ r.paid_at[11:16] }} · <b>№{{ num(r.number) }}</b>{% if r.kind == 'guruh' %} 👥{% endif %} · {{ r.kg|num(1) }} kg · {{ r.amount|num }} so‘m · {{ r.paid_name or '' }}{% if r.brigade %} · {{ r.brigade }}{% endif %}</div>{% else %}<div class="muted small">—</div>{% endfor %}
+    {% for r in p.recent %}<div class="small">{{ r.paid_at[11:16] }} · {% if r.n > 1 %}<b>👥 Starshi: {{ r.n }} talon</b> (№{{ num(r.a) }}…{{ num(r.b) }}){% else %}<b>№{{ num(r.a) }}</b>{% endif %}
+      · {{ r.kg|num(1) }} kg · {{ r.amount|num }} so‘m · {{ r.paid_name or '' }}{% if r.brigade %} · {{ r.brigade }}{% endif %}</div>{% else %}<div class="muted small">—</div>{% endfor %}
   </div></section>
 </div>
 <script>

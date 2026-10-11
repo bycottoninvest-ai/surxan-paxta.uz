@@ -4,10 +4,10 @@
 2. Field (terim hisobchisi, two steps): scan the talon → type its kg → SAQLASH. The kg is written as an ordinary
    hand-picking weighing (Qo‘l terimi) of the open trailer trip, priced at the trip's rate, so the punkt check, the
    trip documents and the reports see it like any other weighing. The date is the day it was scanned — talons are
-   printed once, without a date. Each talon is its own card (“Talon 000274”, hidden from the name lists);
-   “👥 Starshi” makes it a group talon (a whole team's kg, up to the group limit), paid to the starshi.
-3. Kassa (two steps): scan → the amount owed on that talon appears → PUL BERILDI. The money leaves the existing kassa
-   as an ordinary worker payment (payment order + PAY- cash entry), so the worker balances stay exact.
+   printed once, without a date. Each talon is its own card (“Talon 000274”, hidden from the name lists).
+3. Kassa (two steps): scan → the amount owed on that talon appears → PUL BERILDI. A starshi brings his team's talons:
+   the cashier scans them one after another and pays the total with one PUL BERILDI. The money leaves the existing
+   kassa as ordinary worker payments (payment order + PAY- cash entry per talon), so the worker balances stay exact.
 One talon is paid once, ever: the status flips in one guarded UPDATE inside an IMMEDIATE transaction (a second scan,
 a photocopy or two cashiers at the same second pay once). The QR holds only the number and a random code stored with
 the talon (no kg, no money): a home-made QR with a real number but a wrong code is refused.
@@ -210,13 +210,13 @@ def field_lookup(actor, code, manual_code=''):
     return _logged(actor, code, go)
 
 
-def enter(actor, load_id, code, kg, *, group=False, manual_code='', client_uuid=None):
+def enter(actor, load_id, code, kg, *, manual_code='', client_uuid=None):
     """The terim hisobchisi saved one talon: its kg becomes a hand weighing of the open trip (Qo‘l terimi)."""
     _need(actor, 'harvest.write')
-    return _logged(actor, code, lambda: _enter(actor, load_id, code, kg, group, manual_code, client_uuid))
+    return _logged(actor, code, lambda: _enter(actor, load_id, code, kg, manual_code, client_uuid))
 
 
-def _enter(actor, load_id, code, kg, group, manual_code, client_uuid):
+def _enter(actor, load_id, code, kg, manual_code, client_uuid):
     from .services import _new_worker, add_harvest
     with tx() as db:
         if client_uuid:
@@ -230,29 +230,28 @@ def _enter(actor, load_id, code, kg, group, manual_code, client_uuid):
         load = db.execute('SELECT * FROM trailer_loads WHERE id=?', (load_id,)).fetchone()
         if not load:
             raise UserError('Telashka topilmadi.')
-        name = f'Talon {number_text(t["number"])}' + (' (starshi)' if group else '')
+        name = f'Talon {number_text(t["number"])}'
         wid = t['worker_id']
         if wid:
-            db.execute('UPDATE workers SET full_name=?, name_key=?, group_size=?, active=1 WHERE id=?',
-                       (name, name_key(name), 1 if group else None, wid))
+            db.execute('UPDATE workers SET full_name=?, name_key=?, active=1 WHERE id=?', (name, name_key(name), wid))
         else:
             wid = _new_worker(db, actor, name, load['brigadier_id'])
-            db.execute('UPDATE workers SET talon_no=?, group_size=? WHERE id=?', (t['number'], 1 if group else None, wid))
+            db.execute('UPDATE workers SET talon_no=? WHERE id=?', (t['number'], wid))
         try:
             hid, _ = add_harvest(actor, load_id=load_id, method='hand', kg=kg, worker_id=wid, client_uuid=client_uuid,
                                  confirm_duplicate=True)
         except UserError as err:
-            if 'chegara' in str(err) and not group:
-                raise UserError(f'{kg:g} kg — bitta odamga juda ko‘p. Bu guruh (starshi) taloni bo‘lsa — '
-                                '“👥 Starshi” ni tanlab qayta saqlang.')
+            if 'chegara' in str(err):
+                raise UserError(f'{kg:g} kg — bitta talonga juda ko‘p ({str(err).split("(")[1].split(")")[0]}). '
+                                'Talondagi raqamni tekshiring.')
             raise
         h = db.execute('SELECT rate, amount FROM harvests WHERE id=?', (hid,)).fetchone()
         db.execute('''UPDATE tezpul_talons SET status='TAYYOR', kind=?, worker_id=?, harvest_id=?, load_id=?, brigadier_id=?,
                           kg=?, rate=?, amount=?, entered_by=?, entered_at=? WHERE id=?''',
-                   ('guruh' if group else 'odam', wid, hid, load_id, load['brigadier_id'], kg, h['rate'], h['amount'],
+                   ('odam', wid, hid, load_id, load['brigadier_id'], kg, h['rate'], h['amount'],
                     actor.user_id, now_str(), t['id']))
         audit(db, actor, 'TEZPUL_KG', 'tezpul_talon', t['id'],
-              new={'number': t['number'], 'kg': kg, 'kind': 'guruh' if group else 'odam', 'load_id': load_id, 'harvest_id': hid})
+              new={'number': t['number'], 'kg': kg, 'load_id': load_id, 'harvest_id': hid})
         return {'already': False, **_view(db, db.execute('SELECT * FROM tezpul_talons WHERE id=?', (t['id'],)).fetchone())}
 
 
@@ -285,55 +284,83 @@ def lookup(actor, code, manual_code=''):
     return _logged(actor, code, go)
 
 
-def pay(actor, code, *, manual_code='', client_uuid=None):
-    """“PUL BERILDI”: the whole amount owed on the talon, from the cashier's own kassa."""
+def pay(actor, codes, *, manual_codes=None, client_uuid=None):
+    """“PUL BERILDI” for one talon or many at once (a starshi brings his team's 50–60 talons): every talon gets the
+    whole amount owed on it, all in one transaction — all are paid or none. Same tap sent twice = paid once."""
     _need(actor, 'payouts.pay')
-    return _logged(actor, code, lambda: _pay(actor, code, manual_code, client_uuid))
+    codes = [codes] if isinstance(codes, str) else list(codes or [])
+    manual_codes = list(manual_codes or []) + [''] * len(codes)
+    if not codes:
+        raise UserError('Talonni skanerlang.')
+    if len(codes) > 300:
+        raise UserError('Bir to‘lovda 300 tadan ko‘p talon bo‘lmaydi.')
+    return _logged(actor, codes[0] if len(codes) == 1 else f'{len(codes)} talon',
+                   lambda: _pay(actor, codes, manual_codes, client_uuid))
 
 
-def _pay(actor, code, manual_code, client_uuid):
+def _pay(actor, codes, manual_codes, client_uuid):
     from . import accounting as A
     from .db import doc_number
     from .wallet import worker_figures
     with tx() as db:
         if client_uuid:
-            dup = db.execute('SELECT * FROM tezpul_talons WHERE pay_uuid=?', (client_uuid,)).fetchone()
-            if dup:          # the same tap sent twice (bad network): the first one already did it
-                return {'paid': True, 'already': True, **_view(db, dup)}
-        t = _find(db, code, manual_code)
-        _ready(db, t)
+            done_rows = db.execute('SELECT * FROM tezpul_talons WHERE pay_batch=? ORDER BY number', (client_uuid,)).fetchall()
+            if done_rows:          # the same tap sent twice (bad network): the first one already did it
+                return _paid_result(db, done_rows, already=True)
         year = A.season_of(db)
-        f = worker_figures(db, year, t['worker_id'])
-        amount = f['payable']
-        if amount <= 0:
-            if f['uncalc_kg']:
-                raise UserError('Bu telashkada qo‘l terimi narxi yozilmagan — summa hisoblanmagan. Buxgalterga ayting.')
-            raise Refused('tolangan', f'№{number_text(t["number"])} bo‘yicha to‘lanadigan pul qolmagan.', {'id': t['id']})
         box = A._cashbox(db, actor, None)
-        ts = now_str()
-        # the guard: only one transaction can move this talon to TOLANDI
-        n = db.execute('''UPDATE tezpul_talons SET status='TOLANDI', amount=?, paid_by=?, paid_at=?, pay_date=?, cashbox_id=?,
-                              pay_uuid=? WHERE id=? AND status='TAYYOR' ''',
-                       (amount, actor.user_id, ts, today_str(), box, client_uuid, t['id'])).rowcount
-        if n != 1:
-            raise Refused('tolangan', f'№{number_text(t["number"])} ALLAQACHON TO‘LANGAN.', {'id': t['id']})
-        no = doc_number(db, 'PAY', year)
-        note = f'TEZ-PUL talon №{number_text(t["number"])} · {t["kg"]:g} kg'
-        pid = db.execute('''INSERT INTO payouts(doc_no, season_year, kind, purpose, worker_id, amount, note, client_uuid,
-                                cashbox_id, prepared_by, prepared_at, status, paid_by, paid_at)
-                            VALUES (?,?,'worker','pay',?,?,?,?,?,?,?,'BERILDI',?,?)''',
-                         (no, year, t['worker_id'], amount, note, client_uuid, box, actor.user_id, ts, actor.user_id, ts)).lastrowid
-        cid, _ = A.book_cash(db, actor, direction='OUT', category='worker_pay', amount=amount, cashbox_id=box,
-                             worker_id=t['worker_id'], payout_id=pid, counterparty=f['name'], note=note, doc_no=no, feed=False)
-        db.execute('UPDATE payouts SET cash_entry_id=? WHERE id=?', (cid, pid))
-        db.execute('UPDATE tezpul_talons SET cash_entry_id=? WHERE id=?', (cid, t['id']))
-        audit(db, actor, 'TEZPUL_PAID', 'tezpul_talon', t['id'],
-              new={'number': t['number'], 'kg': t['kg'], 'amount': amount, 'cashbox_id': box, 'cash_entry_id': cid,
-                   'payout_id': pid, 'doc_no': no})
-        A.mirror_payout(db, pid)
-        A.mirror_worker(db, t['worker_id'], year)
-        return {'paid': True, 'already': False, 'doc_no': no,
-                **_view(db, db.execute('SELECT * FROM tezpul_talons WHERE id=?', (t['id'],)).fetchone())}
+        items, seen = [], set()
+        for code, manual in zip(codes, manual_codes):
+            t = _find(db, code, manual)
+            if t['id'] in seen:
+                continue
+            seen.add(t['id'])
+            _ready(db, t)
+            f = worker_figures(db, year, t['worker_id'])
+            if f['payable'] <= 0:
+                if f['uncalc_kg']:
+                    raise UserError(f'№{number_text(t["number"])}: telashkada qo‘l terimi narxi yozilmagan — summa hisoblanmagan. '
+                                    'Buxgalterga ayting.')
+                raise Refused('tolangan', f'№{number_text(t["number"])} bo‘yicha to‘lanadigan pul qolmagan.',
+                              {'id': t['id'], 'number': number_text(t['number'])})
+            items.append((t, f))
+        total = sum(f['payable'] for _, f in items)
+        bal = A.box_balance(db, box)
+        if total > bal:
+            raise UserError(f'Kassada yetarli pul yo‘q: qoldiq {A.fmt_som(bal)}, berilmoqchi {A.fmt_som(total)}.')
+        ts, batch = now_str(), client_uuid or secrets.token_hex(8)
+        for k, (t, f) in enumerate(items):
+            amount = f['payable']
+            puid = batch if len(items) == 1 else f'{batch}#{k + 1}'
+            # the guard: only one transaction can move this talon to TOLANDI
+            n = db.execute('''UPDATE tezpul_talons SET status='TOLANDI', amount=?, paid_by=?, paid_at=?, pay_date=?, cashbox_id=?,
+                                  pay_uuid=?, pay_batch=? WHERE id=? AND status='TAYYOR' ''',
+                           (amount, actor.user_id, ts, today_str(), box, puid, batch, t['id'])).rowcount
+            if n != 1:
+                raise Refused('tolangan', f'№{number_text(t["number"])} ALLAQACHON TO‘LANGAN.',
+                              {'id': t['id'], 'number': number_text(t['number'])})
+            no = doc_number(db, 'PAY', year)
+            note = f'TEZ-PUL talon №{number_text(t["number"])} · {t["kg"]:g} kg' + (f' · {len(items)} talon birga' if len(items) > 1 else '')
+            pid = db.execute('''INSERT INTO payouts(doc_no, season_year, kind, purpose, worker_id, amount, note, client_uuid,
+                                    cashbox_id, prepared_by, prepared_at, status, paid_by, paid_at)
+                                VALUES (?,?,'worker','pay',?,?,?,?,?,?,?,'BERILDI',?,?)''',
+                             (no, year, t['worker_id'], amount, note, puid, box, actor.user_id, ts, actor.user_id, ts)).lastrowid
+            cid, _ = A.book_cash(db, actor, direction='OUT', category='worker_pay', amount=amount, cashbox_id=box,
+                                 worker_id=t['worker_id'], payout_id=pid, counterparty=f['name'], note=note, doc_no=no, feed=False)
+            db.execute('UPDATE payouts SET cash_entry_id=? WHERE id=?', (cid, pid))
+            db.execute('UPDATE tezpul_talons SET cash_entry_id=? WHERE id=?', (cid, t['id']))
+            A.mirror_payout(db, pid)
+            A.mirror_worker(db, t['worker_id'], year)
+        audit(db, actor, 'TEZPUL_PAID', 'tezpul_talons', None,
+              new={'batch': batch, 'talons': [t['number'] for t, _ in items], 'amount': total, 'cashbox_id': box})
+        rows = db.execute('SELECT * FROM tezpul_talons WHERE pay_batch=? ORDER BY number', (batch,)).fetchall()
+        return _paid_result(db, rows, already=False)
+
+
+def _paid_result(db, rows, already):
+    return {**_view(db, rows[0]), 'paid': True, 'already': already, 'count': len(rows),
+            'kg': sum(r['kg'] or 0 for r in rows), 'amount': sum(r['amount'] or 0 for r in rows),
+            'numbers': [number_text(r['number']) for r in rows]}
 
 
 # ------------------------------------------------------------------ the rahbar
@@ -360,8 +387,7 @@ def panel(day=None):
            WHERE wb.status='QABUL' AND tl.method='hand' AND nr.received_date=? GROUP BY tl.brigadier_id''', (day,))}
     brigades = [dict(r, punkt_kg=punkt.get(r['bid'])) for r in db.execute(
         f'''SELECT t.brigadier_id bid, COALESCE(b.name, 'Brigadasiz') name, COUNT(*) n, SUM(t.kg) kg, SUM(t.amount) amount,
-                   SUM(CASE WHEN t.status='TOLANDI' THEN t.amount ELSE 0 END) paid,
-                   SUM(CASE WHEN t.kind='guruh' THEN 1 ELSE 0 END) groups
+                   SUM(CASE WHEN t.status='TOLANDI' THEN t.amount ELSE 0 END) paid
             FROM tezpul_talons t LEFT JOIN brigadiers b ON b.id=t.brigadier_id
             WHERE substr(t.entered_at,1,10)=? AND {LIVE} GROUP BY t.brigadier_id ORDER BY kg DESC''', (day,))]
     from .accounting import box_balance
@@ -375,9 +401,11 @@ def panel(day=None):
                             WHERE substr(t.entered_at,1,10)=? AND {LIVE} GROUP BY t.entered_by ORDER BY n DESC''', (day,)).fetchall()
     errors = db.execute('''SELECT e.*, u.full_name name FROM tezpul_events e LEFT JOIN users u ON u.id=e.user_id
                            WHERE substr(e.created_at,1,10)=? ORDER BY e.id DESC LIMIT 50''', (day,)).fetchall()
-    recent = db.execute('''SELECT t.*, b.name brigade, u.full_name paid_name FROM tezpul_talons t
-                           LEFT JOIN brigadiers b ON b.id=t.brigadier_id LEFT JOIN users u ON u.id=t.paid_by
-                           WHERE t.status='TOLANDI' AND t.pay_date=? ORDER BY t.paid_at DESC LIMIT 30''', (day,)).fetchall()
+    recent = db.execute('''SELECT MIN(t.number) a, MAX(t.number) b, COUNT(*) n, SUM(t.kg) kg, SUM(t.amount) amount, MAX(t.paid_at) paid_at,
+                                  MAX(b.name) brigade, MAX(u.full_name) paid_name
+                           FROM tezpul_talons t LEFT JOIN brigadiers b ON b.id=t.brigadier_id LEFT JOIN users u ON u.id=t.paid_by
+                           WHERE t.status='TOLANDI' AND t.pay_date=? GROUP BY COALESCE(t.pay_batch, t.id)
+                           ORDER BY paid_at DESC LIMIT 30''', (day,)).fetchall()
     return {'day': day, 'entered': dict(entered), 'paid': dict(paid), 'unpaid': dict(unpaid), 'season': dict(season),
             'counts': counts, 'brigades': brigades, 'cashiers': cashiers, 'clerks': clerks, 'errors': errors,
             'recent': recent, 'issued': sum(counts.values()), 'blank': counts.get('BOSH', 0),

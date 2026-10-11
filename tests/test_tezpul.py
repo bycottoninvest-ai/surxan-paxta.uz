@@ -20,8 +20,8 @@ def qr(t):
     return f'SPX-T:{t["number"]:06d}:{t["code"]}'
 
 
-def enter(c, lid, code, kg, group=False, uuid=None, manual=''):
-    return c.post(f'/tezpul/dala/{lid}/saqlash', {'code': code, 'kg': kg, 'group': '1' if group else '', 'manual_code': manual,
+def enter(c, lid, code, kg, uuid=None, manual=''):
+    return c.post(f'/tezpul/dala/{lid}/saqlash', {'code': code, 'kg': kg, 'manual_code': manual,
                                                  'client_uuid': uuid or uuid4()})
 
 
@@ -45,7 +45,7 @@ def test_field_two_steps_then_kassa_two_steps(app, world):
     assert r.status_code == 302 and r.headers['Location'].endswith(f'/tezpul/dala/{lid}')
     assert 'TALON SKANERI' in tally.get(f'/dala/reys/{lid}?eski=1').get_data(as_text=True)
     page = tally.get(f'/tezpul/dala/{lid}').get_data(as_text=True)
-    assert 'Talonni skanerlang' in page and 'SAQLASH' in page and 'Starshi' in page
+    assert 'Talonni skanerlang' in page and 'SAQLASH' in page and 'Starshi' not in page
     # the cashier cannot pay a talon that has no kg yet
     r = kassa.post('/tezpul/talon', {'code': qr(ts[0])})
     assert r.status_code == 409 and r.get_json()['refused'] == 'kgsiz'
@@ -65,13 +65,13 @@ def test_field_two_steps_then_kassa_two_steps(app, world):
     assert r.status_code == 409 and r.get_json()['refused'] == 'kiritilgan'
     # kassa: scan → the amount → PUL BERILDI; money out of the existing kassa as a worker payment
     t = kassa.post('/tezpul/talon', {'code': qr(ts[0])}).get_json()['talon']
-    assert t['amount'] == 75_000 and t['kg'] == 37.5 and t['kind'] == 'odam'
+    assert t['amount'] == 75_000 and t['kg'] == 37.5
     r = pay(kassa, qr(ts[0])).get_json()
-    assert r['ok'] and r['result']['amount'] == 75_000 and r['result']['doc_no'].startswith('PAY-')
+    assert r['ok'] and r['result']['amount'] == 75_000 and r['result']['count'] == 1
     assert box_balance(app) == 1_000_000 - 75_000
     with app.app_context():
         ce = q("SELECT * FROM cash_entries WHERE category='worker_pay'", one=True)
-        assert ce['amount'] == 75_000 and ce['worker_id'] == h['worker_id'] and ce['payout_id']
+        assert ce['amount'] == 75_000 and ce['worker_id'] == h['worker_id'] and ce['payout_id'] and ce['doc_no'].startswith('PAY-')
         assert q('SELECT status FROM payouts WHERE id=?', (ce['payout_id'],), one=True)['status'] == 'BERILDI'
     # paid: a second scan / a photocopy / the field — red everywhere
     for resp in (kassa.post('/tezpul/talon', {'code': qr(ts[0])}), pay(kassa, qr(ts[0])), enter(tally, lid, qr(ts[0]), '5')):
@@ -102,22 +102,51 @@ def test_field_two_steps_then_kassa_two_steps(app, world):
     assert pdf.status_code == 200 and pdf.data[:4] == b'%PDF'
 
 
-def test_starshi_talon_for_a_whole_team(app, world):
-    tally, lid, ts = setup(app, world, 2)
-    r = enter(tally, lid, qr(ts[0]), '800')                       # one person cannot have 800 kg
-    assert r.status_code == 422 and 'Starshi' in r.get_json()['error']
-    r = enter(tally, lid, qr(ts[0]), '800', group=True).get_json()   # the starshi's team, one talon
-    assert r['ok'] and r['result']['kind'] == 'guruh' and r['result']['amount'] == 1_600_000
-    cash_in(world['bux'], '1000000')
-    t = world['kassa'].post('/tezpul/talon', {'code': qr(ts[0])}).get_json()['talon']
-    assert t['kind'] == 'guruh' and t['amount'] == 1_600_000
-    assert pay(world['kassa'], qr(ts[0])).get_json()['result']['amount'] == 1_600_000
+def test_starshi_brings_his_teams_talons_one_payment(app, world):
+    """Two modes at the kassa: one talon — one payment; a starshi's 50 talons scanned one after another — one PUL BERILDI."""
+    kassa = world['kassa']
+    tally, lid, ts = setup(app, world, 52)
+    cash_in(world['bux'], '4000000')                              # 5 000 000 in the box
+    r = enter(tally, lid, qr(ts[0]), '800')                       # one talon is one person's kg: 800 is a typo
+    assert r.status_code == 422 and 'bitta talonga juda ko‘p' in r.get_json()['error']
+    for k, t in enumerate(ts):
+        assert enter(tally, lid, qr(t), str(20 + k % 5)).get_json()['ok']
+    assert 'Starshi' not in tally.get(f'/tezpul/dala/{lid}').get_data(as_text=True)     # no group button in the field
+    # mode 1: one person
+    assert pay(kassa, qr(ts[0])).get_json()['result']['amount'] == 40_000
+    # mode 2: the starshi's 50 talons in one tap (a talon scanned twice counts once)
+    codes = [qr(t) for t in ts[1:51]] + [qr(ts[1])]
+    expect = sum((20 + k % 5) * 2000 for k in range(1, 51))
+    u = uuid4()
+    r = kassa.post('/tezpul/tolash', {'code': codes, 'manual_code': [''] * len(codes), 'client_uuid': u}).get_json()
+    assert r['ok'] and r['result']['count'] == 50 and r['result']['amount'] == expect
+    again = kassa.post('/tezpul/tolash', {'code': codes, 'client_uuid': u}).get_json()   # the same tap sent twice
+    assert again['ok'] and again['result']['already'] and again['result']['amount'] == expect
+    assert box_balance(app) == 5_000_000 - 40_000 - expect
+    with app.app_context():
+        assert scalar("SELECT COUNT(*) FROM cash_entries WHERE category='worker_pay'") == 51
+        assert scalar("SELECT COUNT(DISTINCT pay_batch) FROM tezpul_talons WHERE status='TOLANDI'") == 2
+    # one paid talon inside a new batch stops the whole batch (nothing is paid twice, nothing half-paid)
+    r = kassa.post('/tezpul/tolash', {'code': [qr(ts[51]), qr(ts[0])], 'client_uuid': uuid4()})
+    assert r.status_code == 409 and r.get_json()['talon']['number'] == f'{ts[0]["number"]:06d}'
+    with app.app_context():
+        assert q('SELECT status FROM tezpul_talons WHERE id=?', (ts[51]['id'],), one=True)['status'] == 'TAYYOR'
+    page = world['rahbar'].get('/tezpul/panel').get_data(as_text=True)
+    assert '50 talon' in page
 
 
 def test_kassa_short_and_voided_weighing(app, world):
     admin, kassa = world['admin'], world['kassa']
     tally, lid, ts = setup(app, world, 2)
-    enter(tally, lid, qr(ts[0]), '600', group=True)               # 1 200 000 > 1 000 000 in the box
+    cash_out = 1_000_000 - 100_000
+    from surxon.db import tx
+    from surxon.accounting import book_cash
+    from surxon.security import Actor
+    with app.app_context():                                       # the box has only 100 000 left
+        with tx() as db:
+            book_cash(db, Actor(scalar("SELECT id FROM users WHERE username='buxgalter'"), 'accountant'), direction='OUT',
+                      category='other_out', amount=cash_out, cashbox_id=1, counterparty='test')
+    enter(tally, lid, qr(ts[0]), '60')                            # 120 000 > 100 000 in the box
     r = pay(kassa, qr(ts[0]))
     assert r.status_code == 422 and 'yetarli pul' in r.get_json()['error']
     with app.app_context():
@@ -128,8 +157,8 @@ def test_kassa_short_and_voided_weighing(app, world):
     with app.app_context():
         assert q('SELECT voided_at FROM harvests WHERE id=?', (hid,), one=True)['voided_at']
     assert pay(kassa, qr(ts[0])).get_json()['refused'] == 'kgsiz'
-    assert enter(tally, lid, qr(ts[0]), '60').get_json()['result']['amount'] == 120_000
-    assert pay(kassa, qr(ts[0])).get_json()['result']['amount'] == 120_000
+    assert enter(tally, lid, qr(ts[0]), '40').get_json()['result']['amount'] == 80_000       # fits in the box now
+    assert pay(kassa, qr(ts[0])).get_json()['result']['amount'] == 80_000
 
 
 def test_two_cashiers_press_at_the_same_second_pay_once(app, world):
