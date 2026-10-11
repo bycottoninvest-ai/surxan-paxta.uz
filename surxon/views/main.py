@@ -81,6 +81,8 @@ def trailer_qr(token):
     ld = q("""SELECT id FROM trailer_loads WHERE trailer_id=? AND status<>'BEKOR'
               ORDER BY (status IN ('OCHIQ','TOLDI')) DESC, id DESC LIMIT 1""", (e['id'],), one=True)
     if not ld:
+        if can('load.open'):           # an empty trailer: its opening page with this trailer already chosen
+            return redirect(url_for('dala.new_trip', telashka=e['id']))
         flash(f'{e["code"]}: hali reys yo‘q — yangi reys oching.', 'info')
         return redirect(url_for(home))
     if role == 'tally':

@@ -221,3 +221,25 @@ def test_season_scale_1000_pickers_2000_talons(app, world):
     page = world['rahbar'].get('/tezpul/panel')
     assert page.status_code == 200 and time.time() - t2 < 3
     print(f'2000 talons: field {t1 - t0:.1f}s, kassa {t2 - t1:.1f}s')
+
+
+def test_trailer_qr_opens_the_trip_or_its_opening_page(app, world):
+    """The QR stuck on a trailer: empty trailer → its opening page with this trailer chosen; open trip → the scanner."""
+    admin = world['admin']
+    tally = make_user(app, admin, 'terim1', 'tally')
+    talons(app, admin, 1)
+    with app.app_context():
+        e = q("SELECT id, qr_token FROM equipment WHERE code='TL-03'", one=True)
+        if not e['qr_token']:
+            from surxon.db import get_db
+            get_db().execute("UPDATE equipment SET qr_token='tq-test-03' WHERE id=?", (e['id'],))
+        tok = q('SELECT qr_token FROM equipment WHERE id=?', (e['id'],), one=True)['qr_token']
+    r = tally.get(f'/tq/{tok}')
+    assert r.status_code == 302 and r.headers['Location'].endswith(f'/dala/yangi?telashka={e["id"]}')
+    page = tally.get(f'/dala/yangi?telashka={e["id"]}').get_data(as_text=True)
+    assert 'TL-03 — ochish' in page and 'Kombayn' in page
+    lid = open_trip(tally, world, rate='2000', trailer='TL-03')
+    r = tally.get(f'/tq/{tok}')
+    assert r.status_code == 302 and r.headers['Location'].endswith(f'/dala/reys/{lid}')
+    assert tally.get(f'/dala/reys/{lid}').headers['Location'].endswith(f'/tezpul/dala/{lid}')
+    assert 'Telashka QR' in tally.get('/dala').get_data(as_text=True)

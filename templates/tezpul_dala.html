@@ -140,6 +140,7 @@ button{font:inherit;border:0;cursor:pointer}
 
   async function found(code, manual) {
     if (stop) { stop(); stop = null; }
+    if (/\/tq\//.test(code || '')) { msg('soxta', 'BU TELASHKA QR KODI', 'Talonning QR kodini skanerlang.'); return; }
     const no = qrNo(code) || (manual ? String(code).replace(/\D/g, '').padStart(6, '0') : null);
     if (!no) { msg('soxta', 'TALON TANILMADI', 'Bu bizning talon emas yoki QR buzilgan.'); return; }
     if (online()) {

@@ -17,7 +17,9 @@
       <label><input type="radio" name="method" value="combine" data-rate="{{ rate_combine }}"><span>🚜 Kombayn</span></label></div>
     <label class="d-l" style="font-size:18px">2) Telashkani tanlang</label>
     <input type="hidden" name="trailer_id" id="d-trailer" required>
-    <div class="d-trl">{% for t in trailers %}<button type="button" data-id="{{ t.id }}">{{ t.code }}{% if t.plate %}<small>{{ t.plate }}</small>{% endif %}</button>{% endfor %}</div>
+    {% if chosen %}<div class="d-trl d-one"><button type="button" data-id="{{ chosen.id }}">▶ {{ chosen.code }} — ochish<small>telashka QR dan tanlandi</small></button></div>
+    <a class="tiny" href="{{ url_for('dala.new_trip') }}" style="display:block;margin-top:6px">boshqa telashka</a>
+    {% else %}<div class="d-trl">{% for t in trailers %}<button type="button" data-id="{{ t.id }}">{{ t.code }}{% if t.plate %}<small>{{ t.plate }}</small>{% endif %}</button>{% endfor %}</div>{% endif %}
     <div class="tiny muted" id="d-auto" style="margin:8px 0 4px"></div>
     <details class="d-more" id="d-rest"><summary>Dala, brigada, narx — o‘zi tanlandi (o‘zgartirish)</summary>
     <div class="d-l" style="display:flex;align-items:center;justify-content:space-between;gap:8px">Dala
@@ -47,7 +49,7 @@
     <div class="d-seg" id="d-round">{% for r in (1, 2, 3) %}<label><input type="radio" name="round" value="{{ r }}" {{ 'checked' if r == 1 }}><span>{{ r }}-terim</span></label>{% endfor %}</div>
     <script id="d-rounds" type="application/json">{{ rounds|tojson }}</script>
     <label class="d-l">Telashka</label>
-    <select name="trailer_id" required>{% for t in trailers %}<option value="{{ t.id }}">{{ t.code }}{{ ' · ' ~ t.plate if t.plate }}</option>{% endfor %}</select>
+    <select name="trailer_id" required>{% for t in trailers %}<option value="{{ t.id }}"{{ ' selected' if chosen and chosen.id == t.id }}>{{ t.code }}{{ ' · ' ~ t.plate if t.plate }}</option>{% endfor %}</select>
     {% if stations|length > 1 %}<label class="d-l">Qaysi punktga?</label>
     <select name="station_id" required>{% for st in stations %}<option value="{{ st.id }}">{{ st.name }}</option>{% endfor %}</select>{% endif %}
     <label class="d-l">Terim turi</label>
@@ -70,6 +72,7 @@
 .d-trl button{background:#1e9e4a;color:#fff;border:0;border-radius:16px;min-height:74px;font-size:24px;font-weight:900;box-shadow:0 4px 12px rgba(30,158,74,.3)}
 .d-trl button small{display:block;font-size:12px;font-weight:600;opacity:.85}
 .d-seg-big span{min-height:56px;font-size:17px!important;font-weight:800}
+.d-trl.d-one{grid-template-columns:1fr}.d-trl.d-one button{min-height:84px}
 .d-trl.cmb button{background:#b45309;box-shadow:0 4px 12px rgba(180,83,9,.3)}</style><link rel="stylesheet" href="{{ url_for('static', filename='vendor/leaflet/leaflet.css') }}">
 <script src="{{ url_for('static', filename='vendor/leaflet/leaflet.js') }}"></script>
 <script src="{{ url_for('static', filename='js/basemap.js') }}"></script>

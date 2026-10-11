@@ -138,8 +138,9 @@ def new_trip():
     yr = _cs(_gdb())
     rounds = {f['id']: picking.default_round(f['id'], yr) for f in fields}
     from ..tezpul import in_use
+    chosen = next((t for t in trailers if t['id'] == request.args.get('telashka', type=int)), None)   # its QR was scanned
     return render_template('dala_new.html', trailers=trailers, fields=fields, preselect=request.args.get('field', type=int),
-                           tezpul=in_use(),
+                           tezpul=in_use(), chosen=chosen,
                            rounds=rounds,
                            brigadiers=q('SELECT id, name FROM brigadiers WHERE active=1' + (' AND id=?' if brig else '')
                                         + ' ORDER BY name', (brig,) if brig else ()),
