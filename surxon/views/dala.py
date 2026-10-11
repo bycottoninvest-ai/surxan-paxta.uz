@@ -137,7 +137,9 @@ def new_trip():
     from ..services import current_season as _cs
     yr = _cs(_gdb())
     rounds = {f['id']: picking.default_round(f['id'], yr) for f in fields}
+    from ..tezpul import in_use
     return render_template('dala_new.html', trailers=trailers, fields=fields, preselect=request.args.get('field', type=int),
+                           tezpul=in_use(),
                            rounds=rounds,
                            brigadiers=q('SELECT id, name FROM brigadiers WHERE active=1' + (' AND id=?' if brig else '')
                                         + ' ORDER BY name', (brig,) if brig else ()),
@@ -153,8 +155,12 @@ def trip(load_id):
     if ld['status'] != 'OCHIQ':
         return redirect(url_for('dala.docs', load_id=load_id))
     method = ld['method'] or 'hand'
+    from ..tezpul import in_use
+    tezpul = in_use()
+    if tezpul and method == 'hand' and not request.args.get('eski'):
+        return redirect(url_for('tezpul.dala', load_id=load_id))      # TEZ-PUL: no names in the field — scan, kg, save
     return render_template('dala_trip.html', ld=ld, method=method, totals=_totals(load_id), recent=_recent(load_id),
-                           combines=combine_choices() if method == 'combine' else [])
+                           combines=combine_choices() if method == 'combine' else [], tezpul=tezpul)
 
 
 @bp.post('/dala/reys/<int:load_id>/tortish')

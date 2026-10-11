@@ -28,6 +28,8 @@ def workers():
     show = request.args.get('show', 'active')
     where = ['1=1'] if show == 'all' else ['w.active=1']
     params = [year, year, today_str()]
+    if 'talon' not in term.lower():      # TEZ-PUL talon cards (“Talon 000274”) show only when searched for
+        where.append('w.talon_no IS NULL')
     if term:
         where.append('(w.full_name LIKE ? OR w.phone LIKE ?)'); params += [f'%{term}%', f'%{term}%']
     rows = q(f'''SELECT w.*, b.name brigadier_name, p.thumb_path,

@@ -10,7 +10,7 @@ from contextlib import contextmanager
 
 from flask import current_app, g
 
-SCHEMA_VERSION = 25
+SCHEMA_VERSION = 26
 
 SCHEMA = r'''
 CREATE TABLE IF NOT EXISTS brigadiers (
@@ -1145,6 +1145,12 @@ def migrate(db):
     # v24: a worker's own hand rate (so‘m/kg) — set by the owner, wins over the trip's rate for that person only
     _add_column(db, 'workers', 'rate', 'INTEGER')
     # v25: SURXON TEZ-PUL tables (tezpul_talons, tezpul_events) — created above by SCHEMA, nothing to alter
+    # v26: TEZ-PUL talon kg is written in the field as a hand weighing; each talon is its own card (hidden from name lists)
+    _add_column(db, 'tezpul_talons', 'kind', 'TEXT')            # odam / guruh (starshi)
+    _add_column(db, 'tezpul_talons', 'worker_id', 'INTEGER')
+    _add_column(db, 'tezpul_talons', 'harvest_id', 'INTEGER')
+    _add_column(db, 'tezpul_talons', 'load_id', 'INTEGER')
+    _add_column(db, 'workers', 'talon_no', 'INTEGER')
     # Future column changes go here as: if version < N: ALTER TABLE ...
     db.execute('UPDATE schema_version SET version=? WHERE version < ?', (SCHEMA_VERSION, SCHEMA_VERSION))
 

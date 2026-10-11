@@ -11,6 +11,33 @@
   {% else %}
   <form method="post" class="d-form" id="d-open">{{ csrf() }}{{ uuid_field() }}
     <input type="hidden" name="lat" id="d-lat"><input type="hidden" name="lon" id="d-lon"><input type="hidden" name="acc" id="d-acc">
+    {% if tezpul %}
+    <label class="d-l" style="font-size:18px">Telashkani tanlang</label>
+    <input type="hidden" name="trailer_id" id="d-trailer" required>
+    <div class="d-trl">{% for t in trailers %}<button type="button" data-id="{{ t.id }}">{{ t.code }}{% if t.plate %}<small>{{ t.plate }}</small>{% endif %}</button>{% endfor %}</div>
+    <div class="tiny muted" id="d-auto" style="margin:8px 0 4px"></div>
+    <details class="d-more" id="d-rest"><summary>Dala, brigada, narx — o‘zi tanlandi (o‘zgartirish)</summary>
+    <div class="d-l" style="display:flex;align-items:center;justify-content:space-between;gap:8px">Dala
+      <button type="button" class="btn btn-light btn-sm" id="d-gps">📍 Joylashuvdan aniqlash</button></div>
+    <div id="d-gps-msg" class="tiny" hidden></div>
+    <div id="d-minimap" style="height:190px;border-radius:12px;overflow:hidden;margin:6px 0 8px;background:#e9eef5" hidden></div>
+    <select name="field_id" required id="d-field">{% for f in fields %}<option value="{{ f.id }}" data-brig="{{ f.brigadier_id or '' }}"{{ ' selected' if preselect == f.id }}>{{ f.code }} · {{ f.name }}</option>{% endfor %}</select>
+    <label class="d-l">Terim</label>
+    <div class="d-seg" id="d-round">{% for r in (1, 2, 3) %}<label><input type="radio" name="round" value="{{ r }}" {{ 'checked' if r == 1 }}><span>{{ r }}-terim</span></label>{% endfor %}</div>
+    <script id="d-rounds" type="application/json">{{ rounds|tojson }}</script>
+    {% if stations|length > 1 %}<label class="d-l">Qaysi punktga?</label>
+    <select name="station_id" required>{% for st in stations %}<option value="{{ st.id }}">{{ st.name }}</option>{% endfor %}</select>{% endif %}
+    <label class="d-l">Terim turi</label>
+    <div class="d-seg"><label><input type="radio" name="method" value="hand" checked data-rate="{{ rate_hand }}"><span>Qo‘l terimi</span></label>
+      <label><input type="radio" name="method" value="combine" data-rate="{{ rate_combine }}"><span>Kombayn</span></label></div>
+    <label class="d-l">Brigadir</label>
+    <select name="brigadier_id" required id="d-brig"><option value="">— tanlang —</option>{% for b in brigadiers %}<option value="{{ b.id }}">{{ b.name }}</option>{% endfor %}</select>
+    <label class="d-l">Terim narxi <span class="muted">(so‘m/kg)</span></label>
+    <input name="rate" id="d-rate" inputmode="numeric" required value="{{ rate_hand }}" placeholder="masalan 1500" autocomplete="off" class="d-num">
+    <div class="tiny muted">Shu telashkadagi hamma tortish shu narxda hisoblanadi. Keyingi telashkada ham o‘zi chiqadi; o‘zgarsa shu yerda almashtirasiz. Eski hisoblar o‘zgarmaydi.</div>
+    {% if tractors %}<details class="d-more"><summary>Traktor (ixtiyoriy)</summary><select name="tractor_id"><option value="">—</option>{% for t in tractors %}<option value="{{ t.id }}">{{ t.code }}</option>{% endfor %}</select></details>{% endif %}
+    </details>
+    {% else %}
     <div class="d-l" style="display:flex;align-items:center;justify-content:space-between;gap:8px">Dala
       <button type="button" class="btn btn-light btn-sm" id="d-gps">📍 Joylashuvdan aniqlash</button></div>
     <div id="d-gps-msg" class="tiny" hidden></div>
@@ -33,11 +60,15 @@
     <div class="tiny muted">Shu telashkadagi hamma tortish shu narxda hisoblanadi. Keyingi telashkada ham o‘zi chiqadi; o‘zgarsa shu yerda almashtirasiz. Eski hisoblar o‘zgarmaydi.</div>
     {% if tractors %}<details class="d-more"><summary>Traktor (ixtiyoriy)</summary><select name="tractor_id"><option value="">—</option>{% for t in tractors %}<option value="{{ t.id }}">{{ t.code }}</option>{% endfor %}</select></details>{% endif %}
     <button class="btn btn-primary btn-block d-big">Boshlash →</button>
+    {% endif %}
+
   </form>
   {% endif %}
 </div>
 {% endblock %}
-{% block scripts %}<link rel="stylesheet" href="{{ url_for('static', filename='vendor/leaflet/leaflet.css') }}">
+{% block scripts %}<style>.d-trl{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+.d-trl button{background:#1e9e4a;color:#fff;border:0;border-radius:16px;min-height:74px;font-size:24px;font-weight:900;box-shadow:0 4px 12px rgba(30,158,74,.3)}
+.d-trl button small{display:block;font-size:12px;font-weight:600;opacity:.85}</style><link rel="stylesheet" href="{{ url_for('static', filename='vendor/leaflet/leaflet.css') }}">
 <script src="{{ url_for('static', filename='vendor/leaflet/leaflet.js') }}"></script>
 <script src="{{ url_for('static', filename='js/basemap.js') }}"></script>
 <script id="d-fields" type="application/json">[{% for f in fields if f.polygon_json %}{"id": {{ f.id }}, "label": {{ (f.code ~ ' · ' ~ f.name)|tojson }}, "poly": {{ f.polygon_json|safe }}}{{ ',' if not loop.last }}{% endfor %}]</script>
@@ -127,6 +158,19 @@
   const pick = () => { const o = f.selectedOptions[0]; if (o && o.dataset.brig) b.value = o.dataset.brig;
     const r = rounds[f.value] || 1, radio = document.querySelector(`#d-round input[value="${r}"]`); if (radio) radio.checked = true; };
   f.addEventListener('change', pick); pick();
+  // TEZ-PUL: one tap on the trailer opens the trip (field from the location, brigade from the field, last rate)
+  const auto = document.getElementById('d-auto');
+  if (auto) {
+    const say = () => { const o = f.selectedOptions[0], bo = b.selectedOptions[0];
+      auto.textContent = `${o ? o.textContent : ''} · ${bo && b.value ? bo.textContent : 'brigada tanlanmagan'} · ${r.value ? r.value + ' so‘m/kg' : 'narx yozilmagan'}`; };
+    [f, b, r].forEach(x => x.addEventListener('change', say)); setInterval(say, 1500); say();
+    document.querySelectorAll('.d-trl button').forEach(btn => btn.addEventListener('click', () => {
+      document.getElementById('d-trailer').value = btn.dataset.id;
+      const form = document.getElementById('d-open');
+      if (!b.value || !r.value) { document.getElementById('d-rest').open = true; (b.value ? r : b).focus(); return; }
+      if (form.requestSubmit) form.requestSubmit(); else form.submit();
+    }));
+  }
   let typed = false; r.addEventListener('input', () => typed = true);
   document.querySelectorAll('input[name=method]').forEach(m => m.addEventListener('change', () => { if (!typed) r.value = m.dataset.rate || ''; }));
 })();

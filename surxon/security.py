@@ -209,6 +209,7 @@ CASHIER_ENDPOINTS = STATION_ENDPOINTS | {'acct.cashier', 'acct.payout_pay', 'acc
 
 # SURXON TEZ-PUL: the cashier's two-step screen
 TEZPUL_CASHIER = {'tezpul.home', 'tezpul.kassa', 'tezpul.lookup', 'tezpul.pay'}
+TEZPUL_FIELD = {'tezpul.dala', 'tezpul.dala_lookup', 'tezpul.dala_save'}
 
 
 # Field clerk: only the four-step field screens (and the few trip endpoints they use) — no reports, money, staff,
@@ -228,7 +229,7 @@ def station_gate():
     ep = request.endpoint or ''
     if not user or user['role'] not in ('station', 'cashier', 'tally', 'fuel'):
         return None
-    if user['role'] == 'tally' and (ep in TALLY_ENDPOINTS or ep.startswith('dala.')):
+    if user['role'] == 'tally' and (ep in TALLY_ENDPOINTS or ep.startswith('dala.') or ep in TEZPUL_FIELD):
         return None
     if user['role'] == 'station' and (ep in STATION_ENDPOINTS or ep in STATION_EXTRA or ep.startswith('punkt.')):
         return None

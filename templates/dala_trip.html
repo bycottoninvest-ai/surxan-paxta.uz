@@ -7,6 +7,7 @@
     <div><h1 class="d-h1">2. {{ 'Kombayn va kg' if method == 'combine' else 'Odam va kilogramm' }}</h1>
       <div class="small muted">{{ ld.field_name }} · {{ ld.trailer_code }} · {{ ld.brigadier_name }} · <b>{{ ld.rate|num if ld.rate else '—' }} so‘m/kg</b></div></div></div>
 
+  {% if tezpul and method != 'combine' %}<a class="btn btn-primary btn-block" style="margin:0 0 10px;padding:14px;font-size:18px;font-weight:800;background:#1e9e4a;border-color:#1e9e4a" href="{{ url_for('tezpul.dala', load_id=ld.id) }}">📷 TALON SKANERI (TEZ-PUL)</a>{% endif %}
   <form method="post" action="{{ url_for('dala.weigh', load_id=ld.id) }}" class="d-form" id="d-entry" data-offline="Tortish {{ ld.trip_no }}" data-after="reset" data-fast="1" autocomplete="off">
     {{ csrf() }}{{ uuid_field() }}
     <div id="d-gps-st" class="tiny" style="color:#8a97aa;margin-bottom:6px">📍 Joylashuv aniqlanmoqda…</div>

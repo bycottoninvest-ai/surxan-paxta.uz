@@ -268,15 +268,15 @@ def api_workers():
     if request.args.get('all') == '1':
         # the whole active list, kept on the tally's phone so names can be found without internet
         return jsonify(workers=[{'id': r['id'], 'name': r['full_name'], 'phone': r['phone'], 'group': r['group_size']} for r in
-                                q('SELECT id, full_name, phone, group_size FROM workers WHERE active=1 ORDER BY full_name LIMIT 20000')])
+                                q('SELECT id, full_name, phone, group_size FROM workers WHERE active=1 AND talon_no IS NULL ORDER BY full_name LIMIT 20000')])
     from ..utils import name_key
     key = name_key(term)
     if len(key) < 1:
-        rows = q('''SELECT w.id, w.full_name, w.phone, w.photo_id, w.group_size FROM workers w WHERE w.active=1
+        rows = q('''SELECT w.id, w.full_name, w.phone, w.photo_id, w.group_size FROM workers w WHERE w.active=1 AND w.talon_no IS NULL
                     ORDER BY (SELECT MAX(id) FROM harvests h WHERE h.worker_id=w.id) DESC, w.full_name LIMIT 15''')
     else:
         rows = q('''SELECT id, full_name, phone, photo_id, group_size FROM workers
-                    WHERE active=1 AND (name_key LIKE ? OR name_key LIKE ? OR phone LIKE ?)
+                    WHERE active=1 AND talon_no IS NULL AND (name_key LIKE ? OR name_key LIKE ? OR phone LIKE ?)
                     ORDER BY CASE WHEN name_key LIKE ? THEN 0 ELSE 1 END, full_name LIMIT 15''',
                  (key + '%', '% ' + key + '%', '%' + term + '%', key + '%'))
     out = []

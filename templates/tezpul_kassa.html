@@ -48,6 +48,10 @@ button{font:inherit;border:0;cursor:pointer}
 .pad button:active{background:#dfe8f3}
 .big{margin:10px 14px 14px;background:var(--green);color:#fff;border-radius:18px;height:72px;font-size:27px;font-weight:900;letter-spacing:.5px;box-shadow:0 6px 16px rgba(30,158,74,.35);width:calc(100% - 28px)}
 .big:disabled{background:#c3ccd8;box-shadow:none}
+.grp[hidden]{display:none}.grp{display:inline-block;margin-top:4px;background:#e8f1fe;color:#1d4ed8;font-weight:800;font-size:13px;padding:3px 10px;border-radius:20px}
+.sum{margin:8px 14px;background:#e5f6eb;border-radius:16px;padding:12px 16px;text-align:center}
+.sum small{font-size:14px;color:#2a7a47;font-weight:800;letter-spacing:.5px}.sum b{display:block;font-size:42px;font-weight:950;color:#137a37;line-height:1.1;white-space:nowrap}
+.sum span{font-size:13px;color:#2a7a47}
 .err{margin:6px 14px;background:#fde9ee;color:#a0153a;border-radius:12px;padding:10px 12px;font-size:15px;font-weight:700;display:none}.err.on{display:block}
 .box{margin:14px;border-radius:20px;padding:22px 16px;text-align:center;color:#fff}
 .box .ic{font-size:56px;line-height:1}.box b{display:block;font-size:30px;font-weight:950;margin:8px 0 6px;line-height:1.1}
@@ -63,7 +67,7 @@ button{font:inherit;border:0;cursor:pointer}
 <body><div class="app">
   <div class="top"><div class="brand">SURXON <b>TEZ-PUL</b></div><a href="{{ url_for('hamyon.home') }}">Kassa ›</a></div>
   <div class="net" id="net">📡 Internet yo‘q — pul berish yopiq. Aloqa kelishini kuting.</div>
-  <div class="ctx"><span>{{ box_name }}</span><span>1 kg = <b>{{ '{:,}'.format(rate).replace(',', ' ') }}</b> so‘m</span></div>
+  <div class="ctx"><span>{{ box_name }}</span><span>Talon → summa → PUL BERILDI</span></div>
   <div class="toast" id="toast"></div>
 
   <!-- 1: scan -->
@@ -76,15 +80,15 @@ button{font:inherit;border:0;cursor:pointer}
     <div class="count"><div><b id="c-n">{{ today.n }}</b>talon bugun</div><div><b id="c-kg">{{ today.kg|num(1) if today.kg % 1 else today.kg|num }}</b>kg</div><div><b id="c-sum">{{ today.amount|num }}</b>so‘m berildi</div></div>
   </section>
 
-  <!-- 2: kg + PUL BERILDI -->
+  <!-- 2: amount + PUL BERILDI -->
   <section class="view" id="v-pay">
-    <div class="who"><small id="p-brig">Talon</small><b id="p-no">№ 000000</b><button type="button" class="x" id="p-x">✕</button></div>
-    <div class="step" style="padding-top:4px"><div class="num g">2</div><div class="st" id="p-title">Talondagi kg ni yozing</div></div>
-    <div class="kg" id="p-kgbox"><b id="p-kg" class="ph">0</b><span>kg</span></div>
-    <div class="live" id="p-live"></div>
+    <div class="who"><small id="p-brig">Talon</small><b id="p-no">№ 000000</b><span class="grp" id="p-grp" hidden>👥 STARSHI (guruh)</span><button type="button" class="x" id="p-x">✕</button></div>
+    <div class="kg fixed"><b id="p-kg">0</b><span>kg</span></div>
+    <div class="step" style="padding-top:8px"><div class="num g">2</div><div class="st">Pulni sanab bering</div></div>
+    <div class="sum"><small>BERILADI</small><b id="p-sum">0 so‘m</b><span id="p-rate"></span></div>
     <div class="err" id="p-err"></div>
-    <div class="pad" id="pad">{% for k in ['1','2','3','4','5','6','7','8','9',',','0','⌫'] %}<button type="button" data-k="{{ k }}">{{ k }}</button>{% endfor %}</div>
-    <button type="button" class="big" id="p-go" disabled>💵 PUL BERILDI</button>
+    <div style="flex:1"></div>
+    <button type="button" class="big" id="p-go">💵 PUL BERILDI</button>
   </section>
 
   <!-- refused / waiting / done -->
@@ -97,14 +101,14 @@ button{font:inherit;border:0;cursor:pointer}
 <script src="{{ url_for('static', filename='js/qrscan.js') }}?v={{ version }}"></script>
 <script>
 (() => {
-  const CSRF = {{ csrf_token()|tojson }}, RATE = {{ rate|tojson }}, JSQR = {{ url_for('static', filename='vendor/jsqr/jsQR.min.js')|tojson }};
+  const CSRF = {{ csrf_token()|tojson }}, JSQR = {{ url_for('static', filename='vendor/jsqr/jsQR.min.js')|tojson }};
   const URL_LOOK = {{ url_for('tezpul.lookup')|tojson }}, URL_PAY = {{ url_for('tezpul.pay')|tojson }};
   const $ = id => document.getElementById(id);
-  const fmt = v => Math.round(v).toLocaleString('ru-RU').replace(/ |,/g, ' ');
+  const fmt = v => String(Math.round(v)).replace(/\B(?=(\d{3})+(?!\d))/g, '\u00a0');
   const kgfmt = v => String(v).replace('.', ',');
   const uuid = () => (crypto.randomUUID ? crypto.randomUUID() : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
     const r = Math.random() * 16 | 0; return (c === 'x' ? r : (r & 3 | 8)).toString(16); }));
-  let stop = null, cur = null, kg = '', payId = null, busy = false, backTimer = null;
+  let stop = null, cur = null, payId = null, busy = false, backTimer = null;
 
   function show(v) { ['v-scan', 'v-pay', 'v-msg'].forEach(x => $(x).classList.toggle('on', x === v)); }
   function online() { const on = navigator.onLine; $('net').classList.toggle('on', !on); paint(); return on; }
@@ -120,7 +124,7 @@ button{font:inherit;border:0;cursor:pointer}
   }
 
   function scan() {
-    clearTimeout(backTimer); cur = null; kg = ''; payId = null; busy = false;
+    clearTimeout(backTimer); cur = null; payId = null; busy = false;
     show('v-scan'); $('mform').classList.remove('on'); $('m-no').value = ''; $('m-code').value = '';
     if (stop) stop();
     stop = window.spxQrScan($('video'), $('msg'), t => { found(t, ''); return true; }, JSQR);
@@ -133,58 +137,40 @@ button{font:inherit;border:0;cursor:pointer}
     try { j = await post(URL_LOOK, { code, manual_code: manual }); }
     catch (_) { refusedView('net', 'Internet yo‘q', 'Server javob bermadi. Qayta urinib ko‘ring.'); return; }
     if (!j.ok) { if (j.refused) refused(j); else refusedView('soxta', 'Xato', j.error || 'Talon tanilmadi.'); return; }
-    cur = { code, manual, t: j.talon }; payId = uuid(); kg = ''; payScreen();
+    $('toast').classList.remove('on');
+    cur = { code, manual, t: j.talon }; payId = uuid(); payScreen();
   }
 
   function payScreen() {
     const t = cur.t;
     $('p-no').textContent = '№ ' + t.number;
     $('p-brig').textContent = 'Talon' + (t.brigade ? ' · ' + t.brigade + ' brigadasi' : '');
+    $('p-grp').hidden = t.kind !== 'guruh';
+    $('p-kg').textContent = kgfmt(t.kg);
+    $('p-sum').textContent = fmt(t.amount) + '\u00a0so‘m';
+    $('p-sum').style.fontSize = String(t.amount).length > 6 ? '32px' : '';
+    $('p-rate').textContent = t.rate ? `${kgfmt(t.kg)} kg × ${fmt(t.rate)} so‘m` : '';
     $('p-err').classList.remove('on');
-    if (t.status === 'KUTILMOQDA') {
-      refusedView('wait', 'Rahbar tasdig‘ini kutmoqda', `№ ${t.number}: ${kgfmt(t.kg)} kg yozilgan. Rahbar tasdiqlaguncha pul berilmaydi.`);
-      return;
-    }
-    const fixed = t.status === 'TAYYOR';
-    if (fixed) kg = String(t.kg).replace('.', ',');
-    $('pad').style.display = fixed ? 'none' : '';
-    $('p-kgbox').classList.toggle('fixed', fixed);
-    $('p-title').textContent = fixed ? 'Rahbar tasdiqlagan kg' : 'Talondagi kg ni yozing';
     show('v-pay'); paint();
   }
-
-  function kgValue() { const v = parseFloat(kg.replace(',', '.')); return isFinite(v) ? v : 0; }
   function paint() {
     if (!cur) return;
-    const v = kgValue();
-    $('p-kg').textContent = kg || '0'; $('p-kg').classList.toggle('ph', !kg);
-    $('p-live').innerHTML = v > 0 ? `× ${fmt(RATE)} so‘m =<b>${fmt(v * RATE)} so‘m</b>` : '';
-    $('p-go').disabled = busy || !(v > 0) || !navigator.onLine;
+    $('p-go').disabled = busy || !navigator.onLine;
     $('p-go').textContent = busy ? '⏳ Saqlanmoqda…' : '💵 PUL BERILDI';
   }
-  $('pad').addEventListener('click', e => { const b = e.target.closest('button'); if (!b || busy) return;
-    const k = b.dataset.k;
-    if (k === '⌫') kg = kg.slice(0, -1);
-    else if (k === ',') { if (!kg.includes(',')) kg = (kg || '0') + ','; }
-    else if (kg.length < 6 && !(kg.includes(',') && kg.split(',')[1].length >= 1)) kg = (kg === '0' ? '' : kg) + k;
-    $('p-err').classList.remove('on'); paint(); });
 
   $('p-go').addEventListener('click', async () => {
     if (busy || !cur) return;
     if (!online()) return;
     busy = true; paint();
     let j;
-    try { j = await post(URL_PAY, { code: cur.code, manual_code: cur.manual, kg: kg.replace(',', '.'), client_uuid: payId }); }
+    try { j = await post(URL_PAY, { code: cur.code, manual_code: cur.manual, client_uuid: payId }); }
     catch (_) {
       busy = false; paint();
       err('Javob kelmadi. Pul berilganmi — bilinmadi. Internet kelgach yana PUL BERILDI ni bosing: ikki marta yozilmaydi.');
       return;
     }
     busy = false;
-    if (j.ok && j.result.wait) {
-      refusedView('wait', 'Rahbar tasdig‘i kerak', `№ ${j.result.number}: ${kgfmt(j.result.kg)} kg — bitta talonga ko‘p. Pul hozir berilmaydi; rahbar tasdiqlagach shu talonni qayta skanerlang.`);
-      return;
-    }
     if (j.ok) {
       const r = j.result;
       $('c-n').textContent = j.today.n; $('c-kg').textContent = kgfmt(Math.round(j.today.kg * 10) / 10); $('c-sum').textContent = fmt(j.today.amount);
@@ -204,6 +190,8 @@ button{font:inherit;border:0;cursor:pointer}
     if (j.refused === 'tolangan') {
       refusedView('tolangan', 'ALLAQACHON TO‘LANGAN', 'Talon № ' + (t.number || ''),
         t.amount != null ? `${kgfmt(t.kg)} kg · <b>${fmt(t.amount)} so‘m</b> berilgan<br>${(t.paid_at || '').slice(8, 10)}.${(t.paid_at || '').slice(5, 7)} ${(t.paid_at || '').slice(11, 16)}${t.paid_by ? ' · kassir ' + t.paid_by : ''}` : '');
+    } else if (j.refused === 'kgsiz') {
+      refusedView('wait', 'KG HALI YOZILMAGAN', 'Talon № ' + (t.number || ''), 'Terim hisobchisi bu talonni skanerlab kg ni kiritmagan. Pul berilmaydi.');
     } else if (j.refused === 'bekor') {
       refusedView('bekor', 'TALON BEKOR QILINGAN', 'Talon № ' + (t.number || ''), t.void_reason ? 'Sabab: ' + t.void_reason : '');
     } else {

@@ -1,0 +1,257 @@
+<!doctype html>
+<html lang="uz"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="theme-color" content="#0a2c5a"><title>SURXON TEZ-PUL · Terim</title>
+<link rel="icon" href="{{ url_for('static', filename='img/favicon.png') }}">
+<link rel="manifest" href="{{ url_for('main.manifest') }}">
+<style>
+:root{--navy:#0a2c5a;--navy9:#071f40;--green:#1e9e4a;--green2:#2fb45f;--red:#e0284f;--bg:#eef3f9;--line:#e3eaf3;--muted:#6b7c93;--text:#0d2a4a}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%;background:var(--bg);font-family:system-ui,-apple-system,'Segoe UI',Roboto,Arial,sans-serif;color:var(--text)}
+button{font:inherit;border:0;cursor:pointer}
+.app{max-width:480px;margin:0 auto;min-height:100%;display:flex;flex-direction:column}
+.top{background:var(--navy);color:#fff;padding:12px 16px;display:flex;align-items:center;justify-content:space-between}
+.brand{font-weight:900;letter-spacing:.3px;font-size:17px}.brand b{color:#5be38a}
+.top a{color:#cfe0f5;font-size:13px;text-decoration:none;background:rgba(255,255,255,.12);padding:5px 10px;border-radius:20px}
+.ctx{font-size:12.5px;color:#34506f;background:#fff;border-bottom:1px solid var(--line);padding:7px 14px;display:flex;justify-content:space-between;gap:8px}
+.step{display:flex;gap:10px;align-items:center;padding:12px 16px 6px}
+.num{width:34px;height:34px;border-radius:50%;background:var(--navy);color:#fff;display:grid;place-items:center;font-weight:900;font-size:18px;flex:none}
+.num.g{background:var(--green)}
+.st{font-size:21px;font-weight:850;color:var(--navy)}
+.view{display:none;flex:1;flex-direction:column}.view.on{display:flex}
+.cam{margin:8px 14px;flex:1;min-height:300px;border-radius:18px;background:#1d232b;position:relative;overflow:hidden}
+.cam video{width:100%;height:100%;object-fit:cover;position:absolute;inset:0}
+.frame{position:absolute;left:50%;top:46%;width:210px;height:210px;transform:translate(-50%,-50%)}
+.frame i{position:absolute;width:44px;height:44px;border:5px solid #5be38a}
+.frame i:nth-child(1){left:0;top:0;border-right:0;border-bottom:0;border-radius:10px 0 0 0}
+.frame i:nth-child(2){right:0;top:0;border-left:0;border-bottom:0;border-radius:0 10px 0 0}
+.frame i:nth-child(3){left:0;bottom:0;border-right:0;border-top:0;border-radius:0 0 0 10px}
+.frame i:nth-child(4){right:0;bottom:0;border-left:0;border-top:0;border-radius:0 0 10px 0}
+.hint{position:absolute;bottom:14px;left:8px;right:8px;text-align:center;color:#fff;font-size:15px;font-weight:600;text-shadow:0 1px 3px #000}
+.manual{margin:6px 14px 10px;text-align:center;font-size:15px;color:#34506f;padding:12px;border:1px dashed #b9c6d6;border-radius:12px;background:#fff;width:calc(100% - 28px)}
+.mform{margin:6px 14px;display:none;gap:8px}.mform.on{display:flex}
+.mform input{flex:1;min-width:0;font-size:20px;padding:10px;border:2px solid var(--navy);border-radius:12px;text-transform:uppercase}
+.mform button{background:var(--navy);color:#fff;border-radius:12px;padding:0 16px;font-weight:800}
+.count{margin:0 14px 12px;display:flex;gap:8px}.count div{flex:1;background:#fff;border-radius:12px;padding:7px;text-align:center;font-size:11.5px;color:var(--muted)}
+.count b{display:block;font-size:18px;color:var(--navy)}
+.who{margin:10px 14px 4px;background:#fff;border-radius:16px;padding:10px 14px;position:relative;box-shadow:0 2px 10px rgba(10,44,90,.07)}
+.who small{font-size:12.5px;color:var(--muted)}.who b{display:block;font-size:30px;font-weight:950;color:var(--navy);line-height:1.05}
+.x{position:absolute;right:6px;top:6px;background:none;color:#9aa8ba;font-size:22px;padding:6px 10px}
+.kg{margin:6px 14px;background:#fff;border:3px solid var(--navy);border-radius:16px;padding:4px 16px;display:flex;align-items:baseline;justify-content:space-between;min-height:68px}
+.kg b{font-size:46px;font-weight:900;color:var(--navy9)}.kg b.ph{color:#c3ccd8}.kg span{font-size:22px;color:var(--muted);font-weight:700}
+.kg.fixed{border-color:#9fb3cc;background:#f6f9fd}
+.live{margin:2px 14px 0;text-align:center;font-size:15px;color:#2a7a47;font-weight:800;min-height:56px}
+.live b{font-size:36px;display:block;color:#137a37;font-weight:950;line-height:1.1}
+.pad{margin:4px 14px;display:grid;grid-template-columns:repeat(3,1fr);gap:7px}
+.pad button{background:#fff;border-radius:12px;height:52px;font-size:25px;font-weight:800;color:var(--text);box-shadow:0 1px 3px rgba(10,44,90,.12)}
+.pad button:active{background:#dfe8f3}
+.big{margin:10px 14px 14px;background:var(--green);color:#fff;border-radius:18px;height:72px;font-size:27px;font-weight:900;letter-spacing:.5px;box-shadow:0 6px 16px rgba(30,158,74,.35);width:calc(100% - 28px)}
+.big:disabled{background:#c3ccd8;box-shadow:none}
+.grp{display:inline-block;margin-top:4px;background:#e8f1fe;color:#1d4ed8;font-weight:800;font-size:13px;padding:3px 10px;border-radius:20px}
+.sum{margin:8px 14px;background:#e5f6eb;border-radius:16px;padding:12px 16px;text-align:center}
+.sum small{font-size:14px;color:#2a7a47;font-weight:800;letter-spacing:.5px}.sum b{display:block;font-size:42px;font-weight:950;color:#137a37;line-height:1.1;white-space:nowrap}
+.sum span{font-size:13px;color:#2a7a47}
+.err{margin:6px 14px;background:#fde9ee;color:#a0153a;border-radius:12px;padding:10px 12px;font-size:15px;font-weight:700;display:none}.err.on{display:block}
+.box{margin:14px;border-radius:20px;padding:22px 16px;text-align:center;color:#fff}
+.box .ic{font-size:56px;line-height:1}.box b{display:block;font-size:30px;font-weight:950;margin:8px 0 6px;line-height:1.1}
+.box.red{background:var(--red)}.box.dark{background:#7a1d33}.box.orange{background:#fff4e0;border:2px solid #f28b1c;color:#8a4a00}
+.box.ok{background:var(--green)}
+.info{margin:0 14px;background:#fff;border-radius:16px;padding:12px 16px;font-size:16px;line-height:1.6}
+.again{margin:auto 14px 14px;background:var(--navy);color:#fff;border-radius:16px;height:58px;font-size:19px;font-weight:800;width:calc(100% - 28px)}
+.net{display:none;background:#fff4e0;color:#8a4a00;border-bottom:2px solid #f28b1c;padding:9px 14px;font-weight:800;font-size:14.5px;text-align:center}
+.net.on{display:block}
+.toast{position:fixed;left:12px;right:12px;top:58px;max-width:456px;margin:0 auto;background:#e5f6eb;border:2px solid var(--green2);color:#0f6b31;border-radius:14px;padding:11px 12px;font-size:16px;font-weight:800;z-index:9;box-shadow:0 6px 16px rgba(0,0,0,.18);display:none}
+.toast.on{display:block}
+.tog{margin:6px 14px;display:flex;gap:8px}
+.tog button{flex:1;height:50px;border-radius:14px;background:#fff;border:2px solid #d4deea;font-size:17px;font-weight:800;color:var(--text)}
+.tog button.on{border-color:var(--navy);background:var(--navy);color:#fff}
+.tog button.g.on{border-color:#1d4ed8;background:#1d4ed8}
+.queue{display:none;margin:0 14px 8px;background:#fff4e0;color:#8a4a00;border-radius:12px;padding:8px 12px;font-size:14px;font-weight:700}.queue.on{display:block}
+.bad{display:none;margin:0 14px 8px;background:#fde9ee;color:#a0153a;border-radius:12px;padding:8px 12px;font-size:14px;font-weight:700}.bad.on{display:block}
+</style></head>
+<body><div class="app">
+  <div class="top"><div class="brand">SURXON <b>TEZ-PUL</b></div><a href="{{ url_for('dala.close', load_id=ld.id) }}">Telashkani yopish ›</a></div>
+  <div class="net" id="net">📡 Internet yo‘q — saqlanganlar telefonda turadi, aloqa kelganda o‘zi yuboriladi.</div>
+  <div class="ctx"><span>{{ ld.trailer_code }} · {{ ld.field_name }} · {{ ld.brigadier_name }}</span><span>{% if ld.rate %}{{ ld.rate|num }} so‘m/kg{% endif %}</span></div>
+  <div class="toast" id="toast"></div>
+
+  <!-- 1: scan -->
+  <section class="view on" id="v-scan">
+    <div class="step"><div class="num">1</div><div class="st">Talonni skanerlang</div></div>
+    <div class="cam"><video id="video" playsinline muted></video><div class="frame"><i></i><i></i><i></i><i></i></div>
+      <div class="hint" id="msg">Kamera ochilmoqda…</div></div>
+    <button type="button" class="manual" id="m-open">⌨️ Talon raqamini qo‘lda yozish</button>
+    <form class="mform" id="mform" autocomplete="off"><input id="m-no" inputmode="numeric" placeholder="Talon №"><input id="m-code" placeholder="Kod" maxlength="10"><button>OK</button></form>
+    <div class="queue" id="queue"></div>
+    <div class="bad" id="bad"></div>
+    <div class="count" style="margin-bottom:4px"><div><b id="c-n">{{ count.n }}</b>talon shu telashkada</div><div><b id="c-kg">{{ count.kg|num(1) if count.kg % 1 else count.kg|num }}</b>kg</div></div>
+    <a href="{{ url_for('dala.trip', load_id=ld.id, eski=1) }}" style="display:block;text-align:center;font-size:12px;color:#9aa8ba;margin:0 0 10px">eski usul (ism bilan)</a>
+  </section>
+
+  <!-- 2: kg + SAQLASH -->
+  <section class="view" id="v-kg">
+    <div class="who"><small>Talon</small><b id="k-no">№ 000000</b><button type="button" class="x" id="k-x">✕</button></div>
+    <div class="tog"><button type="button" class="on" id="t-one">👤 Bitta odam</button><button type="button" class="g" id="t-grp">👥 Starshi (guruh)</button></div>
+    <div class="step" style="padding-top:2px"><div class="num g">2</div><div class="st">Talondagi kg ni yozing</div></div>
+    <div class="kg"><b id="k-kg" class="ph">0</b><span>kg</span></div>
+    <div class="err" id="k-err"></div>
+    <div class="pad" id="pad">{% for k in ['1','2','3','4','5','6','7','8','9',',','0','⌫'] %}<button type="button" data-k="{{ k }}">{{ k }}</button>{% endfor %}</div>
+    <button type="button" class="big" id="k-go" disabled>✔ SAQLASH</button>
+  </section>
+
+  <!-- refused -->
+  <section class="view" id="v-msg">
+    <div class="box" id="m-box"><div class="ic" id="m-ic"></div><b id="m-title"></b><div id="m-sub"></div></div>
+    <div class="info" id="m-info"></div>
+    <button type="button" class="again" id="m-again">📷 Keyingi talon</button>
+  </section>
+</div>
+<script src="{{ url_for('static', filename='js/qrscan.js') }}?v={{ version }}"></script>
+<script>
+(() => {
+  const CSRF = {{ csrf_token()|tojson }}, JSQR = {{ url_for('static', filename='vendor/jsqr/jsQR.min.js')|tojson }};
+  const URL_LOOK = {{ url_for('tezpul.dala_lookup')|tojson }}, URL_SAVE = {{ url_for('tezpul.dala_save', load_id=ld.id)|tojson }};
+  const QKEY = 'tezpul-q-{{ ld.id }}', BKEY = 'tezpul-bad-{{ ld.id }}';
+  const $ = id => document.getElementById(id);
+  const kgfmt = v => String(v).replace('.', ',');
+  const uuid = () => (crypto.randomUUID ? crypto.randomUUID() : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+    const r = Math.random() * 16 | 0; return (c === 'x' ? r : (r & 3 | 8)).toString(16); }));
+  const load = k => { try { return JSON.parse(localStorage.getItem(k) || '[]'); } catch (_) { return []; } };
+  const keep = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (_) {} };
+  let stop = null, cur = null, kg = '', group = false, busy = false, backTimer = null;
+
+  function show(v) { ['v-scan', 'v-kg', 'v-msg'].forEach(x => $(x).classList.toggle('on', x === v)); }
+  function online() { $('net').classList.toggle('on', !navigator.onLine); return navigator.onLine; }
+  window.addEventListener('online', () => { online(); flush(); }); window.addEventListener('offline', online);
+
+  async function post(url, data) {
+    const fd = new FormData(); fd.append('_csrf', CSRF);
+    Object.entries(data).forEach(([k, v]) => fd.append(k, v == null ? '' : v));
+    const r = await fetch(url, { method: 'POST', body: fd, credentials: 'same-origin', headers: { 'X-Requested-With': 'fetch' } });
+    if (r.status === 401) { location.reload(); }
+    let j = {}; try { j = await r.json(); } catch (_) { throw new Error('net'); }
+    return j;
+  }
+  // a QR that is plainly ours: SPX-T:000274:XXXXXXXX (checked again by the server)
+  const qrNo = t => { const m = /^SPX-T:(\d{6}):([0-9A-F]{8})$/i.exec((t || '').trim()); return m ? m[1] : null; };
+
+  function scan() {
+    clearTimeout(backTimer); cur = null; kg = ''; group = false; busy = false;
+    show('v-scan'); $('mform').classList.remove('on'); $('m-no').value = ''; $('m-code').value = '';
+    paintQueue();
+    if (stop) stop();
+    stop = window.spxQrScan($('video'), $('msg'), t => { found(t, ''); return true; }, JSQR);
+  }
+
+  async function found(code, manual) {
+    if (stop) { stop(); stop = null; }
+    const no = qrNo(code) || (manual ? String(code).replace(/\D/g, '').padStart(6, '0') : null);
+    if (!no) { msg('soxta', 'TALON TANILMADI', 'Bu bizning talon emas yoki QR buzilgan.'); return; }
+    if (online()) {
+      try {
+        const j = await post(URL_LOOK, { code, manual_code: manual });
+        if (!j.ok) { if (j.refused) { refused(j); return; } msg('soxta', 'Xato', j.error || ''); return; }
+      } catch (_) { /* no answer: write it on the phone, the server checks it later */ }
+    }
+    cur = { code, manual, no, uuid: uuid() }; kg = ''; group = false;
+    $('toast').classList.remove('on');
+    $('k-no').textContent = '№ ' + no; $('k-err').classList.remove('on'); tog(); paint(); show('v-kg');
+  }
+
+  function tog() { $('t-one').classList.toggle('on', !group); $('t-grp').classList.toggle('on', group); }
+  $('t-one').addEventListener('click', () => { group = false; tog(); });
+  $('t-grp').addEventListener('click', () => { group = true; tog(); });
+  function kgValue() { const v = parseFloat(kg.replace(',', '.')); return isFinite(v) ? v : 0; }
+  function paint() {
+    $('k-kg').textContent = kg || '0'; $('k-kg').classList.toggle('ph', !kg);
+    $('k-go').disabled = busy || !(kgValue() > 0);
+    $('k-go').textContent = busy ? '⏳ Saqlanmoqda…' : '✔ SAQLASH';
+  }
+  $('pad').addEventListener('click', e => { const b = e.target.closest('button'); if (!b || busy) return;
+    const k = b.dataset.k;
+    if (k === '⌫') kg = kg.slice(0, -1);
+    else if (k === ',') { if (!kg.includes(',')) kg = (kg || '0') + ','; }
+    else if (kg.length < 7 && !(kg.includes(',') && kg.split(',')[1].length >= 1)) kg = (kg === '0' ? '' : kg) + k;
+    $('k-err').classList.remove('on'); paint(); });
+
+  $('k-go').addEventListener('click', async () => {
+    if (busy || !cur || !(kgValue() > 0)) return;
+    const item = { code: cur.code, manual_code: cur.manual, kg: kg.replace(',', '.'), group: group ? '1' : '', client_uuid: cur.uuid, no: cur.no };
+    busy = true; paint();
+    const r = await send(item);
+    busy = false;
+    if (r === 'ok') { toast(`✓ Saqlandi: № ${item.no} — ${kgfmt(item.kg)} kg${group ? ' · 👥 starshi' : ''}`); scan(); return; }
+    if (r === 'queued') { toast(`📥 № ${item.no} — ${kgfmt(item.kg)} kg telefonda saqlandi, internet kelganda yuboriladi`); scan(); return; }
+    paint(); $('k-err').textContent = r; $('k-err').classList.add('on');
+  });
+
+  // 'ok' | 'queued' | error text (refused talons go to the red list)
+  async function send(item, fromQueue) {
+    if (!navigator.onLine) { if (!fromQueue) enqueue(item); return 'queued'; }
+    let j;
+    try { j = await post(URL_SAVE, item); }
+    catch (_) { if (!fromQueue) enqueue(item); return 'queued'; }
+    if (j.ok) { counter(j.count); if (navigator.vibrate) navigator.vibrate(60); return 'ok'; }
+    if (j.refused) {
+      if (fromQueue) { bad(`№ ${item.no} (${kgfmt(item.kg)} kg): ${j.error}`); return 'dropped'; }
+      refused(j); return 'shown';
+    }
+    if (fromQueue) { bad(`№ ${item.no} (${kgfmt(item.kg)} kg): ${j.error || 'xato'}`); return 'dropped'; }
+    return j.error || 'Xato.';
+  }
+  function enqueue(item) { const q = load(QKEY); q.push(item); keep(QKEY, q); paintQueue(); }
+  let flushing = false;
+  async function flush() {
+    if (flushing || !navigator.onLine) return; flushing = true;
+    try {
+      let q = load(QKEY);
+      while (q.length && navigator.onLine) {
+        const r = await send(q[0], true);
+        if (r === 'queued') break;
+        q = load(QKEY); q.shift(); keep(QKEY, q);
+      }
+    } finally { flushing = false; paintQueue(); }
+  }
+  function paintQueue() {
+    const q = load(QKEY);
+    $('queue').classList.toggle('on', q.length > 0);
+    $('queue').textContent = `⏳ ${q.length} ta talon telefonda navbatda — internet kelganda o‘zi yuboriladi.`;
+    const b = load(BKEY);
+    $('bad').classList.toggle('on', b.length > 0);
+    $('bad').innerHTML = b.length ? '⛔ Yuborilmadi (rahbarga ayting):<br>' + b.map(x => '• ' + x.replace(/</g, '&lt;')).join('<br>')
+      + '<br><a href="#" id="bad-ok" style="color:#a0153a">Ko‘rdim — tozalash</a>' : '';
+    const ok = document.getElementById('bad-ok'); if (ok) ok.onclick = e => { e.preventDefault(); keep(BKEY, []); paintQueue(); };
+  }
+  function bad(t) { const b = load(BKEY); b.push(t); keep(BKEY, b.slice(-30)); }
+  function counter(c) { if (!c) return; $('c-n').textContent = c.n; $('c-kg').textContent = kgfmt(Math.round(c.kg * 10) / 10); }
+  function toast(t) { const el = $('toast'); el.textContent = t; el.classList.add('on'); clearTimeout(el._t); el._t = setTimeout(() => el.classList.remove('on'), 3000); }
+
+  function refused(j) {
+    const t = j.talon || {};
+    if (j.refused === 'kiritilgan') msg('kiritilgan', 'BU TALON YOZILGAN', 'Talon № ' + (t.number || ''), j.error);
+    else if (j.refused === 'tolangan') msg('tolangan', 'ALLAQACHON TO‘LANGAN', 'Talon № ' + (t.number || ''), 'Bu talonga pul berilgan — qayta yozilmaydi.');
+    else if (j.refused === 'bekor') msg('bekor', 'TALON BEKOR QILINGAN', 'Talon № ' + (t.number || ''), t.void_reason ? 'Sabab: ' + t.void_reason : '');
+    else msg('soxta', 'TALON HAQIQIY EMAS', 'Soxta yoki bizniki emas');
+  }
+  function msg(kind, title, sub, info) {
+    if (stop) { stop(); stop = null; }
+    $('toast').classList.remove('on');
+    $('m-box').className = 'box ' + ({ kiritilgan: 'orange', tolangan: 'red' }[kind] || 'dark');
+    $('m-ic').textContent = { kiritilgan: '⚠️', tolangan: '⛔' }[kind] || '🚫';
+    $('m-title').textContent = title; $('m-sub').textContent = sub || '';
+    $('m-info').textContent = info || ''; $('m-info').style.display = info ? '' : 'none';
+    if (navigator.vibrate) navigator.vibrate([200, 80, 200]);
+    show('v-msg'); clearTimeout(backTimer); backTimer = setTimeout(scan, 5000);
+  }
+  $('m-again').addEventListener('click', scan);
+  $('k-x').addEventListener('click', scan);
+  $('m-open').addEventListener('click', () => { $('mform').classList.toggle('on'); $('m-no').focus(); });
+  $('mform').addEventListener('submit', e => { e.preventDefault();
+    const no = $('m-no').value.trim(), code = $('m-code').value.trim(); if (!no) return; found(no, code); });
+  // keep the closing page and the home page on the phone too, so the trip can be closed without internet
+  if (navigator.onLine) [{{ url_for('dala.close', load_id=ld.id)|tojson }}, {{ url_for('dala.home')|tojson }}].forEach(u =>
+    fetch(u, { headers: { 'X-SPX-Prefetch': '1' }, credentials: 'same-origin' }).catch(() => {}));
+  online(); scan(); flush(); setInterval(flush, 15000);
+})();
+</script>
+</body></html>
