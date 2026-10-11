@@ -6,7 +6,7 @@
   <span class="uy-tag {{ 'k' if it.method == 'combine' or it.combines else 'h' }}">{{ it.owner }}</span>
   <span class="tiny muted">{{ it.trip_no }} · {{ it.field_name or it.field_code }}</span></div>
   <div class="uy-r"><b>{{ it.net_kg|num }}</b>{% if it.accepted_kg is not none %}<span class="tiny">punkt <b>{{ it.accepted_kg|num }}</b></span>{% endif %}
-  {% if removable and can('station.receive') %}<form method="post" action="{{ url_for('punkt.group_remove', gid=g.id) }}" data-confirm="{{ it.trip_no }} ro‘yxatdan olinsinmi?">{{ csrf() }}<input type="hidden" name="waybill_id" value="{{ it.waybill_id }}"><button class="btn btn-ghost btn-sm">×</button></form>{% endif %}</div>
+  {% if removable and can('station.receive') %}<form method="post" action="{{ url_for('punkt.group_remove', gid=g.id) }}" data-confirm="{{ it.trip_no }} ro‘yxatdan olinsinmi?">{{ csrf() }}<input type="hidden" name="waybill_id" value="{{ it.waybill_id }}"><button class="btn btn-light btn-sm" style="color:#c01b43;font-weight:700">✕ Olib tashlash</button></form>{% endif %}</div>
 </div>{% endmacro %}
 {% block content %}
 <div class="d-wrap">
