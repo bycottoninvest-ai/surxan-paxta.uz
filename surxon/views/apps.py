@@ -11,7 +11,7 @@ from pathlib import Path
 
 from flask import Blueprint, Response, abort, current_app, g, jsonify, redirect, render_template, request, url_for
 
-from ..security import acts_as, can
+from ..security import acts_as, has_perm
 
 bp = Blueprint('apps', __name__)
 
@@ -32,23 +32,36 @@ APPS = {
 }
 
 
+def suits(user, key):
+    """Is this app for this login?"""
+    if not user:
+        return False
+    if key == 'terim':
+        return acts_as(user, 'tally') or has_perm(user, 'harvest.write')
+    if key == 'kassa':
+        return acts_as(user, 'cashier') or has_perm(user, 'payouts.pay')
+    if key == 'buxgalter':
+        return has_perm(user, 'acct.view')
+    if key == 'punkt':
+        return has_perm(user, 'station.view')
+    if key == 'rahbar':
+        return has_perm(user, 'reports.finance')
+    if key == 'admin':
+        return user['role'] == 'admin'
+    return False
+
+
 def _start(key):
     """Where the app opens for this login (None: this app is not for them)."""
-    user = g.user
-    if key == 'terim' and (acts_as(user, 'tally') or can('harvest.write')):
+    if not suits(g.user, key):
+        return None
+    if key == 'terim':
         return url_for('dala.home')
-    if key == 'kassa' and (acts_as(user, 'cashier') or can('payouts.pay')):
+    if key == 'kassa':
         from ..tezpul import in_use
         return url_for('tezpul.kassa' if in_use() else 'hamyon.home')
-    if key == 'buxgalter' and can('acct.view'):
-        return url_for('hamyon.home')
-    if key == 'punkt' and can('station.view'):
-        return url_for('punkt.home')
-    if key == 'rahbar' and can('reports.finance'):
-        return url_for('rahbar.home')
-    if key == 'admin' and user['role'] == 'admin':
-        return url_for('main.dashboard')
-    return None
+    return url_for({'buxgalter': 'hamyon.home', 'punkt': 'punkt.home', 'rahbar': 'rahbar.home',
+                    'admin': 'main.dashboard'}[key])
 
 
 def app_for_page():
@@ -97,7 +110,12 @@ def open_app(key):
     _app(key)
     if not g.get('user'):
         return redirect(url_for('auth.login', next=request.path))
-    return redirect(_start(key) or url_for('main.dashboard'))
+    start = _start(key)
+    if not start and g.user['role'] != 'admin':
+        # a second login on this phone (e.g. the clerk's Terim next to the cashier's Kassir): sign in once more, the
+        # phone then keeps both and every app uses its own
+        return redirect(url_for('auth.login', next=request.path, ilova=key))
+    return redirect(start or url_for('main.dashboard'))
 
 
 @bp.get('/ilova/<key>/manifest.webmanifest')

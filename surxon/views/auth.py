@@ -5,7 +5,7 @@ from werkzeug.security import check_password_hash, generate_password_hash
 
 from ..db import get_db, q, tx
 from ..security import (Actor, audit, clear_failed_logins, current_actor, login_blocked, login_required,
-                        record_failed_login, throttle_key, validate_csrf)
+                        record_failed_login, remember_account, throttle_key, validate_csrf)
 from ..services import change_password as svc_change_password
 from ..utils import UserError, now_str
 
@@ -23,9 +23,11 @@ def _safe_next(target):
 
 @bp.get('/login')
 def login():
-    if g.get('user'):
+    if g.get('user') and not request.args.get('ilova'):
         return redirect(url_for('main.dashboard'))
-    return render_template('login.html')
+    from .apps import APPS
+    a = APPS.get(request.args.get('ilova') or '')
+    return render_template('login.html', second=a if g.get('user') else None)
 
 
 @bp.post('/login')
@@ -36,23 +38,26 @@ def do_login():
     key = throttle_key(username)
     if login_blocked(key):
         flash('Juda ko‘p noto‘g‘ri urinish. 15 daqiqadan keyin qayta urinib ko‘ring.', 'error')
-        return redirect(url_for('auth.login'))
+        return redirect(url_for('auth.login', next=request.args.get('next') or None, ilova=request.args.get('ilova') or None))
     user = q('SELECT * FROM users WHERE username=? AND active=1', (username,), one=True)
     ok = check_password_hash(user['password_hash'] if user else _DUMMY_HASH, password)
     if user and ok:
         clear_failed_logins(key)
+        previous = session.get('accounts') or ([{'id': session['user_id'], 'pw': session.get('pw')}]
+                                               if session.get('user_id') else [])
         session.clear()
         session.permanent = bool(request.form.get('remember'))
         session['user_id'] = user['id']
         session['pw'] = user['password_hash'][-16:]
         session['csrf'] = secrets.token_urlsafe(32)
+        remember_account(user, previous)
         with tx() as db:
             db.execute('UPDATE users SET last_login_at=? WHERE id=?', (now_str(), user['id']))
             audit(db, Actor.from_user(user, ip=request.remote_addr), 'LOGIN', 'user', user['id'])
         return redirect(_safe_next(request.args.get('next')))
     record_failed_login(key)
     flash('Login yoki parol noto‘g‘ri.', 'error')
-    return redirect(url_for('auth.login', next=request.args.get('next') or None))
+    return redirect(url_for('auth.login', next=request.args.get('next') or None, ilova=request.args.get('ilova') or None))
 
 
 @bp.route('/logout', methods=['GET', 'POST'])
@@ -81,6 +86,7 @@ def change_password():
         svc_change_password(current_actor(), g.user['id'], new)
         user = q('SELECT password_hash FROM users WHERE id=?', (g.user['id'],), one=True)
         session['pw'] = user['password_hash'][-16:]
+        remember_account({'id': g.user['id'], 'password_hash': user['password_hash']}, session.get('accounts'))
         flash('Parol almashtirildi.', 'success')
         return redirect(url_for('main.dashboard'))
     return render_template('change_password.html')

@@ -16,8 +16,9 @@
       <div class="ttl">PAXTA HISOB TIZIMI</div>
       {% if test_mode %}<div class="test-badge">TEST REJIMI · v{{ version }}</div>{% endif %}
       {% with messages = get_flashed_messages(with_categories=true) %}{% for cat, msg in messages %}<div class="flash {{ cat }}">{{ msg }}</div>{% endfor %}{% endwith %}
+      {% if second %}<div class="flash info"><span><b>{{ second.name }}</b> uchun o‘z loginingiz bilan kiring. Telefon ikkala loginni eslab qoladi — har ilova o‘zinikini ochadi.</span></div>{% endif %}
       {% if request.args.get('bye') %}<div class="flash info">Tizimdan chiqdingiz.</div>{% endif %}
-      <form method="post" action="{{ url_for('auth.do_login', next=request.args.get('next')) }}">
+      <form method="post" action="{{ url_for('auth.do_login', next=request.args.get('next'), ilova=request.args.get('ilova')) }}">
         {{ csrf() }}
         <div class="inp">{{ icon('user','sm') }}<input name="username" required autocomplete="username" autocapitalize="none" placeholder="Login" autofocus></div>
         <div class="inp">{{ icon('shield','sm') }}<input type="password" name="password" required autocomplete="current-password" placeholder="Parol"></div>

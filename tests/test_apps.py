@@ -28,8 +28,8 @@ def test_each_section_has_its_own_installable_app(app, world):
     assert world['kassa'].get('/ilova/kassa/ochish').headers['Location'].endswith(('/tezpul/kassa', '/hamyon'))
     tally = make_user(app, world['admin'], 'terim1', 'tally')
     assert tally.get('/ilova/terim/ochish').headers['Location'].endswith('/dala')
-    assert tally.get('/ilova/kassa/ochish').headers['Location'].endswith('/')         # not theirs: home as usual
-    assert tally.get('/ilova/admin/ochish').headers['Location'].endswith('/')
+    assert '/login?' in tally.get('/ilova/kassa/ochish').headers['Location']   # not theirs: sign in with that app's login
+    assert 'ilova=admin' in tally.get('/ilova/admin/ochish').headers['Location']
     assert world['rahbar'].get('/ilova/rahbar/ochish').headers['Location'].endswith('/rahbar')
     assert world['admin'].get('/ilova/admin/ochish').headers['Location'].endswith('/')
     assert '/ilova/admin/manifest.webmanifest' in world['admin'].get('/').get_data(as_text=True)
@@ -110,3 +110,44 @@ def test_standin_cashier_writes_talons_only_on_own_trips(app, world):
     own = open_trip(kassa, world, rate='2000', trailer='TL-02', field='D-01')
     assert enter(kassa, own, qr(ts[2]), '15').get_json()['ok']
     assert kassa.get('/tezpul/kassa').status_code == 200                # still the cashier
+
+
+def test_one_phone_two_logins_each_app_its_own(app, world):
+    """The clerk's SURXON Terim and the cashier's SURXON Kassir on one phone: each app keeps its own login."""
+    from conftest import Client
+    admin = world['admin']
+    tally, lid, ts = setup(app, world)
+    phone = Client(app, 'terim1', 'Worker2026x')                      # Terim installed first
+    assert phone.get('/ilova/terim/ochish').headers['Location'].endswith('/dala')
+    r = phone.get('/ilova/kassa/ochish')                               # Kassir: not the clerk's — sign in once more
+    assert r.status_code == 302 and 'ilova=kassa' in r.headers['Location']
+    page = phone.get(r.headers['Location']).get_data(as_text=True)
+    assert 'SURXON Kassir' in page and 'ikkala loginni eslab qoladi' in page
+    r = phone.c.post(r.headers['Location'], data={'username': 'asadbek', 'password': 'Worker2026x', '_csrf': phone.csrf()})
+    assert r.status_code == 302 and r.headers['Location'].endswith('/ilova/kassa/ochish')
+    assert phone.get('/ilova/kassa/ochish').headers['Location'].endswith('/tezpul/kassa')
+    # back to the Terim icon: the clerk again, not the kassa
+    assert phone.get('/ilova/terim/ochish').headers['Location'].endswith('/dala')
+    assert phone.get('/dala').status_code == 200
+    assert enter(phone, lid, qr(ts[0]), '20').get_json()['ok']
+    # both apps stay open: a button pressed in the Kassir app goes as the cashier, one in Terim as the clerk
+    assert pay(phone, qr(ts[0])).get_json()['ok']
+    assert enter(phone, lid, qr(ts[1]), '15').get_json()['ok']
+    with app.app_context():
+        rows = {r['number']: dict(r) for r in q("""SELECT t.number, e.username entered, p.username paid FROM tezpul_talons t
+                    LEFT JOIN users e ON e.id=t.entered_by LEFT JOIN users p ON p.id=t.paid_by WHERE t.status<>'BOSH'""")}
+    assert rows[ts[0]['number']] == {'number': ts[0]['number'], 'entered': 'terim1', 'paid': 'asadbek'}
+    assert rows[ts[1]['number']]['entered'] == 'terim1'
+    # a shared page opened from the field screen stays the clerk's; the trailer QR is the clerk's
+    phone.get('/ilova/kassa/ochish')
+    assert phone.get('/', headers={'Referer': 'http://localhost/dala'}).headers['Location'].endswith('/dala')
+    phone.get('/ilova/kassa/ochish')
+    with app.app_context():
+        get_db().execute("UPDATE equipment SET qr_token='tq-test-03' WHERE code='TL-03'")
+    assert '/dala/yangi' in phone.get('/tq/tq-test-03').headers['Location']
+    # a wrong password for the second login keeps the app's login page; Chiqish signs the phone out of both
+    other = Client(app, 'terim1', 'Worker2026x')
+    r = other.c.post('/login?next=/ilova/kassa/ochish&ilova=kassa', data={'username': 'asadbek', 'password': 'xato', '_csrf': other.csrf()})
+    assert 'ilova=kassa' in r.headers['Location']
+    phone.get('/logout')
+    assert '/login' in phone.get('/dala').headers['Location']

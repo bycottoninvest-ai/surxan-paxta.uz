@@ -25,7 +25,7 @@ ROLES = {
 }
 
 # Punkt operators get a closed, minimal app: only these endpoints (checked on every request).
-STATION_ENDPOINTS = {'static', 'auth.login', 'auth.logout', 'auth.change_password', 'main.health', 'main.verify_receipt', 'main.manifest',
+STATION_ENDPOINTS = {'static', 'auth.login', 'auth.do_login', 'auth.logout', 'auth.change_password', 'main.health', 'main.verify_receipt', 'main.manifest',
                      'main.service_worker', 'main.offline', 'main.dashboard', 'main.trailer_qr',
                      'apps.install', 'apps.open_app', 'apps.manifest', 'apps.icon'}
 # trip photos on the punkt cards (checked per photo in main.media: only trips sent to that punkt)
@@ -228,10 +228,69 @@ def load_user():
     if uid:
         user = q('SELECT * FROM users WHERE id=? AND active=1', (uid,), one=True)
         if user and session.get('pw') == user['password_hash'][-16:]:
-            g.user = user
+            g.user = _pick_account(user)
         else:
             session.clear()
     return station_gate()
+
+
+# One phone, two logins: the clerk's SURXON Terim and the cashier's SURXON Kassir share the site's cookie, so the
+# session keeps every login made on this phone (newest first) and each request goes to the login it belongs to.
+MAX_ACCOUNTS = 3
+
+
+def remember_account(user, previous):
+    """Called at login: this login first, the phone's other logins after it."""
+    accs = [{'id': user['id'], 'pw': user['password_hash'][-16:]}]
+    accs += [a for a in previous or [] if a.get('id') != user['id']]
+    session['accounts'] = accs[:MAX_ACCOUNTS]
+
+
+def _stored(acc):
+    u = q('SELECT * FROM users WHERE id=? AND active=1', (acc.get('id'),), one=True)
+    return u if u and acc.get('pw') == u['password_hash'][-16:] else None
+
+
+def _allowed(user, ep):
+    if user['role'] not in ('station', 'cashier', 'tally', 'fuel'):
+        return True
+    return _gate_open(user['role'], ep) or _gate_open(standin(user), ep)
+
+
+def _referrer_endpoint():
+    ref = request.referrer or ''
+    host = request.host_url
+    if not ref.startswith(host):
+        return ''
+    try:
+        from flask import current_app
+        return current_app.url_map.bind('').match('/' + ref[len(host):].split('?')[0].split('#')[0].lstrip('/'))[0]
+    except Exception:
+        return ''
+
+
+def _pick_account(user):
+    accs = session.get('accounts') or []
+    if len(accs) < 2:
+        return user
+    ep = request.endpoint or ''
+    others = (u for u in map(_stored, (a for a in accs if a.get('id') != user['id'])) if u)
+    if ep == 'apps.open_app':                                 # the app's icon: its own login
+        from .views.apps import suits
+        key = (request.view_args or {}).get('key')
+        want = None if suits(user, key) else next((u for u in others if suits(u, key)), None)
+    elif ep == 'main.trailer_qr':                             # a trailer QR is the field clerk's
+        want = None if acts_as(user, 'tally') else next((u for u in others if acts_as(u, 'tally')), None)
+    elif not _allowed(user, ep):                              # the other app's screen or button
+        want = next((u for u in others if _allowed(u, ep)), None)
+    else:                                                     # a shared page (home, photo…): the app it was opened from
+        ref = _referrer_endpoint()
+        want = None if not ref or _allowed(user, ref) else next((u for u in others if _allowed(u, ref) and _allowed(u, ep)), None)
+    if not want:
+        return user
+    session['user_id'] = want['id']
+    session['pw'] = want['password_hash'][-16:]
+    return want
 
 
 # Cashier: only prepared payments, their own cash box shift and quick expenses.
