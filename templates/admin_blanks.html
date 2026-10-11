@@ -10,7 +10,7 @@
       .pr-row input{width:100%;font-size:22px;padding:8px 10px;border:1px solid var(--line,#d6dde7);border-radius:10px}.pr .btn{width:100%}</style>
     <div class="pr-wrap">
       <form method="get" action="{{ url_for('admin.blanks_print') }}" target="_blank" class="pr">
-        <b>Dala nakladnoyi (PB)</b> <span class="tiny muted">— A4 da 2 ta, hisobchilarga</span>
+        <b>Dala nakladnoyi (PB)</b> <span class="tiny muted">— A4 da 2 ta, hisobchilarga · chap nazorat qismi bizda qoladi</span>
         <div class="pr-row"><div><label>Qaysi raqamdan</label><input name="dan" value="{{ first_free }}" inputmode="numeric"></div>
           <div><label>Nechta</label><input name="soni" value="10" inputmode="numeric"></div></div>
         <button class="btn btn-primary">{{ icon('printer','sm') }} PDF ochish</button>

@@ -40,3 +40,10 @@ Hozir kg tarozi ekranidan qo‘lda kiritiladi (`scale_adapter = manual`). Tarozi
 ## Eski tartib
 
 Sozlamada `auto_waybill_hand = 0` qilinsa, eski tartib qaytadi: TOLDI, keyin umumiy tarozida brutto va tara, keyin nakladnoy.
+
+## DALA NAKLADNOYI (PB) — dizayn v2 (2026-10-11)
+Talon kabi bank chekidek ikki qism, A4 ga 2 ta: chapda **NAZORAT QISMI** (bizda qoladi, papkaga teshiladi), o‘ngda
+**DALA NAKLADNOYI** (telashka bilan punktga boradi). Ikkala qismda bir xil PB raqam va QR; muhr chiziq ustiga bosiladi.
+Hisobchi ikkala qismga bir xil yozadi: telashka, kg, qo‘l / kombayn, kombayn №, sana. Raqamlar va QR havolalari
+o‘zgarmagan — oldin chop etilgan PB blankalar ham ishlayveradi, yangilari oxirgi raqamdan davom etadi.
+Tasdiqlangan dizaynni o‘zgartirish faqat egasining roziligi bilan; o‘zgarsa — versiya raqami oshiriladi.
