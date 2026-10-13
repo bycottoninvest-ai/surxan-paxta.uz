@@ -1,0 +1,28 @@
+{% extends 'base.html' %}
+{% from 'macros.html' import icon with context %}
+{% set page_title = ld.trip_no %}
+{% block content %}
+{# TEZ-PUL, hand picking: during the day the trailer only gets its own kg when it is full — the people's kg is on the
+   starshi talon, counted in the evening (🌙 Kechki hisob). One big button, nothing else to choose. #}
+<div class="d-wrap">
+  <div class="d-top"><a class="icon-btn" href="{{ url_for('dala.home') }}">{{ icon('chev-left') }}</a>
+    <div><h1 class="d-h1">{{ ld.trailer_code }} · {{ ld.trip_no }}</h1>
+      <div class="small muted">{{ ld.field_name }} · {{ ld.brigadier_name }} · Qo‘l terimi{% if ld.rate %} · <b>{{ ld.rate|num }} so‘m/kg</b>{% endif %}</div></div></div>
+
+  <div style="margin:16px 0 14px;padding:16px;border-radius:14px;background:#e9f6ee;border:2px solid #1e9e4a;color:#14632f;font-size:16px;line-height:1.45">
+    <b>Telashka ochiq — paxta yuklanyapti.</b><br>To‘lganda pastdagi tugmani bosing va telashkaning kg ini yozing.
+    {% if totals.n %}<div class="small" style="margin-top:6px">Yozilgan: {{ totals.n }} tortish · <b>{{ totals.kg|num }} kg</b></div>{% endif %}
+  </div>
+
+  <a class="btn btn-block d-big" id="d-closebtn" href="{{ url_for('dala.close', load_id=ld.id) }}"
+     style="background:#1e9e4a;border-color:#1e9e4a;color:#fff;padding:24px 14px;font-size:22px;font-weight:800;white-space:normal;line-height:1.25">🚜 Telashkani yopish — kg yozish</a>
+
+  <p class="small muted" style="text-align:center;margin:14px 6px">Talon kunduzi skanerlanmaydi. Odamlarning kg i starshi talonida —
+    kechqurun bosh sahifada <b>🌙 Kechki hisob</b>.</p>
+
+  <div class="tiny" style="text-align:center;margin-top:34px;color:#8a97aa">
+    <a href="{{ url_for('tezpul.dala', load_id=ld.id) }}" style="color:#8a97aa">talon skaneri</a> ·
+    <a href="{{ url_for('dala.trip', load_id=ld.id, eski=1) }}" style="color:#8a97aa">eski usul (ism bilan)</a>
+  </div>
+</div>
+{% endblock %}

@@ -161,7 +161,8 @@ def trip(load_id):
     from ..tezpul import in_use
     tezpul = in_use()
     if tezpul and method == 'hand' and not request.args.get('eski'):
-        return redirect(url_for('tezpul.dala', load_id=load_id))      # TEZ-PUL: no names in the field — scan, kg, save
+        # TEZ-PUL v3: the people's kg is on the starshi talon (counted in the evening) — by day only "close with kg"
+        return render_template('dala_trip_tezpul.html', ld=ld, totals=_totals(load_id))
     return render_template('dala_trip.html', ld=ld, method=method, totals=_totals(load_id), recent=_recent(load_id),
                            combines=combine_choices() if method == 'combine' else [], tezpul=tezpul)
 

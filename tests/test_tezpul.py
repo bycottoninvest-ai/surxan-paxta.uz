@@ -41,8 +41,8 @@ def test_field_two_steps_then_kassa_two_steps(app, world):
     admin, kassa = world['admin'], world['kassa']
     tally, lid, ts = setup(app, world)
     assert kassa.get('/').headers['Location'].endswith('/tezpul/kassa')        # the cashier's camera opens at once
-    r = tally.get(f'/dala/reys/{lid}')                                   # no names in the field: the scanner opens
-    assert r.status_code == 302 and r.headers['Location'].endswith(f'/tezpul/dala/{lid}')
+    r = tally.get(f'/dala/reys/{lid}')                                   # no names in the field: close-with-kg page,
+    assert r.status_code == 200 and f'/tezpul/dala/{lid}' in r.get_data(as_text=True)   # the talon scanner a link away
     assert 'TALON SKANERI' in tally.get(f'/dala/reys/{lid}?eski=1').get_data(as_text=True)
     page = tally.get(f'/tezpul/dala/{lid}').get_data(as_text=True)
     assert 'Talonni skanerlang' in page and 'SAQLASH' in page and 'Starshi varaqlarini rasmga olish' in page
@@ -240,7 +240,13 @@ def test_trailer_qr_opens_the_trip_or_its_opening_page(app, world):
     lid = open_trip(tally, world, rate='2000', trailer='TL-03')
     r = tally.get(f'/tq/{tok}')
     assert r.status_code == 302 and r.headers['Location'].endswith(f'/dala/reys/{lid}')
-    assert tally.get(f'/dala/reys/{lid}').headers['Location'].endswith(f'/tezpul/dala/{lid}')
+    # by day the hand trailer has one big button: close it with its kg (the talon is counted in the evening)
+    page = tally.get(f'/dala/reys/{lid}')
+    html = page.get_data(as_text=True)
+    assert page.status_code == 200 and 'Telashkani yopish — kg yozish' in html and f'/dala/reys/{lid}/yopish' in html
+    assert 'Talonni skanerlang' not in html and 'Kechki hisob' in html
+    assert f'href="/dala/reys/{lid}"' in tally.get('/dala').get_data(as_text=True)
+    assert 'Ismni qidiring' in tally.get(f'/dala/reys/{lid}?eski=1').get_data(as_text=True)
     assert 'Telashka QR' in tally.get('/dala').get_data(as_text=True)
 
 

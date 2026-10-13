@@ -33,6 +33,8 @@ Tasdiqlangan dizaynni o‘zgartirish faqat egasining roziligi bilan; o‘zgarsa 
   bitta talon 2–5 A4 varaq (100 kishi uchun 5 varaq): har qatorda ism familiya, **Abetgacha / Abetdan keyin / JAMI** kg;
   1-varaqda Starshi, Dala/brigada, Sana, **Telashka №**, Odam soni, **JAMI KG**; har varaqda raqam + QR va “N-varaq jami”.
 - **Kun bo‘yi:** qo‘l terimi telashkasi to‘lishi bilan yopiladi — hisobchi yopishda **telashkaning kg** ini yozadi (blankadagi raqam).
+  Ochiq telashka sahifasida bitta katta tugma: **🚜 Telashkani yopish — kg yozish** (kunduzi talon skanerlanmaydi;
+  talon skaneri va eski usul pastda kichik havola bo‘lib qoladi).
 - **Kechqurun, kassa oldida (hisobchi yoki kassir):** 🌙 Kechki hisob → brigada → starshi talonini skanerlash → “Bugun nechta odam?”
   → tizim nechta varaq rasmga olishni aytadi (30 odam → 2 varaq) → har varaqni rasmga olish (qora parda ismlarni yopadi)
   → tizim kg ni o‘qib qo‘shadi, mos kelmagan qatorni rangli qiladi → hisobchi tekshiradi → “✅ Tugadi — jami N kg” → SAQLASH.

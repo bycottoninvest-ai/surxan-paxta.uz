@@ -7,7 +7,7 @@
   <div class="small muted">Bugun siz yozdingiz: <b>{{ today.kg|num }} kg</b> · {{ today.people }} kishi</div>
 
   {% for t in open_trips %}
-  <a class="d-continue" href="{{ url_for('tezpul.dala', load_id=t.id) if tezpul and t.method != 'combine' else url_for('dala.trip', load_id=t.id) }}">
+  <a class="d-continue" href="{{ url_for('dala.trip', load_id=t.id) }}">
     <div class="small">Ochiq telashka</div>
     <b>{{ t.trip_no }} · {{ t.trailer_code }}</b>
     <div class="small">{{ t.field_name }} · {{ t.brigadier_name }} · {{ 'Kombayn' if t.method == 'combine' else 'Qo‘l terimi' }}{% if t.rate %} · {{ t.rate|num }} so‘m/kg{% endif %}</div>
@@ -43,10 +43,10 @@
 {% endblock %}
 {% block scripts %}<script src="{{ url_for('static', filename='js/qrscan.js') }}?v={{ version }}"></script>
 {% if tezpul %}<script>
-// keep the talon scanner of every open hand trailer on the phone, so it opens without internet too
+// keep every open hand trailer's page and its close form on the phone, so they open without internet too
 const handTrips = {{ (open_trips|selectattr('method', 'ne', 'combine')|map(attribute='id')|list)|tojson }};
-if (navigator.onLine && Array.isArray(handTrips)) handTrips.forEach(id =>
-  fetch('/tezpul/dala/' + id, { headers: { 'X-SPX-Prefetch': '1' }, credentials: 'same-origin' }).catch(() => {}));
+if (navigator.onLine && Array.isArray(handTrips)) handTrips.forEach(id => ['/dala/reys/' + id, '/dala/reys/' + id + '/yopish'].forEach(u =>
+  fetch(u, { headers: { 'X-SPX-Prefetch': '1' }, credentials: 'same-origin' }).catch(() => {})));
 </script>{% endif %}
 <script>
 (() => {   // the QR stuck on a trailer: opens its trip (or the opening page with this trailer chosen)
