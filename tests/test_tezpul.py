@@ -395,6 +395,47 @@ def test_reader_check_rules():
     assert [x['row'] for x in r['rows']] == [1, 2] and r['computed'] == 22.5 and r['total_ok'] is False
 
 
+def test_ai_key_pasted_on_the_integrations_page(app, world, monkeypatch):
+    """When nobody can reach the server's .env, the admin pastes the Claude key on Admin → Integratsiyalar: it is checked,
+    kept in a private file (not in the database, the audit or any page — only its last 4 characters show); .env wins."""
+    import os
+    from surxon import talon_ai
+    admin = world['admin']
+    page = admin.get('/admin/integratsiyalar').get_data(as_text=True)
+    assert 'ai_key_save' in page and 'Ulanmagan — kg qo‘lda yoziladi' in page
+    monkeypatch.setattr(talon_ai, '_verify', lambda k: k.endswith('good'))   # no real request to Anthropic
+    good = 'sk-ant-api03-' + 'x' * 40 + '-good'
+    for wrong in ('salom', 'sk-ant-api03-' + 'y' * 40 + '-bad'):          # not a key / Anthropic refuses it
+        admin.post('/admin/integratsiyalar', {'action': 'ai_key_save', 'ai_key': wrong}, json_resp=False)
+        with app.app_context():
+            assert not talon_ai.enabled()
+    world['bux'].post('/admin/integratsiyalar', {'action': 'ai_key_save', 'ai_key': good}, json_resp=False)
+    with app.app_context():
+        assert not talon_ai.enabled()                                       # only the admin
+    admin.post('/admin/integratsiyalar', {'action': 'ai_key_save', 'ai_key': f'  {good}\n'}, json_resp=False)
+    with app.app_context():
+        assert talon_ai.enabled() and talon_ai.api_key() == good and talon_ai.source() == 'site'
+        path = talon_ai._key_path()
+        assert path.parent == app.config['SURXON'].DATA_DIR and oct(os.stat(path).st_mode & 0o777) == '0o600'
+        assert app.config['SURXON'].UPLOAD_DIR not in path.parents          # not in the photo backups
+        dump = '\n'.join(str(tuple(r)) for t in ('settings', 'audit_logs') for r in q(f'SELECT * FROM {t}'))
+        assert good not in dump and '…good' in dump
+    page = admin.get('/admin/integratsiyalar').get_data(as_text=True)
+    assert good not in page and 'Ulangan …good' in page and 'Kalitni o‘chirish' in page
+    # the server's .env key comes first; the page then has no paste box
+    app.config['SURXON'].ANTHROPIC_API_KEY = 'sk-ant-api03-' + 'e' * 40 + '-envk'
+    try:
+        with app.app_context():
+            assert talon_ai.source() == 'env' and talon_ai.api_key().endswith('envk')
+        page = admin.get('/admin/integratsiyalar').get_data(as_text=True)
+        assert 'Ulangan (server .env)' in page and 'name="ai_key"' not in page
+    finally:
+        app.config['SURXON'].ANTHROPIC_API_KEY = ''
+    admin.post('/admin/integratsiyalar', {'action': 'ai_key_clear'}, json_resp=False)
+    with app.app_context():
+        assert not talon_ai.enabled() and not talon_ai._key_path().exists()
+
+
 def test_trailers_close_with_their_kg_and_the_evening_count_pays(app, world):
     """Hand trailers close during the day with their own kg (no talon yet); in the evening the hisobchi — or the
     kassir — counts the starshi's talon for the brigade; the kassir pays it. Trailer kg, talon kg and punkt kg stay

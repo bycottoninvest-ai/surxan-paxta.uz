@@ -6,12 +6,17 @@ row number) — the names stay on paper and in our own photo archive. The clerk 
 Safety: rows that do not add up (before + after ≠ total) or were unclear come back flagged; the clerk fixes them by
 looking at the photo and confirms — only then the kg is written (as before, through tezpul.enter).
 
-The key is read from the server's .env only (ANTHROPIC_API_KEY); without it the feature stays off and the photo is still
-kept as evidence. The model is a setting (tezpul_ai_model) — Claude Opus 5.5 by default, Claude Haiku 5.5 is cheaper.
+The key: the server's .env (ANTHROPIC_API_KEY) if set, else the one the admin pasted on Admin → Integratsiyalar — kept
+like the Google Sheets key, in a private file next to the database (never in the database, the backups, the audit or on
+any page; only its last 4 characters are shown). Without a key the feature stays off and the photo is still kept as
+evidence. The model is a setting (tezpul_ai_model) — Claude Opus 5.5 by default, Claude Haiku 5.5 is cheaper.
 """
 import base64
 import io
 import json
+import os
+import re
+from pathlib import Path
 
 from flask import current_app
 
@@ -55,8 +60,71 @@ SCHEMA = {
 }
 
 
+KEY_FILE = 'anthropic-api.key'
+KEY_RE = re.compile(r'sk-ant-[A-Za-z0-9_-]{20,}')
+
+
+def _key_path():
+    return Path(current_app.config['SURXON'].DATA_DIR) / KEY_FILE
+
+
+def _saved_key():
+    try:
+        return _key_path().read_text(encoding='utf-8').strip()
+    except OSError:
+        return ''
+
+
 def api_key():
-    return current_app.config['SURXON'].ANTHROPIC_API_KEY
+    return current_app.config['SURXON'].ANTHROPIC_API_KEY or _saved_key()
+
+
+def source():
+    """'env' (server .env), 'site' (pasted on the Integratsiyalar page) or '' (none)."""
+    if current_app.config['SURXON'].ANTHROPIC_API_KEY:
+        return 'env'
+    return 'site' if _saved_key() else ''
+
+
+def key_tail():
+    k = api_key()
+    return ('…' + k[-4:]) if k else ''
+
+
+def _verify(key):
+    """Asks Anthropic whether the key works (the model list — free, nothing is read). True / False, None: no answer."""
+    import anthropic
+    try:
+        anthropic.Anthropic(api_key=key, timeout=20, max_retries=1).models.list(limit=1)
+        return True
+    except (anthropic.AuthenticationError, anthropic.PermissionDeniedError):
+        return False
+    except anthropic.APIError:
+        return None
+
+
+def save_key(raw):
+    """The key pasted by the admin: checked with Anthropic, then written to the private file. Returns True when
+    Anthropic confirmed it, None when it could not be asked (saved anyway)."""
+    key = re.sub(r'\s+', '', raw or '')
+    if not KEY_RE.fullmatch(key):
+        raise UserError('Kalit ko‘rinishi noto‘g‘ri — platform.claude.com → Ключи API dan “sk-ant-…” bilan boshlanadigan '
+                        'kalitni to‘liq nusxalang.')
+    ok = _verify(key)
+    if ok is False:
+        raise UserError('Anthropic bu kalitni qabul qilmadi — kalit o‘chirilgan yoki to‘liq nusxalanmagan. Yangi kalit yarating.')
+    path = _key_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix('.tmp')
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, 'w', encoding='utf-8') as out:
+        out.write(key)
+    os.replace(tmp, path)
+    return ok
+
+
+def clear_key():
+    _key_path().unlink(missing_ok=True)
 
 
 def enabled():

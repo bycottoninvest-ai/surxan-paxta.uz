@@ -39,5 +39,7 @@ Tasdiqlangan dizaynni o‘zgartirish faqat egasining roziligi bilan; o‘zgarsa 
   Kg o‘sha kungi brigadaning ish haqiga (oxirgi telashkasiga) yoziladi, telashkaning o‘z kg i o‘zgarmaydi. Keyin kassir PUL BERILDI.
 - **Nazorat:** panelda har brigada uchun 3 ta raqam — talon kg (pul) · telashkalar (dala) · punkt; 3% dan ko‘p farq qizil.
   O‘zi kg yozib o‘zi pul bergan — qizil. Saqlangan starshi taloni **PDF** bo‘lib direktor va buxgalterga (Telegram) boradi va panelda turadi.
-- **AI o‘qish** (Claude, pullik): kalit faqat server `.env` da — `ANTHROPIC_API_KEY`. Ismlar yuborilmaydi, faqat kg ustunlari.
+- **AI o‘qish** (Claude, pullik): kalit server `.env` da (`ANTHROPIC_API_KEY`) yoki admin uni **Admin → Integratsiyalar** ga qo‘yadi —
+  tekshiriladi va baza yonidagi yopiq faylga yoziladi (bazaga, zaxiraga, auditga tushmaydi; faqat oxirgi 4 belgisi ko‘rinadi); `.env` ustun.
+  Ismlar yuborilmaydi, faqat kg ustunlari.
   Kalitsiz ham ishlaydi: rasm dalil bo‘lib saqlanadi, varaq jamisi qo‘lda yoziladi. Model: Admin → Integratsiyalar (Opus 5.5 / Haiku 5.5).

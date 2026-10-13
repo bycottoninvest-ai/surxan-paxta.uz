@@ -17,7 +17,7 @@ Foydalanuvchi **“paxta”** desa (yoki shunga o‘xshash: “paxtani och”, �
 - Har qadamni aniq ayting: qaysi tugma, qaysi fayl, nima yozish. Skrinshot so‘rang.
 - Dizayn va texnik qarorlarni o‘zingiz qabul qiling; faqat haqiqiy biznes ma’lumoti yetishmasa so‘rang.
 - Ulanmagan narsani “ishlayapti” demang. Test qilinmaganini aniq ayting.
-- Maxfiy kalit/token/parolni chatga yozdirmang — faqat serverdagi `.env` ga.
+- Maxfiy kalit/token/parolni chatga yozdirmang — faqat serverdagi `.env` ga yoki Admin → Integratsiyalar dagi yashirin maydonga (Sheets JSON, Claude kaliti kabi: baza yonidagi yopiq fayl).
 
 ## Loyiha qoidalari (buzmang)
 

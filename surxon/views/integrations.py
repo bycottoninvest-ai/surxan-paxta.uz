@@ -69,6 +69,9 @@ def index():
         actor = post_actor()
         action = request.form.get('action')
         new_key = None
+        if action == 'ai_key_save':          # before the transaction: the check asks Anthropic over the internet
+            from .. import talon_ai
+            ai_checked = talon_ai.save_key(request.form.get('ai_key'))
         with tx() as db:
             if action in ('erp_on', 'erp_off', 'tv_on', 'tv_off'):
                 key = 'erp_enabled' if action.startswith('erp') else 'tv_enabled'
@@ -103,6 +106,18 @@ def index():
                            ('tezpul_ai_model', val, now_str(), actor.user_id))
                 audit(db, actor, 'UPDATE', 'integration', 'tezpul_ai_model', new={'tezpul_ai_model': val})
                 msg = f'AI modeli: {MODELS[val]}.'
+            elif action in ('ai_key_save', 'ai_key_clear'):
+                # the Claude key pasted here (when nobody can reach the server's .env): kept in a private file like the
+                # Sheets key — never in the database, backups, audit or on a page; .env stays first if it has one
+                from .. import talon_ai
+                if action == 'ai_key_save':
+                    msg = ('Kalit saqlandi va Anthropic uni tasdiqladi. Endi kechki hisobda varaq rasmlari o‘qiladi.' if ai_checked
+                           else 'Kalit saqlandi, lekin hozir Anthropic’dan javob kelmadi (internet?) — birinchi varaqda tekshiriladi.')
+                else:
+                    talon_ai.clear_key()
+                    msg = 'Kalit o‘chirildi — kg qo‘lda yoziladi.'
+                audit(db, actor, 'UPDATE', 'integration', 'anthropic_key',
+                      new={'anthropic_key': talon_ai.key_tail() if action == 'ai_key_save' else 'o‘chirildi'})
             elif action in ('gmaps_save', 'gmaps_clear'):
                 # Google Map Tiles key: a browser key (sent to every map page anyway), restricted in Google Cloud to this
                 # site and to the Map Tiles API — so it may be kept in settings. Shown masked, never in full.
@@ -345,6 +360,7 @@ def render(new_key=None, message=None):
                            gmaps_tail=(lambda k: ('…' + k[-4:]) if k else '')(get_setting('google_maps_key') or ''),
                            gmaps_env=bool(current_app.config['SURXON'].GOOGLE_MAPS_KEY),
                            ai_on=talon_ai.enabled(), ai_models=talon_ai.MODELS, ai_model=talon_ai.model(),
+                           ai_src=talon_ai.source(), ai_tail=talon_ai.key_tail(),
                            sheets=_sheets_state(), offsite=_offsite_state(),
                            chosen={'archive': get_setting('tg_archive_chat_id'), 'report': get_setting('tg_report_chat_id')},
                            bot_user=current_app.config['SURXON'].TELEGRAM_BOT_USERNAME)
