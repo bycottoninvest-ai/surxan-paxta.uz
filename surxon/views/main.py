@@ -344,6 +344,8 @@ def can_see_photo(photo):
     uid = g.user['id']
     if photo['uploaded_by'] == uid:
         return True
+    if photo['entity_type'] == 'tezpul_talon' and can('payouts.pay'):
+        return True                   # the starshi talon's sheets: the cashier who pays it looks at them
     if photo['category'] in FINANCE_PHOTO_CATEGORIES and not sees_finance_photos():
         return False
     if g.user['role'] == 'fuel':      # the fuel keeper sees only the photos they took

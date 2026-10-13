@@ -49,6 +49,7 @@ button{font:inherit;border:0;cursor:pointer}
 .pad button:active{background:#dfe8f3}
 .big{margin:10px 14px 14px;background:var(--green);color:#fff;border-radius:18px;height:72px;font-size:27px;font-weight:900;letter-spacing:.5px;box-shadow:0 6px 16px rgba(30,158,74,.35);width:calc(100% - 28px)}
 .big:disabled{background:#c3ccd8;box-shadow:none}
+[hidden]{display:none!important}
 .grp[hidden]{display:none}.grp{display:inline-block;margin-top:4px;background:#e8f1fe;color:#1d4ed8;font-weight:800;font-size:13px;padding:3px 10px;border-radius:20px}
 .sum{margin:8px 14px;background:#e5f6eb;border-radius:16px;padding:12px 16px;text-align:center}
 .sum small{font-size:14px;color:#2a7a47;font-weight:800;letter-spacing:.5px}.sum b{display:block;font-size:42px;font-weight:950;color:#137a37;line-height:1.1;white-space:nowrap}
@@ -71,6 +72,17 @@ button{font:inherit;border:0;cursor:pointer}
 .more{margin:4px 14px;background:#fff;border:2px dashed #9fb3cc;color:var(--navy);border-radius:14px;height:54px;font-size:17px;font-weight:800;width:calc(100% - 28px)}
 .bar{display:none;margin:8px 14px 0;background:#e8f1fe;border-radius:12px;padding:8px 12px;font-size:14.5px;font-weight:700;color:#1d4ed8;justify-content:space-between;align-items:center;gap:8px}
 .bar.on{display:flex}.bar button{background:#1d4ed8;color:#fff;border-radius:10px;padding:8px 12px;font-weight:800;font-size:14px}
+.det{margin:6px 14px}
+.det .tot{background:#e5f6eb;border:2px solid #1e9e4a;border-radius:14px;padding:10px 14px;text-align:center;color:#137a37}
+.det .tot b{display:block;font-size:34px;font-weight:950;line-height:1.1}.det .tot span{font-size:14px;font-weight:700}
+.det h4{margin:10px 2px 4px;font-size:14px;color:var(--navy)}
+.det table{width:100%;border-collapse:collapse;background:#fff;border-radius:12px;overflow:hidden;font-size:14.5px}
+.det th{background:#e8eef7;font-size:11px;padding:5px 4px;text-align:right}.det th:first-child{text-align:left}
+.det td{padding:6px 4px;border-top:1px solid var(--line);text-align:right;font-weight:700}.det td:first-child{text-align:left;color:#8796ab}
+.det td.s{color:#137a37}.det tr.f td{background:#f3f7fc;font-weight:900}
+.det .ph{display:block;margin:6px 0 2px;background:#fff;border:1px solid #c9d6e8;border-radius:12px;padding:10px;text-align:center;font-weight:800;color:var(--navy);width:100%}
+.zoom{position:fixed;inset:0;background:#000;z-index:20;overflow:auto}.zoom img{display:block;width:230%;max-width:none}
+.zoom button{position:fixed;top:12px;right:12px;background:#fff;color:#0b2a55;border-radius:12px;padding:10px 14px;font-weight:850;font-size:16px;z-index:21}
 </style></head>
 <body><div class="app">
   <div class="top"><div class="brand">SURXON <b>TEZ-PUL</b></div>{% if standin == 'tally' %}<a href="{{ url_for('dala.home') }}">🔁 Terim ›</a>{% endif %}<a href="{{ url_for('tezpul.kechki') }}">🌙 Kechki hisob</a><a href="{{ url_for('hamyon.home') }}">Kassa ›</a></div>
@@ -92,6 +104,7 @@ button{font:inherit;border:0;cursor:pointer}
   <!-- 2: the talons + PUL BERILDI -->
   <section class="view" id="v-pay">
     <div class="who"><small id="p-brig">Talon</small><b id="p-no">№ 000000</b><button type="button" class="x" id="p-x">✕</button></div>
+    <div class="det" id="p-det" hidden></div>
     <div class="list" id="p-list"></div>
     <button type="button" class="more" id="p-more">📷 + Yana talon (starshi — guruh talonlari)</button>
     <div class="step" style="padding-top:8px"><div class="num g">2</div><div class="st">Pulni sanab bering</div></div>
@@ -100,6 +113,8 @@ button{font:inherit;border:0;cursor:pointer}
     <div style="flex:1"></div>
     <button type="button" class="big" id="p-go">💵 PUL BERILDI</button>
   </section>
+
+  <div class="zoom" id="z" hidden><button type="button" id="z-x">✕ Yopish</button><img id="z-img" alt=""></div>
 
   <!-- refused -->
   <section class="view" id="v-msg">
@@ -177,8 +192,25 @@ button{font:inherit;border:0;cursor:pointer}
     $('p-sum').style.fontSize = String(Math.round(total())).length > 6 ? '32px' : '';
     $('p-rate').textContent = one && t.rate ? `${kgfmt(t.kg)} kg × ${fmt(t.rate)} so‘m` : '';
     $('p-err').classList.remove('on');
+    detail(one && t.sheets && t.sheets.length ? t : null);
     show('v-pay'); paint();
   }
+  // a starshi talon: the whole sheet — the money on top, every row's kg and money below, the sheet photos
+  function detail(t) {
+    $('p-det').hidden = !t; $('p-list').hidden = !!t;
+    if (!t) { $('p-det').innerHTML = ''; return; }
+    const n = t.sheets.reduce((a, s) => a + s.rows.length, 0), k = v => v == null ? '—' : kgfmt(v);
+    $('p-det').innerHTML = `<div class="tot"><span>JAMI BERILADI</span><b>${fmt(t.amount)}\u00a0so‘m</b>`
+      + `<span>${kgfmt(t.kg)} kg · ${t.people || n} odam · ${t.sheets.length} varaq${t.rate ? ' · ' + fmt(t.rate) + ' so‘m/kg' : ''}</span></div>`
+      + t.sheets.map(s => `<h4>${s.sheet}-varaq — ${kgfmt(s.kg)} kg · ${fmt(s.amount)} so‘m</h4>`
+        + (s.rows.length ? '<table><tr><th>№</th><th>Abetgacha</th><th>Keyin</th><th>JAMI kg</th><th>Summa</th></tr>'
+          + s.rows.map(r => `<tr><td>${esc(String(r.row))}</td><td>${k(r.before)}</td><td>${k(r.after)}</td><td>${k(r.total)}</td><td class="s">${fmt(r.amount)}</td></tr>`).join('')
+          + `<tr class="f"><td colspan="3">Varaq jami</td><td>${kgfmt(s.kg)}</td><td class="s">${fmt(s.amount)}</td></tr></table>` : '')
+        + (s.photo ? `<button type="button" class="ph" data-ph="${esc(s.photo)}">📄 ${s.sheet}-varaq rasmi (ismlar bilan)</button>` : '')).join('');
+  }
+  $('p-det').addEventListener('click', e => { const b = e.target.closest('button[data-ph]'); if (!b) return;
+    $('z-img').src = b.dataset.ph; $('z').hidden = false; });
+  $('z-x').addEventListener('click', () => { $('z').hidden = true; });
   $('p-list').addEventListener('click', e => { const b = e.target.closest('button[data-i]'); if (!b || busy) return;
     basket.splice(+b.dataset.i, 1); payId = uuid(); payScreen(); });
   $('p-more').addEventListener('click', scan);

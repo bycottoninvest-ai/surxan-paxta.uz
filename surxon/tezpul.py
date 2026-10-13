@@ -390,8 +390,10 @@ def starshi_report(talon_id):
         raise UserError('Talon topilmadi.')
     t = info['talon']
     pdf = build_tezpul_starshi_report(info, company=get_setting('company_name'), upload_dir=current_app.config['SURXON'].UPLOAD_DIR)
-    caption = (f'👥 Starshi taloni № {info["number"]} · {t["brigade"] or ""}\n'
-               f'{t["people"] or "—"} odam · {len(info["sheets"])} varaq · {fmt_num(t["kg"] or 0, 1)} kg · {fmt_money(t["amount"])} so‘m\n'
+    paid = (f'💵 PUL BERILDI: {fmt_money(t["amount"])} · kassir {t["cashier"] or "—"} · {(t["paid_at"] or "")[:16]}\n'
+            if t['status'] == 'TOLANDI' else '')
+    caption = (paid + f'👥 Starshi taloni № {info["number"]} · {t["brigade"] or ""}\n'
+               f'{t["people"] or "—"} odam · {len(info["sheets"])} varaq · {fmt_num(t["kg"] or 0, 1)} kg · {fmt_money(t["amount"])}\n'
                f'Hisobchi: {t["clerk"] or "—"} · {(t["entered_at"] or "")[:16]}')
     return pdf, f'starshi_talon_{info["number"]}.pdf', caption
 
@@ -421,8 +423,25 @@ def lookup(actor, code, manual_code=''):
         v = _view(db, t)
         if not v['amount']:
             raise Refused('tolangan', f'№{v["number"]} bo‘yicha to‘lanadigan pul qolmagan.', {**v, 'id': t['id']})
-        return v
+        return {**v, **_detail(db, t)}
     return _logged(actor, code, go)
+
+
+def _detail(db, t):
+    """A starshi talon on the kassa: every row of its sheets (kg before / after lunch, total kg and its money) and the
+    sheet photos — the cashier sees the whole sheet before paying. A one-person talon: nothing extra."""
+    if (t['kind'] or 'odam') != 'guruh':
+        return {}
+    from flask import url_for
+    rate = float(t['rate'] or 0)
+    sheets = []
+    for sh in db.execute('''SELECT s.sheet, s.kg, s.rows_json, p.path FROM tezpul_sheets s
+                            LEFT JOIN photos p ON p.id=s.photo_id AND p.voided_at IS NULL
+                            WHERE s.talon_id=? ORDER BY s.sheet''', (t['id'],)).fetchall():
+        rows = [{**r, 'amount': round((r.get('total') or 0) * rate)} for r in json.loads(sh['rows_json'] or '[]')]
+        sheets.append({'sheet': sh['sheet'], 'kg': sh['kg'], 'amount': round((sh['kg'] or 0) * rate), 'rows': rows,
+                       'photo': url_for('main.media', path=sh['path']) if sh['path'] else None})
+    return {'people': t['people'], 'sheets': sheets}
 
 
 def pay(actor, codes, *, manual_codes=None, client_uuid=None):
@@ -492,6 +511,10 @@ def _pay(actor, codes, manual_codes, client_uuid):
             db.execute('UPDATE tezpul_talons SET cash_entry_id=? WHERE id=?', (cid, t['id']))
             A.mirror_payout(db, pid)
             A.mirror_worker(db, t['worker_id'], year)
+            if (t['kind'] or 'odam') == 'guruh':   # a starshi's talon: “PUL BERILDI” with its PDF to the director
+                from .yordamchi import _send
+                _send(db, 'tezpul_paid', f'tezpul-paid:{t["id"]}', '', ('admin', 'manager', 'accountant'),
+                      {'tezpul_starshi': {'talon_id': t['id']}})
         audit(db, actor, 'TEZPUL_PAID', 'tezpul_talons', None,
               new={'batch': batch, 'talons': [t['number'] for t, _ in items], 'amount': total, 'cashbox_id': box})
         rows = db.execute('SELECT * FROM tezpul_talons WHERE pay_batch=? ORDER BY number', (batch,)).fetchall()

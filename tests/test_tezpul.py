@@ -381,6 +381,22 @@ def test_sheet_photos_are_kept_and_read_without_the_names(app, world, monkeypatc
     pdf = world['rahbar'].get(f'/tezpul/talon/{ts[0]["number"]}/hisobot.pdf')
     assert pdf.status_code == 200 and pdf.data[:4] == b'%PDF'
     assert tally.get(f'/tezpul/talon/{ts[0]["number"]}/hisobot.pdf').status_code in (302, 403)
+    # the kassa sees the whole sheet before paying: every row's kg and money, and the sheet photos
+    kassa = world['kassa']
+    look = kassa.post('/tezpul/talon', {'code': qr(ts[0])}).get_json()['talon']
+    assert look['kind'] == 'guruh' and look['people'] == 5 and look['amount'] == 448_000
+    s2 = look['sheets'][1]
+    assert s2['kg'] == 224 and s2['amount'] == 448_000 and s2['photo'].startswith('/media/')
+    assert [(r['row'], r['total'], r['amount']) for r in s2['rows']][:2] == [(1, 70, 140_000), (2, 69, 138_000)]
+    assert kassa.get(s2['photo']).status_code == 200
+    assert 'JAMI BERILADI' in kassa.get('/tezpul/kassa').get_data(as_text=True)
+    # PUL BERILDI: the director and the accountant get the PDF saying so
+    assert pay(kassa, qr(ts[0])).get_json()['ok']
+    with app.app_context():
+        assert q("SELECT COUNT(*) n FROM outbox WHERE kind='tezpul_paid'", one=True)['n'] >= 1
+        from surxon.tezpul import starshi_report
+        pdf, _, caption = starshi_report(ts[0]['id'])
+    assert caption.startswith('💵 PUL BERILDI: 448') and pdf[:4] == b'%PDF'
     from surxon import tezpul as T
     assert [T.sheets_needed(n) for n in (1, 19, 20, 30, 40, 41, 100)] == [1, 1, 2, 2, 2, 3, 5]
     # after the kg is written no more sheets can be added to that talon

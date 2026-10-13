@@ -1504,6 +1504,13 @@ def build_tezpul_starshi_report(info, *, company, upload_dir):
         return H - 38 * mm
 
     y = head('STARSHI TALONI — HISOBOT')
+    if t.get('status') == 'TOLANDI':
+        c.setFillColor(colors.HexColor('#1e9e4a')); c.roundRect(x0, y - 11 * mm, x1 - x0, 12 * mm, 3 * mm, stroke=0, fill=1)
+        c.setFillColor(colors.white); c.setFont('DejaVu-Bold', 13)
+        c.drawString(x0 + 4 * mm, y - 6.8 * mm, f'💵 PUL BERILDI: {num(t.get("amount"), 0)} so‘m'.replace('💵 ', ''))
+        c.setFont('DejaVu', 10)
+        c.drawRightString(x1 - 4 * mm, y - 6.8 * mm, f'kassir {t.get("cashier") or "—"} · {(t.get("paid_at") or "")[:16]}')
+        y -= 18 * mm
     facts = [('Brigada', t.get('brigade') or '—'), ('Dala', t.get('field_name') or '—'),
              ('Telashka / reys', f'{t.get("trailer") or "—"} · {t.get("trip_no") or "—"}'),
              ('Hisobchi', f'{t.get("clerk") or "—"} · {(t.get("entered_at") or "")[:16]}'),
@@ -1530,7 +1537,8 @@ def build_tezpul_starshi_report(info, *, company, upload_dir):
         c.setFillColor(red); c.setFont('DejaVu-Bold', 10)
         c.drawString(x0, y, f'⚠ Varaqlar yig‘indisi {num(total)} kg, yozilgan jami {num(t["kg"])} kg — farq bor.')
         y -= 7 * mm
-    cw = [18 * mm, 22 * mm, 30 * mm, 30 * mm, 30 * mm]
+    cw = [18 * mm, 22 * mm, 30 * mm, 30 * mm, 30 * mm, 34 * mm]
+    rate = float(t.get('rate') or 0)
     for s in sheets:
         if y < 40 * mm:
             c.showPage(); y = head('STARSHI TALONI — HISOBOT')
@@ -1539,7 +1547,7 @@ def build_tezpul_starshi_report(info, *, company, upload_dir):
         c.setFillColor(colors.HexColor('#e8eef7')); c.rect(x0, y - 1.8 * mm, sum(cw), 6 * mm, stroke=0, fill=1)
         c.setFillColor(navy); c.setFont('DejaVu-Bold', 9)
         xs = x0
-        for title, w in zip(('Varaq', 'Qator №', 'Abetgacha', 'Abetdan keyin', 'JAMI kg'), cw):
+        for title, w in zip(('Varaq', 'Qator №', 'Abetgacha', 'Abetdan keyin', 'JAMI kg', 'Summa, so‘m'), cw):
             c.drawString(xs + 2 * mm, y, title); xs += w
         y -= 6 * mm
         c.setFont('DejaVu', 9.5)
@@ -1547,7 +1555,8 @@ def build_tezpul_starshi_report(info, *, company, upload_dir):
             if y < 20 * mm:
                 c.showPage(); y = head('STARSHI TALONI — HISOBOT'); c.setFont('DejaVu', 9.5)
             xs = x0
-            for v, w in zip((s['sheet'], r['row'], num(r.get('before')), num(r.get('after')), num(r.get('total'))), cw):
+            money = num((r.get('total') or 0) * rate, 0) if rate and r.get('total') is not None else '—'
+            for v, w in zip((s['sheet'], r['row'], num(r.get('before')), num(r.get('after')), num(r.get('total')), money), cw):
                 c.setFillColor(navy); c.drawString(xs + 2 * mm, y, str(v)); xs += w
             c.setStrokeColor(line); c.setLineWidth(0.4); c.line(x0, y - 2 * mm, x0 + sum(cw), y - 2 * mm)
             y -= 5.6 * mm
