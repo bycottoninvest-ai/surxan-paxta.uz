@@ -9,7 +9,8 @@
     <form method="post" class="form">{{ csrf() }}<input type="hidden" name="action" value="create">
       <div class="f"><label>Nechta talon?</label><input class="input" name="count" placeholder="masalan 1000" inputmode="numeric" required></div>
       <div class="f"><button class="btn btn-primary btn-block">Talonlar yaratish</button></div>
-      <div class="f"><div class="tiny muted">A4 varaqqa 2 ta talon. PDF ni ochib chop eting, chiziqdan qirqing. Ishlatilmay qolganlari keyingi kunlarga qoladi — yo‘qolmaydi.</div></div></form>
+      <div class="f"><div class="tiny muted">Talon faqat starshiga beriladi: pastdagi ro‘yxatdan <b>👥 Starshi taloni</b> ni chop eting — bitta talon 2–5 varaq
+        (har odamning ismi va kg i, abetgacha / abetdan keyin). Ishlatilmay qolganlari keyingi kunlarga qoladi — yo‘qolmaydi.</div></div></form>
   </div></section>
   <section class="card s4"><div class="card-h"><h3>🚫 Talonni bekor qilish</h3></div><div class="card-b">
     <form method="post" class="form">{{ csrf() }}<input type="hidden" name="action" value="void">
@@ -19,13 +20,16 @@
       <div class="f"><div class="tiny muted">Faqat bo‘sh (kg yozilmagan) talon. Bekor qilingani skanerlansa — qizil “BEKOR QILINGAN”.</div></div></form>
   </div></section>
   <section class="card s4"><div class="card-h"><h3>Qanday ishlaydi</h3></div><div class="card-b small">
-    1) Daftar: talon № — ism.<br>2) Terim hisobchisi: telashkani tanlaydi → skaner → kg → <b>SAQLASH</b>.<br>
-    3) Kassir: skaner → summa chiqadi → <b>PUL BERILDI</b>.<br>4) Starshi guruhining talonlarini olib kelsa: skaner → <b>“+ Yana talon”</b> → … → bitta <b>PUL BERILDI</b>.</div></section>
+    1) Ertalab hisobchi starshiga bitta talon beradi.<br>2) Starshi kun bo‘yi har odamning ismi va kg ini yozadi (abetgacha / abetdan keyin).<br>
+    3) Kechqurun hisobchi: skaner → varaqlarni rasmga oladi (tizim kg ni o‘qib hisoblaydi) → tekshiradi → <b>SAQLASH</b>.<br>
+    4) Kassir: skaner → summa → <b>PUL BERILDI</b> — pul starshiga, u ro‘yxat bo‘yicha bo‘lib beradi.</div></section>
   <section class="card s12"><div class="card-h"><h3>Partiyalar</h3></div><div class="card-b">
     {% if batches %}<div class="table-wrap"><table class="t"><thead><tr><th>Partiya</th><th>Raqamlar</th><th class="num">Soni</th><th class="num">Bo‘sh</th><th class="num">To‘langan</th><th class="num">Bekor</th><th>Yaratilgan</th><th></th></tr></thead><tbody>
     {% for bt in batches %}<tr {% if new == bt.batch %}style="background:#ecfdf5"{% endif %}><td>{{ bt.batch }}</td><td class="b">{{ num(bt.a) }} … {{ num(bt.b) }}</td><td class="num">{{ bt.n }}</td>
       <td class="num">{{ bt.blank }}</td><td class="num">{{ bt.paid }}</td><td class="num">{{ bt.void }}</td><td>{{ bt.created_at[:16] }}</td>
-      <td><a class="btn btn-primary btn-sm" href="{{ url_for('tezpul.talons_pdf', batch=bt.batch) }}" target="_blank">{{ icon('printer','sm') }} PDF</a></td></tr>{% endfor %}
+      <td style="white-space:nowrap"><form method="get" action="{{ url_for('tezpul.talons_starshi_pdf', batch=bt.batch) }}" target="_blank" style="display:inline-flex;gap:4px">
+          <select name="varaq" class="input" style="width:auto;padding:4px 6px">{% for n in (2,3,4,5) %}<option value="{{ n }}" {{ 'selected' if n == 5 }}>{{ n }} varaq</option>{% endfor %}</select>
+          <button class="btn btn-primary btn-sm">{{ icon('printer','sm') }} 👥 Starshi taloni</button></form></td></tr>{% endfor %}
     </tbody></table></div>{% else %}<div class="muted">Hali talon yo‘q. Soni yozib yarating.</div>{% endif %}
   </div></section>
 </div>

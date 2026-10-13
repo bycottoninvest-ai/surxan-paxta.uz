@@ -214,7 +214,12 @@ def close(load_id):
         code = (request.form.get('blank_code') or '').strip()
         if code:                     # checked before closing, so a wrong blank never leaves a closed trip without it
             BL.check_free(code, ld['waybill_id'])
-        res = mark_full(actor, load_id, photos=uploads_from_request(request, 'photos'))
+        manual = (request.form.get('kg') or '').replace(' ', '').replace(',', '.')
+        try:
+            manual = float(manual) if manual else None
+        except ValueError:
+            raise UserError('Kg ni raqam bilan yozing (masalan 1300).')
+        res = mark_full(actor, load_id, photos=uploads_from_request(request, 'photos'), manual_kg=manual)
         blank_msg = ''
         if code and res.get('waybill_id'):
             try:

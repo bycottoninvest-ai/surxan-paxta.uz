@@ -3,6 +3,8 @@ the rahbar's day panel and the talon print.
 
 The cashier screen never queues anything offline: a payment exists only when the server answered “paid”.
 """
+import json
+
 from flask import Blueprint, Response, flash, jsonify, redirect, render_template, request, url_for
 
 from .. import tezpul as T
@@ -35,7 +37,11 @@ def dala(load_id):
     if ld['status'] != 'OCHIQ' or (ld['method'] or 'hand') != 'hand':
         flash('Talon faqat ochiq qo‘l terimi telashkasiga yoziladi.', 'error')
         return redirect(url_for('dala.trip', load_id=load_id))
-    return render_template('tezpul_dala.html', ld=ld, count=T.trip_counter(load_id))
+    from ..settings import get_float
+    from .. import talon_ai
+    return render_template('tezpul_dala.html', ld=ld, count=T.trip_counter(load_id), ai_on=talon_ai.enabled(),
+                           rows_first=T.STARSHI_ROWS_FIRST, rows_next=T.STARSHI_ROWS_NEXT,
+                           max_one=get_float('max_hand_kg', 250), max_group=get_float('max_group_kg', 20000))
 
 
 @bp.post('/tezpul/dala/talon')
@@ -54,11 +60,82 @@ def dala_save(load_id):
     from .dala import _trip
     _trip(load_id)                                   # brigade scope + existence
     try:
+        try:
+            sheets = json.loads(request.form.get('sheets') or '[]')
+        except ValueError:
+            sheets = []
         r = T.enter(post_actor(), load_id, request.form.get('code'), request.form.get('kg'),
-                    manual_code=request.form.get('manual_code', ''), client_uuid=form_uuid())
+                    manual_code=request.form.get('manual_code', ''), client_uuid=form_uuid(),
+                    group=request.form.get('guruh') == '1', sheets=sheets if isinstance(sheets, list) else [],
+                    people=request.form.get('odam'))
     except T.Refused as err:
         return _refused(err)
     return jsonify(ok=True, result=r, count=T.trip_counter(load_id))
+
+
+@bp.get('/tezpul/kechki')
+@perm_required('harvest.write', 'tezpul.count')
+def kechki():
+    """The evening count at the kassa (hisobchi or kassir): a starshi's talon → people → sheets → total kg → SAQLASH,
+    written as the brigade's hand work of the day; then the kassir pays it."""
+    from .. import talon_ai
+    from ..security import acts_as
+    back = url_for('dala.home') if acts_as(current_actor()._as_user(), 'tally') else url_for('tezpul.kassa')
+    return render_template('tezpul_dala.html', ld=None, brigades=T.evening_brigades(), back_url=back,
+                           ai_on=talon_ai.enabled(), rows_first=T.STARSHI_ROWS_FIRST, rows_next=T.STARSHI_ROWS_NEXT,
+                           max_one=1e9)
+
+
+@bp.post('/tezpul/kechki/talon')
+@perm_required('harvest.write', 'tezpul.count')
+def kechki_lookup():
+    try:
+        t = T.evening_lookup(post_actor(), request.form.get('code'), request.form.get('manual_code', ''))
+    except T.Refused as err:
+        return _refused(err)
+    return jsonify(ok=True, talon=t)
+
+
+@bp.post('/tezpul/kechki/saqlash')
+@perm_required('harvest.write', 'tezpul.count')
+def kechki_save():
+    try:
+        sheets = json.loads(request.form.get('sheets') or '[]')
+    except ValueError:
+        sheets = []
+    try:
+        r = T.enter_evening(post_actor(), request.form.get('brigada', type=int), request.form.get('code'),
+                            request.form.get('kg'), manual_code=request.form.get('manual_code', ''),
+                            client_uuid=form_uuid(), sheets=sheets if isinstance(sheets, list) else [],
+                            people=request.form.get('odam'))
+    except T.Refused as err:
+        return _refused(err)
+    return jsonify(ok=True, result=r)
+
+
+@bp.post('/tezpul/dala/rasm')
+@perm_required('harvest.write', 'tezpul.count')
+def dala_photo():
+    """One sheet of a starshi's talon: the photo is kept with the talon; when AI reading is on, the kg columns (only
+    the part right of the cut — never the names) are read and checked, as a suggestion the clerk confirms."""
+    from .. import talon_ai
+    from ..photos import read_upload
+    data = read_upload(request.files.get('photo'))
+    if not data:
+        raise UserError('Varaqni rasmga oling.')
+    full, kg_part = talon_ai.kg_part(data, request.form.get('cut', type=float))
+    sheet = request.form.get('sheet', type=int) or 1
+    try:
+        t = T.attach_photo(post_actor(), request.form.get('code'), request.form.get('manual_code', ''), full, sheet)
+    except T.Refused as err:
+        return _refused(err)
+    if not talon_ai.enabled():
+        return jsonify(ok=True, ai=None, ai_on=False, talon=t)
+    try:
+        result = talon_ai.read_sheet(kg_part)
+    except UserError as err:
+        return jsonify(ok=True, ai=None, ai_on=True, ai_error=str(err), talon=t)
+    return jsonify(ok=True, ai=result, ai_on=True, talon=t)
 
 
 # ------------------------------------------------------------------ cashier
@@ -147,6 +224,33 @@ def talons():
             return done('Talon bekor qilindi — endi u ishlatilmaydi.', url_for('tezpul.talons'))
         raise UserError('Noma’lum amal.')
     return render_template('tezpul_talons.html', batches=T.batches(), num=T.number_text, new=request.args.get('yangi', type=int))
+
+
+@bp.get('/tezpul/talonlar/<int:batch>-starshi.pdf')
+@perm_required('tezpul.manage')
+def talons_starshi_pdf(batch):
+    """The starshi's talon: one talon = 2–5 stapled A4 sheets with 1-cm rows for every worker's name and kg."""
+    from ..pdfdoc import STARSHI_SHEETS, build_tezpul_starshi_pdf
+    rows = T.talons_for_print(batch=batch)
+    if not rows:
+        raise UserError('Bu partiyada talon yo‘q.')
+    sheets = request.args.get('varaq', type=int) or 5
+    if sheets not in STARSHI_SHEETS:
+        raise UserError('Varaq soni 2 dan 5 gacha.')
+    pdf = build_tezpul_starshi_pdf(rows, company=get_setting('company_name'), sheets=sheets)
+    return Response(pdf, mimetype='application/pdf',
+                    headers={'Content-Disposition': f'inline; filename=starshi_{T.number_text(rows[0]["number"])}.pdf'})
+
+
+@bp.get('/tezpul/talon/<int:number>/hisobot.pdf')
+@perm_required('tezpul.panel')
+def starshi_report_pdf(number):
+    """The starshi talon's report: the sheets' photos and the kg read / confirmed for every row."""
+    t = q('SELECT id FROM tezpul_talons WHERE number=?', (number,), one=True)
+    if not t:
+        raise UserError('Talon topilmadi.')
+    pdf, name, _ = T.starshi_report(t['id'])
+    return Response(pdf, mimetype='application/pdf', headers={'Content-Disposition': f'inline; filename={name}'})
 
 
 @bp.get('/tezpul/talonlar/<int:batch>.pdf')

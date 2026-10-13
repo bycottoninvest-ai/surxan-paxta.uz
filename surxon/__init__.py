@@ -14,7 +14,7 @@ from .config import BASE_DIR, Config
 from .security import (PERMISSIONS, ROLES, acts_as, brigadier_scope, can, csrf_token, load_user, standin, wants_json)
 from .utils import UserError, fmt_date, fmt_money, fmt_num, now_str, today_str, weekday_name
 
-VERSION = '2.39.0'
+VERSION = '2.40.0'
 
 
 def create_app(**overrides):

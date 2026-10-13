@@ -16,6 +16,7 @@
   {% endfor %}
 
   {% if standin == 'cashier' %}<a class="btn btn-block d-big" href="{{ url_for('tezpul.kassa') }}" style="background:#e8730c;border-color:#e8730c;color:#fff;white-space:normal;line-height:1.2">🔁 KASSA<small style="display:block;font-size:14px;font-weight:600;margin-top:2px">bugun kassir o‘rnidasiz</small></a>{% endif %}
+  {% if tezpul %}<a class="btn btn-block d-big" href="{{ url_for('tezpul.kechki') }}" style="background:#0b2a55;border-color:#0b2a55;color:#fff">🌙 Kechki hisob — starshi talonlari</a>{% endif %}
   <button type="button" class="btn btn-block d-big" id="d-tqbtn" style="background:#1e9e4a;border-color:#1e9e4a;color:#fff">📷 Telashka QR ni skanerlash</button>
   <div id="d-tq" hidden style="margin:8px 0 10px"><div style="position:relative;border-radius:14px;overflow:hidden;background:#1d232b;height:300px">
     <video id="d-tq-v" playsinline muted style="width:100%;height:100%;object-fit:cover"></video></div>

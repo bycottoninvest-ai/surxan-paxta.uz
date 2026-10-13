@@ -59,6 +59,7 @@ PERMISSIONS = {
     'payouts.prepare': {'accountant'},
     'payouts.pay': {'accountant', 'cashier'},
     'tezpul.panel': {'manager', 'accountant'},      # SURXON TEZ-PUL: the day's talon figures (read)
+    'tezpul.count': {'manager', 'accountant', 'tally', 'cashier'},   # the evening count of a starshi's talon (photos)
     'tezpul.manage': {'manager'},                  # print talons, hand packs to brigades, approve big kg, cancel a talon
     'combine.finance': {'accountant'},
     'debts.write': {'accountant'},
@@ -299,8 +300,9 @@ CASHIER_ENDPOINTS = STATION_ENDPOINTS | {'acct.cashier', 'acct.payout_pay', 'acc
 
 
 # SURXON TEZ-PUL: the cashier's two-step screen
-TEZPUL_CASHIER = {'tezpul.home', 'tezpul.kassa', 'tezpul.lookup', 'tezpul.pay'}
-TEZPUL_FIELD = {'tezpul.dala', 'tezpul.dala_lookup', 'tezpul.dala_save'}
+TEZPUL_EVENING = {'tezpul.kechki', 'tezpul.kechki_lookup', 'tezpul.kechki_save', 'tezpul.dala_photo'}
+TEZPUL_CASHIER = {'tezpul.home', 'tezpul.kassa', 'tezpul.lookup', 'tezpul.pay'} | TEZPUL_EVENING
+TEZPUL_FIELD = {'tezpul.dala', 'tezpul.dala_lookup', 'tezpul.dala_save'} | TEZPUL_EVENING
 
 
 # Field clerk: only the four-step field screens (and the few trip endpoints they use) — no reports, money, staff,

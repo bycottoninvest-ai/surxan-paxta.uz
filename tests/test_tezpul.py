@@ -45,7 +45,7 @@ def test_field_two_steps_then_kassa_two_steps(app, world):
     assert r.status_code == 302 and r.headers['Location'].endswith(f'/tezpul/dala/{lid}')
     assert 'TALON SKANERI' in tally.get(f'/dala/reys/{lid}?eski=1').get_data(as_text=True)
     page = tally.get(f'/tezpul/dala/{lid}').get_data(as_text=True)
-    assert 'Talonni skanerlang' in page and 'SAQLASH' in page and 'Starshi' not in page
+    assert 'Talonni skanerlang' in page and 'SAQLASH' in page and 'Starshi varaqlarini rasmga olish' in page
     # the cashier cannot pay a talon that has no kg yet
     r = kassa.post('/tezpul/talon', {'code': qr(ts[0])})
     assert r.status_code == 409 and r.get_json()['refused'] == 'kgsiz'
@@ -107,11 +107,10 @@ def test_starshi_brings_his_teams_talons_one_payment(app, world):
     kassa = world['kassa']
     tally, lid, ts = setup(app, world, 52)
     cash_in(world['bux'], '4000000')                              # 5 000 000 in the box
-    r = enter(tally, lid, qr(ts[0]), '800')                       # one talon is one person's kg: 800 is a typo
+    r = enter(tally, lid, qr(ts[0]), '25000')                     # over the group limit (20 t): a typo
     assert r.status_code == 422 and 'bitta talonga juda ko‘p' in r.get_json()['error']
     for k, t in enumerate(ts):
         assert enter(tally, lid, qr(t), str(20 + k % 5)).get_json()['ok']
-    assert 'Starshi' not in tally.get(f'/tezpul/dala/{lid}').get_data(as_text=True)     # no group button in the field
     # mode 1: one person
     assert pay(kassa, qr(ts[0])).get_json()['result']['amount'] == 40_000
     # mode 2: the starshi's 50 talons in one tap (a talon scanned twice counts once)
@@ -266,3 +265,177 @@ def test_trailer_qr_after_another_clerks_trip(app, world):
     r = tally.get(f'/tq/{tok}')
     assert r.status_code == 302 and r.headers['Location'].endswith(f'/dala/yangi?telashka={e["id"]}')
     assert tally.get(f'/dala/yangi?telashka={e["id"]}').status_code == 200
+
+
+def test_one_talon_for_a_starshis_whole_team(app, world):
+    """Only the starshi gets a talon: his team's total kg on top (5 t), the names in pen underneath — one scan, one kg,
+    one payment. Over one person's 250 kg the talon becomes the starshi's by itself."""
+    kassa = world['kassa']
+    tally, lid, ts = setup(app, world, 2)
+    cash_in(world['bux'], '10000000')
+    r = enter(tally, lid, qr(ts[0]), '5000').get_json()
+    assert r['ok'] and r['result']['amount'] == 10_000_000 and r['count'] == {'n': 1, 'kg': 5000}
+    with app.app_context():
+        t = q('SELECT * FROM tezpul_talons WHERE id=?', (ts[0]['id'],), one=True)
+        assert t['kind'] == 'guruh' and t['kg'] == 5000
+        assert scalar('SELECT group_size FROM workers WHERE id=?', (t['worker_id'],)) == 1
+        assert scalar("SELECT SUM(kg) FROM harvests WHERE load_id=? AND voided_at IS NULL", (lid,)) == 5000
+    assert enter(tally, lid, qr(ts[1]), '40').get_json()['ok']          # an ordinary talon stays one person's
+    with app.app_context():
+        assert q('SELECT kind FROM tezpul_talons WHERE id=?', (ts[1]['id'],), one=True)['kind'] == 'odam'
+    look = kassa.post('/tezpul/talon', {'code': qr(ts[0])}).get_json()['talon']
+    assert look['kind'] == 'guruh' and look['amount'] == 10_000_000
+    assert pay(kassa, qr(ts[0])).get_json()['result']['amount'] == 10_000_000
+    assert pay(kassa, qr(ts[0])).status_code == 409                      # never twice
+    assert 'Starshi taloni' in kassa.get('/tezpul/kassa').get_data(as_text=True)
+
+
+def _sheet_photo(shade=220):
+    """A synthetic 'sheet': the names half red, the kg half blue — to see what goes to the reader."""
+    import io
+    from PIL import Image
+    img = Image.new('RGB', (1000, 1400), (220, 30, 30))
+    img.paste((30, 30, shade), (500, 0, 1000, 1400))
+    buf = io.BytesIO()
+    img.save(buf, 'JPEG')
+    return buf.getvalue()
+
+
+def test_starshi_talon_print_sheets(app, world):
+    admin = world['admin']
+    talons(app, admin, 2)
+    r = admin.get('/tezpul/talonlar/1-starshi.pdf?varaq=5')
+    assert r.status_code == 200 and r.data[:4] == b'%PDF'
+    import re
+    assert len(re.findall(rb'/Type\s*/Page[^s]', r.data)) == 10                 # 2 talons × 5 sheets
+    assert admin.get('/tezpul/talonlar/1-starshi.pdf?varaq=9').status_code in (302, 422)
+    page = admin.get('/tezpul/talonlar').get_data(as_text=True)
+    assert 'Starshi taloni' in page and 'Kichik' not in page
+
+
+def test_sheet_photos_are_kept_and_read_without_the_names(app, world, monkeypatch):
+    """Without the AI key: the photo is kept with the talon (finance photo), kg is typed. With it: only the kg part of
+    the photo is read; rows that do not add up or are unclear come back flagged; the clerk still saves the kg."""
+    import io
+    from PIL import Image
+    from surxon import talon_ai
+    tally, lid, ts = setup(app, world, 1)
+    assert 'Starshi varaqlarini rasmga olish' in tally.get(f'/tezpul/dala/{lid}').get_data(as_text=True)
+    files = {'photo': [(io.BytesIO(_sheet_photo()), 'v.jpg')]}
+    r = tally.c.post('/tezpul/dala/rasm', data={'_csrf': tally.csrf(), 'code': qr(ts[0]), 'sheet': '1', 'cut': '0.5', **files},
+                     headers={'X-Requested-With': 'fetch'}, content_type='multipart/form-data').get_json()
+    assert r['ok'] and r['ai'] is None and r['ai_on'] is False
+    with app.app_context():
+        ph = q("SELECT * FROM photos WHERE entity_type='tezpul_talon'", one=True)
+        assert ph['category'] == 'payment' and ph['entity_id'] == ts[0]['id']
+    # AI on (the reader is replaced here — no real request): the part sent has no red (the names half)
+    sent = []
+
+    def fake_ask(data):
+        sent.append(Image.open(io.BytesIO(data)).convert('RGB'))
+        return {'rows': [{'row': 1, 'before': 37, 'after': 33, 'total': 70, 'unclear': False},
+                         {'row': 2, 'before': 45, 'after': 29, 'total': 69, 'unclear': False},
+                         {'row': 3, 'before': 30, 'after': 35, 'total': 65, 'unclear': True},
+                         {'row': 4, 'before': 20, 'after': None, 'total': None, 'unclear': False},
+                         {'row': 5, 'before': None, 'after': None, 'total': None, 'unclear': False}],
+                'sheet_total': {'before': None, 'after': None, 'total': 224}, 'note': ''}
+    app.config['SURXON'].ANTHROPIC_API_KEY = 'test-key-not-real'
+    monkeypatch.setattr(talon_ai, '_ask', fake_ask)
+    try:
+        assert 'tizim hisoblaydi' in tally.get(f'/tezpul/dala/{lid}').get_data(as_text=True)
+        files = {'photo': [(io.BytesIO(_sheet_photo(180)), 'v2.jpg')]}
+        r = tally.c.post('/tezpul/dala/rasm', data={'_csrf': tally.csrf(), 'code': qr(ts[0]), 'sheet': '2', 'cut': '0.55', **files},
+                         headers={'X-Requested-With': 'fetch'}, content_type='multipart/form-data').get_json()
+    finally:
+        app.config['SURXON'].ANTHROPIC_API_KEY = ''
+    img = sent[0]
+    px = [img.getpixel((x, y)) for x in range(0, img.width, 20) for y in range(0, img.height, 50)]
+    assert all(p[0] < 120 for p in px)                                  # no red: the names half never left the server
+    ai = r['ai']
+    flags = {x['row']: x['flag'] for x in ai['rows']}
+    assert flags == {1: '', 2: 'sum', 3: 'unclear', 4: 'half'} and ai['problems'] == 3
+    assert ai['computed'] == 70 + 69 + 65 + 20 and ai['total_ok'] is True
+    # the kg is still written by the clerk (here: the checked sum) with the sheets as confirmed and the head count
+    import json as _json
+    with app.app_context():
+        pids = [x['id'] for x in q("SELECT id FROM photos WHERE entity_type='tezpul_talon' ORDER BY id")]
+    sheets = [{'sheet': 1, 'photo_id': pids[0], 'kg': 0.0, 'rows': []},
+              {'sheet': 2, 'photo_id': pids[1], 'kg': 224, 'rows': [{'row': x['row'], 'before': x['before'], 'after': x['after'],
+                                                                   'total': x['total']} for x in ai['rows']]},
+              {'sheet': 'x'}]                                                  # junk is dropped
+    r = tally.post(f'/tezpul/dala/{lid}/saqlash', {'code': qr(ts[0]), 'kg': '224', 'client_uuid': uuid4(),
+                                                   'sheets': _json.dumps(sheets), 'odam': '5'}).get_json()
+    assert r['ok']
+    with app.app_context():
+        t = q('SELECT kind, people FROM tezpul_talons WHERE id=?', (ts[0]['id'],), one=True)
+        assert t['kind'] == 'guruh' and t['people'] == 5                  # a starshi talon even under 250 kg
+        assert [s['sheet'] for s in q('SELECT sheet FROM tezpul_sheets ORDER BY sheet')] == [1, 2]
+        jobs = q("SELECT * FROM outbox WHERE kind='tezpul_starshi'")
+        assert jobs and all('tezpul_starshi' in j['payload_json'] for j in jobs)
+    pdf = world['rahbar'].get(f'/tezpul/talon/{ts[0]["number"]}/hisobot.pdf')
+    assert pdf.status_code == 200 and pdf.data[:4] == b'%PDF'
+    assert tally.get(f'/tezpul/talon/{ts[0]["number"]}/hisobot.pdf').status_code in (302, 403)
+    from surxon import tezpul as T
+    assert [T.sheets_needed(n) for n in (1, 19, 20, 30, 40, 41, 100)] == [1, 1, 2, 2, 2, 3, 5]
+    # after the kg is written no more sheets can be added to that talon
+    files = {'photo': [(io.BytesIO(_sheet_photo(150)), 'v3.jpg')]}
+    r = tally.c.post('/tezpul/dala/rasm', data={'_csrf': tally.csrf(), 'code': qr(ts[0]), 'sheet': '3', **files},
+                     headers={'X-Requested-With': 'fetch'}, content_type='multipart/form-data')
+    assert r.status_code == 409
+    page = world['rahbar'].get('/tezpul/panel').get_data(as_text=True)
+    assert 'varaq rasmlari' in page and '/media/' in page and 'PDF hisobot' in page
+
+
+def test_reader_check_rules():
+    from surxon.talon_ai import check
+    r = check({'rows': [{'row': 2, 'before': 10, 'after': 5, 'total': 15, 'unclear': False},
+                        {'row': 2, 'before': 1, 'after': 1, 'total': 2, 'unclear': False},       # duplicate row: dropped
+                        {'row': 1, 'before': '7,5', 'after': None, 'total': 7.5, 'unclear': False}],
+               'sheet_total': {'before': None, 'after': None, 'total': 30}, 'note': 'x'})
+    assert [x['row'] for x in r['rows']] == [1, 2] and r['computed'] == 22.5 and r['total_ok'] is False
+
+
+def test_trailers_close_with_their_kg_and_the_evening_count_pays(app, world):
+    """Hand trailers close during the day with their own kg (no talon yet); in the evening the hisobchi — or the
+    kassir — counts the starshi's talon for the brigade; the kassir pays it. Trailer kg, talon kg and punkt kg stay
+    three separate numbers (nothing counted twice)."""
+    from conftest import jpeg
+    admin, kassa = world['admin'], world['kassa']
+    tally, lid, ts = setup(app, world, 3)
+    cash_in(world['bux'], '6000000')
+    r = tally.post(f'/dala/reys/{lid}/yopish', files={'photos': jpeg()})
+    assert r.status_code in (200, 422) and not (r.get_json() or {}).get('ok')                 # no kg: refused
+    assert 'Telashkadagi paxta, kg' in tally.get(f'/dala/reys/{lid}/yopish').get_data(as_text=True)
+    assert tally.post(f'/dala/reys/{lid}/yopish', {'kg': '1300'}, files={'photos': jpeg((10, 20, 30))}).get_json()['ok']
+    lid2 = open_trip(tally, world, rate='2000', trailer='TL-02')                                  # after lunch
+    assert tally.post(f'/dala/reys/{lid2}/yopish', {'kg': '1250'}, files={'photos': jpeg((40, 50, 60))}).get_json()['ok']
+    with app.app_context():
+        assert [x['internal_kg'] for x in q('SELECT internal_kg FROM trailer_loads ORDER BY id')] == [1300, 1250]
+        bid = scalar('SELECT brigadier_id FROM trailer_loads WHERE id=?', (lid,))
+    # the evening count: the hisobchi's screen and the kassir's screen both open it
+    page = tally.get('/tezpul/kechki').get_data(as_text=True)
+    assert 'KECHKI HISOB' in page and '2 telashka' in page
+    assert kassa.get('/tezpul/kechki').status_code == 200
+    r = tally.post('/tezpul/kechki/saqlash', {'brigada': bid, 'code': qr(ts[0]), 'kg': '2480', 'client_uuid': uuid4(),
+                                              'odam': '30', 'sheets': '[]'}).get_json()
+    assert r['ok'] and r['result']['amount'] == 2480 * 2000
+    with app.app_context():
+        h = q('SELECT * FROM harvests WHERE voided_at IS NULL', one=True)
+        assert h['load_id'] == lid2 and h['kg'] == 2480                    # the brigade's last trailer of the day…
+        assert scalar('SELECT internal_kg FROM trailer_loads WHERE id=?', (lid2,)) == 1250   # …keeps its own kg
+        t = q('SELECT kind, people FROM tezpul_talons WHERE id=?', (ts[0]['id'],), one=True)
+        assert t['kind'] == 'guruh' and t['people'] == 30
+    assert pay(kassa, qr(ts[0])).get_json()['result']['amount'] == 2480 * 2000
+    # the kassir can count too (the panel then shows “wrote and paid himself” in red)
+    r = kassa.post('/tezpul/kechki/saqlash', {'brigada': bid, 'code': qr(ts[1]), 'kg': '300', 'client_uuid': uuid4(),
+                                              'odam': '4'}).get_json()
+    assert r['ok']
+    assert pay(kassa, qr(ts[1])).get_json()['ok']
+    page = world['rahbar'].get('/tezpul/panel').get_data(as_text=True)
+    assert 'Telashkalar (dala)' in page, 'col'
+    import re
+    assert re.search(r'<td class="num">2\W550 <span class="badge b-red"', page)      # trailers 1300 + 1250; talons 2780
+    assert 'o‘zi kg yozib, o‘zi pul bergan' in page
+    # no hand trailer for a brigade today: refused
+    r = tally.post('/tezpul/kechki/saqlash', {'brigada': 99999, 'code': qr(ts[2]), 'kg': '100', 'client_uuid': uuid4()})
+    assert r.status_code == 422 and 'brigadani tanlang' in r.get_json()['error']

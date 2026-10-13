@@ -293,9 +293,11 @@ def open_load(actor, *, trailer_id, field_id, brigadier_id, tractor_id=None, veh
 
 
 def add_harvest(actor, *, load_id, method, kg, worker_id=None, worker_name=None, combine_id=None, note='',
-                client_uuid=None, source='web', confirm_duplicate=False, new_worker=False, new_group=False):
-    """Record one weighing next to the trailer. Returns (harvest_id, info dict)."""
-    _need(actor, 'harvest.write')
+                client_uuid=None, source='web', confirm_duplicate=False, new_worker=False, new_group=False, late=False):
+    """Record one weighing next to the trailer. Returns (harvest_id, info dict).
+    late: a starshi talon counted in the evening — pay for the day's work, written to the brigade's last trip of the
+    day even when that trailer is already closed (its own kg stays as it was closed with)."""
+    _need(actor, *(('harvest.write', 'tezpul.count') if late else ('harvest.write',)))
     if method not in ('hand', 'combine'):
         raise UserError('Terim turi noto‘g‘ri.')
     with tx() as db:
@@ -304,7 +306,7 @@ def add_harvest(actor, *, load_id, method, kg, worker_id=None, worker_name=None,
             if dup:
                 return dup['id'], {'duplicate': True}
         load = load_row(db, load_id)
-        if load['status'] != 'OCHIQ':
+        if load['status'] != 'OCHIQ' and not (late and load['status'] in ('TOLDI', 'TORTILDI')):
             raise UserError('Bu telashka yopilgan (TOLDI yoki tortilgan). Yangi yuk oching.')
         assert_season_open(db, load['season_year'])
         _check_scope(actor, load['brigadier_id'])
@@ -408,9 +410,12 @@ def _snapshot_load(db, load_id):
     t = db.execute('''SELECT COALESCE(SUM(CASE WHEN method='hand' THEN kg END),0) hand,
                              COALESCE(SUM(CASE WHEN method='combine' THEN kg END),0) comb
                       FROM harvests WHERE load_id=? AND voided_at IS NULL''', (load_id,)).fetchone()
-    db.execute('UPDATE trailer_loads SET hand_kg=?, combine_kg=?, internal_kg=? WHERE id=?',
-               (t['hand'], t['comb'], t['hand'] + t['comb'], load_id))
-    return t['hand'], t['comb']
+    hand, comb = t['hand'], t['comb']
+    manual = db.execute('SELECT manual_kg FROM trailer_loads WHERE id=?', (load_id,)).fetchone()['manual_kg']
+    if manual:          # closed with its own kg: the starshi talons written later are pay, not this trailer's cotton
+        hand = manual
+    db.execute('UPDATE trailer_loads SET hand_kg=?, combine_kg=?, internal_kg=? WHERE id=?', (hand, comb, hand + comb, load_id))
+    return hand, comb
 
 
 def attach_load_photos(actor, load_id, photos, category='trailer', source='web', tg_ids=None):
@@ -429,8 +434,9 @@ def attach_load_photos(actor, load_id, photos, category='trailer', source='web',
         return ids
 
 
-def mark_full(actor, load_id, note='', photos=None, source='web'):
-    """TOLDI: the trailer is full. Freezes the internal kg snapshot."""
+def mark_full(actor, load_id, note='', photos=None, source='web', manual_kg=None):
+    """TOLDI: the trailer is full. Freezes the internal kg snapshot. A hand trailer with no weighing yet (the
+    starshi talons are counted in the evening) is closed with its own kg — `manual_kg`, the kg on its field blank."""
     _need(actor, 'load.full')
     photos = photos or []
     with tx() as db:
@@ -460,7 +466,13 @@ def mark_full(actor, load_id, note='', photos=None, source='web'):
             raise UserError(f'TOLDI uchun kamida {need} ta rasm kerak (telashka/paxta). Hozir: {have} ta.')
         live = db.execute('SELECT COUNT(*) FROM harvests WHERE load_id=? AND voided_at IS NULL', (load_id,)).fetchone()[0]
         if not live:
-            raise UserError('Bu telashkada hali birorta terim yozilmagan — bo‘sh telashkani tugatib bo‘lmaydi.')
+            if (load['method'] or 'hand') != 'hand' or not manual_kg:
+                raise UserError('Bu telashkada hali birorta terim yozilmagan — bo‘sh telashkani tugatib bo‘lmaydi.'
+                                + (' Qo‘l terimi bo‘lsa, telashkadagi paxta kg ini yozing.' if (load['method'] or 'hand') == 'hand' else ''))
+            manual_kg = round(float(manual_kg), 1)
+            if not 0 < manual_kg <= get_float('max_trailer_kg', 15000, db):
+                raise UserError('Telashka kg i noto‘g‘ri — blankadagi raqamni tekshiring.')
+            db.execute('UPDATE trailer_loads SET manual_kg=? WHERE id=?', (manual_kg, load_id))
         hand, comb = _snapshot_load(db, load_id)
         db.execute("UPDATE trailer_loads SET status='TOLDI', full_by=?, full_at=?, note=COALESCE(NULLIF(?,''), note) WHERE id=?",
                    (actor.user_id, now_str(), clean_text(note), load_id))

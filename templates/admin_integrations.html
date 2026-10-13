@@ -44,6 +44,20 @@
     </div>
   </section>
 
+  <section class="card s12" id="ai">
+    <div class="card-h"><h3>🤖 Starshi talonini rasmdan o‘qish (Claude AI)</h3>
+      <span class="badge {{ 'b-green' if ai_on else 'b-gray' }}" style="margin-left:auto">{{ 'Ulangan (server .env)' if ai_on else 'Ulanmagan — kg qo‘lda yoziladi' }}</span></div>
+    <div class="card-b">
+      <p class="small">Terim hisobchisi starshi talonining varaqlarini rasmga oladi — tizim har qatordagi kg ni o‘qib, qo‘shib beradi; mos kelmagan qatorni
+        rangli qiladi, hisobchi tekshirib tasdiqlaydi. <b>Ismlar yuborilmaydi</b> — faqat kg ustunlari. Rasm talon bilan dalil bo‘lib saqlanadi.</p>
+      <p class="small">Bu <b>pullik xizmat</b> (Anthropic). Taxminan bir varaq: Opus 5.5 — <b>~0,05 $</b>, Haiku 5.5 — <b>~0,002 $</b>.
+        Kalit maxfiy — u faqat <b>server .env</b> fayliga yoziladi: <code>ANTHROPIC_API_KEY=…</code> (chatga yoki shu sahifaga yozilmaydi). Kalitsiz ham hammasi ishlaydi — faqat kg qo‘lda yoziladi.</p>
+      <form method="post" class="row">{{ csrf() }}<input type="hidden" name="action" value="ai_model">
+        <select class="input" name="model" style="width:auto">{% for k, v in ai_models.items() %}<option value="{{ k }}" {{ 'selected' if k == ai_model }}>{{ v }}</option>{% endfor %}</select>
+        <button class="btn btn-light">Saqlash</button></form>
+    </div>
+  </section>
+
   <section class="card s12">
     <div class="card-h"><h3>{{ icon('map') }} Google sun’iy yo‘ldosh xaritasi</h3>
       <span class="badge {{ 'b-green' if gmaps_tail or gmaps_env else 'b-gray' }}" style="margin-left:auto">{{ ('Ulangan ' ~ gmaps_tail) if gmaps_tail else ('Ulangan (server .env)' if gmaps_env else 'Ulanmagan — Esri foni') }}</span></div>

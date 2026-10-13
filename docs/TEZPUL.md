@@ -27,3 +27,17 @@ Tasdiqlangan dizaynni o‘zgartirish faqat egasining roziligi bilan; o‘zgarsa 
 - Kassir kg yozmaydi va o‘zgartira olmaydi; kg yozilmagan talonga pul berilmaydi; internet yo‘q — PUL BERILDI yopiq.
 - Kg xato yozilgan bo‘lsa — tortish odatdagidek bekor qilinadi, talon qayta skanerlanadi. Hech narsa o‘chirilmaydi, hammasi auditda.
 - Har talon “Talon 000274” kartasi (ism ro‘yxatlarida ko‘rinmaydi); to‘lov Telegram guruhiga alohida yuborilmaydi.
+
+## v3 (2026-10-13) — STARSHI TALONI va kechki hisob
+- Talon **faqat starshiga** beriladi (har odamga alohida kichik talon chiqarilmaydi). Chop etish: Talonlar → 👥 Starshi taloni,
+  bitta talon 2–5 A4 varaq (100 kishi uchun 5 varaq): har qatorda ism familiya, **Abetgacha / Abetdan keyin / JAMI** kg;
+  1-varaqda Starshi, Dala/brigada, Sana, **Telashka №**, Odam soni, **JAMI KG**; har varaqda raqam + QR va “N-varaq jami”.
+- **Kun bo‘yi:** qo‘l terimi telashkasi to‘lishi bilan yopiladi — hisobchi yopishda **telashkaning kg** ini yozadi (blankadagi raqam).
+- **Kechqurun, kassa oldida (hisobchi yoki kassir):** 🌙 Kechki hisob → brigada → starshi talonini skanerlash → “Bugun nechta odam?”
+  → tizim nechta varaq rasmga olishni aytadi (30 odam → 2 varaq) → har varaqni rasmga olish (qora parda ismlarni yopadi)
+  → tizim kg ni o‘qib qo‘shadi, mos kelmagan qatorni rangli qiladi → hisobchi tekshiradi → “✅ Tugadi — jami N kg” → SAQLASH.
+  Kg o‘sha kungi brigadaning ish haqiga (oxirgi telashkasiga) yoziladi, telashkaning o‘z kg i o‘zgarmaydi. Keyin kassir PUL BERILDI.
+- **Nazorat:** panelda har brigada uchun 3 ta raqam — talon kg (pul) · telashkalar (dala) · punkt; 3% dan ko‘p farq qizil.
+  O‘zi kg yozib o‘zi pul bergan — qizil. Saqlangan starshi taloni **PDF** bo‘lib direktor va buxgalterga (Telegram) boradi va panelda turadi.
+- **AI o‘qish** (Claude, pullik): kalit faqat server `.env` da — `ANTHROPIC_API_KEY`. Ismlar yuborilmaydi, faqat kg ustunlari.
+  Kalitsiz ham ishlaydi: rasm dalil bo‘lib saqlanadi, varaq jamisi qo‘lda yoziladi. Model: Admin → Integratsiyalar (Opus 5.5 / Haiku 5.5).

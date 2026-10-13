@@ -12,11 +12,15 @@ One talon is paid once, ever: the status flips in one guarded UPDATE inside an I
 a photocopy or two cashiers at the same second pay once). The QR holds only the number and a random code stored with
 the talon (no kg, no money): a home-made QR with a real number but a wrong code is refused.
 """
+import json
 import secrets
+
+from flask import current_app
 
 from .db import get_db, q, tx
 from .security import audit
-from .utils import UserError, name_key, now_str, today_str
+from .settings import get_float
+from .utils import UserError, fmt_money, fmt_num, name_key, now_str, today_str
 
 MAX_BATCH = 2000
 PREFIX = 'SPX-T'
@@ -36,8 +40,8 @@ class Refused(UserError):
         self.kind, self.talon = kind, talon
 
 
-def _need(actor, perm):
-    if not actor or not actor.can(perm):
+def _need(actor, *perms):
+    if not actor or not any(actor.can(p) for p in perms):
         raise UserError('Bu amal uchun huquqingiz yo‘q.')
 
 
@@ -210,13 +214,79 @@ def field_lookup(actor, code, manual_code=''):
     return _logged(actor, code, go)
 
 
-def enter(actor, load_id, code, kg, *, manual_code='', client_uuid=None):
-    """The terim hisobchisi saved one talon: its kg becomes a hand weighing of the open trip (Qo‘l terimi)."""
+# rows on a starshi talon sheet (pdfdoc.build_tezpul_starshi_pdf): the first sheet has the header, the others more rows
+STARSHI_ROWS_FIRST, STARSHI_ROWS_NEXT = 19, 21
+
+
+def sheets_needed(people):
+    """How many sheets a starshi's list of `people` takes (30 people → 2 sheets)."""
+    people = int(people or 0)
+    return 1 if people <= STARSHI_ROWS_FIRST else 1 + -(-(people - STARSHI_ROWS_FIRST) // STARSHI_ROWS_NEXT)
+
+
+def _clean_sheets(db, talon_id, sheets):
+    """The photographed sheets as the clerk confirmed them: [{sheet, photo_id, kg, rows:[{row, before, after, total}]}]."""
+    out = []
+    for s in (sheets or [])[:10]:
+        try:
+            no, kg = int(s.get('sheet')), round(float(s.get('kg')), 1)
+        except (TypeError, ValueError, AttributeError):
+            continue
+        pid = s.get('photo_id')
+        if pid and not db.execute("SELECT 1 FROM photos WHERE id=? AND entity_type='tezpul_talon' AND entity_id=?",
+                                  (pid, talon_id)).fetchone():
+            pid = None
+        rows = []
+        for r in (s.get('rows') or [])[:40]:
+            try:
+                rows.append({'row': int(r['row']), 'before': r.get('before'), 'after': r.get('after'),
+                             'total': round(float(r['total']), 1)})
+            except (TypeError, ValueError, KeyError):
+                continue
+        if no > 0 and kg >= 0 and no not in {x['sheet'] for x in out}:
+            out.append({'sheet': no, 'photo_id': pid, 'kg': kg, 'rows': rows})
+    return out
+
+
+def enter(actor, load_id, code, kg, *, manual_code='', client_uuid=None, group=False, sheets=None, people=None):
+    """The terim hisobchisi saved one talon: its kg becomes a hand weighing of the open trip (Qo‘l terimi).
+    group: a starshi's talon — one talon for his whole team's kg (over the one-person limit, up to the group limit).
+    sheets / people: the starshi's photographed sheets and head count — kept with the talon, sent as a PDF."""
     _need(actor, 'harvest.write')
-    return _logged(actor, code, lambda: _enter(actor, load_id, code, kg, manual_code, client_uuid))
+    return _logged(actor, code, lambda: _enter(actor, load_id, code, kg, manual_code, client_uuid, group, sheets, people))
 
 
-def _enter(actor, load_id, code, kg, manual_code, client_uuid):
+def evening_brigades(day=None):
+    """The brigades with a hand trailer today — the evening count writes the starshi's kg to the brigade's last one."""
+    return q('''SELECT b.id, b.name, MAX(tl.id) last_load, COUNT(*) trips FROM trailer_loads tl JOIN brigadiers b ON b.id=tl.brigadier_id
+                WHERE COALESCE(tl.method,'hand')='hand' AND tl.status<>'BEKOR' AND substr(tl.opened_at,1,10)=?
+                GROUP BY b.id ORDER BY MAX(tl.id) DESC''', (day or today_str(),))
+
+
+def evening_lookup(actor, code, manual_code=''):
+    _need(actor, 'harvest.write', 'tezpul.count')
+
+    def go():
+        db = get_db()
+        t = _find(db, code, manual_code)
+        _entered_check(db, t)
+        return _view(db, t)
+    return _logged(actor, code, go)
+
+
+def enter_evening(actor, brigadier_id, code, kg, *, manual_code='', client_uuid=None, sheets=None, people=None):
+    """The evening count (hisobchi or kassir, at the kassa): a starshi's talon — the day's kg of his whole team —
+    written as that brigade's hand work of the day, to its last trailer of the day even if it is closed (the trailers
+    were closed with their own kg; this is the pay). Then the kassir pays it as any talon."""
+    _need(actor, 'harvest.write', 'tezpul.count')
+    b = next((r for r in evening_brigades() if r['id'] == brigadier_id), None)
+    if not b:
+        raise UserError('Bugun bu brigadada qo‘l terimi telashkasi yo‘q — brigadani tanlang.')
+    return _logged(actor, code, lambda: _enter(actor, b['last_load'], code, kg, manual_code, client_uuid, True, sheets,
+                                              people, late=True))
+
+
+def _enter(actor, load_id, code, kg, manual_code, client_uuid, group=False, sheets=None, people=None, late=False):
     from .services import _new_worker, add_harvest
     with tx() as db:
         if client_uuid:
@@ -237,9 +307,18 @@ def _enter(actor, load_id, code, kg, manual_code, client_uuid):
         else:
             wid = _new_worker(db, actor, name, load['brigadier_id'])
             db.execute('UPDATE workers SET talon_no=? WHERE id=?', (t['number'], wid))
+        sheets = _clean_sheets(db, t['id'], sheets)
+        try:
+            people = int(people) if people not in (None, '') else None
+        except (TypeError, ValueError):
+            people = None
+        if kg > get_float('max_hand_kg', 250, db) or sheets or (people or 0) > 1:
+            group = True     # more than one person picks: the starshi's talon — his whole team's kg, names on the paper
+        if group:            # the card takes the group limit (max_group_kg) instead of one person's
+            db.execute('UPDATE workers SET group_size=1 WHERE id=?', (wid,))
         try:
             hid, _ = add_harvest(actor, load_id=load_id, method='hand', kg=kg, worker_id=wid, client_uuid=client_uuid,
-                                 confirm_duplicate=True)
+                                 confirm_duplicate=True, late=late)
         except UserError as err:
             if 'chegara' in str(err):
                 raise UserError(f'{kg:g} kg — bitta talonga juda ko‘p ({str(err).split("(")[1].split(")")[0]}). '
@@ -248,11 +327,73 @@ def _enter(actor, load_id, code, kg, manual_code, client_uuid):
         h = db.execute('SELECT rate, amount FROM harvests WHERE id=?', (hid,)).fetchone()
         db.execute('''UPDATE tezpul_talons SET status='TAYYOR', kind=?, worker_id=?, harvest_id=?, load_id=?, brigadier_id=?,
                           kg=?, rate=?, amount=?, entered_by=?, entered_at=? WHERE id=?''',
-                   ('odam', wid, hid, load_id, load['brigadier_id'], kg, h['rate'], h['amount'],
+                   ('guruh' if group else 'odam', wid, hid, load_id, load['brigadier_id'], kg, h['rate'], h['amount'],
                     actor.user_id, now_str(), t['id']))
+        if people:
+            db.execute('UPDATE tezpul_talons SET people=? WHERE id=?', (people, t['id']))
+        for s in sheets:
+            db.execute('''INSERT INTO tezpul_sheets(talon_id, sheet, photo_id, kg, rows_json, created_at, created_by)
+                          VALUES (?,?,?,?,?,?,?) ON CONFLICT(talon_id, sheet) DO UPDATE SET photo_id=excluded.photo_id,
+                          kg=excluded.kg, rows_json=excluded.rows_json, created_at=excluded.created_at, created_by=excluded.created_by''',
+                       (t['id'], s['sheet'], s['photo_id'], s['kg'], json.dumps(s['rows']), now_str(), actor.user_id))
         audit(db, actor, 'TEZPUL_KG', 'tezpul_talon', t['id'],
-              new={'number': t['number'], 'kg': kg, 'load_id': load_id, 'harvest_id': hid})
+              new={'number': t['number'], 'kg': kg, 'load_id': load_id, 'harvest_id': hid, 'group': bool(group),
+                   'people': people, 'sheets': [(s['sheet'], s['kg']) for s in sheets]})
+        if sheets or people:          # the starshi's talon goes to the director and the accountant as a PDF
+            from .yordamchi import _send
+            _send(db, 'tezpul_starshi', f'tezpul:{t["id"]}', '', ('admin', 'manager', 'accountant'),
+                  {'tezpul_starshi': {'talon_id': t['id']}})
         return {'already': False, **_view(db, db.execute('SELECT * FROM tezpul_talons WHERE id=?', (t['id'],)).fetchone())}
+
+
+def attach_photo(actor, code, manual_code, data, sheet):
+    """A photo of the starshi's filled talon sheet, kept with the talon as evidence (finance photos: the names stay
+    out of the field archive). Taken before the talon's kg is written. Returns the talon's view."""
+    _need(actor, 'harvest.write', 'tezpul.count')
+    from .photos import store_photo
+    if not data:
+        raise UserError('Varaqni rasmga oling.')
+
+    def go():
+        with tx() as db:
+            t = _find(db, code, manual_code)
+            _entered_check(db, t)
+            pid = store_photo(db, actor, data, category='payment', entity_type='tezpul_talon', entity_id=t['id'],
+                              caption=f'Starshi taloni № {number_text(t["number"])} · {sheet}-varaq')
+            audit(db, actor, 'TEZPUL_PHOTO', 'tezpul_talon', t['id'], new={'photo_id': pid, 'sheet': sheet})
+            return {**_view(db, t), 'photo_id': pid}
+    return _logged(actor, code, go)
+
+
+def starshi_info(talon_id):
+    """Everything the starshi talon's PDF shows: the talon, its trip, its sheets (rows and photos)."""
+    t = q('''SELECT t.*, b.name brigade, e.full_name clerk, u.full_name cashier, tl.trip_no, f.name field_name, eq.code trailer
+             FROM tezpul_talons t LEFT JOIN brigadiers b ON b.id=t.brigadier_id LEFT JOIN users e ON e.id=t.entered_by
+             LEFT JOIN users u ON u.id=t.paid_by LEFT JOIN trailer_loads tl ON tl.id=t.load_id
+             LEFT JOIN fields f ON f.id=tl.field_id LEFT JOIN equipment eq ON eq.id=tl.trailer_id WHERE t.id=?''',
+          (talon_id,), one=True)
+    if not t:
+        return None
+    sheets = [dict(s, rows=json.loads(s['rows_json'] or '[]')) for s in
+              q('''SELECT s.*, p.path FROM tezpul_sheets s LEFT JOIN photos p ON p.id=s.photo_id
+                   WHERE s.talon_id=? ORDER BY s.sheet''', (talon_id,))]
+    return {'talon': dict(t), 'sheets': sheets, 'number': number_text(t['number']),
+            'rows': sum(len(s['rows']) for s in sheets)}
+
+
+def starshi_report(talon_id):
+    """(pdf bytes, file name, caption) — the starshi talon's report, built when it is sent or opened (always fresh)."""
+    from .pdfdoc import build_tezpul_starshi_report
+    from .settings import get_setting
+    info = starshi_info(talon_id)
+    if not info:
+        raise UserError('Talon topilmadi.')
+    t = info['talon']
+    pdf = build_tezpul_starshi_report(info, company=get_setting('company_name'), upload_dir=current_app.config['SURXON'].UPLOAD_DIR)
+    caption = (f'👥 Starshi taloni № {info["number"]} · {t["brigade"] or ""}\n'
+               f'{t["people"] or "—"} odam · {len(info["sheets"])} varaq · {fmt_num(t["kg"] or 0, 1)} kg · {fmt_money(t["amount"])} so‘m\n'
+               f'Hisobchi: {t["clerk"] or "—"} · {(t["entered_at"] or "")[:16]}')
+    return pdf, f'starshi_talon_{info["number"]}.pdf', caption
 
 
 def trip_counter(load_id):
@@ -385,7 +526,11 @@ def panel(day=None):
         '''SELECT tl.brigadier_id b, SUM(nr.accepted_kg) kg FROM nayman_receipts nr JOIN waybills wb ON wb.id=nr.waybill_id
            JOIN trailer_loads tl ON tl.id=wb.load_id
            WHERE wb.status='QABUL' AND tl.method='hand' AND nr.received_date=? GROUP BY tl.brigadier_id''', (day,))}
-    brigades = [dict(r, punkt_kg=punkt.get(r['bid'])) for r in db.execute(
+    # the brigade's hand trailers closed that day — their own kg (dala), the third number next to talons and punkt
+    trailers = {r['b']: r['kg'] for r in db.execute(
+        '''SELECT brigadier_id b, SUM(internal_kg) kg FROM trailer_loads WHERE COALESCE(method,'hand')='hand'
+           AND status IN ('TOLDI','TORTILDI') AND substr(opened_at,1,10)=? GROUP BY brigadier_id''', (day,))}
+    brigades = [dict(r, punkt_kg=punkt.get(r['bid']), trailer_kg=trailers.get(r['bid'])) for r in db.execute(
         f'''SELECT t.brigadier_id bid, COALESCE(b.name, 'Brigadasiz') name, COUNT(*) n, SUM(t.kg) kg, SUM(t.amount) amount,
                    SUM(CASE WHEN t.status='TOLANDI' THEN t.amount ELSE 0 END) paid
             FROM tezpul_talons t LEFT JOIN brigadiers b ON b.id=t.brigadier_id
@@ -412,7 +557,15 @@ def panel(day=None):
                               FROM tezpul_talons t LEFT JOIN users u ON u.id=t.paid_by
                               WHERE t.status='TOLANDI' AND t.pay_date=? AND t.paid_by=t.entered_by
                               GROUP BY t.paid_by ORDER BY n DESC''', (day,)).fetchall()
+    # the starshi talons' sheets photographed today — the evidence behind each total kg
+    photos = {}
+    for r in db.execute('''SELECT t.number, t.kg, t.status, p.path, p.thumb_path, p.caption FROM photos p
+                           JOIN tezpul_talons t ON t.id=p.entity_id
+                           WHERE p.entity_type='tezpul_talon' AND p.voided_at IS NULL AND substr(p.uploaded_at,1,10)=?
+                           ORDER BY t.number, p.id''', (day,)).fetchall():
+        photos.setdefault(r['number'], {'number': r['number'], 'kg': r['kg'], 'status': r['status'], 'sheets': []})['sheets'].append(dict(r))
     return {'day': day, 'entered': dict(entered), 'paid': dict(paid), 'unpaid': dict(unpaid), 'season': dict(season),
+            'photos': list(photos.values()),
             'counts': counts, 'brigades': brigades, 'cashiers': cashiers, 'clerks': clerks, 'errors': errors,
             'self_paid': self_paid,
             'recent': recent, 'issued': sum(counts.values()), 'blank': counts.get('BOSH', 0),

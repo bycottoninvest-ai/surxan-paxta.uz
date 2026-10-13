@@ -174,6 +174,14 @@ def _send_report(job, payload):
                         {'document': (name, pdf, 'application/pdf')},
                         token=cfg.TELEGRAM_BOT_TOKEN if personal else (cfg.TELEGRAM_REPORT_BOT_TOKEN or cfg.TELEGRAM_BOT_TOKEN))
         return
+    if payload.get('tezpul_starshi'):   # a starshi talon's report — the PDF is made at sending time
+        from .tezpul import starshi_report
+        pdf, name, caption = starshi_report(payload['tezpul_starshi']['talon_id'])
+        personal = payload.get('chat_id')
+        telegram_upload('sendDocument', {'chat_id': personal or chat_id('telegram_report'), 'caption': caption[:1000]},
+                        {'document': (name, pdf, 'application/pdf')},
+                        token=cfg.TELEGRAM_BOT_TOKEN if personal else (cfg.TELEGRAM_REPORT_BOT_TOKEN or cfg.TELEGRAM_BOT_TOKEN))
+        return
     if payload.get('chat_id'):          # a personal message (Nazorat) — through the main bot the person linked
         token = cfg.TELEGRAM_BOT_TOKEN if payload.get('main_bot') else (cfg.TELEGRAM_REPORT_BOT_TOKEN or cfg.TELEGRAM_BOT_TOKEN)
         photos = [cfg.UPLOAD_DIR / p for p in payload.get('photos') or [] if (cfg.UPLOAD_DIR / p).exists()]

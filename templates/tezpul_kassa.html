@@ -73,7 +73,7 @@ button{font:inherit;border:0;cursor:pointer}
 .bar.on{display:flex}.bar button{background:#1d4ed8;color:#fff;border-radius:10px;padding:8px 12px;font-weight:800;font-size:14px}
 </style></head>
 <body><div class="app">
-  <div class="top"><div class="brand">SURXON <b>TEZ-PUL</b></div>{% if standin == 'tally' %}<a href="{{ url_for('dala.home') }}">🔁 Terim ›</a>{% endif %}<a href="{{ url_for('hamyon.home') }}">Kassa ›</a></div>
+  <div class="top"><div class="brand">SURXON <b>TEZ-PUL</b></div>{% if standin == 'tally' %}<a href="{{ url_for('dala.home') }}">🔁 Terim ›</a>{% endif %}<a href="{{ url_for('tezpul.kechki') }}">🌙 Kechki hisob</a><a href="{{ url_for('hamyon.home') }}">Kassa ›</a></div>
   <div class="net" id="net">📡 Internet yo‘q — pul berish yopiq. Aloqa kelishini kuting.</div>
   <div class="ctx"><span>{{ box_name }}</span><span>Talon → summa → PUL BERILDI</span></div>
   <div class="toast" id="toast"></div>
@@ -169,7 +169,7 @@ button{font:inherit;border:0;cursor:pointer}
     if (!basket.length) { scan(); return; }
     const one = basket.length === 1, t = basket[0].t;
     $('p-no').textContent = one ? '№ ' + t.number : `${basket.length} ta talon`;
-    $('p-brig').textContent = one ? 'Talon' + (t.brigade ? ' · ' + t.brigade + ' brigadasi' : '') : 'Starshi — guruh talonlari';
+    $('p-brig').textContent = one ? (t.kind === 'guruh' ? '👥 Starshi taloni (butun guruh)' : 'Talon') + (t.brigade ? ' · ' + t.brigade + ' brigadasi' : '') : 'Starshi — guruh talonlari';
     $('p-list').innerHTML = basket.map((x, i) => `<div class="r"><b>№ ${esc(x.t.number)}</b><span>${kgfmt(x.t.kg)} kg</span><em>${fmt(x.t.amount)}</em>`
       + (one ? '' : `<button type="button" data-i="${i}" aria-label="olib tashlash">✕</button>`) + '</div>').join('');
     $('p-cap').textContent = one ? 'BERILADI' : `BERILADI · ${basket.length} talon · ${kgfmt(totalKg())} kg`;

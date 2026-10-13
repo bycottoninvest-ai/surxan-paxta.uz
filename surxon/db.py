@@ -10,7 +10,7 @@ from contextlib import contextmanager
 
 from flask import current_app, g
 
-SCHEMA_VERSION = 27
+SCHEMA_VERSION = 28
 
 SCHEMA = r'''
 CREATE TABLE IF NOT EXISTS brigadiers (
@@ -713,6 +713,17 @@ CREATE TABLE IF NOT EXISTS tezpul_events (  -- v25: refused scans (fake QR, alre
   talon_id INTEGER REFERENCES tezpul_talons(id),
   note TEXT
 );
+CREATE TABLE IF NOT EXISTS tezpul_sheets (  -- v28: a starshi talon's photographed sheets and the kg read / confirmed
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  talon_id INTEGER NOT NULL REFERENCES tezpul_talons(id),
+  sheet INTEGER NOT NULL,
+  photo_id INTEGER REFERENCES photos(id),
+  kg REAL NOT NULL,
+  rows_json TEXT,
+  created_at TEXT NOT NULL,
+  created_by INTEGER REFERENCES users(id),
+  UNIQUE(talon_id, sheet)
+);
 CREATE TABLE IF NOT EXISTS trackers (
   imei TEXT PRIMARY KEY,
   equipment_id INTEGER REFERENCES equipment(id),
@@ -1155,6 +1166,10 @@ def migrate(db):
     # v27: o‘rinbosar — a clerk holds the cashier's role (or the other way round) for a few days
     _add_column(db, 'users', 'standin_role', 'TEXT')
     _add_column(db, 'users', 'standin_until', 'TEXT')
+    # v28: a starshi talon: how many people the starshi wrote (its sheets are in tezpul_sheets)
+    _add_column(db, 'tezpul_talons', 'people', 'INTEGER')
+    # v28: a hand trailer closed with its own kg (the starshi talons are counted in the evening, for pay only)
+    _add_column(db, 'trailer_loads', 'manual_kg', 'REAL')
     # Future column changes go here as: if version < N: ALTER TABLE ...
     db.execute('UPDATE schema_version SET version=? WHERE version < ?', (SCHEMA_VERSION, SCHEMA_VERSION))
 

@@ -1359,3 +1359,211 @@ def build_tezpul_talons_pdf(talons, *, company):
         c.showPage()
     c.save()
     return buf.getvalue()
+
+
+STARSHI_SHEETS = (2, 3, 4, 5)
+
+
+def build_tezpul_starshi_pdf(talons, *, company, sheets=5):
+    """SURXON STARSHI TALONI — one talon for a starshi's whole team: `sheets` A4 sheets per talon (stapled), every sheet
+    with the talon number and QR. The starshi writes each worker's name and kg (before lunch / after lunch / total) in
+    1-cm rows; sheet 1 carries the team's JAMI KG, every sheet its own total row. The kg columns sit right of a marked
+    line (▼ … ▲) with the row number repeated on the right, so a photo can be read without the names (talon_ai)."""
+    from .tezpul import number_text, qr_text
+    _fonts()
+    buf = io.BytesIO()
+    c = canvas.Canvas(buf, pagesize=A4)
+    W, H = A4
+    c.setTitle('STARSHI TALONI')
+    c.setAuthor(company)
+    logo = Path(current_app.static_folder) / 'img' / 'logo-dark.png'
+    navy, red, pink, grey, line = (colors.HexColor(x) for x in ('#0b2a55', '#e0284f', '#fde4ea', '#6b7c93', '#9fb3cc'))
+    rh = 9 * mm
+    x0, x1, y1, y0 = 10 * mm, W - 10 * mm, H - 10 * mm, 10 * mm
+    tx0, tx1 = x0 + 6 * mm, x1 - 6 * mm
+    kw, nw = 25 * mm, 9 * mm
+    cols = [tx0, tx0 + nw, tx1 - nw - 3 * kw, tx1 - nw - 2 * kw, tx1 - nw - kw, tx1 - nw, tx1]
+
+    def field(x, y, label, w, size=11):
+        c.setFillColor(navy); c.setFont('DejaVu-Bold', size); c.drawString(x, y, label)
+        lw = c.stringWidth(label, 'DejaVu-Bold', size)
+        c.setStrokeColor(navy); c.setLineWidth(0.8); c.line(x + lw + 2 * mm, y - 1.2 * mm, x + w, y - 1.2 * mm)
+
+    def table(top, bottom, first, sheet):
+        rows = int((top - bottom) / rh) - 2                       # minus the header and the total row
+        c.setFillColor(colors.HexColor('#e8eef7')); c.rect(tx0, top - rh, tx1 - tx0, rh, stroke=0, fill=1)
+        c.setFillColor(navy); c.setFont('DejaVu-Bold', 10)
+        c.drawCentredString((cols[0] + cols[1]) / 2, top - rh + 3.3 * mm, '№')
+        c.drawString(cols[1] + 2 * mm, top - rh + 3.3 * mm, 'Ism familiya')
+        for i, title in enumerate(('Abetgacha', 'Abetdan keyin', 'JAMI')):
+            cx = (cols[2 + i] + cols[3 + i]) / 2
+            c.setFont('DejaVu-Bold', 8.2 if i < 2 else 10.5); c.drawCentredString(cx, top - rh + 4.8 * mm, title)
+            c.setFont('DejaVu', 7.5); c.drawCentredString(cx, top - rh + 1.5 * mm, 'kg')
+        c.setFont('DejaVu-Bold', 10); c.drawCentredString((cols[5] + cols[6]) / 2, top - rh + 3.3 * mm, '№')
+        c.setStrokeColor(line); c.setLineWidth(0.5)
+        for r in range(rows + 1):
+            y = top - rh - r * rh
+            c.line(tx0, y, tx1, y)
+            if r < rows:
+                c.setFillColor(grey); c.setFont('DejaVu', 11)
+                c.drawCentredString((cols[0] + cols[1]) / 2, y - rh + 3.2 * mm, str(first + r))
+                c.setFont('DejaVu', 9)
+                c.drawCentredString((cols[5] + cols[6]) / 2, y - rh + 3.2 * mm, str(first + r))
+        b = top - rh - rows * rh - rh                              # the sheet's total row
+        c.setFillColor(pink); c.rect(tx0, b, tx1 - tx0, rh, stroke=0, fill=1)
+        c.setFillColor(navy); c.setFont('DejaVu-Bold', 11)
+        c.drawRightString(cols[2] - 3 * mm, b + 3.2 * mm, f'{sheet}-varaq jami:')
+        c.setFont('DejaVu-Bold', 9); c.drawCentredString((cols[5] + cols[6]) / 2, b + 3.2 * mm, 'Σ')
+        c.setStrokeColor(line)
+        for x in cols[1:-1]:
+            c.line(x, b, x, top)
+        c.setStrokeColor(navy); c.setLineWidth(1); c.rect(tx0, b, tx1 - tx0, top - b)
+        c.setLineWidth(1.4); c.line(cols[4], b, cols[4], top)    # the JAMI column stands out
+        # the line the kg part starts at: the phone keeps only what is right of it when reading (names stay on paper)
+        mx = cols[2]
+        c.setFillColor(colors.black)
+        for yy, d in ((top + 1 * mm, 1), (b - 1 * mm, -1)):
+            p = c.beginPath(); p.moveTo(mx, yy); p.lineTo(mx - 2 * mm, yy + d * 3 * mm); p.lineTo(mx + 2 * mm, yy + d * 3 * mm)
+            p.close(); c.drawPath(p, stroke=0, fill=1)
+        return first + rows
+
+    for t in talons:
+        no, code, nxt = number_text(t['number']), t['code'], 1
+        for s in range(1, sheets + 1):
+            c.setStrokeColor(navy); c.setLineWidth(1.6); c.roundRect(x0, y0, x1 - x0, y1 - y0, 5 * mm)
+            if logo.exists():
+                c.drawImage(str(logo), x0 + 5 * mm, y1 - 20 * mm, width=50 * mm, height=15 * mm, mask='auto',
+                            preserveAspectRatio=True, anchor='w')
+            c.setFillColor(pink); c.roundRect(x1 - 41 * mm, y1 - 20 * mm, 36 * mm, 15 * mm, 3 * mm, stroke=0, fill=1)
+            c.setFillColor(navy); c.setFont('DejaVu-Bold', 9); c.drawCentredString(x1 - 23 * mm, y1 - 10 * mm, 'Talon №')
+            c.setFillColor(red); c.setFont('DejaVu-Bold', 18); c.drawCentredString(x1 - 23 * mm, y1 - 17 * mm, no)
+            mid = (x0 + 60 * mm + x1 - 44 * mm) / 2
+            c.setFillColor(navy); c.setFont('DejaVu-Bold', 15); c.drawCentredString(mid, y1 - 11 * mm, 'STARSHI TALONI')
+            c.setFillColor(red); c.setFont('DejaVu-Bold', 11); c.drawCentredString(mid, y1 - 17.5 * mm, f'{s}-varaq / {sheets}')
+            if s == 1:
+                yb = y1 - 26 * mm
+                _qr(c, qr_text(t), x0 + 6 * mm, yb - 34 * mm, 34 * mm)
+                c.setFillColor(grey); c.setFont('DejaVu', 7); c.drawCentredString(x0 + 23 * mm, yb - 37 * mm, f'Kod: {code}')
+                fx = x0 + 46 * mm
+                fw = x1 - fx - 6 * mm
+                field(fx, yb - 5 * mm, 'Starshi (ism familiya):', fw)
+                field(fx, yb - 13 * mm, 'Dala / brigada:', 70 * mm); field(fx + 76 * mm, yb - 13 * mm, 'Sana:', fw - 76 * mm)
+                field(fx, yb - 21 * mm, 'Telashka №:', 70 * mm); field(fx + 76 * mm, yb - 21 * mm, 'Odam soni:', fw - 76 * mm)
+                c.setStrokeColor(red); c.setLineWidth(2.2); c.roundRect(fx, yb - 37 * mm, fw, 12 * mm, 2.5 * mm)
+                c.setFillColor(navy); c.setFont('DejaVu-Bold', 15)
+                c.drawString(fx + 4 * mm, yb - 32.8 * mm, f'JAMI KG ({sheets} varaq):')
+                c.setFont('DejaVu-Bold', 18); c.drawRightString(fx + fw - 4 * mm, yb - 32.8 * mm, 'KG')
+                top = yb - 43 * mm
+            else:
+                _qr(c, qr_text(t), x0 + 6 * mm, y1 - 46 * mm, 22 * mm)
+                field(x0 + 34 * mm, y1 - 30 * mm, 'Starshi:', 90 * mm)
+                c.setFillColor(grey); c.setFont('DejaVu', 9)
+                c.drawString(x0 + 34 * mm, y1 - 40 * mm, f'Talon № {no} davomi — ro‘yxatni shu yerda davom ettiring.')
+                top = y1 - 50 * mm
+            nxt = table(top, y0 + 17 * mm, nxt, s)
+            if s == 1:
+                field(x0 + 6 * mm, y0 + 8 * mm, 'Starshi imzosi:', 80 * mm, 10)
+                field(x0 + 96 * mm, y0 + 8 * mm, 'Hisobchi imzosi:', x1 - x0 - 102 * mm, 10)
+            else:
+                c.setFillColor(grey); c.setFont('DejaVu', 8)
+                c.drawString(x0 + 6 * mm, y0 + 8 * mm, f'{sheets} varaq birga steplerlanadi · 1-varaqdagi JAMI KG = '
+                                                       'hamma varaqlar jamining yig‘indisi')
+            c.showPage()
+    c.save()
+    return buf.getvalue()
+
+
+def build_tezpul_starshi_report(info, *, company, upload_dir):
+    """The starshi talon's report for the director and the accountant: the talon (brigade, trip, clerk, people, sheets,
+    total kg and money), every row's kg as read and confirmed (before lunch / after lunch / total) per sheet, and the
+    photo of every sheet (the names are on the photos)."""
+    from reportlab.lib.utils import ImageReader
+    _fonts()
+    buf = io.BytesIO()
+    c = canvas.Canvas(buf, pagesize=A4)
+    W, H = A4
+    t, sheets = info['talon'], info['sheets']
+    c.setTitle(f'Starshi taloni {info["number"]}')
+    c.setAuthor(company)
+    navy, red, grey, line = (colors.HexColor(x) for x in ('#0b2a55', '#e0284f', '#6b7c93', '#c9d6e8'))
+    logo = Path(current_app.static_folder) / 'img' / 'logo-dark.png'
+    x0, x1 = 15 * mm, W - 15 * mm
+
+    def num(v, d=1):
+        return '—' if v is None else (f'{float(v):,.{d}f}'.replace(',', ' ').replace('.', ',') if d else f'{float(v):,.0f}'.replace(',', ' '))
+
+    def head(title):
+        if logo.exists():
+            c.drawImage(str(logo), x0, H - 27 * mm, width=45 * mm, height=14 * mm, mask='auto', preserveAspectRatio=True, anchor='w')
+        c.setFillColor(navy); c.setFont('DejaVu-Bold', 14); c.drawRightString(x1, H - 18 * mm, title)
+        c.setFillColor(red); c.setFont('DejaVu-Bold', 12); c.drawRightString(x1, H - 24 * mm, f'Talon № {info["number"]}')
+        c.setStrokeColor(navy); c.setLineWidth(1); c.line(x0, H - 30 * mm, x1, H - 30 * mm)
+        return H - 38 * mm
+
+    y = head('STARSHI TALONI — HISOBOT')
+    facts = [('Brigada', t.get('brigade') or '—'), ('Dala', t.get('field_name') or '—'),
+             ('Telashka / reys', f'{t.get("trailer") or "—"} · {t.get("trip_no") or "—"}'),
+             ('Hisobchi', f'{t.get("clerk") or "—"} · {(t.get("entered_at") or "")[:16]}'),
+             ('Odam soni (starshi yozgan)', str(t.get('people') or '—')),
+             ('Varaqlar', f'{len(sheets)} ta · o‘qilgan qatorlar: {info["rows"]}'),
+             ('Narx', f'{num(t.get("rate"), 0)} so‘m/kg'),
+             ('Holat', 'To‘langan — ' + (t.get('cashier') or '') + ' · ' + (t.get('paid_at') or '')[:16] if t.get('status') == 'TOLANDI'
+              else 'To‘lanmagan')]
+    c.setFont('DejaVu', 10)
+    for k, v in facts:
+        c.setFillColor(grey); c.drawString(x0, y, k + ':'); c.setFillColor(navy); c.drawString(x0 + 55 * mm, y, v)
+        y -= 6 * mm
+    c.setStrokeColor(red); c.setLineWidth(2); c.roundRect(x0, y - 14 * mm, x1 - x0, 14 * mm, 3 * mm)
+    c.setFillColor(navy); c.setFont('DejaVu-Bold', 15)
+    c.drawString(x0 + 4 * mm, y - 9.5 * mm, f'JAMI: {num(t.get("kg"))} kg')
+    c.drawRightString(x1 - 4 * mm, y - 9.5 * mm, f'{num(t.get("amount"), 0)} so‘m')
+    y -= 22 * mm
+    if info['rows'] and t.get('people') and info['rows'] != t['people']:
+        c.setFillColor(red); c.setFont('DejaVu-Bold', 10)
+        c.drawString(x0, y, f'⚠ Starshi {t["people"]} odam yozgan, varaqlardan {info["rows"]} qator o‘qilgan — tekshiring.')
+        y -= 7 * mm
+    total = round(sum(s['kg'] for s in sheets), 1)
+    if sheets and t.get('kg') is not None and abs(total - float(t['kg'])) > 0.05:
+        c.setFillColor(red); c.setFont('DejaVu-Bold', 10)
+        c.drawString(x0, y, f'⚠ Varaqlar yig‘indisi {num(total)} kg, yozilgan jami {num(t["kg"])} kg — farq bor.')
+        y -= 7 * mm
+    cw = [18 * mm, 22 * mm, 30 * mm, 30 * mm, 30 * mm]
+    for s in sheets:
+        if y < 40 * mm:
+            c.showPage(); y = head('STARSHI TALONI — HISOBOT')
+        c.setFillColor(navy); c.setFont('DejaVu-Bold', 11)
+        c.drawString(x0, y, f'{s["sheet"]}-varaq — jami {num(s["kg"])} kg'); y -= 6 * mm
+        c.setFillColor(colors.HexColor('#e8eef7')); c.rect(x0, y - 1.8 * mm, sum(cw), 6 * mm, stroke=0, fill=1)
+        c.setFillColor(navy); c.setFont('DejaVu-Bold', 9)
+        xs = x0
+        for title, w in zip(('Varaq', 'Qator №', 'Abetgacha', 'Abetdan keyin', 'JAMI kg'), cw):
+            c.drawString(xs + 2 * mm, y, title); xs += w
+        y -= 6 * mm
+        c.setFont('DejaVu', 9.5)
+        for r in s['rows'] or [{'row': '—', 'before': None, 'after': None, 'total': s['kg']}]:
+            if y < 20 * mm:
+                c.showPage(); y = head('STARSHI TALONI — HISOBOT'); c.setFont('DejaVu', 9.5)
+            xs = x0
+            for v, w in zip((s['sheet'], r['row'], num(r.get('before')), num(r.get('after')), num(r.get('total'))), cw):
+                c.setFillColor(navy); c.drawString(xs + 2 * mm, y, str(v)); xs += w
+            c.setStrokeColor(line); c.setLineWidth(0.4); c.line(x0, y - 2 * mm, x0 + sum(cw), y - 2 * mm)
+            y -= 5.6 * mm
+        y -= 4 * mm
+    # the photos: one sheet per page, as large as it fits
+    for s in sheets:
+        if not s.get('path'):
+            continue
+        p = Path(upload_dir) / s['path']
+        if not p.exists():
+            continue
+        c.showPage()
+        top = head(f'{s["sheet"]}-varaq rasmi')
+        img = ImageReader(str(p))
+        iw, ih = img.getSize()
+        k = min((x1 - x0) / iw, (top - 15 * mm) / ih)
+        c.drawImage(img, x0 + ((x1 - x0) - iw * k) / 2, top - ih * k, width=iw * k, height=ih * k)
+    c.setFillColor(grey); c.setFont('DejaVu', 7)
+    c.drawString(x0, 8 * mm, f'{company} · SURXON TEZ-PUL · kg qatorlari rasmdan o‘qilgan va hisobchi tasdiqlagan')
+    c.showPage()
+    c.save()
+    return buf.getvalue()

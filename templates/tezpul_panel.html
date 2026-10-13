@@ -19,14 +19,16 @@
   {{ s.n }} talon · {{ s.kg|num(1) }} kg · {{ s.amount|num }} so‘m — talonlar: {% for x in (s.numbers or '').split(',')[:30] %}{{ num(x|int) }}{% if not loop.last %}, {% endif %}{% endfor %}{% if s.n > 30 %} …{% endif %}. Daftar va punkt bilan solishtiring.</div>{% endfor %}
 <div class="grid">
   <section class="card s6"><div class="card-h"><h3>👥 Brigadalar natijasi</h3></div><div class="card-b">
-    <div class="table-wrap"><table class="t"><thead><tr><th>Brigada</th><th class="num">Talon</th><th class="num">Kg</th><th class="num">Hisoblangan</th><th class="num">Berildi</th><th class="num">Punkt qabul (qo‘l)</th><th class="num">Farq</th></tr></thead><tbody>
+    <div class="table-wrap"><table class="t"><thead><tr><th>Brigada</th><th class="num">Talon</th><th class="num">Talon kg</th><th class="num">Telashkalar (dala)</th><th class="num">Hisoblangan</th><th class="num">Berildi</th><th class="num">Punkt qabul (qo‘l)</th><th class="num">Farq</th></tr></thead><tbody>
     {% for b in p.brigades %}<tr><td class="b">{{ b.name }}</td><td class="num">{{ b.n }}</td><td class="num">{{ b.kg|num(1) }}</td>
+      <td class="num">{% if b.trailer_kg %}{{ b.trailer_kg|num(0) }}{% set dt = b.kg - b.trailer_kg %}{% if dt|abs > b.trailer_kg * 0.03 %} <span class="badge b-red" title="talon kg − telashkalar kg">{{ dt|num(0) }}</span>{% endif %}{% else %}—{% endif %}</td>
       <td class="num">{{ (b.amount or 0)|num }}</td><td class="num">{{ (b.paid or 0)|num }}</td>
       <td class="num">{{ b.punkt_kg|num(0) if b.punkt_kg else '—' }}</td>
       <td class="num">{% if b.punkt_kg %}{% set d = b.kg - b.punkt_kg %}<span class="badge {{ 'b-red' if d > b.punkt_kg * 0.03 else 'b-green' }}">{{ d|num(0) }}</span>{% else %}—{% endif %}</td></tr>
-    {% else %}<tr><td colspan="7" class="muted">Bugun hali talon yozilmagan.</td></tr>{% endfor %}
+    {% else %}<tr><td colspan="8" class="muted">Bugun hali talon yozilmagan.</td></tr>{% endfor %}
     </tbody></table></div>
-    <div class="tiny muted" style="margin-top:6px">Farq = talon kg − punkt shu kuni shu brigadadan qabul qilgan qo‘l terimi kg. Musbat va katta bo‘lsa — daftar va talonlarni tekshiring.</div>
+    <div class="tiny muted" style="margin-top:6px">3 ta raqam: <b>talon kg</b> (pul to‘lanadigan) · <b>telashkalar</b> (yopishda yozilgan) · <b>punkt</b> (tortilgan).
+      Farq = talon kg − punkt. Qizil — 3% dan ko‘p farq: starshi varaqlari, telashka blankalari va punktni solishtiring.</div>
   </div></section>
   <section class="card s6"><div class="card-h"><h3>💵 Kassirlar hisoboti</h3></div><div class="card-b">
     <div class="table-wrap"><table class="t"><thead><tr><th>Kassir</th><th>Kassa</th><th class="num">Talon</th><th class="num">Berildi</th><th class="num">Kassa qoldig‘i</th><th>Oxirgi</th></tr></thead><tbody>
@@ -38,6 +40,12 @@
   <section class="card s6"><div class="card-h"><h3>⚠️ Xatoliklar (rad etilgan skanerlar)</h3></div><div class="card-b">
     {% for e in p.errors %}<div class="small">{{ e.created_at[11:16] }} · <b>{{ {'soxta': 'Soxta / tanilmagan QR', 'takror': 'Qayta skaner — allaqachon to‘langan', 'bekor': 'Bekor qilingan talon', 'kiritilgan': 'Bir talonga ikkinchi marta kg'}.get(e.kind, e.kind) }}</b>
       · {{ e.code }} · {{ e.name or '' }}</div>{% else %}<div class="muted small">Bugun xato yo‘q.</div>{% endfor %}
+  </div></section>
+  <section class="card s6"><div class="card-h"><h3>📷 Starshi talonlari — varaq rasmlari</h3></div><div class="card-b">
+    {% for t in p.photos %}<div class="small" style="margin-bottom:8px"><b>№ {{ num(t.number) }}</b> · {{ (t.kg|num(1)) ~ ' kg' if t.kg else 'kg hali yozilmagan' }} · {{ status[t.status][0] }}
+      {% if t.kg %} · <a class="link" href="{{ url_for('tezpul.starshi_report_pdf', number=t.number) }}" target="_blank">📄 PDF hisobot</a>{% endif %}
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px">{% for ph in t.sheets %}<a href="{{ photo_url(ph.path) }}" target="_blank" title="{{ ph.caption }}"><img src="{{ photo_url(ph.thumb_path) }}" alt="" style="height:64px;border-radius:6px;border:1px solid #d6dde7"></a>{% endfor %}</div></div>
+    {% else %}<div class="muted small">Bugun rasm yo‘q.</div>{% endfor %}
   </div></section>
   <section class="card s6"><div class="card-h"><h3>🕘 Oxirgi to‘lovlar</h3></div><div class="card-b">
     {% for r in p.recent %}<div class="small">{{ r.paid_at[11:16] }} · {% if r.n > 1 %}<b>👥 Starshi: {{ r.n }} talon</b> (№{{ num(r.a) }}…{{ num(r.b) }}){% else %}<b>№{{ num(r.a) }}</b>{% endif %}

@@ -93,6 +93,16 @@ def index():
             elif action in ('test_telegram_archive', 'test_telegram_report', 'test_sheets', 'test_offsite', 'outbox_run',
                             'outbox_retry'):
                 msg = None
+            elif action == 'ai_model':
+                from ..talon_ai import MODELS
+                val = request.form.get('model') or ''
+                if val not in MODELS:
+                    raise UserError('Noma’lum model.')
+                db.execute('INSERT INTO settings(key, value, updated_at, updated_by) VALUES (?,?,?,?) ON CONFLICT(key) '
+                           'DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at, updated_by=excluded.updated_by',
+                           ('tezpul_ai_model', val, now_str(), actor.user_id))
+                audit(db, actor, 'UPDATE', 'integration', 'tezpul_ai_model', new={'tezpul_ai_model': val})
+                msg = f'AI modeli: {MODELS[val]}.'
             elif action in ('gmaps_save', 'gmaps_clear'):
                 # Google Map Tiles key: a browser key (sent to every map page anyway), restricted in Google Cloud to this
                 # site and to the Map Tiles API — so it may be kept in settings. Shown masked, never in full.
@@ -320,6 +330,7 @@ def _sheets_state():
 
 
 def render(new_key=None, message=None):
+    from .. import talon_ai
     clients = q('''SELECT c.*, u.full_name created_name FROM integration_clients c LEFT JOIN users u ON u.id=c.created_by
                    ORDER BY c.active DESC, c.id DESC''')
     log = q('''SELECT l.*, c.name, c.kind, c.key_prefix FROM integration_log l LEFT JOIN integration_clients c ON c.id=l.client_id
@@ -333,6 +344,7 @@ def render(new_key=None, message=None):
                            channels=q("SELECT * FROM tg_chats WHERE type='channel' ORDER BY last_seen_at DESC"),
                            gmaps_tail=(lambda k: ('…' + k[-4:]) if k else '')(get_setting('google_maps_key') or ''),
                            gmaps_env=bool(current_app.config['SURXON'].GOOGLE_MAPS_KEY),
+                           ai_on=talon_ai.enabled(), ai_models=talon_ai.MODELS, ai_model=talon_ai.model(),
                            sheets=_sheets_state(), offsite=_offsite_state(),
                            chosen={'archive': get_setting('tg_archive_chat_id'), 'report': get_setting('tg_report_chat_id')},
                            bot_user=current_app.config['SURXON'].TELEGRAM_BOT_USERNAME)

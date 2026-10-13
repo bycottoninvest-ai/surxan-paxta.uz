@@ -65,12 +65,33 @@ button{font:inherit;border:0;cursor:pointer}
 .toast{position:fixed;left:12px;right:12px;top:58px;max-width:456px;margin:0 auto;background:#e5f6eb;border:2px solid var(--green2);color:#0f6b31;border-radius:14px;padding:11px 12px;font-size:16px;font-weight:800;z-index:9;box-shadow:0 6px 16px rgba(0,0,0,.18);display:none}
 .toast.on{display:block}
 .queue{display:none;margin:0 14px 8px;background:#fff4e0;color:#8a4a00;border-radius:12px;padding:8px 12px;font-size:14px;font-weight:700}.queue.on{display:block}
+[hidden]{display:none!important}
+.shot{margin:4px 14px 0;background:#1d4ed8;color:#fff;border-radius:14px;height:52px;font-size:17px;font-weight:850;width:calc(100% - 28px)}
+.shots{margin:4px 14px 0;font-size:13.5px;color:#1d3f9e;font-weight:700;text-align:center;min-height:0}
+.pv{margin:8px 14px;position:relative;border-radius:14px;overflow:hidden;background:#111}
+.pv canvas{display:block;width:100%;height:auto}
+.cutl{margin:4px 14px;font-size:13.5px;color:#34506f;text-align:center}.cutl input{width:100%}
+.at{width:calc(100% - 28px);margin:6px 14px;border-collapse:collapse;background:#fff;border-radius:12px;overflow:hidden;font-size:15px}
+.at th{background:#e8eef7;font-size:11px;padding:6px 4px;text-align:right}.at th:first-child{text-align:left}
+.at td{padding:5px 4px;border-top:1px solid var(--line);text-align:right;font-weight:700}.at td:first-child{text-align:left;color:#8796ab;width:34px}
+.at input{width:64px;font:inherit;font-weight:800;text-align:right;border:1px solid #c9d6e8;border-radius:8px;padding:5px}
+.at tr.sum td{background:#fde9ee}.at tr.unclear td,.at tr.half td{background:#fff4e0}
+.at button{background:#1e9e4a;color:#fff;border-radius:8px;padding:4px 8px;font-weight:800;margin-left:4px}
+.atn{margin:6px 14px;border-radius:12px;padding:8px 10px;font-size:14px;font-weight:700}.atn.n-bad{background:#fde9ee;color:#a0153a}.atn.n-ok{background:#e5f6eb;color:#0f6b31}
+.atn.n-info{background:#e8f1fe;color:#1d3f9e}
+.b-next:disabled{opacity:.4}
+.row2{display:flex;gap:8px;margin:8px 14px 14px}.row2 button{flex:1;border-radius:14px;height:56px;font-size:16.5px;font-weight:850}
+.b-next{background:#fff;color:var(--navy);border:2px solid var(--navy)!important}.b-done{background:var(--green);color:#fff}.b-done:disabled{background:#c3ccd8}
+.mkg{margin:6px 14px;display:flex;gap:8px;align-items:center;font-weight:800}.mkg input{flex:1;font-size:22px;padding:8px;border:2px solid var(--navy);border-radius:12px}
 .bad{display:none;margin:0 14px 8px;background:#fde9ee;color:#a0153a;border-radius:12px;padding:8px 12px;font-size:14px;font-weight:700}.bad.on{display:block}
 </style></head>
 <body><div class="app">
-  <div class="top"><div class="brand">SURXON <b>TEZ-PUL</b></div><a href="{{ url_for('dala.close', load_id=ld.id) }}">Telashkani yopish ›</a></div>
+  {% if ld %}<div class="top"><div class="brand">SURXON <b>TEZ-PUL</b></div><a href="{{ url_for('dala.close', load_id=ld.id) }}">Telashkani yopish ›</a></div>
+  {% else %}<div class="top"><div class="brand">🌙 <b>KECHKI HISOB</b></div><a href="{{ back_url }}">‹ Orqaga</a></div>{% endif %}
   <div class="net" id="net">📡 Internet yo‘q — saqlanganlar telefonda turadi, aloqa kelganda o‘zi yuboriladi.</div>
-  <div class="ctx"><span>{{ ld.trailer_code }} · {{ ld.field_name }} · {{ ld.brigadier_name }}</span><span>{% if ld.rate %}{{ ld.rate|num }} so‘m/kg{% endif %}</span></div>
+  {% if ld %}<div class="ctx"><span>{{ ld.trailer_code }} · {{ ld.field_name }} · {{ ld.brigadier_name }}</span><span>{% if ld.rate %}{{ ld.rate|num }} so‘m/kg{% endif %}</span></div>
+  {% else %}<div class="ctx" style="align-items:center"><span>Brigada:</span>
+    <select id="brig" style="flex:1;font-size:16px;font-weight:800;padding:6px;border:2px solid var(--navy);border-radius:10px">{% for b in brigades %}<option value="{{ b.id }}">{{ b.name }} · {{ b.trips }} telashka</option>{% else %}<option value="">Bugun qo‘l terimi telashkasi yo‘q</option>{% endfor %}</select></div>{% endif %}
   <div class="toast" id="toast"></div>
 
   <!-- 1: scan -->
@@ -82,8 +103,9 @@ button{font:inherit;border:0;cursor:pointer}
     <form class="mform" id="mform" autocomplete="off"><input id="m-no" inputmode="numeric" placeholder="Talon №"><input id="m-code" placeholder="Kod" maxlength="10"><button>OK</button></form>
     <div class="queue" id="queue"></div>
     <div class="bad" id="bad"></div>
-    <div class="count" style="margin-bottom:4px"><div><b id="c-n">{{ count.n }}</b>talon shu telashkada</div><div><b id="c-kg">{{ count.kg|num(1) if count.kg % 1 else count.kg|num }}</b>kg</div></div>
+    {% if ld %}<div class="count" style="margin-bottom:4px"><div><b id="c-n">{{ count.n }}</b>talon shu telashkada</div><div><b id="c-kg">{{ count.kg|num(1) if count.kg % 1 else count.kg|num }}</b>kg</div></div>
     <a href="{{ url_for('dala.trip', load_id=ld.id, eski=1) }}" style="display:block;text-align:center;font-size:12px;color:#9aa8ba;margin:0 0 10px">eski usul (ism bilan)</a>
+    {% else %}<div class="shots" style="margin-bottom:12px">Starshi talonini skanerlang → nechta odam → varaqlarni rasmga oling → tizim jami kg ni hisoblaydi → SAQLASH. Keyin kassir PUL BERILDI.</div>{% endif %}
   </section>
 
   <!-- 2: kg + SAQLASH -->
@@ -94,6 +116,34 @@ button{font:inherit;border:0;cursor:pointer}
     <div class="err" id="k-err"></div>
     <div class="pad" id="pad">{% for k in ['1','2','3','4','5','6','7','8','9',',','0','⌫'] %}<button type="button" data-k="{{ k }}">{{ k }}</button>{% endfor %}</div>
     <button type="button" class="big" id="k-go" disabled>✔ SAQLASH</button>
+    <button type="button" class="shot" id="k-shot">📷 Starshi varaqlarini rasmga olish{% if ai_on %} — tizim hisoblaydi{% endif %}</button>
+    <div class="shots" id="k-shots"></div>
+    <div style="height:14px"></div>
+  </section>
+
+  <!-- 3: the starshi's sheets, one photo each — read and added up, the clerk checks -->
+  <section class="view" id="v-photo">
+    <div class="who"><small>Starshi taloni</small><b id="p-no">№ 000000</b><button type="button" class="x" id="p-x">✕</button></div>
+    <div class="step" style="padding-top:2px"><div class="num g" id="p-sheet">1</div><div class="st" id="p-title">1-varaqni rasmga oling</div></div>
+    <div id="p-ask" hidden>
+      <div class="mkg" style="flex-direction:column;align-items:stretch">Bugun starshida nechta odam ishladi?<span style="font-size:12.5px;color:#6b7c93;font-weight:600">1-varaqdagi “Odam soni” — tizim nechta varaq rasmga olishni aytadi</span>
+        <input id="p-people" inputmode="numeric" placeholder="masalan 30"></div>
+      <button type="button" class="big" id="p-people-ok" style="height:56px;font-size:20px">Davom etish ›</button>
+    </div>
+    <input type="file" id="p-file" accept="image/*" capture="environment" hidden>
+    <button type="button" class="shot" id="p-take">📷 Rasmga olish</button>
+    <div id="p-cutbox" hidden>
+      <div class="pv"><canvas id="p-canvas"></canvas></div>
+      <div class="cutl">Qora qism <b>ismlarni yopsin</b> — chiziq ▼ ▲ belgilariga to‘g‘ri kelsin<input type="range" id="p-cut" min="15" max="75" value="48"></div>
+      <button type="button" class="big" id="p-send" style="height:58px;font-size:20px">✔ Yuborish{% if ai_on %} — o‘qib hisoblaydi{% endif %}</button>
+    </div>
+    <div id="p-res" hidden>
+      <div class="atn" id="p-msg"></div>
+      <table class="at" id="p-table"></table>
+      <div class="mkg" id="p-manual" hidden>Shu varaq jami: <input id="p-mkg" inputmode="decimal" placeholder="kg"> kg</div>
+      <div class="row2"><button type="button" class="b-next" id="p-next">➕ Keyingi varaq</button><button type="button" class="b-done" id="p-done">✔ Tayyor</button></div>
+    </div>
+    <div class="shots" id="p-done-list"></div>
   </section>
 
   <!-- refused -->
@@ -107,8 +157,11 @@ button{font:inherit;border:0;cursor:pointer}
 <script>
 (() => {
   const CSRF = {{ csrf_token()|tojson }}, JSQR = {{ url_for('static', filename='vendor/jsqr/jsQR.min.js')|tojson }};
-  const URL_LOOK = {{ url_for('tezpul.dala_lookup')|tojson }}, URL_SAVE = {{ url_for('tezpul.dala_save', load_id=ld.id)|tojson }};
-  const QKEY = 'tezpul-q-{{ ld.id }}', BKEY = 'tezpul-bad-{{ ld.id }}';
+  const EVENING = {{ 'false' if ld else 'true' }};
+  const URL_LOOK = {{ (url_for('tezpul.dala_lookup') if ld else url_for('tezpul.kechki_lookup'))|tojson }};
+  const URL_SAVE = {{ (url_for('tezpul.dala_save', load_id=ld.id) if ld else url_for('tezpul.kechki_save'))|tojson }};
+  const QKEY = 'tezpul-q-{{ ld.id if ld else "kechki" }}', BKEY = 'tezpul-bad-{{ ld.id if ld else "kechki" }}';
+  const MAX1 = {{ max_one|tojson }};    // over this the talon is the starshi's (his whole team's kg)
   const $ = id => document.getElementById(id);
   const kgfmt = v => String(v).replace('.', ',');
   const uuid = () => (crypto.randomUUID ? crypto.randomUUID() : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
@@ -117,7 +170,7 @@ button{font:inherit;border:0;cursor:pointer}
   const keep = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (_) {} };
   let stop = null, cur = null, kg = '', busy = false, backTimer = null;
 
-  function show(v) { ['v-scan', 'v-kg', 'v-msg'].forEach(x => $(x).classList.toggle('on', x === v)); }
+  function show(v) { ['v-scan', 'v-kg', 'v-msg', 'v-photo'].forEach(x => $(x).classList.toggle('on', x === v)); }
   function online() { $('net').classList.toggle('on', !navigator.onLine); return navigator.onLine; }
   window.addEventListener('online', () => { online(); flush(); }); window.addEventListener('offline', online);
 
@@ -157,7 +210,9 @@ button{font:inherit;border:0;cursor:pointer}
     }
     cur = { code, manual, no, uuid: uuid() }; kg = '';
     $('toast').classList.remove('on');
+    cur.sheets = []; $('k-shots').textContent = '';
     $('k-no').textContent = '№ ' + no; $('k-err').classList.remove('on'); paint(); show('v-kg');
+    if (EVENING) photoStart();          // the evening: a starshi's talon — straight to “how many people” and the sheets
   }
 
   function kgValue() { const v = parseFloat(kg.replace(',', '.')); return isFinite(v) ? v : 0; }
@@ -175,11 +230,14 @@ button{font:inherit;border:0;cursor:pointer}
 
   $('k-go').addEventListener('click', async () => {
     if (busy || !cur || !(kgValue() > 0)) return;
-    const item = { code: cur.code, manual_code: cur.manual, kg: kg.replace(',', '.'), client_uuid: cur.uuid, no: cur.no };
+    const item = { code: cur.code, manual_code: cur.manual, kg: kg.replace(',', '.'), client_uuid: cur.uuid, no: cur.no,
+                   sheets: JSON.stringify(cur.sheets || []), odam: cur.people || '' };
+    if (EVENING) { item.brigada = $('brig').value; if (!item.brigada) { $('k-err').textContent = 'Brigadani tanlang.'; $('k-err').classList.add('on'); return; } }
     busy = true; paint();
     const r = await send(item);
     busy = false;
-    if (r === 'ok') { toast(`✓ Saqlandi: № ${item.no} — ${kgfmt(item.kg)} kg`); scan(); return; }
+    if (r === 'ok') { toast(EVENING ? `✓ № ${item.no} — ${kgfmt(item.kg)} kg saqlandi. Endi kassir PUL BERILDI qiladi.`
+                                     : `✓ Saqlandi: № ${item.no} — ${kgfmt(item.kg)} kg` + (+item.kg > MAX1 ? ' (👥 starshi)' : '')); scan(); return; }
     if (r === 'queued') { toast(`📥 № ${item.no} — ${kgfmt(item.kg)} kg telefonda saqlandi, internet kelganda yuboriladi`); scan(); return; }
     paint(); $('k-err').textContent = r; $('k-err').classList.add('on');
   });
@@ -222,7 +280,7 @@ button{font:inherit;border:0;cursor:pointer}
     const ok = document.getElementById('bad-ok'); if (ok) ok.onclick = e => { e.preventDefault(); keep(BKEY, []); paintQueue(); };
   }
   function bad(t) { const b = load(BKEY); b.push(t); keep(BKEY, b.slice(-30)); }
-  function counter(c) { if (!c) return; $('c-n').textContent = c.n; $('c-kg').textContent = kgfmt(Math.round(c.kg * 10) / 10); }
+  function counter(c) { if (!c || !$('c-n')) return; $('c-n').textContent = c.n; $('c-kg').textContent = kgfmt(Math.round(c.kg * 10) / 10); }
   function toast(t) { const el = $('toast'); el.textContent = t; el.classList.add('on'); clearTimeout(el._t); el._t = setTimeout(() => el.classList.remove('on'), 3000); }
 
   function refused(j) {
@@ -242,14 +300,143 @@ button{font:inherit;border:0;cursor:pointer}
     if (navigator.vibrate) navigator.vibrate([200, 80, 200]);
     show('v-msg'); clearTimeout(backTimer); backTimer = setTimeout(scan, 5000);
   }
+  // ---- the starshi's sheets: photo → (names covered) → read → check → added up into the kg above
+  const URL_PHOTO = {{ url_for('tezpul.dala_photo')|tojson }}, AI_ON = {{ 'true' if ai_on else 'false' }};
+  let pimg = null, pres = null;
+  const kgOf = v => { const n = parseFloat(String(v).replace(',', '.')); return isFinite(n) ? n : 0; };
+  const r1 = n => Math.round(n * 10) / 10;
+  function sheetsTotal() { return r1((cur && cur.sheets || []).reduce((s, x) => s + x.kg, 0)); }
+  function paintSheets(el) {
+    const s = (cur && cur.sheets) || [];
+    $(el).textContent = s.length ? s.map(x => `${x.sheet}-varaq: ${kgfmt(x.kg)} kg`).join(' · ') + ` = ${kgfmt(sheetsTotal())} kg` : '';
+  }
+  // rows on a printed sheet: the first one has the header (tezpul.STARSHI_ROWS_FIRST / _NEXT)
+  const ROWS1 = {{ rows_first }}, ROWSN = {{ rows_next }};
+  const plan = p => p <= ROWS1 ? 1 : 1 + Math.ceil((p - ROWS1) / ROWSN);
+  function photoStart() {
+    if (!cur) return;
+    const n = cur.sheets.length + 1;
+    $('p-no').textContent = '№ ' + cur.no; $('p-sheet').textContent = n;
+    $('p-cutbox').hidden = true; $('p-res').hidden = true; pimg = null; pres = null; $('p-file').value = '';
+    $('p-ask').hidden = !!cur.people; $('p-take').hidden = !cur.people;
+    $('p-title').textContent = cur.people ? `${n}-varaq / ${cur.plan} — rasmga oling` : 'Odam soni';
+    paintSheets('p-done-list'); show('v-photo');
+    if (!cur.people) setTimeout(() => $('p-people').focus(), 50);
+  }
+  $('p-people-ok').addEventListener('click', () => {
+    const p = parseInt($('p-people').value, 10);
+    if (!(p > 0 && p < 1000)) { $('p-people').focus(); return; }
+    cur.people = p; cur.plan = plan(p);
+    toast(`${p} odam — ${cur.plan} ta varaq rasmga olinadi`); photoStart();
+  });
+  $('k-shot').addEventListener('click', photoStart);
+  $('p-x').addEventListener('click', () => { paintSheets('k-shots'); show('v-kg'); });
+  $('p-take').addEventListener('click', () => { $('p-file').value = ''; $('p-file').click(); });
+  $('p-file').addEventListener('change', () => {
+    const f = $('p-file').files[0]; if (!f) return;
+    const img = new Image();
+    img.onload = () => { pimg = img; $('p-take').hidden = true; $('p-cutbox').hidden = false; drawCut(); };
+    img.src = URL.createObjectURL(f);
+  });
+  function drawCut() {
+    if (!pimg) return;
+    const cv = $('p-canvas'), w = Math.min(900, pimg.naturalWidth), h = Math.round(pimg.naturalHeight * w / pimg.naturalWidth);
+    cv.width = w; cv.height = h;
+    const g = cv.getContext('2d'); g.drawImage(pimg, 0, 0, w, h);
+    const x = Math.round(w * $('p-cut').value / 100);
+    g.fillStyle = 'rgba(0,0,0,.88)'; g.fillRect(0, 0, x, h);
+    g.fillStyle = '#ffd400'; g.fillRect(x - 2, 0, 4, h);
+  }
+  $('p-cut').addEventListener('input', drawCut);
+  // the photo goes smaller (max 2000 px) so a weak connection can carry it; the server cuts the names off before reading
+  function shrink() {
+    return new Promise(res => {
+      const k = Math.min(1, 2000 / Math.max(pimg.naturalWidth, pimg.naturalHeight)), cv = document.createElement('canvas');
+      cv.width = Math.round(pimg.naturalWidth * k); cv.height = Math.round(pimg.naturalHeight * k);
+      cv.getContext('2d').drawImage(pimg, 0, 0, cv.width, cv.height);
+      cv.toBlob(b => res(b), 'image/jpeg', 0.85);
+    });
+  }
+  $('p-send').addEventListener('click', async () => {
+    if (!pimg || busy) return;
+    busy = true; $('p-send').disabled = true; $('p-send').textContent = '⏳ Yuborilmoqda…';
+    try {
+      const fd = new FormData(); fd.append('_csrf', CSRF); fd.append('code', cur.code); fd.append('manual_code', cur.manual || '');
+      fd.append('sheet', cur.sheets.length + 1); fd.append('cut', $('p-cut').value / 100);
+      fd.append('photo', await shrink(), 'varaq.jpg');
+      const ctl = window.AbortController ? new AbortController() : null, t = ctl && setTimeout(() => ctl.abort(), 120000);
+      let j = {};
+      try {
+        const r = await fetch(URL_PHOTO, { method: 'POST', body: fd, credentials: 'same-origin', headers: { 'X-Requested-With': 'fetch' }, signal: ctl && ctl.signal });
+        j = await r.json();
+      } finally { if (t) clearTimeout(t); }
+      if (!j.ok) { if (j.refused) { refused(j); return; } throw new Error(j.error || 'Xato'); }
+      result(j);
+    } catch (e) {
+      $('p-cutbox').hidden = true; $('p-res').hidden = false;
+      note('bad', (e && e.name === 'AbortError') ? 'Internet sekin — rasm yetib bormadi. Qayta urinib ko‘ring yoki jami kg ni qo‘lda yozing.' : (e.message || 'Xato'));
+      table(null);
+    } finally { busy = false; $('p-send').disabled = false; $('p-send').textContent = '✔ Yuborish' + (AI_ON ? ' — o‘qib hisoblaydi' : ''); }
+  });
+  function note(kind, text) { $('p-msg').className = 'atn n-' + kind; $('p-msg').textContent = text; }
+  function result(j) {
+    $('p-cutbox').hidden = true; $('p-res').hidden = false; pres = j.ai;
+    pres = { photo_id: j.talon && j.talon.photo_id, rows: j.ai ? j.ai.rows : [] };
+    if (!j.ai) { note(j.ai_on ? 'bad' : 'info', (j.ai_error ? j.ai_error : 'Rasm saqlandi.') + ' Shu varaq jami kg ni yozing.'); table(null); return; }
+    const p = j.ai.problems;
+    note(p ? 'bad' : 'ok', p ? `${j.ai.rows.length} qator o‘qildi · ${p} ta qatorni tekshiring (rangli) — rasmga qarab tuzating yoki ✓ bosing.`
+                         : `${j.ai.rows.length} qator o‘qildi — hammasi mos keldi.` + (j.ai.total_ok ? '' : ` Lekin varaq jami ${kgfmt(j.ai.written_total)} yozilgan, qatorlar yig‘indisi ${kgfmt(j.ai.computed)} — tekshiring.`));
+    if (!j.ai.rows.length) { note('bad', 'Raqamlar o‘qilmadi' + (j.ai.note ? ' (' + j.ai.note + ')' : '') + '. Shu varaq jami kg ni yozing.'); table(null); return; }
+    table(j.ai.rows);
+  }
+  const FLAG = { sum: 'qo‘shilmaydi', unclear: 'aniq emas', half: 'jami yo‘q' };
+  function table(rows) {
+    $('p-manual').hidden = !!(rows && rows.length);
+    if (!rows || !rows.length) { $('p-table').innerHTML = ''; $('p-mkg').value = ''; paintDone(); return; }
+    $('p-table').innerHTML = '<tr><th>№</th><th>Abet­gacha</th><th>Keyin</th><th>JAMI</th></tr>' + rows.map((r, i) =>
+      `<tr class="${r.flag}" data-i="${i}"><td>${r.row}</td><td>${r.before == null ? '—' : kgfmt(r.before)}</td><td>${r.after == null ? '—' : kgfmt(r.after)}</td>`
+      + `<td><input value="${kgfmt(r.total)}" inputmode="decimal">${r.flag ? '<button type="button" title="' + FLAG[r.flag] + '">✓</button>' : ''}</td></tr>`).join('');
+    paintDone();
+  }
+  $('p-table').addEventListener('input', e => { const tr = e.target.closest('tr'); if (tr) { tr.className = ''; const b = tr.querySelector('button'); if (b) b.remove(); } paintDone(); });
+  $('p-table').addEventListener('click', e => { if (e.target.tagName !== 'BUTTON') return; const tr = e.target.closest('tr'); tr.className = ''; e.target.remove(); paintDone(); });
+  $('p-mkg').addEventListener('input', paintDone);
+  function sheetKg() {
+    const ins = [...$('p-table').querySelectorAll('input')];
+    return ins.length ? r1(ins.reduce((s, i) => s + kgOf(i.value), 0)) : r1(kgOf($('p-mkg').value));
+  }
+  function open() { return $('p-table').querySelectorAll('tr.sum, tr.unclear, tr.half').length; }
+  function paintDone() {
+    const left = open(), kgv = sheetKg();
+    const n = cur.sheets.length + 1, last = n >= cur.plan;
+    $('p-done').disabled = $('p-next').disabled = left > 0 || !(kgv > 0);
+    $('p-next').hidden = last;
+    $('p-next').textContent = `➕ Keyingi varaq (${n + 1}/${cur.plan})`;
+    $('p-done').textContent = left ? `✔ Tayyor (${left} ta qator qoldi)`
+      : (last ? `✅ Tugadi — jami ${kgfmt(r1(sheetsTotal() + kgv))} kg` : `Shu bilan tugatish (${cur.plan} varaq edi)`);
+  }
+  function keepSheet() {
+    const trs = [...$('p-table').querySelectorAll('tr[data-i]')], rows = (pres && pres.rows) || [];
+    cur.sheets.push({ sheet: cur.sheets.length + 1, kg: sheetKg(), photo_id: pres && pres.photo_id,
+      rows: trs.map(tr => { const r = rows[+tr.dataset.i]; return { row: r.row, before: r.before, after: r.after, total: kgOf(tr.querySelector('input').value) }; }) });
+  }
+  $('p-next').addEventListener('click', () => { keepSheet(); photoStart(); });
+  $('p-done').addEventListener('click', () => {
+    keepSheet(); kg = kgfmt(sheetsTotal()); paintSheets('k-shots');
+    const read = cur.sheets.reduce((s, x) => s + x.rows.length, 0);
+    $('k-shots').textContent += ` · ${cur.people} odam` + (read && read !== cur.people ? ` (⚠ ${read} qator o‘qildi)` : '');
+    $('k-err').classList.remove('on'); paint(); show('v-kg');
+    toast(`✅ Tugadi: ${cur.sheets.length} varaq · ${kg} kg — tekshirib SAQLASH ni bosing`);
+  });
+
   $('m-again').addEventListener('click', scan);
   $('k-x').addEventListener('click', scan);
   $('m-open').addEventListener('click', () => { $('mform').classList.toggle('on'); $('m-no').focus(); });
   $('mform').addEventListener('submit', e => { e.preventDefault();
     const no = $('m-no').value.trim(), code = $('m-code').value.trim(); if (!no) return; found(no, code); });
   // keep the closing page and the home page on the phone too, so the trip can be closed without internet
-  if (navigator.onLine) [{{ url_for('dala.close', load_id=ld.id)|tojson }}, {{ url_for('dala.home')|tojson }}].forEach(u =>
-    fetch(u, { headers: { 'X-SPX-Prefetch': '1' }, credentials: 'same-origin' }).catch(() => {}));
+  {% if ld %}if (navigator.onLine) [{{ url_for('dala.close', load_id=ld.id)|tojson }}, {{ url_for('dala.home')|tojson }}].forEach(u =>
+    fetch(u, { headers: { 'X-SPX-Prefetch': '1' }, credentials: 'same-origin' }).catch(() => {}));{% endif %}
   online(); scan(); flush(); setInterval(flush, 15000);
 })();
 </script>
