@@ -1367,7 +1367,7 @@ STARSHI_SHEETS = (2, 3, 4, 5)
 def build_tezpul_starshi_pdf(talons, *, company, sheets=5):
     """SURXON STARSHI TALONI — one talon for a starshi's whole team: `sheets` A4 sheets per talon (stapled), every sheet
     with the talon number and QR. The starshi writes each worker's name and kg (before lunch / after lunch / total) in
-    1-cm rows; sheet 1 carries the team's JAMI KG, every sheet its own total row. The kg columns sit right of a marked
+    9-mm rows drawn dark and thick (cheap printers print thin light lines faintly); sheet 1 carries the team's JAMI KG, every sheet its own total row. The kg columns sit right of a marked
     line (▼ … ▲) with the row number repeated on the right, so a photo can be read without the names (talon_ai)."""
     from .tezpul import number_text, qr_text
     _fonts()
@@ -1377,48 +1377,51 @@ def build_tezpul_starshi_pdf(talons, *, company, sheets=5):
     c.setTitle('STARSHI TALONI')
     c.setAuthor(company)
     logo = Path(current_app.static_folder) / 'img' / 'logo-dark.png'
-    navy, red, pink, grey, line = (colors.HexColor(x) for x in ('#0b2a55', '#e0284f', '#fde4ea', '#6b7c93', '#9fb3cc'))
+    navy, red, pink, grey, line = (colors.HexColor(x) for x in ('#0b2a55', '#e0284f', '#fde4ea', '#6b7c93', '#1c2635'))
+    ink = colors.HexColor('#1c2635')             # dark, thick lines: a cheap printer still prints them clearly
     rh = 9 * mm
     x0, x1, y1, y0 = 10 * mm, W - 10 * mm, H - 10 * mm, 10 * mm
     tx0, tx1 = x0 + 6 * mm, x1 - 6 * mm
-    kw, nw = 25 * mm, 9 * mm
+    kw, nw = 27 * mm, 10 * mm
     cols = [tx0, tx0 + nw, tx1 - nw - 3 * kw, tx1 - nw - 2 * kw, tx1 - nw - kw, tx1 - nw, tx1]
 
     def field(x, y, label, w, size=11):
         c.setFillColor(navy); c.setFont('DejaVu-Bold', size); c.drawString(x, y, label)
         lw = c.stringWidth(label, 'DejaVu-Bold', size)
-        c.setStrokeColor(navy); c.setLineWidth(0.8); c.line(x + lw + 2 * mm, y - 1.2 * mm, x + w, y - 1.2 * mm)
+        c.setStrokeColor(ink); c.setLineWidth(1.2); c.line(x + lw + 2 * mm, y - 1.2 * mm, x + w, y - 1.2 * mm)
 
     def table(top, bottom, first, sheet):
         rows = int((top - bottom) / rh) - 2                       # minus the header and the total row
         c.setFillColor(colors.HexColor('#e8eef7')); c.rect(tx0, top - rh, tx1 - tx0, rh, stroke=0, fill=1)
-        c.setFillColor(navy); c.setFont('DejaVu-Bold', 10)
-        c.drawCentredString((cols[0] + cols[1]) / 2, top - rh + 3.3 * mm, '№')
-        c.drawString(cols[1] + 2 * mm, top - rh + 3.3 * mm, 'Ism familiya')
+        c.setFillColor(navy); c.setFont('DejaVu-Bold', 11.5)
+        c.drawCentredString((cols[0] + cols[1]) / 2, top - rh + 3.2 * mm, '№')
+        c.drawString(cols[1] + 2.5 * mm, top - rh + 3.2 * mm, 'ISM FAMILIYA')
         for i, title in enumerate(('Abetgacha', 'Abetdan keyin', 'JAMI')):
             cx = (cols[2 + i] + cols[3 + i]) / 2
-            c.setFont('DejaVu-Bold', 8.2 if i < 2 else 10.5); c.drawCentredString(cx, top - rh + 4.8 * mm, title)
-            c.setFont('DejaVu', 7.5); c.drawCentredString(cx, top - rh + 1.5 * mm, 'kg')
-        c.setFont('DejaVu-Bold', 10); c.drawCentredString((cols[5] + cols[6]) / 2, top - rh + 3.3 * mm, '№')
-        c.setStrokeColor(line); c.setLineWidth(0.5)
+            c.setFont('DejaVu-Bold', 8.6 if i < 2 else 11.5); c.drawCentredString(cx, top - rh + 4.7 * mm, title)
+            c.setFont('DejaVu-Bold', 7.5); c.drawCentredString(cx, top - rh + 1.4 * mm, 'kg')
+        c.setFont('DejaVu-Bold', 11); c.drawCentredString((cols[5] + cols[6]) / 2, top - rh + 3.2 * mm, '№')
+        c.setStrokeColor(line); c.setLineWidth(1)
         for r in range(rows + 1):
             y = top - rh - r * rh
             c.line(tx0, y, tx1, y)
             if r < rows:
-                c.setFillColor(grey); c.setFont('DejaVu', 11)
-                c.drawCentredString((cols[0] + cols[1]) / 2, y - rh + 3.2 * mm, str(first + r))
-                c.setFont('DejaVu', 9)
+                c.setFillColor(navy); c.setFont('DejaVu-Bold', 12)
+                c.drawCentredString((cols[0] + cols[1]) / 2, y - rh + 3.1 * mm, str(first + r))
+                c.setFont('DejaVu-Bold', 10)
                 c.drawCentredString((cols[5] + cols[6]) / 2, y - rh + 3.2 * mm, str(first + r))
         b = top - rh - rows * rh - rh                              # the sheet's total row
         c.setFillColor(pink); c.rect(tx0, b, tx1 - tx0, rh, stroke=0, fill=1)
         c.setFillColor(navy); c.setFont('DejaVu-Bold', 11)
         c.drawRightString(cols[2] - 3 * mm, b + 3.2 * mm, f'{sheet}-varaq jami:')
         c.setFont('DejaVu-Bold', 9); c.drawCentredString((cols[5] + cols[6]) / 2, b + 3.2 * mm, 'Σ')
-        c.setStrokeColor(line)
+        c.setStrokeColor(line); c.setLineWidth(1.2)
         for x in cols[1:-1]:
             c.line(x, b, x, top)
-        c.setStrokeColor(navy); c.setLineWidth(1); c.rect(tx0, b, tx1 - tx0, top - b)
-        c.setLineWidth(1.4); c.line(cols[4], b, cols[4], top)    # the JAMI column stands out
+        c.setLineWidth(1.4); c.line(tx0, top - rh, tx1, top - rh); c.line(tx0, b + rh, tx1, b + rh)
+        c.setStrokeColor(ink); c.setLineWidth(2.2); c.rect(tx0, b, tx1 - tx0, top - b)
+        c.line(cols[2], b, cols[2], top)                          # names | kg
+        c.setLineWidth(2.6); c.line(cols[4], b, cols[4], top); c.line(cols[5], b, cols[5], top)   # the JAMI column stands out
         # the line the kg part starts at: the phone keeps only what is right of it when reading (names stay on paper)
         mx = cols[2]
         c.setFillColor(colors.black)
