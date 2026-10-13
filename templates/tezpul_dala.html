@@ -77,6 +77,15 @@ button{font:inherit;border:0;cursor:pointer}
 .at input{width:64px;font:inherit;font-weight:800;text-align:right;border:1px solid #c9d6e8;border-radius:8px;padding:5px}
 .at tr.sum td{background:#fde9ee}.at tr.unclear td,.at tr.half td{background:#fff4e0}
 .at button{background:#1e9e4a;color:#fff;border-radius:8px;padding:4px 8px;font-weight:800;margin-left:4px}
+.at tr.why td{background:#fff7f8;text-align:left;font-weight:600;font-size:14px;color:#7a1630;padding:4px 8px 9px;border-top:0;line-height:1.4}
+.at tr.why td:first-child{color:#7a1630;width:auto}
+.at tr.why .wb{display:flex;gap:6px;margin-top:6px}.at tr.why .wb button{flex:1;margin:0;padding:9px 6px;font-size:14.5px;border-radius:10px}
+.at tr.why .wb button[data-ok]{background:#fff;color:#0b2a55;border:2px solid #0b2a55}
+.pf{margin:8px 14px}.pf b{display:block;font-size:13.5px;color:#34506f;margin-bottom:4px}
+.pf img{display:block;width:100%;border-radius:12px;border:1px solid #c9d6e8}
+.zoom{position:fixed;inset:0;background:#000;z-index:20;overflow:auto;-webkit-overflow-scrolling:touch}
+.zoom img{display:block;width:230%;max-width:none}
+.zoom button{position:fixed;top:12px;right:12px;background:#fff;color:#0b2a55;border-radius:12px;padding:10px 14px;font-weight:850;font-size:16px;z-index:21}
 .atn{margin:6px 14px;border-radius:12px;padding:8px 10px;font-size:14px;font-weight:700}.atn.n-bad{background:#fde9ee;color:#a0153a}.atn.n-ok{background:#e5f6eb;color:#0f6b31}
 .atn.n-info{background:#e8f1fe;color:#1d3f9e}
 .b-next:disabled{opacity:.4}
@@ -141,9 +150,11 @@ button{font:inherit;border:0;cursor:pointer}
       <div class="atn" id="p-msg"></div>
       <table class="at" id="p-table"></table>
       <div class="mkg" id="p-manual" hidden>Shu varaq jami: <input id="p-mkg" inputmode="decimal" placeholder="kg"> kg</div>
+      <div class="pf" id="p-full" hidden><b>📄 Varaq rasmi — ismlar shu yerda (kattalashtirish uchun bosing). Rasm AI ga yuborilmaydi.</b><img id="p-full-img" alt=""></div>
       <div class="row2"><button type="button" class="b-next" id="p-next">➕ Keyingi varaq</button><button type="button" class="b-done" id="p-done">✔ Tayyor</button></div>
     </div>
     <div class="shots" id="p-done-list"></div>
+    <div class="zoom" id="p-zoom" hidden><button type="button" id="p-zoom-x">✕ Yopish</button><img id="p-zoom-img" alt=""></div>
   </section>
 
   <!-- refused -->
@@ -317,7 +328,7 @@ button{font:inherit;border:0;cursor:pointer}
     if (!cur) return;
     const n = cur.sheets.length + 1;
     $('p-no').textContent = '№ ' + cur.no; $('p-sheet').textContent = n;
-    $('p-cutbox').hidden = true; $('p-res').hidden = true; pimg = null; pres = null; $('p-file').value = '';
+    $('p-cutbox').hidden = true; $('p-res').hidden = true; $('p-zoom').hidden = true; pimg = null; pres = null; $('p-file').value = '';
     $('p-ask').hidden = !!cur.people; $('p-take').hidden = !cur.people;
     $('p-title').textContent = cur.people ? `${n}-varaq / ${cur.plan} — rasmga oling` : 'Odam soni';
     paintSheets('p-done-list'); show('v-photo');
@@ -379,27 +390,54 @@ button{font:inherit;border:0;cursor:pointer}
     } finally { busy = false; $('p-send').disabled = false; $('p-send').textContent = '✔ Yuborish' + (AI_ON ? ' — o‘qib hisoblaydi' : ''); }
   });
   function note(kind, text) { $('p-msg').className = 'atn n-' + kind; $('p-msg').textContent = text; }
+  function showPhoto() {   // the whole sheet with the names — only on this phone (the AI got the kg part only)
+    $('p-full').hidden = !pimg; if (pimg) { $('p-full-img').src = pimg.src; $('p-zoom-img').src = pimg.src; }
+  }
+  $('p-full').addEventListener('click', () => { $('p-zoom').hidden = false; });
+  $('p-zoom-x').addEventListener('click', () => { $('p-zoom').hidden = true; });
   function result(j) {
-    $('p-cutbox').hidden = true; $('p-res').hidden = false; pres = j.ai;
+    $('p-cutbox').hidden = true; $('p-res').hidden = false; pres = j.ai; showPhoto();
     pres = { photo_id: j.talon && j.talon.photo_id, rows: j.ai ? j.ai.rows : [] };
     if (!j.ai) { note(j.ai_on ? 'bad' : 'info', (j.ai_error ? j.ai_error : 'Rasm saqlandi.') + ' Shu varaq jami kg ni yozing.'); table(null); return; }
     const p = j.ai.problems;
-    note(p ? 'bad' : 'ok', p ? `${j.ai.rows.length} qator o‘qildi · ${p} ta qatorni tekshiring (rangli) — rasmga qarab tuzating yoki ✓ bosing.`
+    note(p ? 'bad' : 'ok', p ? `${j.ai.rows.length} qator o‘qildi · ${p} ta qatorda xato bor — har birining ostida nima xatoligi yozilgan. Qaysi odam ekanini qog‘ozdan yoki pastdagi rasmdan qarang.`
                          : `${j.ai.rows.length} qator o‘qildi — hammasi mos keldi.` + (j.ai.total_ok ? '' : ` Lekin varaq jami ${kgfmt(j.ai.written_total)} yozilgan, qatorlar yig‘indisi ${kgfmt(j.ai.computed)} — tekshiring.`));
     if (!j.ai.rows.length) { note('bad', 'Raqamlar o‘qilmadi' + (j.ai.note ? ' (' + j.ai.note + ')' : '') + '. Shu varaq jami kg ni yozing.'); table(null); return; }
     table(j.ai.rows);
   }
-  const FLAG = { sum: 'qo‘shilmaydi', unclear: 'aniq emas', half: 'jami yo‘q' };
   function table(rows) {
     $('p-manual').hidden = !!(rows && rows.length);
     if (!rows || !rows.length) { $('p-table').innerHTML = ''; $('p-mkg').value = ''; paintDone(); return; }
     $('p-table').innerHTML = '<tr><th>№</th><th>Abet­gacha</th><th>Keyin</th><th>JAMI</th></tr>' + rows.map((r, i) =>
       `<tr class="${r.flag}" data-i="${i}"><td>${r.row}</td><td>${r.before == null ? '—' : kgfmt(r.before)}</td><td>${r.after == null ? '—' : kgfmt(r.after)}</td>`
-      + `<td><input value="${kgfmt(r.total)}" inputmode="decimal">${r.flag ? '<button type="button" title="' + FLAG[r.flag] + '">✓</button>' : ''}</td></tr>`).join('');
+      + `<td><input value="${kgfmt(r.total)}" inputmode="decimal"></td></tr>`
+      + (r.flag ? `<tr class="why" data-w="${i}"><td colspan="4">${why(r)}</td></tr>` : '')).join('');
     paintDone();
   }
-  $('p-table').addEventListener('input', e => { const tr = e.target.closest('tr'); if (tr) { tr.className = ''; const b = tr.querySelector('button'); if (b) b.remove(); } paintDone(); });
-  $('p-table').addEventListener('click', e => { if (e.target.tagName !== 'BUTTON') return; const tr = e.target.closest('tr'); tr.className = ''; e.target.remove(); paintDone(); });
+  // what exactly is wrong in a row, and one tap to settle it
+  function why(r) {
+    const keep = `<button type="button" data-ok>✓ ${kgfmt(r.total)} to‘g‘ri</button>`;
+    if (r.flag === 'sum') {
+      const s = r1(r.before + r.after), d = r1(Math.abs(s - r.total));
+      return `⚠ <b>${r.row}-qator:</b> ${kgfmt(r.before)} + ${kgfmt(r.after)} = <b>${kgfmt(s)}</b>, lekin JAMI ga <b>${kgfmt(r.total)}</b> yozilgan — `
+        + `farq <b>${kgfmt(d)} kg</b>. Starshidan so‘rang, qaysi biri to‘g‘ri?`
+        + `<div class="wb"><button type="button" data-set="${s}">${kgfmt(s)} qo‘yish</button>${keep}</div>`;
+    }
+    if (r.flag === 'half') return `⚠ <b>${r.row}-qator:</b> ${r.before == null ? '“Abetgacha”' : '“Abetdan keyin”'} yozilmagan va JAMI ham yo‘q — `
+      + `${kgfmt(r.total)} kg deb olindi. Starshidan so‘rang.<div class="wb">${keep}</div>`;
+    return `⚠ <b>${r.row}-qator:</b> raqam aniq o‘qilmadi. Qog‘ozdagi ${r.row}-qatorga qarang — boshqacha bo‘lsa JAMI ni tuzating.<div class="wb">${keep}</div>`;
+  }
+  function settle(tr) {   // the row is checked: no colour, no explanation
+    tr.className = ''; const w = $('p-table').querySelector(`tr[data-w="${tr.dataset.i}"]`); if (w) w.remove(); paintDone();
+    if (!open()) note('ok', `Hammasi tekshirildi — shu varaq jami ${kgfmt(sheetKg())} kg.`);
+  }
+  $('p-table').addEventListener('input', e => { const tr = e.target.closest('tr[data-i]'); if (tr) settle(tr); else paintDone(); });
+  $('p-table').addEventListener('click', e => {
+    const b = e.target.closest('button'); if (!b) return;
+    const w = b.closest('tr.why'), tr = w && $('p-table').querySelector(`tr[data-i="${w.dataset.w}"]`); if (!tr) return;
+    if (b.dataset.set != null) tr.querySelector('input').value = kgfmt(+b.dataset.set);
+    settle(tr);
+  });
   $('p-mkg').addEventListener('input', paintDone);
   function sheetKg() {
     const ins = [...$('p-table').querySelectorAll('input')];
