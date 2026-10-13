@@ -137,6 +137,10 @@ button{font:inherit;border:0;cursor:pointer}
     <div id="p-ask" hidden>
       <div class="mkg" style="flex-direction:column;align-items:stretch">Bugun starshida nechta odam ishladi?<span style="font-size:12.5px;color:#6b7c93;font-weight:600">1-varaqdagi “Odam soni” — tizim nechta varaq rasmga olishni aytadi</span>
         <input id="p-people" inputmode="numeric" placeholder="masalan 30"></div>
+      {% if drivers %}<div class="mkg" style="flex-direction:column;align-items:stretch">🚐 Odamlarni qaysi shofyor olib keldi?<span style="font-size:12.5px;color:#6b7c93;font-weight:600">Unga talonda kg i yozilgan har odam uchun {{ driver_rate|num }} so‘m</span>
+        <select id="p-driver" style="font-size:19px;padding:10px;border:2px solid var(--navy);border-radius:12px;margin-top:6px;background:#fff">
+          <option value="">— tanlang —</option>{% for d in drivers %}<option value="{{ d.id }}">{{ d.name }}{% if d.vehicle %} · {{ d.vehicle }}{% endif %}</option>{% endfor %}
+          <option value="0">Shofyorsiz (o‘zi keldi)</option></select></div>{% endif %}
       <button type="button" class="big" id="p-people-ok" style="height:56px;font-size:20px">Davom etish ›</button>
     </div>
     <input type="file" id="p-file" accept="image/*" capture="environment" hidden>
@@ -219,7 +223,7 @@ button{font:inherit;border:0;cursor:pointer}
         if (!j.ok) { if (j.refused) { refused(j); return; } msg('soxta', 'Xato', j.error || ''); return; }
       } catch (_) { /* no answer: write it on the phone, the server checks it later */ }
     }
-    cur = { code, manual, no, uuid: uuid() }; kg = '';
+    cur = { code, manual, no, uuid: uuid() }; kg = ''; if (DRIVERS) $('p-driver').value = '';
     $('toast').classList.remove('on');
     cur.sheets = []; $('k-shots').textContent = '';
     $('k-no').textContent = '№ ' + no; $('k-err').classList.remove('on'); paint(); show('v-kg');
@@ -243,6 +247,7 @@ button{font:inherit;border:0;cursor:pointer}
     if (busy || !cur || !(kgValue() > 0)) return;
     const item = { code: cur.code, manual_code: cur.manual, kg: kg.replace(',', '.'), client_uuid: cur.uuid, no: cur.no,
                    sheets: JSON.stringify(cur.sheets || []), odam: cur.people || '' };
+    if (DRIVERS && cur.sheets && cur.sheets.length) item.shofyor = cur.driver == null ? '' : cur.driver;
     if (EVENING) { item.brigada = $('brig').value; if (!item.brigada) { $('k-err').textContent = 'Brigadani tanlang.'; $('k-err').classList.add('on'); return; } }
     busy = true; paint();
     const r = await send(item);
@@ -313,6 +318,7 @@ button{font:inherit;border:0;cursor:pointer}
   }
   // ---- the starshi's sheets: photo → (names covered) → read → check → added up into the kg above
   const URL_PHOTO = {{ url_for('tezpul.dala_photo')|tojson }}, AI_ON = {{ 'true' if ai_on else 'false' }};
+  const DRIVERS = {{ 'true' if drivers else 'false' }}, DRATE = {{ (driver_rate or 0)|int }};
   let pimg = null, pres = null;
   const kgOf = v => { const n = parseFloat(String(v).replace(',', '.')); return isFinite(n) ? n : 0; };
   const r1 = n => Math.round(n * 10) / 10;
@@ -337,6 +343,11 @@ button{font:inherit;border:0;cursor:pointer}
   $('p-people-ok').addEventListener('click', () => {
     const p = parseInt($('p-people').value, 10);
     if (!(p > 0 && p < 1000)) { $('p-people').focus(); return; }
+    if (DRIVERS) {
+      const d = $('p-driver');
+      if (d.value === '') { d.focus(); toast('🚐 Shofyorni tanlang (yoki “Shofyorsiz”)'); return; }
+      cur.driver = d.value; cur.driverName = d.value === '0' ? '' : d.options[d.selectedIndex].text;
+    }
     cur.people = p; cur.plan = plan(p);
     toast(`${p} odam — ${cur.plan} ta varaq rasmga olinadi`); photoStart();
   });
@@ -463,6 +474,10 @@ button{font:inherit;border:0;cursor:pointer}
     keepSheet(); kg = kgfmt(sheetsTotal()); paintSheets('k-shots');
     const read = cur.sheets.reduce((s, x) => s + x.rows.length, 0);
     $('k-shots').textContent += ` · ${cur.people} odam` + (read && read !== cur.people ? ` (⚠ ${read} qator o‘qildi)` : '');
+    if (cur.driverName) {        // the driver is paid for the rows with kg (not for the head count anybody says)
+      const n = cur.sheets.reduce((s, x) => s + x.rows.filter(r => r.total > 0).length, 0) || cur.people;
+      $('k-shots').textContent += ` · 🚐 ${cur.driverName}: ${n} × ${kgfmt(DRATE)} = ${String(n * DRATE).replace(/\B(?=(\d{3})+(?!\d))/g, ' ')} so‘m`;
+    }
     $('k-err').classList.remove('on'); paint(); show('v-kg');
     toast(`✅ Tugadi: ${cur.sheets.length} varaq · ${kg} kg — tekshirib SAQLASH ni bosing`);
   });

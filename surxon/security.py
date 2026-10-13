@@ -301,7 +301,7 @@ CASHIER_ENDPOINTS = STATION_ENDPOINTS | {'acct.cashier', 'acct.payout_pay', 'acc
 
 # SURXON TEZ-PUL: the cashier's two-step screen
 TEZPUL_EVENING = {'tezpul.kechki', 'tezpul.kechki_lookup', 'tezpul.kechki_save', 'tezpul.dala_photo'}
-TEZPUL_CASHIER = {'tezpul.home', 'tezpul.kassa', 'tezpul.lookup', 'tezpul.pay'} | TEZPUL_EVENING
+TEZPUL_CASHIER = {'tezpul.home', 'tezpul.kassa', 'tezpul.lookup', 'tezpul.pay', 'tezpul.pay_driver'} | TEZPUL_EVENING
 TEZPUL_FIELD = {'tezpul.dala', 'tezpul.dala_lookup', 'tezpul.dala_save'} | TEZPUL_EVENING
 
 

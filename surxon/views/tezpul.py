@@ -41,7 +41,8 @@ def dala(load_id):
     from .. import talon_ai
     return render_template('tezpul_dala.html', ld=ld, count=T.trip_counter(load_id), ai_on=talon_ai.enabled(),
                            rows_first=T.STARSHI_ROWS_FIRST, rows_next=T.STARSHI_ROWS_NEXT,
-                           max_one=get_float('max_hand_kg', 250), max_group=get_float('max_group_kg', 20000))
+                           max_one=get_float('max_hand_kg', 250), max_group=get_float('max_group_kg', 20000),
+                           drivers=T.drivers(), driver_rate=T.driver_rate())
 
 
 @bp.post('/tezpul/dala/talon')
@@ -67,7 +68,7 @@ def dala_save(load_id):
         r = T.enter(post_actor(), load_id, request.form.get('code'), request.form.get('kg'),
                     manual_code=request.form.get('manual_code', ''), client_uuid=form_uuid(),
                     group=request.form.get('guruh') == '1', sheets=sheets if isinstance(sheets, list) else [],
-                    people=request.form.get('odam'))
+                    people=request.form.get('odam'), driver=request.form.get('shofyor'))
     except T.Refused as err:
         return _refused(err)
     return jsonify(ok=True, result=r, count=T.trip_counter(load_id))
@@ -83,7 +84,7 @@ def kechki():
     back = url_for('dala.home') if acts_as(current_actor()._as_user(), 'tally') else url_for('tezpul.kassa')
     return render_template('tezpul_dala.html', ld=None, brigades=T.evening_brigades(), back_url=back,
                            ai_on=talon_ai.enabled(), rows_first=T.STARSHI_ROWS_FIRST, rows_next=T.STARSHI_ROWS_NEXT,
-                           max_one=1e9)
+                           max_one=1e9, drivers=T.drivers(), driver_rate=T.driver_rate())
 
 
 @bp.post('/tezpul/kechki/talon')
@@ -107,7 +108,7 @@ def kechki_save():
         r = T.enter_evening(post_actor(), request.form.get('brigada', type=int), request.form.get('code'),
                             request.form.get('kg'), manual_code=request.form.get('manual_code', ''),
                             client_uuid=form_uuid(), sheets=sheets if isinstance(sheets, list) else [],
-                            people=request.form.get('odam'))
+                            people=request.form.get('odam'), driver=request.form.get('shofyor'))
     except T.Refused as err:
         return _refused(err)
     return jsonify(ok=True, result=r)
@@ -147,7 +148,34 @@ def kassa():
     from ..db import get_db
     box = A._cashbox(get_db(), current_actor(), None)
     name = q('SELECT name FROM cashboxes WHERE id=?', (box,), one=True)
-    return render_template('tezpul_kassa.html', box_name=name['name'] if name else 'Kassa', today=T.today_counter(current_actor()))
+    return render_template('tezpul_kassa.html', box_name=name['name'] if name else 'Kassa', today=T.today_counter(current_actor()),
+                           due=T.drivers_due())
+
+
+@bp.post('/tezpul/shofyor/tolash')
+@perm_required('payouts.pay')
+def pay_driver():
+    """PUL BERILDI to a driver (everything he is owed for bringing people)."""
+    r = T.pay_driver(post_actor(), request.form.get('driver', type=int), client_uuid=form_uuid())
+    return jsonify(ok=True, result=r, due=T.drivers_due())
+
+
+@bp.route('/tezpul/shofyorlar', methods=['GET', 'POST'])
+@perm_required('tezpul.manage', 'tezpul.panel')
+def drivers():
+    """The drivers who bring the pickers: the list the clerk picks from in the evening count, and the rate per person."""
+    if request.method == 'POST':
+        actor = post_actor()
+        if request.form.get('action') == 'rate':
+            T.set_driver_rate(actor, request.form.get('rate'))
+            return done('Narx saqlandi — bundan keyingi kechki hisoblarga qo‘llanadi.', url_for('tezpul.drivers'))
+        T.save_driver(actor, name=request.form.get('name'), vehicle=request.form.get('vehicle'), phone=request.form.get('phone'),
+                      driver_id=request.form.get('id', type=int), active=request.form.get('active', '1') == '1')
+        return done('Saqlandi.', url_for('tezpul.drivers'))
+    pays = q('''SELECT p.*, d.name, d.vehicle, u.full_name cashier FROM tezpul_driver_pays p JOIN tezpul_drivers d ON d.id=p.driver_id
+                LEFT JOIN users u ON u.id=p.paid_by ORDER BY p.id DESC LIMIT 50''')
+    return render_template('tezpul_drivers.html', drivers=T.drivers(active=False), due={d['id']: d for d in T.drivers_due()},
+                           pays=pays, rate=T.driver_rate())
 
 
 @bp.post('/tezpul/talon')

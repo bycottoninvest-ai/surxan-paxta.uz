@@ -10,7 +10,7 @@ from contextlib import contextmanager
 
 from flask import current_app, g
 
-SCHEMA_VERSION = 28
+SCHEMA_VERSION = 29
 
 SCHEMA = r'''
 CREATE TABLE IF NOT EXISTS brigadiers (
@@ -724,6 +724,27 @@ CREATE TABLE IF NOT EXISTS tezpul_sheets (  -- v28: a starshi talon's photograph
   created_by INTEGER REFERENCES users(id),
   UNIQUE(talon_id, sheet)
 );
+CREATE TABLE IF NOT EXISTS tezpul_drivers (  -- v29: drivers who bring the pickers, paid per person on the starshi talons
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL,
+  vehicle TEXT,
+  phone TEXT,
+  active INTEGER NOT NULL DEFAULT 1,
+  created_by INTEGER REFERENCES users(id),
+  created_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS tezpul_driver_pays (  -- v29: one PUL BERILDI to a driver (all his talons not yet paid)
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  driver_id INTEGER NOT NULL REFERENCES tezpul_drivers(id),
+  amount REAL NOT NULL,
+  people INTEGER NOT NULL,
+  talons INTEGER NOT NULL,
+  cashbox_id INTEGER REFERENCES cashboxes(id),
+  cash_entry_id INTEGER REFERENCES cash_entries(id),
+  client_uuid TEXT UNIQUE,
+  paid_by INTEGER REFERENCES users(id),
+  paid_at TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS trackers (
   imei TEXT PRIMARY KEY,
   equipment_id INTEGER REFERENCES equipment(id),
@@ -1170,6 +1191,12 @@ def migrate(db):
     _add_column(db, 'tezpul_talons', 'people', 'INTEGER')
     # v28: a hand trailer closed with its own kg (the starshi talons are counted in the evening, for pay only)
     _add_column(db, 'trailer_loads', 'manual_kg', 'REAL')
+    # v29: the driver who brought the starshi's people: paid per person with kg on the talon (not per person he says)
+    _add_column(db, 'tezpul_talons', 'driver_id', 'INTEGER')
+    _add_column(db, 'tezpul_talons', 'driver_people', 'INTEGER')
+    _add_column(db, 'tezpul_talons', 'driver_rate', 'REAL')
+    _add_column(db, 'tezpul_talons', 'driver_amount', 'REAL')
+    _add_column(db, 'tezpul_talons', 'driver_pay_id', 'INTEGER')
     # Future column changes go here as: if version < N: ALTER TABLE ...
     db.execute('UPDATE schema_version SET version=? WHERE version < ?', (SCHEMA_VERSION, SCHEMA_VERSION))
 
@@ -1207,7 +1234,7 @@ def doc_number(db, prefix, year):
 def cash_prefix(direction, category):
     if direction == 'IN':
         return 'INC'
-    if category in ('worker_pay', 'advance', 'combine_pay', 'tezpul_pay'):
+    if category in ('worker_pay', 'advance', 'combine_pay', 'tezpul_pay', 'driver_pay'):
         return 'PAY'
     if category in ('adjust_in', 'adjust_out'):
         return 'ADJ'

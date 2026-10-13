@@ -81,6 +81,12 @@ button{font:inherit;border:0;cursor:pointer}
 .det td{padding:6px 4px;border-top:1px solid var(--line);text-align:right;font-weight:700}.det td:first-child{text-align:left;color:#8796ab}
 .det td.s{color:#137a37}.det tr.f td{background:#f3f7fc;font-weight:900}
 .det .ph{display:block;margin:6px 0 2px;background:#fff;border:1px solid #c9d6e8;border-radius:12px;padding:10px;text-align:center;font-weight:800;color:var(--navy);width:100%}
+.drv{margin:0 14px 12px;background:#fff;border-radius:16px;padding:8px 12px;box-shadow:0 2px 10px rgba(10,44,90,.07)}
+.drv h4{margin:2px 0 4px;font-size:15px;color:var(--navy)}
+.drv .r{display:flex;align-items:center;gap:8px;padding:8px 0;border-top:1px solid var(--line)}
+.drv .r div{flex:1;font-size:14px;color:var(--muted)}.drv .r div b{display:block;font-size:16px;color:var(--navy)}
+.drv .r em{font-style:normal;font-weight:900;font-size:16px;color:#137a37;white-space:nowrap}
+.drv .r button{background:var(--green);color:#fff;border-radius:10px;padding:9px 10px;font-weight:850;font-size:13.5px;white-space:nowrap}
 .zoom{position:fixed;inset:0;background:#000;z-index:20;overflow:auto}.zoom img{display:block;width:230%;max-width:none}
 .zoom button{position:fixed;top:12px;right:12px;background:#fff;color:#0b2a55;border-radius:12px;padding:10px 14px;font-weight:850;font-size:16px;z-index:21}
 </style></head>
@@ -98,6 +104,7 @@ button{font:inherit;border:0;cursor:pointer}
       <div class="hint" id="msg">Kamera ochilmoqda…</div></div>
     <button type="button" class="manual" id="m-open">⌨️ Talon raqamini qo‘lda yozish</button>
     <form class="mform" id="mform" autocomplete="off"><input id="m-no" inputmode="numeric" placeholder="Talon №"><input id="m-code" placeholder="Kod" maxlength="10"><button>OK</button></form>
+    <div class="drv" id="drv" hidden></div>
     <div class="count"><div><b id="c-n">{{ today.n }}</b>talon bugun</div><div><b id="c-kg">{{ today.kg|num(1) if today.kg % 1 else today.kg|num }}</b>kg</div><div><b id="c-sum">{{ today.amount|num }}</b>so‘m berildi</div></div>
   </section>
 
@@ -128,6 +135,8 @@ button{font:inherit;border:0;cursor:pointer}
 (() => {
   const CSRF = {{ csrf_token()|tojson }}, JSQR = {{ url_for('static', filename='vendor/jsqr/jsQR.min.js')|tojson }};
   const URL_LOOK = {{ url_for('tezpul.lookup')|tojson }}, URL_PAY = {{ url_for('tezpul.pay')|tojson }};
+  const URL_DRV = {{ url_for('tezpul.pay_driver')|tojson }};
+  let due = {{ due|tojson }};
   const $ = id => document.getElementById(id);
   const fmt = v => String(Math.round(v)).replace(/\B(?=(\d{3})+(?!\d))/g, '\u00a0');
   const kgfmt = v => String(Math.round(v * 10) / 10).replace('.', ',');
@@ -166,6 +175,28 @@ button{font:inherit;border:0;cursor:pointer}
     stop = window.spxQrScan($('video'), $('msg'), t => { found(t, ''); return true; }, JSQR);
   }
   function reset() { basket = []; payId = null; scan(); }
+
+  // drivers owed for bringing people (per person with kg on the starshi talons): one PUL BERILDI each
+  function paintDue() {
+    $('drv').hidden = !due.length;
+    $('drv').innerHTML = '<h4>🚐 Shofyorlar — odam tashish puli</h4>' + due.map(d =>
+      `<div class="r"><div><b>${esc(d.name)}</b>${esc(d.vehicle || '')} · ${d.people} odam · ${d.talons} talon</div>`
+      + `<em>${fmt(d.amount)}</em><button type="button" data-d="${d.id}">💵 BERILDI</button></div>`).join('');
+  }
+  $('drv').addEventListener('click', async e => {
+    const b = e.target.closest('button[data-d]'); if (!b || busy || !online()) return;
+    const d = due.find(x => String(x.id) === b.dataset.d); if (!d) return;
+    if (!confirm(`${d.name} ga ${fmt(d.amount)} so‘m berildimi?\n(${d.people} odam)`)) return;
+    busy = true; b.disabled = true; b.textContent = '⏳';
+    let j;
+    try { j = await post(URL_DRV, [['driver', d.id], ['client_uuid', d.uuid || (d.uuid = uuid())]], 20000); }
+    catch (_) { j = { ok: false, error: 'Javob kelmadi — qayta bosing (ikki marta yozilmaydi).' }; }
+    busy = false;
+    if (!j.ok) { toast('⚠ ' + (j.error || 'Xato')); paintDue(); return; }
+    due = j.due || []; paintDue();
+    toast(`✓ ${j.result.name}: ${fmt(j.result.amount)} so‘m berildi`);
+  });
+  paintDue();
 
   async function found(code, manual) {
     if (stop) { stop(); stop = null; }

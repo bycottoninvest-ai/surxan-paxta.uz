@@ -1,0 +1,45 @@
+{% extends 'base.html' %}
+{% from 'macros.html' import csrf with context %}
+{% set page_title = 'Shofyorlar' %}
+{% block content %}
+<div class="page-h"><h1>🚐 Shofyorlar — odam tashish</h1><span class="sub">Shofyorga olib kelgan har bir odam uchun pul: starshi talonida kg i yozilgan odamlar soni bo‘yicha</span>
+  <a class="btn btn-light btn-sm" href="{{ url_for('tezpul.panel') }}">📊 TEZ-PUL panel</a></div>
+<div class="grid">
+  <section class="card s4"><div class="card-h"><h3>➕ Yangi shofyor</h3></div><div class="card-b">
+    <form method="post" class="form">{{ csrf() }}
+      <div class="f"><label>Ism familiya</label><input class="input" name="name" required maxlength="60" placeholder="Karim Aliyev"></div>
+      <div class="f"><label>Mashina (raqami / turi)</label><input class="input" name="vehicle" maxlength="40" placeholder="Damas 01 A 123 BC"></div>
+      <div class="f"><label>Telefon</label><input class="input" name="phone" maxlength="30" inputmode="tel" placeholder="+998"></div>
+      <div class="f"><button class="btn btn-primary btn-block">Qo‘shish</button></div></form>
+  </div></section>
+  <section class="card s4"><div class="card-h"><h3>💰 Narx</h3></div><div class="card-b">
+    <div style="font-size:30px;font-weight:900;color:#0b2a55">{{ rate|num }} so‘m <span class="small muted" style="font-weight:600">/ 1 odam</span></div>
+    {% if can('tezpul.manage') %}<form method="post" class="row mt-s">{{ csrf() }}<input type="hidden" name="action" value="rate">
+      <input class="input" name="rate" inputmode="numeric" value="{{ rate|int }}" style="width:140px"><button class="btn btn-light">Saqlash</button></form>{% endif %}
+    <p class="tiny muted mt-s">Yangi narx bundan keyingi kechki hisoblarga qo‘llanadi; avval hisoblanganlari o‘z narxida qoladi.</p>
+  </div></section>
+  <section class="card s4"><div class="card-h"><h3>Qanday ishlaydi</h3></div><div class="card-b small">
+    1) Kechki hisobda hisobchi starshi talonini skanerlaydi va <b>“Odamlarni kim olib keldi?”</b> — shofyorni tanlaydi.<br>
+    2) Varaqlarda kg i yozilgan odamlar sanaladi: masalan 32 odam × {{ rate|num }} = {{ (32 * rate)|num }} so‘m.
+    Shofyor “40 kishi” desa ham — talonda 32 ta bo‘lsa, 32 ta uchun.<br>
+    3) Kassir: TEZ-PUL kassa → <b>🚐 Shofyorlar</b> → <b>PUL BERILDI</b>. Direktor va buxgalterga xabar boradi.</div></section>
+  <section class="card s12"><div class="card-h"><h3>Ro‘yxat</h3></div><div class="card-b">
+    {% if drivers %}<div class="table-wrap"><table class="t"><thead><tr><th>Shofyor</th><th>Mashina</th><th>Telefon</th><th class="num">Berilmagan</th><th>Holat</th><th></th></tr></thead><tbody>
+    {% for d in drivers %}{% set o = due.get(d.id) %}<tr {% if not d.active %}style="opacity:.55"{% endif %}>
+      {% set f = 'df' ~ d.id %}
+      <td><input class="input" name="name" form="{{ f }}" value="{{ d.name }}" maxlength="60" required></td>
+      <td><input class="input" name="vehicle" form="{{ f }}" value="{{ d.vehicle or '' }}" maxlength="40"></td>
+      <td><input class="input" name="phone" form="{{ f }}" value="{{ d.phone or '' }}" maxlength="30"></td>
+      <td class="num">{% if o %}<b>{{ o.amount|num }} so‘m</b><div class="tiny muted">{{ o.people }} odam · {{ o.talons }} talon</div>{% else %}—{% endif %}</td>
+      <td><select class="input" name="active" form="{{ f }}" style="width:auto"><option value="1" {{ 'selected' if d.active }}>Ishlayapti</option><option value="0" {{ 'selected' if not d.active }}>To‘xtatilgan</option></select></td>
+      <td><form method="post" id="{{ f }}">{{ csrf() }}<input type="hidden" name="id" value="{{ d.id }}"><button class="btn btn-light btn-sm">Saqlash</button></form></td></tr>{% endfor %}
+    </tbody></table></div>{% else %}<div class="muted">Hali shofyor yo‘q — chapdan qo‘shing.</div>{% endif %}
+  </div></section>
+  <section class="card s12"><div class="card-h"><h3>Berilgan pullar (oxirgi 50)</h3></div><div class="card-b">
+    {% if pays %}<div class="table-wrap"><table class="t"><thead><tr><th>Vaqt</th><th>Shofyor</th><th class="num">Odam</th><th class="num">Talon</th><th class="num">Summa</th><th>Kassir</th></tr></thead><tbody>
+    {% for p in pays %}<tr><td>{{ p.paid_at[:16] }}</td><td class="b">{{ p.name }}{% if p.vehicle %} <span class="tiny muted">{{ p.vehicle }}</span>{% endif %}</td>
+      <td class="num">{{ p.people }}</td><td class="num">{{ p.talons }}</td><td class="num b">{{ p.amount|num }} so‘m</td><td>{{ p.cashier or '—' }}</td></tr>{% endfor %}
+    </tbody></table></div>{% else %}<div class="muted">Hali to‘lov yo‘q.</div>{% endif %}
+  </div></section>
+</div>
+{% endblock %}

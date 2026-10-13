@@ -45,3 +45,15 @@ Tasdiqlangan dizaynni o‘zgartirish faqat egasining roziligi bilan; o‘zgarsa 
   tekshiriladi va baza yonidagi yopiq faylga yoziladi (bazaga, zaxiraga, auditga tushmaydi; faqat oxirgi 4 belgisi ko‘rinadi); `.env` ustun.
   Ismlar yuborilmaydi, faqat kg ustunlari.
   Kalitsiz ham ishlaydi: rasm dalil bo‘lib saqlanadi, varaq jamisi qo‘lda yoziladi. Model: Admin → Integratsiyalar (Opus 5.5 / Haiku 5.5).
+
+## v3.1 (2026-10-14) — kassada to‘liq varaq, PUL BERILDI PDF, shofyorlar
+- **Kassir / buxgalter** starshi talonini skanerlaganda: tepada **JAMI BERILADI**, tagida har qator (Abetgacha · Keyin · JAMI kg · Summa)
+  va varaq rasmlari (ismlar bilan — kassir shu talonning rasmlarini ko‘ra oladi).
+- **PUL BERILDI** bosilganda direktor va buxgalterga PDF: yashil “PUL BERILDI: N so‘m · kassir · vaqt”, har qatorning kg va summasi.
+- **Kechki hisob:** xato qator ostida aniq izoh (“47 + 11 = 58, lekin JAMI ga 64 yozilgan — farq 6 kg”) va bir bosishda tuzatish;
+  ismli varaq rasmi faqat telefonda ko‘rinadi (AI ga yuborilmaydi).
+- **Shofyorlar (odam tashish):** TEZ-PUL → 🚐 Shofyorlar — ro‘yxat va narx (sozlama `driver_rate_person`, standart 10 000 so‘m/odam).
+  Kechki hisobda “Odamlarni qaysi shofyor olib keldi?” (yoki “Shofyorsiz”). Shofyorga **talonda kg i yozilgan odamlar soni** bo‘yicha
+  hisoblanadi — starshi yoki shofyor aytgan son bo‘yicha emas (panelda “starshi: N” qizil bo‘lib farq ko‘rinadi).
+  Kassir: TEZ-PUL kassa → 🚐 Shofyorlar → BERILDI — bitta kassa chiqimi (“Shofyor (odam tashish)”), direktor va buxgalterga xabar.
+  Narx o‘zgarsa — avval hisoblangan talonlar o‘z narxida qoladi.

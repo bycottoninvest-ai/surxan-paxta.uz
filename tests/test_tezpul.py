@@ -502,3 +502,61 @@ def test_trailers_close_with_their_kg_and_the_evening_count_pays(app, world):
     # no hand trailer for a brigade today: refused
     r = tally.post('/tezpul/kechki/saqlash', {'brigada': 99999, 'code': qr(ts[2]), 'kg': '100', 'client_uuid': uuid4()})
     assert r.status_code == 422 and 'brigadani tanlang' in r.get_json()['error']
+
+
+def test_driver_paid_per_person_with_kg_on_the_talon(app, world):
+    """The driver who brought a starshi's people gets the rate per person — counted from the rows with kg on the
+    talon's sheets, not from the head count anybody says; one PUL BERILDI pays all he is owed; the director is told."""
+    import json as _json
+    admin, kassa = world['admin'], world['kassa']
+    tally, lid, ts = setup(app, world)
+    assert kassa.post('/tezpul/shofyorlar', {'name': 'Karim'}).status_code in (302, 403)      # the cashier cannot add
+    admin.post('/tezpul/shofyorlar', {'name': 'Karim Sinov', 'vehicle': 'Damas 01'}, json_resp=False)
+    admin.post('/tezpul/shofyorlar', {'name': 'Bobur Sinov'}, json_resp=False)
+    with app.app_context():
+        karim = q("SELECT id FROM tezpul_drivers WHERE name='Karim Sinov'", one=True)['id']
+    page = tally.get(f'/tezpul/dala/{lid}').get_data(as_text=True)
+    assert 'Odamlarni qaysi shofyor olib keldi' in page and 'Karim Sinov' in page and 'Shofyorsiz' in page
+    rows = [{'row': 1, 'before': 27, 'after': 35, 'total': 62}, {'row': 2, 'before': 13, 'after': 17, 'total': 30},
+            {'row': 3, 'before': 10, 'after': None, 'total': 10}, {'row': 4, 'before': None, 'after': None, 'total': 0}]
+    sheets = _json.dumps([{'sheet': 1, 'kg': 102, 'rows': rows}])
+
+    def save(t, driver, odam='5'):
+        return tally.post(f'/tezpul/dala/{lid}/saqlash', {'code': qr(t), 'kg': '102', 'client_uuid': uuid4(), 'sheets': sheets,
+                                                          'odam': odam, 'shofyor': driver}).get_json()
+    r = save(ts[0], '')
+    assert not r['ok'] and 'shofyor' in r['error']                       # must be chosen (or “Shofyorsiz”)
+    assert save(ts[0], str(karim))['ok']
+    assert save(ts[1], '0')['ok']                                          # nobody brought them
+    with app.app_context():
+        t0 = q('SELECT * FROM tezpul_talons WHERE id=?', (ts[0]['id'],), one=True)
+        assert (t0['driver_id'], t0['driver_people'], t0['driver_amount']) == (karim, 3, 30_000)   # 3 rows with kg, not 5
+        assert q('SELECT driver_id FROM tezpul_talons WHERE id=?', (ts[1]['id'],), one=True)['driver_id'] is None
+    # the rate can change; talons already counted keep theirs
+    admin.post('/tezpul/shofyorlar', {'action': 'rate', 'rate': '12000'}, json_resp=False)
+    rows2 = _json.dumps([{'sheet': 1, 'kg': 40, 'rows': [{'row': 1, 'before': 20, 'after': 20, 'total': 40}]}])
+    assert tally.post(f'/tezpul/dala/{lid}/saqlash', {'code': qr(ts[2]), 'kg': '40', 'client_uuid': uuid4(), 'sheets': rows2,
+                                                      'odam': '1', 'shofyor': str(karim)}).get_json()['ok']
+    # the kassa: Karim is owed 30 000 + 12 000
+    assert 'Karim Sinov' in kassa.get('/tezpul/kassa').get_data(as_text=True)
+    assert tally.post('/tezpul/shofyor/tolash', {'driver': karim, 'client_uuid': uuid4()}).status_code in (302, 403)
+    u = uuid4()
+    r = kassa.post('/tezpul/shofyor/tolash', {'driver': karim, 'client_uuid': u}).get_json()
+    assert r['ok'] and r['result']['amount'] == 42_000 and r['result']['people'] == 4 and r['due'] == []
+    assert kassa.post('/tezpul/shofyor/tolash', {'driver': karim, 'client_uuid': u}).get_json()['result']['already']
+    r = kassa.post('/tezpul/shofyor/tolash', {'driver': karim, 'client_uuid': uuid4()}).get_json()
+    assert not r['ok'] and 'qolmagan' in r['error']
+    with app.app_context():
+        ce = q("SELECT * FROM cash_entries WHERE category='driver_pay'", one=True)
+        assert ce['amount'] == 42_000 and ce['direction'] == 'OUT' and 'Karim Sinov' in ce['counterparty']
+        job = q("SELECT * FROM outbox WHERE kind='tezpul_driver'", one=True)
+        text = job['payload_json'].replace('\u202f', ' ').replace('\\u202f', ' ')
+        assert '4 odam = 42 000' in text
+        from surxon.tezpul import starshi_report
+        pdf, _, _ = starshi_report(ts[0]['id'])
+        assert pdf[:4] == b'%PDF'
+    page = world['rahbar'].get('/tezpul/panel').get_data(as_text=True)
+    assert 'Shofyorlar — odam tashish' in page and 'Karim Sinov' in page and '(starshi: 6)' in page
+    page = admin.get('/tezpul/shofyorlar').get_data(as_text=True)
+    import re
+    assert 'Berilgan pullar' in page and re.search(r'42\W000 so', page)

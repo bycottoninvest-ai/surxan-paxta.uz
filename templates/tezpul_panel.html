@@ -7,7 +7,8 @@
   <form method="get" style="display:flex;gap:6px"><input class="input" type="date" name="kun" value="{{ p.day }}"><button class="btn btn-light btn-sm">Ko‘rish</button></form>
   <a class="btn btn-light btn-sm" href="{{ url_for('tezpul.panel', kun=p.day, format='xlsx') }}">⬇ Excel</a>
   <a class="btn btn-light btn-sm" href="javascript:print()">🖨 PDF / chop</a>
-  {% if can('tezpul.manage') %}<a class="btn btn-light btn-sm" href="{{ url_for('tezpul.talons') }}">🧾 Talonlar</a>{% endif %}</div>
+  {% if can('tezpul.manage') %}<a class="btn btn-light btn-sm" href="{{ url_for('tezpul.talons') }}">🧾 Talonlar</a>{% endif %}
+  <a class="btn btn-light btn-sm" href="{{ url_for('tezpul.drivers') }}">🚐 Shofyorlar</a></div>
 <div class="kpis" style="grid-template-columns:repeat(4,minmax(0,1fr))">
   <div class="kpi"><div class="sq bg-green">{{ icon('cotton') }}</div><div><div class="label">Dalada yozilgan (qo‘l terimi)</div><div class="value"><span id="k-ekg">{{ p.entered.kg|num(1) }}</span> <small>kg</small></div><div class="tiny muted"><span id="k-en">{{ p.entered.n }}</span> talon · hisoblangan <span id="k-esum">{{ p.entered.amount|num }}</span> so‘m</div></div></div>
   <div class="kpi"><div class="sq bg-blue">{{ icon('cash') }}</div><div><div class="label">Kassadan berilgan naqd pul</div><div class="value"><span id="k-psum">{{ p.paid.amount|num }}</span> <small>so‘m</small></div><div class="tiny muted"><span id="k-pn">{{ p.paid.n }}</span> talon · {{ p.paid.kg|num(1) }} kg</div></div></div>
@@ -36,6 +37,15 @@
     {% else %}<tr><td colspan="6" class="muted">—</td></tr>{% endfor %}
     </tbody></table></div>
     <div class="small" style="margin-top:10px"><b>Terim hisobchilari:</b> {% for c in p.clerks %}{{ c.name }} — {{ c.n }} talon, {{ c.kg|num(1) }} kg{% if not loop.last %}; {% endif %}{% else %}—{% endfor %}</div>
+  </div></section>
+  <section class="card s6"><div class="card-h"><h3>🚐 Shofyorlar — odam tashish</h3><a class="small" style="margin-left:auto" href="{{ url_for('tezpul.drivers') }}">Ro‘yxat ›</a></div><div class="card-b">
+    <div class="table-wrap"><table class="t"><thead><tr><th>Shofyor</th><th class="num">Talon</th><th class="num">Odam (talonda kg bor)</th><th class="num">Hisoblangan</th><th class="num">Berildi</th></tr></thead><tbody>
+    {% for d in p.drivers %}<tr><td class="b">{{ d.name }}{% if d.vehicle %} <span class="tiny muted">{{ d.vehicle }}</span>{% endif %}</td><td class="num">{{ d.talons }}</td>
+      <td class="num">{{ d.people }}{% if d.said and d.said != d.people %} <span class="tiny" style="color:#a0153a" title="starshi yozgan odam soni">(starshi: {{ d.said }})</span>{% endif %}</td>
+      <td class="num">{{ d.amount|num }}</td><td class="num" {% if d.paid < d.amount %}style="color:#b45309"{% endif %}>{{ d.paid|num }}</td></tr>
+    {% else %}<tr><td colspan="5" class="muted">Bugun shofyor yozilmagan.</td></tr>{% endfor %}
+    </tbody></table></div>
+    <div class="tiny muted" style="margin-top:8px">Shofyorga talonda kg i yozilgan odamlar soni bo‘yicha to‘lanadi — starshi yoki shofyor aytgan son bo‘yicha emas.</div>
   </div></section>
   <section class="card s6"><div class="card-h"><h3>⚠️ Xatoliklar (rad etilgan skanerlar)</h3></div><div class="card-b">
     {% for e in p.errors %}<div class="small">{{ e.created_at[11:16] }} · <b>{{ {'soxta': 'Soxta / tanilmagan QR', 'takror': 'Qayta skaner — allaqachon to‘langan', 'bekor': 'Bekor qilingan talon', 'kiritilgan': 'Bir talonga ikkinchi marta kg'}.get(e.kind, e.kind) }}</b>

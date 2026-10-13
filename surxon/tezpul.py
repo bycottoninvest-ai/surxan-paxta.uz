@@ -248,12 +248,13 @@ def _clean_sheets(db, talon_id, sheets):
     return out
 
 
-def enter(actor, load_id, code, kg, *, manual_code='', client_uuid=None, group=False, sheets=None, people=None):
+def enter(actor, load_id, code, kg, *, manual_code='', client_uuid=None, group=False, sheets=None, people=None, driver=None):
     """The terim hisobchisi saved one talon: its kg becomes a hand weighing of the open trip (Qo‘l terimi).
     group: a starshi's talon — one talon for his whole team's kg (over the one-person limit, up to the group limit).
     sheets / people: the starshi's photographed sheets and head count — kept with the talon, sent as a PDF."""
     _need(actor, 'harvest.write')
-    return _logged(actor, code, lambda: _enter(actor, load_id, code, kg, manual_code, client_uuid, group, sheets, people))
+    return _logged(actor, code, lambda: _enter(actor, load_id, code, kg, manual_code, client_uuid, group, sheets, people,
+                                              driver=driver))
 
 
 def evening_brigades(day=None):
@@ -274,7 +275,7 @@ def evening_lookup(actor, code, manual_code=''):
     return _logged(actor, code, go)
 
 
-def enter_evening(actor, brigadier_id, code, kg, *, manual_code='', client_uuid=None, sheets=None, people=None):
+def enter_evening(actor, brigadier_id, code, kg, *, manual_code='', client_uuid=None, sheets=None, people=None, driver=None):
     """The evening count (hisobchi or kassir, at the kassa): a starshi's talon — the day's kg of his whole team —
     written as that brigade's hand work of the day, to its last trailer of the day even if it is closed (the trailers
     were closed with their own kg; this is the pay). Then the kassir pays it as any talon."""
@@ -283,10 +284,10 @@ def enter_evening(actor, brigadier_id, code, kg, *, manual_code='', client_uuid=
     if not b:
         raise UserError('Bugun bu brigadada qo‘l terimi telashkasi yo‘q — brigadani tanlang.')
     return _logged(actor, code, lambda: _enter(actor, b['last_load'], code, kg, manual_code, client_uuid, True, sheets,
-                                              people, late=True))
+                                              people, late=True, driver=driver))
 
 
-def _enter(actor, load_id, code, kg, manual_code, client_uuid, group=False, sheets=None, people=None, late=False):
+def _enter(actor, load_id, code, kg, manual_code, client_uuid, group=False, sheets=None, people=None, late=False, driver=None):
     from .services import _new_worker, add_harvest
     with tx() as db:
         if client_uuid:
@@ -331,6 +332,7 @@ def _enter(actor, load_id, code, kg, manual_code, client_uuid, group=False, shee
                     actor.user_id, now_str(), t['id']))
         if people:
             db.execute('UPDATE tezpul_talons SET people=? WHERE id=?', (people, t['id']))
+        _set_driver(db, t['id'], driver, sheets, people, ask=bool(sheets))
         for s in sheets:
             db.execute('''INSERT INTO tezpul_sheets(talon_id, sheet, photo_id, kg, rows_json, created_at, created_by)
                           VALUES (?,?,?,?,?,?,?) ON CONFLICT(talon_id, sheet) DO UPDATE SET photo_id=excluded.photo_id,
@@ -367,8 +369,10 @@ def attach_photo(actor, code, manual_code, data, sheet):
 
 def starshi_info(talon_id):
     """Everything the starshi talon's PDF shows: the talon, its trip, its sheets (rows and photos)."""
-    t = q('''SELECT t.*, b.name brigade, e.full_name clerk, u.full_name cashier, tl.trip_no, f.name field_name, eq.code trailer
+    t = q('''SELECT t.*, b.name brigade, e.full_name clerk, u.full_name cashier, tl.trip_no, f.name field_name, eq.code trailer,
+                    d.name driver, d.vehicle driver_vehicle
              FROM tezpul_talons t LEFT JOIN brigadiers b ON b.id=t.brigadier_id LEFT JOIN users e ON e.id=t.entered_by
+             LEFT JOIN tezpul_drivers d ON d.id=t.driver_id
              LEFT JOIN users u ON u.id=t.paid_by LEFT JOIN trailer_loads tl ON tl.id=t.load_id
              LEFT JOIN fields f ON f.id=tl.field_id LEFT JOIN equipment eq ON eq.id=tl.trailer_id WHERE t.id=?''',
           (talon_id,), one=True)
@@ -527,6 +531,142 @@ def _paid_result(db, rows, already):
             'numbers': [number_text(r['number']) for r in rows]}
 
 
+# ------------------------------------------------------------------ drivers: paid per person brought
+
+def driver_rate(db=None):
+    return get_float('driver_rate_person', 10000, db)
+
+
+def set_driver_rate(actor, value):
+    """The rate per person brought (setting driver_rate_person); talons already counted keep their own rate."""
+    _need(actor, 'tezpul.manage')
+    try:
+        rate = round(float(str(value or '').replace(' ', '').replace(',', '.')))
+    except ValueError:
+        raise UserError('Narxni raqam bilan yozing, masalan 10000.')
+    if not 0 <= rate <= 1_000_000:
+        raise UserError('Narx 0 dan 1 000 000 so‘mgacha bo‘lsin.')
+    with tx() as db:
+        old = get_float('driver_rate_person', 10000, db)
+        db.execute('INSERT INTO settings(key, value, updated_at, updated_by) VALUES (?,?,?,?) ON CONFLICT(key) '
+                   'DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at, updated_by=excluded.updated_by',
+                   ('driver_rate_person', str(rate), now_str(), actor.user_id))
+        audit(db, actor, 'UPDATE', 'setting', 'driver_rate_person', old={'driver_rate_person': old},
+              new={'driver_rate_person': rate})
+    return rate
+
+
+def drivers(active=True):
+    return q('SELECT * FROM tezpul_drivers' + (' WHERE active=1' if active else '') + ' ORDER BY active DESC, name')
+
+
+def _set_driver(db, talon_id, driver, sheets, people, ask):
+    """Who brought the starshi's people. He is paid for the people who have kg on the talon's sheets — not for the
+    number anybody says (the starshi's head count only when no row was read). '' = not chosen, '0' = nobody."""
+    if driver is None:            # not asked on this screen (an old page, a one-person talon)
+        return
+    if driver == '':
+        if ask and db.execute('SELECT 1 FROM tezpul_drivers WHERE active=1').fetchone():
+            raise UserError('Odamlarni qaysi shofyor olib keldi? Tanlang (yoki “Shofyorsiz”).')
+        return
+    try:
+        did = int(driver)
+    except (TypeError, ValueError):
+        raise UserError('Shofyor tanlanmadi.')
+    if not did:
+        return
+    d = db.execute('SELECT * FROM tezpul_drivers WHERE id=? AND active=1', (did,)).fetchone()
+    if not d:
+        raise UserError('Bu shofyor ro‘yxatda yo‘q.')
+    rows = sum(1 for s in sheets or [] for r in s['rows'] if (r.get('total') or 0) > 0)
+    n = rows or int(people or 0)
+    if not n:
+        raise UserError('Shofyor puli uchun odam soni kerak — varaqni rasmga oling yoki odam sonini yozing.')
+    rate = driver_rate(db)
+    db.execute('UPDATE tezpul_talons SET driver_id=?, driver_people=?, driver_rate=?, driver_amount=? WHERE id=?',
+               (did, n, rate, round(n * rate), talon_id))
+
+
+def save_driver(actor, *, name, vehicle='', phone='', driver_id=None, active=True):
+    _need(actor, 'tezpul.manage', 'tezpul.panel')
+    from .utils import clean_text
+    name, vehicle, phone = clean_text(name, 60), clean_text(vehicle, 40), clean_text(phone, 30)
+    if not name:
+        raise UserError('Shofyorning ismini yozing.')
+    with tx() as db:
+        if driver_id:
+            old = db.execute('SELECT * FROM tezpul_drivers WHERE id=?', (driver_id,)).fetchone()
+            if not old:
+                raise UserError('Shofyor topilmadi.')
+            db.execute('UPDATE tezpul_drivers SET name=?, vehicle=?, phone=?, active=? WHERE id=?',
+                       (name, vehicle, phone, 1 if active else 0, driver_id))
+            audit(db, actor, 'UPDATE', 'tezpul_driver', driver_id, old=dict(old),
+                  new={'name': name, 'vehicle': vehicle, 'phone': phone, 'active': bool(active)})
+            return driver_id
+        did = db.execute('INSERT INTO tezpul_drivers(name, vehicle, phone, created_by, created_at) VALUES (?,?,?,?,?)',
+                         (name, vehicle, phone, actor.user_id, now_str())).lastrowid
+        audit(db, actor, 'CREATE', 'tezpul_driver', did, new={'name': name, 'vehicle': vehicle, 'phone': phone})
+        return did
+
+
+def drivers_due():
+    """Every driver still owed: the starshi talons he brought people for (kg written, not cancelled), not yet paid."""
+    return [dict(r) for r in q(f'''SELECT d.id, d.name, d.vehicle, COUNT(*) talons, SUM(t.driver_people) people,
+                                       SUM(t.driver_amount) amount, MIN(substr(t.entered_at,1,10)) since
+                                FROM tezpul_talons t JOIN tezpul_drivers d ON d.id=t.driver_id
+                                WHERE t.driver_pay_id IS NULL AND t.status IN ('TAYYOR','TOLANDI') AND {LIVE}
+                                GROUP BY d.id ORDER BY amount DESC''')]
+
+
+def pay_driver(actor, driver_id, *, client_uuid=None):
+    """PUL BERILDI to a driver: everything he is owed, in one cash entry (Shofyor — odam tashish). Same tap twice = once."""
+    _need(actor, 'payouts.pay')
+    from . import accounting as A
+    with tx() as db:
+        if client_uuid:
+            done = db.execute('SELECT * FROM tezpul_driver_pays WHERE client_uuid=?', (client_uuid,)).fetchone()
+            if done:
+                return {'already': True, **dict(done)}
+        d = db.execute('SELECT * FROM tezpul_drivers WHERE id=?', (driver_id,)).fetchone()
+        if not d:
+            raise UserError('Shofyor topilmadi.')
+        rows = db.execute(f'''SELECT t.* FROM tezpul_talons t WHERE t.driver_id=? AND t.driver_pay_id IS NULL
+                              AND t.status IN ('TAYYOR','TOLANDI') AND {LIVE}''', (driver_id,)).fetchall()
+        if not rows:
+            raise UserError(f'{d["name"]} ga to‘lanadigan pul qolmagan.')
+        amount = sum(r['driver_amount'] or 0 for r in rows)
+        people = sum(r['driver_people'] or 0 for r in rows)
+        box = A._cashbox(db, actor, None)
+        bal = A.box_balance(db, box)
+        if amount > bal:
+            raise UserError(f'Kassada yetarli pul yo‘q: qoldiq {A.fmt_som(bal)}, berilmoqchi {A.fmt_som(amount)}.')
+        nums = ', '.join(number_text(r['number']) for r in rows)
+        note = f'Shofyor {d["name"]}{" · " + d["vehicle"] if d["vehicle"] else ""} · {people} odam · talonlar {nums}'
+        cid, doc = A.book_cash(db, actor, direction='OUT', category='driver_pay', amount=amount, cashbox_id=box,
+                               counterparty=d['name'], note=note, feed=False)
+        ts = now_str()
+        pid = db.execute('''INSERT INTO tezpul_driver_pays(driver_id, amount, people, talons, cashbox_id, cash_entry_id,
+                                client_uuid, paid_by, paid_at) VALUES (?,?,?,?,?,?,?,?,?)''',
+                         (driver_id, amount, people, len(rows), box, cid, client_uuid, actor.user_id, ts)).lastrowid
+        n = db.execute(f'''UPDATE tezpul_talons SET driver_pay_id=? WHERE driver_id=? AND driver_pay_id IS NULL
+                           AND id IN ({",".join("?" * len(rows))})''', (pid, driver_id, *[r['id'] for r in rows])).rowcount
+        if n != len(rows):
+            raise UserError('Shu payt boshqa kassir ham to‘ladi — qaytadan oching.')
+        audit(db, actor, 'DRIVER_PAID', 'tezpul_driver', driver_id,
+              new={'pay_id': pid, 'amount': amount, 'people': people, 'talons': [r['number'] for r in rows], 'doc_no': doc})
+        from .yordamchi import _send
+        who = db.execute('SELECT full_name FROM users WHERE id=?', (actor.user_id,)).fetchone()
+        rates = sorted({r['driver_rate'] for r in rows})
+        _send(db, 'tezpul_driver', f'driver-pay:{pid}',
+              f'🚐 Shofyorga pul berildi: {d["name"]}{" (" + d["vehicle"] + ")" if d["vehicle"] else ""}\n'
+              + (f'{people} odam × {fmt_money(rates[0])} = {fmt_money(amount)}\n' if len(rates) == 1
+                 else f'{people} odam = {fmt_money(amount)}\n')
+              + f'Starshi talonlari: {nums}\nKassir: {who["full_name"] if who else "—"} · {ts[:16]}',
+              ('admin', 'manager', 'accountant'))
+        return {'already': False, 'id': pid, 'name': d['name'], 'amount': amount, 'people': people, 'talons': len(rows),
+                'doc_no': doc}
+
+
 # ------------------------------------------------------------------ the rahbar
 
 LIVE = "t.harvest_id IS NOT NULL AND EXISTS (SELECT 1 FROM harvests h WHERE h.id=t.harvest_id AND h.voided_at IS NULL)"
@@ -574,6 +714,12 @@ def panel(day=None):
                            FROM tezpul_talons t LEFT JOIN brigadiers b ON b.id=t.brigadier_id LEFT JOIN users u ON u.id=t.paid_by
                            WHERE t.status='TOLANDI' AND t.pay_date=? GROUP BY COALESCE(t.pay_batch, t.id)
                            ORDER BY paid_at DESC LIMIT 30''', (day,)).fetchall()
+    drivers_day = [dict(r) for r in db.execute(f'''SELECT d.name, d.vehicle, COUNT(*) talons, SUM(t.driver_people) people,
+                                   SUM(t.driver_amount) amount,
+                                   SUM(CASE WHEN t.driver_pay_id IS NOT NULL THEN t.driver_amount ELSE 0 END) paid,
+                                   SUM(t.people) said
+                            FROM tezpul_talons t JOIN tezpul_drivers d ON d.id=t.driver_id
+                            WHERE substr(t.entered_at,1,10)=? AND {LIVE} GROUP BY d.id ORDER BY amount DESC''', (day,))]
     # one person both wrote the kg and paid the money (an o‘rinbosar day) — shown in red for the rahbar to check
     self_paid = db.execute('''SELECT u.full_name name, COUNT(*) n, SUM(t.kg) kg, SUM(t.amount) amount,
                                      GROUP_CONCAT(t.number, ',') numbers
@@ -590,7 +736,7 @@ def panel(day=None):
     return {'day': day, 'entered': dict(entered), 'paid': dict(paid), 'unpaid': dict(unpaid), 'season': dict(season),
             'photos': list(photos.values()),
             'counts': counts, 'brigades': brigades, 'cashiers': cashiers, 'clerks': clerks, 'errors': errors,
-            'self_paid': self_paid,
+            'self_paid': self_paid, 'drivers': drivers_day,
             'recent': recent, 'issued': sum(counts.values()), 'blank': counts.get('BOSH', 0),
             'legacy': counts.get('KUTILMOQDA', 0)}
 

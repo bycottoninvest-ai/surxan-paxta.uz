@@ -1517,6 +1517,9 @@ def build_tezpul_starshi_report(info, *, company, upload_dir):
              ('Odam soni (starshi yozgan)', str(t.get('people') or '—')),
              ('Varaqlar', f'{len(sheets)} ta · o‘qilgan qatorlar: {info["rows"]}'),
              ('Narx', f'{num(t.get("rate"), 0)} so‘m/kg'),
+             ('Shofyor', (f'{t["driver"]}{" · " + t["driver_vehicle"] if t.get("driver_vehicle") else ""} — {t.get("driver_people") or 0} odam × '
+                          f'{num(t.get("driver_rate"), 0)} = {num(t.get("driver_amount"), 0)} so‘m'
+                          + (' (berildi)' if t.get('driver_pay_id') else ' (berilmagan)')) if t.get('driver') else '—'),
              ('Holat', 'To‘langan — ' + (t.get('cashier') or '') + ' · ' + (t.get('paid_at') or '')[:16] if t.get('status') == 'TOLANDI'
               else 'To‘lanmagan')]
     c.setFont('DejaVu', 10)
