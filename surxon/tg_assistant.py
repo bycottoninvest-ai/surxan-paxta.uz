@@ -46,7 +46,12 @@ def wants(m, user, group):
     if (m.get('text') or '').startswith('/'):
         return False
     if group:
-        return addressed(m, current_app.config['SURXON'].TELEGRAM_BOT_USERNAME)[0]
+        if addressed(m, current_app.config['SURXON'].TELEGRAM_BOT_USERNAME)[0]:
+            return True
+        # a voice message in the group: listened to, answered only if it starts with “Yordamchi, …”
+        from . import gemini
+        from .settings import get_bool
+        return bool(m.get('voice')) and gemini.enabled() and get_bool('ai_group_voice_listen')
     return bool(user) and A.allowed(user, 'telegram')
 
 
@@ -81,12 +86,21 @@ def _run(app, m, group):
             return
         voice_in = bool(m.get('voice') or m.get('audio'))
         try:
-            _action(chat, 'typing')
             if voice_in:
                 v = m.get('voice') or m.get('audio')
+                spoken_to = not group or addressed(m, app.config['SURXON'].TELEGRAM_BOT_USERNAME)[0]
+                if spoken_to:
+                    _action(chat, 'typing')
                 text = gemini.transcribe(tg_download(v['file_id']), v.get('mime_type') or 'audio/ogg')
+                if not spoken_to:            # people talking to each other: only “Yordamchi, …” is for the bot
+                    trig = TRIGGER.match(text) or re.match(r'^\W*(\w+\W+){0,2}?(yordamchi)\b[\s,:!.-]*', text, re.I)
+                    if not trig:
+                        return
+                    text = text[trig.end():].strip()
+                    _action(chat, 'typing')
                 send(chat, f'🎤 {text}', reply_to=reply_to)
             else:
+                _action(chat, 'typing')
                 text = addressed(m, app.config['SURXON'].TELEGRAM_BOT_USERNAME)[1] if group else (m.get('text') or '')
             if not text.strip():
                 send(chat, 'Savolingizni yozing yoki ayting 🙂', reply_to=reply_to)
@@ -121,3 +135,4 @@ def _voice(app, chat, text, reply_to):
         telegram_upload('sendVoice', fields, {'voice': ('javob.mp3', audio, 'audio/mpeg')})
     except Exception as exc:
         app.logger.warning('telegram assistant voice failed: %s', exc)
+        gemini.remember_error(f'Telegram ovozli javob: {exc}')

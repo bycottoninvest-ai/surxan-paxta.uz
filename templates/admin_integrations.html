@@ -61,11 +61,12 @@
       {% if gm_tail %}<form method="post" class="mt-s" data-confirm="Gemini kaliti o‘chirilsinmi? Yordamchi telefon ovozida gapiradi.">{{ csrf() }}<input type="hidden" name="action" value="gemini_key_clear"><button class="btn btn-ghost btn-sm">Kalitni o‘chirish</button></form>{% endif %}
       {% endif %}
       {% if gm_on %}<p class="small mt-s"><b>2.</b> <button type="button" class="btn btn-light btn-sm" id="gm-test">🔊 Ovozni sinash</button> <span id="gm-msg" class="small"></span></p>
-      <p class="tiny muted">Model va ovoz: Sozlamalar → <code>gemini_tts_model</code>, <code>gemini_tts_voice</code>.</p>
+      <p class="tiny muted">Model: <code>{{ gm_model }}</code> · Sozlamalar → <code>gemini_tts_model</code>, <code>gemini_tts_voice</code>.</p>
+      {% if gm_error %}<p class="small" style="color:#b91c1c">Oxirgi ovoz xatosi: {{ gm_error }}</p>{% endif %}
       <script>document.getElementById('gm-test').addEventListener('click', async () => {
         const m = document.getElementById('gm-msg'); m.textContent = 'Kuting…';
         const r = await fetch('{{ url_for('integrations.gemini_test') }}');
-        if ((r.headers.get('Content-Type') || '').startsWith('audio')) { new Audio(URL.createObjectURL(await r.blob())).play(); m.textContent = '✅ Ishlayapti'; }
+        if ((r.headers.get('Content-Type') || '').startsWith('audio')) { new Audio(URL.createObjectURL(await r.blob())).play(); m.textContent = '✅ Ishlayapti (' + (r.headers.get('X-Model') || '') + ')'; }
         else { const j = await r.json().catch(() => ({})); m.textContent = '❌ ' + (j.error || ('xato ' + r.status)); }
       });</script>{% endif %}
     </div>

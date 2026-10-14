@@ -181,6 +181,7 @@ def tts(text):
             msg = r.json().get('error', {}).get('message', '')[:200]
         except ValueError:
             msg = ''
+        remember_error(f'TTS {model()}: {r.status_code} {msg}')
         raise UserError(f'Gemini ovoz xatosi ({r.status_code}){": " + msg if msg else ""}')
     try:
         part = next(p for c in r.json()['candidates'] for p in c['content']['parts'] if p.get('inlineData'))
@@ -241,6 +242,7 @@ def transcribe(audio, mime='audio/ogg'):
     except requests.RequestException:
         raise UserError('Google’ga ulanib bo‘lmadi (internet).')
     if r.status_code != 200:
+        remember_error(f'Ovozni tanish {_stt_model()}: {r.status_code} {r.text[:200]}')
         raise UserError(f'Ovozni tanib bo‘lmadi ({r.status_code}).')
     try:
         text = ''.join(p.get('text', '') for c in r.json()['candidates'] for p in c['content']['parts']).strip()
@@ -262,3 +264,19 @@ def mp3(wav_bytes):
     enc.set_channels(ch)
     enc.set_quality(5)
     return bytes(enc.encode(pcm) + enc.flush())
+
+
+def remember_error(text):
+    """The last voice failure, shown on the Integratsiyalar page (so “no voice” has a reason anyone can read)."""
+    try:
+        from .db import tx
+        from .utils import now_str
+        with tx() as db:
+            db.execute("INSERT INTO settings(key, value, updated_at) VALUES ('gemini_last_error', ?, ?) ON CONFLICT(key) DO "
+                       "UPDATE SET value=excluded.value, updated_at=excluded.updated_at", (f'{now_str()[:16]} · {str(text)[:300]}', now_str()))
+    except Exception:
+        pass
+
+
+def last_error():
+    return get_setting('gemini_last_error') or ''

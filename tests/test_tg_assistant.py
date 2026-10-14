@@ -139,3 +139,32 @@ def test_director_sends_a_task_to_the_work_group(app, world, tg, monkeypatch):
     fake = use(say('x'))
     b2.text('Hammaga ayt: ertaga ish yo‘q')
     assert 'topshiriq' not in {t['name'] for t in fake.sent[0]['tools']}
+
+
+def test_group_voice_is_answered_only_when_it_starts_with_yordamchi(app, world, tg, monkeypatch):
+    use, uploads = tg
+    link(app, world['admin'], 'buxgalter', 5505)
+    g = Bot(app, 5505)
+    g.uid += 5
+    app.config['SURXON'].GEMINI_API_KEY = 'AIza' + 'g' * 35
+    heard = {'text': 'Mirjalol, telashkani tez olib kel'}
+    try:
+        monkeypatch.setattr(gemini, 'transcribe', lambda audio, mime='audio/ogg': heard['text'])
+        monkeypatch.setattr(gemini, 'tts', lambda text: b'RIFF')
+        monkeypatch.setattr(gemini, 'mp3', lambda wav: b'MP3')
+
+        def voice():
+            return g._post({'message': {'message_id': g.uid, 'chat': {'id': -1003, 'type': 'supergroup', 'title': 'Ish'},
+                                        'from': {'id': 5505, 'first_name': 'Asadbek'}, 'voice': {'file_id': 'v9', 'duration': 4}}})
+        SENT.clear()
+        fake = use(say('x'))
+        voice()                                                    # people talking to each other: left alone
+        assert not fake.sent and not [p for m, p in SENT if m == 'sendMessage']
+        heard['text'] = 'Yordamchi, bugun qancha paxta terildi?'
+        fake = use(say('Bugun 4 120 kg.'))
+        voice()
+        texts = [p['text'] for m, p in SENT if m == 'sendMessage']
+        assert '🎤 bugun qancha paxta terildi?' in texts and fake.sent[0]['messages'][-1]['content'] == 'bugun qancha paxta terildi?'
+        assert uploads and uploads[-1][0] == 'sendVoice'
+    finally:
+        app.config['SURXON'].GEMINI_API_KEY = ''

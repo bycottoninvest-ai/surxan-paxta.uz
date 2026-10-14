@@ -378,6 +378,8 @@ def render(new_key=None, message=None):
                            gm_on=__import__('surxon.gemini', fromlist=['enabled']).enabled(),
                            gm_src=__import__('surxon.gemini', fromlist=['source']).source(),
                            gm_tail=__import__('surxon.gemini', fromlist=['key_tail']).key_tail(),
+                           gm_error=__import__('surxon.gemini', fromlist=['last_error']).last_error(),
+                           gm_model=__import__('surxon.gemini', fromlist=['model']).model(),
                            sheets=_sheets_state(), offsite=_offsite_state(),
                            chosen={'archive': get_setting('tg_archive_chat_id'), 'report': get_setting('tg_report_chat_id')},
                            bot_user=current_app.config['SURXON'].TELEGRAM_BOT_USERNAME)
@@ -971,7 +973,13 @@ def gemini_test():
     from flask import Response, jsonify
     from .. import gemini
     try:
-        return Response(gemini.tts('Assalomu alaykum! Men SURXON yordamchisiman. Bugun 12 450 kilogramm paxta terildi.'),
-                        mimetype='audio/wav', headers={'Cache-Control': 'no-store'})
+        wav = gemini.tts('Assalomu alaykum! Men SURXON yordamchisiman. Bugun 12 450 kilogramm paxta terildi.')
     except UserError as err:
+        gemini.remember_error(f'Ovozni sinash: {err}')
         return jsonify(ok=False, error=str(err)), 422
+    try:                                   # the Telegram voice needs MP3 too: check it here as well
+        gemini.mp3(wav)
+    except Exception as exc:
+        gemini.remember_error(f'MP3 (Telegram ovozi): {exc}')
+        return jsonify(ok=False, error=f'Ovoz bor, lekin Telegram uchun MP3 qilinmadi: {exc}'), 422
+    return Response(wav, mimetype='audio/wav', headers={'Cache-Control': 'no-store', 'X-Model': gemini.model()})
