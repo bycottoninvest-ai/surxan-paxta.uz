@@ -806,7 +806,7 @@ def record_nayman(actor, waybill_id, *, accepted_kg, received_date, receiver_nam
 # the operator picks one; nothing is preselected or guessed. Only “Boshqa sabab” needs a written note.
 # (older receipts keep whatever reason text they were saved with)
 STATION_DIFF_REASONS = ['Tarozilar farqi', 'Tara farqi', 'Paxta to‘kilgan', 'Namlik o‘zgarishi', 'Aralashma ajratilgan',
-                        'Qisman tushirilgan', 'Sabab aniqlanmagan', 'Boshqa sabab']
+                        'Qisman tushirilgan', 'Dala kg xato yozilgan', 'Sabab aniqlanmagan', 'Boshqa sabab']
 OTHER_REASON = 'Boshqa sabab'
 
 
@@ -843,7 +843,8 @@ def mark_arrived(actor, waybill_id):
         return True
 
 
-def receive_at_station(actor, waybill_id, *, station_kg=None, reason='', note='', photo=None, gross_kg=None, tare_kg=None):
+def receive_at_station(actor, waybill_id, *, station_kg=None, reason='', note='', photo=None, gross_kg=None, tare_kg=None,
+                       big_ok=False):
     """Punkt scale weight → difference → QABUL QILINDI. A second tap never makes a second receipt.
     Either brutto + tara (netto = brutto − tara, both kept) or a ready netto from the scale."""
     _need(actor, 'station.receive')
@@ -865,11 +866,15 @@ def receive_at_station(actor, waybill_id, *, station_kg=None, reason='', note=''
         max_g = get_float('max_gross_kg', 40000, db)
         if station_kg is None or station_kg <= 0 or station_kg > max_g:
             raise UserError(f'Punkt tarozisi kg 0 va {max_g:g} oralig‘ida bo‘lishi kerak.')
-        if too_heavy(station_kg, wb['net_kg'], db):
-            raise UserError(f'Punkt vazni ({station_kg:g} kg) daladagidan ({wb["net_kg"]:g} kg) juda katta. Tekshiring.')
+        big = too_heavy(station_kg, wb['net_kg'], db)
+        if big and not big_ok:
+            raise UserError(f'Punkt vazni ({station_kg:g} kg) daladagidan ({wb["net_kg"]:g} kg) juda katta. Tekshiring — '
+                            'to‘g‘ri bo‘lsa, “Ha, punkt kg to‘g‘ri” ni belgilab, sababini yozing.')
         diff, pct, level = diff_level(wb['net_kg'], station_kg, db)
         reason = clean_text(reason, 60)
         note = clean_text(note, 300)
+        if big and (reason not in STATION_DIFF_REASONS or len(note) < 3):
+            raise UserError('Juda katta farq: sababni tanlang va nima bo‘lganini qisqa yozing (masalan: dalada kg xato yozilgan).')
         if level != 'ok' and reason not in STATION_DIFF_REASONS:
             raise UserError(f'Farq {diff:+g} kg ({pct:+.2f}%). Farq sababini tanlang.')
         if reason and reason not in STATION_DIFF_REASONS:
@@ -890,7 +895,8 @@ def receive_at_station(actor, waybill_id, *, station_kg=None, reason='', note=''
         audit(db, actor, 'RECEIVE', 'waybill', waybill_id,
               new={'trip_no': wb['trip_no'], 'field_kg': wb['net_kg'], 'station_kg': station_kg, 'diff_kg': diff,
                    'station_gross_kg': gross_kg, 'station_tare_kg': tare_kg,
-                   'diff_pct': pct, 'level': level, 'reason': full_reason, 'status': 'QABUL QILINDI'})
+                   'diff_pct': pct, 'level': level, 'reason': full_reason, 'status': 'QABUL QILINDI',
+                   **({'katta_farq_tasdiqlandi': True} if big else {})})
         if photo:
             store_photo(db, actor, photo, category='nayman', entity_type='nayman_receipt', entity_id=cur.lastrowid,
                         caption=f'Punkt tarozisi {wb["trip_no"]}: {station_kg:g} kg',

@@ -275,7 +275,21 @@ def test_punkt_may_accept_up_to_1000_kg_over_field(app, world):
         k1 = q("SELECT id FROM equipment WHERE code='K-01'", one=True)['id']
     w = _close(app, tally, world, 'TL-01', [('600', k1)])
     r = yunus.post(f'/punkt/yuk/{w}/qabul', {'station_kg': '1700', 'reason': 'Tarozilar farqi'}).get_json()
-    assert not r['ok'] and 'juda katta' in r['error']                     # 1 100 kg over — a typo
+    assert not r['ok'] and 'juda katta' in r['error'] and 'Ha, punkt kg to‘g‘ri' in r['error']   # 1 100 kg over — a typo?
+    page = yunus.get(f'/punkt/yuk/{w}').get_data(as_text=True)
+    assert 'pk-big' in page and 'data-maxover="1000' in page
+    # it really was so (the field paper was wrong): confirmed + a reason and a note → accepted, the director is told
+    r = yunus.post(f'/punkt/yuk/{w}/qabul', {'station_kg': '1700', 'reason': 'Dala kg xato yozilgan', 'katta_farq': '1'}).get_json()
+    assert not r['ok'] and 'qisqa yozing' in r['error']                  # the note is required
+    w_big = w
+    r = yunus.post(f'/punkt/yuk/{w_big}/qabul', {'station_kg': '1700', 'reason': 'Dala kg xato yozilgan', 'katta_farq': '1',
+                                                 'note': 'Nakladnoyda 600 deb yozilgan, telashka to‘la edi'}).get_json()
+    assert r['ok'], r
+    with app.app_context():
+        a = q("SELECT new_json FROM audit_logs WHERE action='RECEIVE' AND entity_type='waybill' AND entity_id=?", (str(w_big),), one=True)
+        assert 'katta_farq_tasdiqlandi' in a['new_json']
+        assert q("SELECT COUNT(*) n FROM outbox WHERE ref LIKE 'alert:%'", one=True)['n'] >= 1
+    w = _close(app, tally, world, 'TL-03', [('600', k1)])
     r = yunus.post(f'/punkt/yuk/{w}/qabul', {'station_kg': '1500', 'reason': 'Tarozilar farqi'}).get_json()
     assert r['ok'], r                                                     # 900 kg over (2.5×) — allowed with a reason
     assert world['admin'].post('/admin/sozlamalar', {'set_punkt_max_over_kg': '0'}).get_json()['ok']   # 0 = cheksiz

@@ -110,6 +110,7 @@ def trip(waybill_id):
                            blank=BL.of_waybill(waybill_id), blank_required=BL.required(),
                            blank_code=request.args.get('blanka', ''),
                            reasons=STATION_DIFF_REASONS, other_reason=OTHER_REASON, warn=get_float('punkt_warn_pct', 1),
+                           max_over=get_float('punkt_max_over_kg', 1000),
                            alert=get_float('punkt_alert_pct', 3), scale=scale_reading(probe=True),
                            timeline=queries.load_timeline(wb['load_id']), event_text=queries.EVENT_TEXT,
                            stamps=_stamp_photos(waybill_id) if wb['receipt_id'] else [])
@@ -162,7 +163,7 @@ def receive(waybill_id):
         BL.attach(actor, waybill_id, code, ph)
     res = receive_at_station(actor, waybill_id, station_kg=kg, gross_kg=gross, tare_kg=tare,
                              reason=request.form.get('reason', ''), note=request.form.get('note', ''),
-                             photo=read_upload(request.files.get('photo')))
+                             photo=read_upload(request.files.get('photo')), big_ok=request.form.get('katta_farq') == '1')
     kg = res['station_kg']
     if load_no and not res['already']:        # the punkt scale's load number (hosil-qabuli.uz yuk xati) — ties the PQ-17 to this trip exactly
         from ..db import tx

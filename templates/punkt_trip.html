@@ -57,7 +57,7 @@
 
   {% if can('station.receive') %}
   <form method="post" action="{{ url_for('punkt.receive', waybill_id=wb.id) }}" enctype="multipart/form-data" class="d-form" id="pk-form"
-        data-sent="{{ wb.net_kg }}" data-warn="{{ warn }}">
+        data-sent="{{ wb.net_kg }}" data-warn="{{ warn }}" data-maxover="{{ max_over if max_over is not none else 1000 }}">
     {{ csrf() }}<input type="hidden" name="mode" id="pk-mode" value="bt">
     <div id="pk-step2">
       <h2 class="d-h1">2. Og‘irlik</h2>
@@ -82,6 +82,10 @@
         <div class="pk-rs">{% for r in reasons %}<label><input type="radio" name="reason" value="{{ r }}"><span>{{ r }}</span></label>{% endfor %}</div>
         <textarea name="note" id="pk-note" rows="2" placeholder="Sababni qisqa yozing" hidden></textarea>
       </div>
+      <div class="pk-big" id="pk-big" hidden>
+        <b>⚠️ Juda katta farq</b> — punkt kg dala nakladnoyidagidan ancha ko‘p. Tarozi va nakladnoyni yana bir bor tekshiring.
+        <label><input type="checkbox" name="katta_farq" value="1" id="pk-bigok"> <span>Ha, punkt kg to‘g‘ri — sababini pastga yozaman</span></label>
+      </div>
       {% if blank_required and not blank %}
       <div class="pk-blank">
         <label class="d-l"><b>Punkt blankasi</b> — raqami (blankning yuqorisida, masalan PB-0012)</label>
@@ -101,6 +105,8 @@
   {% endif %}
 {% endif %}
 </div>
+<style>.pk-big{margin:10px 0;padding:12px;border-radius:12px;background:#fff1f2;border:2px solid #fca5a5;color:#991b1b;font-size:14px}
+.pk-big label{display:flex;gap:8px;align-items:center;margin-top:8px;font-weight:700;color:#7f1d1d}.pk-big input{width:22px;height:22px}</style>
 {% endblock %}
 {% block scripts %}<script>
 (function(){
@@ -131,6 +137,11 @@
     f.querySelectorAll('input[name=reason]').forEach(r => { r.checked = false; r.required = d !== 0 && pct > warn; });
     req.textContent = d !== 0 && pct > warn ? '(majburiy)' : (d !== 0 ? '(ixtiyoriy — farq me’yor ichida)' : '');
     note.hidden = true; note.required = false;
+    const maxOver = parseFloat(f.dataset.maxover || '1000');
+    const big = maxOver > 0 && v > sent * 1.5 && (v - sent) > maxOver;       // the server's “cannot be right” check
+    const bigBox = document.getElementById('pk-big'), bigOk = document.getElementById('pk-bigok');
+    bigBox.hidden = !big; bigOk.required = big; bigOk.checked = false;
+    if (big) { note.hidden = false; note.required = true; note.placeholder = 'Nima bo‘lgan? (masalan: dalada kg xato yozilgan)'; }
     s2.hidden = true; s3.hidden = false; window.scrollTo(0, 0);
   });
   document.getElementById('pk-back').addEventListener('click', () => { s3.hidden = true; s2.hidden = false; });
@@ -139,7 +150,8 @@
     const r = f.querySelector('input[name=wmode][value=netto]'); r.checked = true; r.dispatchEvent(new Event('change'));
     n.value = sent; g.value = ''; t.value = ''; show(); document.getElementById('pk-next').click(); });
   f.querySelectorAll('input[name=reason]').forEach(r => r.addEventListener('change', () => {
-    const other = r.value === {{ other_reason|tojson }}; note.hidden = !other; note.required = other; if (other) note.focus(); }));
+    const big = !document.getElementById('pk-big').hidden;
+    const other = r.value === {{ other_reason|tojson }}; note.hidden = !other && !big; note.required = other || big; if (other) note.focus(); }));
   // a required field on the hidden weight step (yuk xati №) must not block the button silently: show it
   f.addEventListener('invalid', e => { if (s2.hidden && s2.contains(e.target)) { s3.hidden = true; s2.hidden = false;
     setTimeout(() => { e.target.focus(); alert('Yuk xati № ni yozing (klaster tarozisi chekidagi raqam).'); }, 50); } }, true);
