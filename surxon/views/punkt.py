@@ -50,8 +50,10 @@ def home():
     today = today_str()
     from ..transit import on_the_way
     etas = {d['wb_id']: d for d in on_the_way(sid) if d['eta']}
-    from ..groups import who
+    from ..groups import active, who
+    from ..settings import get_bool
     return render_template('punkt_home.html', station=station, stations=_stations(), sid=sid, etas=etas,
+                           paper=get_bool('dala_qogoz'), uys=active(sid),
                            who=who([t['id'] for t in trips]),
                            counts=queries.station_counts(sid, today),
                            on_way=[t for t in trips if not t['arrived_at']], arrived=[t for t in trips if t['arrived_at']],

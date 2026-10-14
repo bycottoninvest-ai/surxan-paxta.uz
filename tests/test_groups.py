@@ -169,7 +169,8 @@ def test_umumiy_yuk_guards(app, world):
     assert r['ok'] is False and 'qabul qilingan' in r['error']
     # the UY start page finds a paper by its number
     assert yunus.get('/punkt/uy?q=UY-0009').headers['Location'].endswith(f'/punkt/uy/{t2}')
-    assert 'Umumiy yuk' in yunus.get('/punkt').get_data(as_text=True)
+    home = yunus.get('/punkt').get_data(as_text=True)
+    assert 'UMUMIY YUK (UY)' in home and ('YANGI UY VARAG‘INI SKANERLASH' in home or 'DALA NAKLADNOYINI QO‘SHISH' in home)
 
 
 def test_split_is_exact():

@@ -18,8 +18,33 @@
 {%- endmacro %}
 {% block content %}
 <div class="d-wrap">
-  <div><h1 class="d-h1">1. Kelgan telashkani tanlang</h1>
-  {% if can('station.receive') %}<a class="btn btn-block uy-btn" href="{{ url_for('punkt.groups_home') }}">🚜 Umumiy yuk — bir nechta telashka birga</a>
+  {% if paper and can('station.receive') %}
+  {# the paper way (dala_qogoz): every trailer comes with its field nakladnoy; it is photographed into the open UY #}
+  <div class="py-hero">
+    <div class="py-t">📦 UMUMIY YUK (UY)</div>
+    {% set open_uy = uys|selectattr('status', 'equalto', 'OCHIQ')|list %}
+    {% for u in open_uy %}
+    <div class="py-uy"><div><b>{{ u.number }}</b><span>{{ u.n }} ta telashka · {{ u.kg|num }} kg</span></div><em>ochiq</em></div>
+    <a class="py-big" href="{{ url_for('punkt.group', token=u.token) }}">📷 DALA NAKLADNOYINI QO‘SHISH<small>telashka keldi — nakladnoyini rasmga oling</small></a>
+    {% endfor %}
+    {% for u in uys if u.status == 'YUBORILDI' %}
+    <a class="py-wait" href="{{ url_for('punkt.group', token=u.token) }}"><span><b>{{ u.number }}</b> · {{ u.n }} ta telashka · {{ u.kg|num }} kg<small>yopilgan — punkt tortishi kutilmoqda</small></span><b>⚖️ Brutto / tara ›</b></a>
+    {% endfor %}
+    {% if not open_uy %}<a class="py-big py-new" href="{{ url_for('punkt.groups_home') }}">🧾 YANGI UY VARAG‘INI SKANERLASH<small>bo‘sh UY qog‘ozidagi QR ni oching</small></a>{% endif %}
+    <ol class="py-steps"><li>UY varag‘ini skanerlang (yangi yuk boshlanadi)</li><li>Har telashka kelganda — <b>nakladnoyini rasmga oling</b>, tekshirib “Qo‘shish”</li><li>Hammasi kelgach — <b>yopish</b>, keyin brutto / tara</li></ol>
+  </div>
+  <style>.py-hero{background:linear-gradient(135deg,#0b2a55,#1d4ed8);color:#fff;border-radius:22px;padding:16px;margin:4px 0 14px;box-shadow:0 10px 26px rgba(11,42,85,.25)}
+  .py-t{font-size:13px;font-weight:900;letter-spacing:1px;opacity:.9;margin-bottom:8px}
+  .py-uy{display:flex;justify-content:space-between;align-items:center;background:rgba(255,255,255,.14);border-radius:14px;padding:10px 12px;margin-bottom:8px}
+  .py-uy b{display:block;font-size:20px}.py-uy span{font-size:13px;opacity:.9}.py-uy em{font-style:normal;background:#22c55e;border-radius:999px;padding:4px 10px;font-size:12px;font-weight:800}
+  .py-big{display:flex;flex-direction:column;align-items:center;text-align:center;background:#22c55e;color:#fff;text-decoration:none;font-weight:900;font-size:19px;border-radius:16px;padding:16px 10px;margin:6px 0;box-shadow:0 6px 16px rgba(0,0,0,.18)}
+  .py-big small{font-size:12.5px;font-weight:600;opacity:.95;margin-top:3px}.py-new{background:#f59e0b}
+  .py-wait{display:flex;justify-content:space-between;align-items:center;gap:8px;background:#fff;color:#0b2a55;text-decoration:none;border-radius:14px;padding:10px 12px;margin:6px 0;font-size:14px}
+  .py-wait small{display:block;font-size:12px;color:#b45309;font-weight:700}.py-wait>b{white-space:nowrap;color:#1d4ed8}
+  .py-steps{margin:10px 0 0;padding-left:20px;font-size:13px;line-height:1.5;opacity:.95}</style>
+  {% endif %}
+  <div>{% if not paper %}<h1 class="d-h1">1. Kelgan telashkani tanlang</h1>{% endif %}
+  {% if can('station.receive') and not paper %}<a class="btn btn-block uy-btn" href="{{ url_for('punkt.groups_home') }}">🚜 Umumiy yuk — bir nechta telashka birga</a>
   <style>.uy-btn{background:#6d28d9;color:#fff;font-weight:800;margin:6px 0 10px;padding:14px}</style>{% endif %}
   <style>.pk-who{display:inline-block;align-self:flex-start;font-size:.78rem;font-weight:700;border-radius:6px;padding:1px 7px;margin:2px 4px 2px 0}
   .pk-kb{background:#fef3c7;color:#92400e}.pk-ql{background:#dcfce7;color:#166534}.pk-uy{background:#ede9fe;color:#5b21b6}</style><div class="small muted">Nakladnoylar avtomatik chiqadi · {{ station.name if station else 'Barcha punktlar' }}</div></div>
@@ -29,7 +54,9 @@
   <div class="p-banner" id="p-banner" hidden><b>🚜 Yangi yuk yo‘lda</b><span data-text></span><a class="btn btn-light btn-sm" data-link href="#">Ko‘rish</a></div>
 
   {% set trips = arrived + on_way %}
-  {% for t in trips %}{{ card(t, loop.first) }}{% else %}{{ empty('Hozircha kelayotgan telashka yo‘q', 'trailer') }}{% endfor %}
+  {% if paper %}<details class="py-old"><summary>Eski usulda (nakladnoysiz) kelayotganlar — {{ trips|length }} ta</summary>{% endif %}
+  {% for t in trips %}{{ card(t, loop.first and not paper) }}{% else %}{{ empty('Hozircha kelayotgan telashka yo‘q', 'trailer') }}{% endfor %}
+  {% if paper %}</details><style>.py-old{margin:4px 0 12px}.py-old>summary{cursor:pointer;font-weight:800;color:#475569;padding:10px 4px}</style>{% endif %}
 
   <div class="pk-tools">
     <form method="get" action="{{ url_for('punkt.find') }}" class="pk-find"><input name="q" inputmode="numeric" autocomplete="off" placeholder="Raqam bilan qidirish" required><button class="btn btn-light">{{ icon('search','sm') }}</button></form>
