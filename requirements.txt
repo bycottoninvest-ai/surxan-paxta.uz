@@ -8,4 +8,5 @@ google-auth>=2.30,<3
 requests>=2.31,<3
 anthropic>=1.13,<2
 pypdf>=4,<7
+lameenc>=1.7,<2
 tzdata>=2024.1; sys_platform == "win32"

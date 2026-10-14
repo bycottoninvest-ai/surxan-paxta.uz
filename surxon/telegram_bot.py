@@ -271,6 +271,9 @@ def _on_group_message(m):
         if m.get('left_chat_member'):
             _left(db, m['left_chat_member'], chat)
         member = kuzatuv.seen(db, m.get('from'), chat) if m.get('from') else None
+    from . import tg_assistant
+    if m.get('from') and not m['from'].get('is_bot') and tg_assistant.wants(m, None, group=True):
+        return tg_assistant.handle(m, group=True)       # “@bot …”, “Yordamchi, …” or a reply to the bot
     if not info or not info['is_work'] or not member or member['status'] != 'FAOL' or not kuzatuv.media_of(m):
         return
     reply_to = (m.get('reply_to_message') or {}).get('message_id')
@@ -590,6 +593,10 @@ def _on_message(chat, user, message, update_id):
     text = (message.get('text') or '').strip()
     photo = message.get('photo')
     actor = actor_for(user)
+    # no form in progress: a question (text or a voice message) goes to the assistant
+    from . import tg_assistant
+    if step in (None, '', 'menu') and tg_assistant.wants(message, user, group=False):
+        return tg_assistant.handle(message)
 
     doc = message.get('document') or {}
     if doc and actor.can('loans.write'):

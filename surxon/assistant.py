@@ -22,7 +22,8 @@ from .utils import UserError, now_str, today_str
 
 ROLES = ('admin', 'manager', 'accountant', 'station')
 ROLE_NAMES = {'admin': 'admin (tizim egasi)', 'manager': 'direktor / rahbar', 'accountant': 'buxgalter',
-              'station': 'punkt operatori'}
+              'station': 'punkt operatori', 'cashier': 'kassir', 'tally': 'terim hisobchisi', 'brigadier': 'brigadir',
+              'scale': 'tarozi xodimi', 'fuel': 'yoqilg‘i mas’uli'}
 MEMORY = 12                     # last messages kept in the conversation
 MAX_STEPS = 6                   # tool rounds per answer
 DOCS = {'punkt': 'PUNKT.md', 'tezpul': 'TEZPUL.md', 'buxgalteriya': 'BUXGALTERIYA.md', 'kuzatuv': 'KUZATUV.md',
@@ -57,8 +58,12 @@ def enabled():
     return get_bool('ai_yordamchi_on') and talon_ai.enabled()
 
 
-def allowed(user):
-    return bool(user) and user['role'] in ROLES and enabled()
+def allowed(user, channel='site'):
+    """On the site: the director, the punkt operator, the accountant (and admin). In Telegram: every linked staff member
+    (each with their own permissions — a clerk's tools are a clerk's)."""
+    if not user or not enabled():
+        return False
+    return user['role'] in ROLES if channel == 'site' else user['role'] != 'driver'
 
 
 def model():
@@ -443,12 +448,16 @@ TOOLS = {
 FUNCS = {spec['name']: globals()[fn] for fn, (_, spec) in TOOLS.items()}
 
 
-def tools_for(user):
-    return [spec for _, (perm, spec) in TOOLS.items() if perm is None or has_perm(user, perm)]
+GROUP_SAFE = {'kun_holati', 'telashkalar', 'yoriqnoma'}      # in a group everybody reads the answer: no money, no names
 
 
-def run_tool(user, name, args):
-    spec = next((s for s in tools_for(user) if s['name'] == name), None)
+def tools_for(user, group=False):
+    return [spec for _, (perm, spec) in TOOLS.items() if (perm is None or has_perm(user, perm))
+            and (not group or spec['name'] in GROUP_SAFE)]
+
+
+def run_tool(user, name, args, group=False):
+    spec = next((s for s in tools_for(user, group) if s['name'] == name), None)
     if not spec:
         return {'xato': 'Bu ma’lumot sizga yopiq.'}
     try:
@@ -571,12 +580,13 @@ def _call(client, **kw):
         raise UserError(f'AI xatosi ({err.status_code}) — birozdan keyin qayta urinib ko‘ring.')
 
 
-def ask(user, text):
-    """One turn: the question → (tools …) → the answer. Returns {text, links}. Both sides are kept in our database."""
+def ask(user, text, channel='site', group=False):
+    """One turn: the question → (tools …) → the answer. Returns {text, links, cards}. Both sides are kept in our
+    database. channel 'telegram': the bot (private chat, or a work group — then only kg/trips/instructions)."""
     text = (text or '').strip()[:1500]
     if not text:
         raise UserError('Savolni yozing yoki ayting.')
-    if not allowed(user):
+    if not allowed(user, channel):
         raise UserError('Yordamchi siz uchun yoqilmagan.')
     u = month_usage()
     if u['limit'] and u['questions'] >= u['limit']:
@@ -589,7 +599,13 @@ def ask(user, text):
     with tx() as db:
         db.execute("INSERT INTO yordamchi_messages(user_id, role, text, created_at) VALUES (?, 'user', ?, ?)",
                    (user['id'], text, now_str()))
-    client, tools, system = _client(), tools_for(user), _system(user)
+    client, tools, system = _client(), tools_for(user, group), _system(user)
+    if channel == 'telegram':
+        system = system + [{'type': 'text', 'text': (
+            'Bu suhbat Telegram botda. Javob qisqa, oddiy matn (markdown yo‘q). Karta (taklif) bu yerda bosilmaydi — '
+            'o‘zgarish kerak bo‘lsa, saytdagi yordamchida qilishni ayt.' + (
+                ' Bu ISHCHI GURUH: javobni hamma o‘qiydi. Pul, kassa, ish haqi, qarz, ismlar haqida gapirma — '
+                '“bu haqda menga shaxsiy yozing” de. Faqat kg, telashkalar va tizimdan foydalanish.' if group else ''))}]
     links, tin, tout, resp = [], 0, 0, None
     for _ in range(MAX_STEPS):
         resp = _call(client, model=model(), max_tokens=4000, system=system, tools=tools, messages=messages,
@@ -605,7 +621,7 @@ def ask(user, text):
         messages.append({'role': 'assistant', 'content': resp.content})
         results = []
         for b in uses:
-            out = run_tool(user, b.name, b.input)
+            out = run_tool(user, b.name, b.input, group)
             if isinstance(out, dict) and out.get('tugma') and out['tugma'] not in links:
                 links.append(out['tugma'])
             if isinstance(out, dict) and out.get('taklif_id'):

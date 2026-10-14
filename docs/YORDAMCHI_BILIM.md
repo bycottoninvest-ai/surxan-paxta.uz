@@ -79,3 +79,11 @@ Kassir kg yoza olmaydi va o‘zgartira olmaydi.
   dala nakladnoyi rasmi bilan solishtiriladi (TEZ-PUL panel, UY sahifasi).
 - **“Yangi PB blanka kerak”** — Boshqaruv → Punkt blanklari → yaratish → PDF chop etish.
 - **“Yangi xodim”** — Boshqaruv → Xodimlar va loginlar (rol tanlanadi; punkt operatoriga punkt biriktiriladi).
+
+## Yordamchi qayerda ishlaydi
+- **Saytda:** har sahifadagi yumaloq paxta tugmasi (direktor, punkt operatori, buxgalter). 🎤 — gapirish.
+- **Telegram botda (shaxsiy):** Telegrami tizimga ulangan har bir xodim botga yozadi yoki ovozli xabar yuboradi —
+  javob yozuvda, ovozli savolga o‘zbekcha ovozda ham. Ulash: admin “Foydalanuvchilar” sahifasidan kod beradi → botga /start KOD.
+- **Ish guruhida:** bot guruhda admin; “Yordamchi, …” deb yoki @bot nomi bilan yozilsa, yoki botning xabariga javob
+  (ovozli ham) bo‘lsa — javob beradi. Guruhda faqat kg, telashkalar va tizimdan foydalanish haqida; pul va ismlar — faqat shaxsiy chatda.
+- O‘zgarish (xarajatni tasdiqlash, kassani yopish, qarzni yopish) faqat saytda, “✔ Bajarish” bilan.

@@ -193,3 +193,72 @@ def tts(text):
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_bytes(out)
     return out
+
+
+# ------------------------------------------------------------------ voice messages (Telegram): speech → text, text → MP3
+
+STT_PROMPT = ('Bu ovozli xabar o‘zbek tilida (ba’zan rus so‘zlari aralash) — paxta korxonasi xodimining savoli. '
+              'Faqat aytilgan so‘zlarni o‘zbek lotin yozuvida aniq yozing (o‘, g‘ bilan). Hech narsa qo‘shmang va tushuntirmang. '
+              'Hech narsa eshitilmasa, bo‘sh qaytaring.')
+
+
+def _stt_model():
+    """A general (not TTS) flash model this key has — asked once and remembered."""
+    import requests
+    m = (get_setting('gemini_stt_model') or '').strip() or (get_setting('gemini_stt_auto_model') or '').strip()
+    if m:
+        return m
+    try:
+        r = requests.get(f'{API}/models', params={'pageSize': 1000}, headers={'x-goog-api-key': api_key()}, timeout=20)
+        names = [x['name'].split('/', 1)[-1] for x in r.json().get('models', [])
+                 if 'generateContent' in (x.get('supportedGenerationMethods') or ['generateContent'])]
+    except Exception:
+        names = []
+    bad = ('tts', 'image', 'embedding', 'live', 'audio', 'veo', 'imagen', 'aqa', 'robotics', 'computer')
+    names = [n for n in names if 'flash' in n and not any(b in n for b in bad)]
+    if not names:
+        return 'gemini-2.5-flash'
+    best = sorted(names, key=lambda n: (-_version(n), 'lite' in n, 'preview' in n or 'exp' in n))[0]
+    from .db import tx
+    from .utils import now_str
+    with tx() as db:
+        db.execute("INSERT INTO settings(key, value, updated_at) VALUES ('gemini_stt_auto_model', ?, ?) ON CONFLICT(key) DO "
+                   "UPDATE SET value=excluded.value, updated_at=excluded.updated_at", (best, now_str()))
+    return best
+
+
+def transcribe(audio, mime='audio/ogg'):
+    """A Telegram voice message (OGG/Opus) → the Uzbek words said. Raises UserError."""
+    import base64
+    import requests
+    if not enabled():
+        raise UserError('Ovozli xabarni tushunish uchun Gemini kaliti kerak — yozib yuboring.')
+    body = {'contents': [{'parts': [{'inlineData': {'mimeType': mime, 'data': base64.b64encode(audio).decode()}},
+                                    {'text': STT_PROMPT}]}]}
+    try:
+        r = requests.post(f'{API}/models/{_stt_model()}:generateContent', headers={'x-goog-api-key': api_key(),
+                          'Content-Type': 'application/json'}, data=json.dumps(body), timeout=60)
+    except requests.RequestException:
+        raise UserError('Google’ga ulanib bo‘lmadi (internet).')
+    if r.status_code != 200:
+        raise UserError(f'Ovozni tanib bo‘lmadi ({r.status_code}).')
+    try:
+        text = ''.join(p.get('text', '') for c in r.json()['candidates'] for p in c['content']['parts']).strip()
+    except (KeyError, ValueError):
+        text = ''
+    if not text:
+        raise UserError('Ovozdan so‘z eshitilmadi — qaytadan aytib ko‘ring yoki yozing.')
+    return text[:1500]
+
+
+def mp3(wav_bytes):
+    """WAV → MP3 (Telegram plays MP3 as a voice message; no ffmpeg needed)."""
+    import lameenc
+    with wave.open(io.BytesIO(wav_bytes)) as w:
+        rate, ch, pcm = w.getframerate(), w.getnchannels(), w.readframes(w.getnframes())
+    enc = lameenc.Encoder()
+    enc.set_bit_rate(48)
+    enc.set_in_sample_rate(rate)
+    enc.set_channels(ch)
+    enc.set_quality(5)
+    return bytes(enc.encode(pcm) + enc.flush())
