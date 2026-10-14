@@ -2,7 +2,7 @@
 where the bot is admin; the answer comes as text and, when Gemini is connected, as an Uzbek voice message.
 
 Private chat: every linked staff member, with their own permissions (the same assistant as on the site, the same memory).
-Work group: the bot answers only when it is addressed — its @name, a reply to its message, or a message that starts with
+Work group (members the system does not know are answered too, as guests: kg, trips, how-to): the bot answers only when it is addressed — its @name, a reply to its message, or a message that starts with
 “Yordamchi” (a voice message: a reply to the bot) — so ordinary chatter is left alone; and there everybody reads the
 answer, so it talks only about kg, trips and how to use the system (never money or names). Someone the system does not
 know is told how to link their account. It runs off the webhook thread: Telegram gets its answer at once.
@@ -72,6 +72,9 @@ def _run(app, m, group):
         chat, mid = m['chat']['id'], m.get('message_id')
         reply_to = mid if group else None
         user = _user(m['from']['id'])
+        if (not user or not A.allowed(user, 'telegram')) and group:
+            # a group member the system does not know: still helped — kg, trips, how-to (no money, no memory)
+            user = A.guest(' '.join(x for x in (m['from'].get('first_name'), m['from'].get('last_name')) if x))
         if not user or not A.allowed(user, 'telegram'):
             send(chat, '🤝 Men SURXON yordamchisiman. Savol berish uchun Telegramingiz tizimga ulangan '
                        'bo‘lishi kerak — admin “Foydalanuvchilar” sahifasidan sizga kod beradi (/start KOD).', reply_to=reply_to)
@@ -101,7 +104,7 @@ def _run(app, m, group):
         if r.get('cards') and not group:
             buttons.append([{'text': '🛠 Saytda tasdiqlash ›', 'url': f'https://{domain}/ai'}])
         sent = send(chat, r['text'], buttons or None, reply_to=reply_to)
-        if gemini.enabled() and voice_in:           # spoken to → answers by voice too
+        if gemini.enabled() and (voice_in or group):    # spoken to, or in the group → the answer is spoken too
             _voice(app, chat, r['text'], (sent or {}).get('result', {}).get('message_id'))
 
 

@@ -21,7 +21,7 @@ from .settings import get_bool, get_setting
 from .utils import UserError, now_str, today_str
 
 ROLES = ('admin', 'manager', 'accountant', 'station')
-ROLE_NAMES = {'admin': 'admin (tizim egasi)', 'manager': 'direktor / rahbar', 'accountant': 'buxgalter',
+ROLE_NAMES = {'guest': 'guruh a’zosi (tizimga ulanmagan — faqat kg, telashkalar, yo‘riqnoma)', 'admin': 'admin (tizim egasi)', 'manager': 'direktor / rahbar', 'accountant': 'buxgalter',
               'station': 'punkt operatori', 'cashier': 'kassir', 'tally': 'terim hisobchisi', 'brigadier': 'brigadir',
               'scale': 'tarozi xodimi', 'fuel': 'yoqilg‘i mas’uli'}
 MEMORY = 12                     # last messages kept in the conversation
@@ -81,7 +81,24 @@ def month_usage():
         limit = int(float(get_setting('ai_yordamchi_limit') or 0))
     except ValueError:
         limit = 0
-    return {'questions': r['n'], 'tokens_in': t['tin'], 'tokens_out': t['tout'], 'limit': limit}
+    g = (get_setting('ai_guest_count') or '').split(':')
+    guests = int(g[1]) if len(g) == 2 and g[0] == today_str()[:7] and g[1].isdigit() else 0
+    return {'questions': r['n'] + guests, 'tokens_in': t['tin'], 'tokens_out': t['tout'], 'limit': limit, 'guests': guests}
+
+
+def guest(name):
+    """Someone in a work group the system does not know (not linked): kg, trips and instructions only, no memory."""
+    return {'id': None, 'role': 'guest', 'full_name': (name or 'Mehmon')[:60], 'username': '', 'station_id': None,
+            'standin_role': None, 'standin_until': None}
+
+
+def _count_guest():
+    month = today_str()[:7]
+    g = (get_setting('ai_guest_count') or '').split(':')
+    n = (int(g[1]) if len(g) == 2 and g[0] == month and g[1].isdigit() else 0) + 1
+    with tx() as db:
+        db.execute("INSERT INTO settings(key, value, updated_at) VALUES ('ai_guest_count', ?, ?) ON CONFLICT(key) DO UPDATE "
+                   "SET value=excluded.value, updated_at=excluded.updated_at", (f'{month}:{n}', now_str()))
 
 
 # ------------------------------------------------------------------ tools (read-only, the asker's own permissions)
@@ -295,6 +312,51 @@ def t_kassa_kun(user):
     return {'sana': day, 'kassalar': out, 'izoh': 'system = tizim bo‘yicha bo‘lishi kerak bo‘lgan pul; odam real pulni sanaydi.'}
 
 
+def _work_group():
+    """The work group the bot posts to: the one marked as work group, else the latest group the bot is in."""
+    return q("""SELECT * FROM tg_chats WHERE type IN ('group','supergroup')
+                ORDER BY is_work DESC, last_seen_at DESC LIMIT 1""", one=True)
+
+
+def t_topshiriq(user, matn='', kimga=''):
+    """The director's task to a person, posted in the work group as text and an Uzbek voice message."""
+    import html
+    from .telegram_bot import tg_api
+    matn = (matn or '').strip()[:800]
+    if len(matn) < 3:
+        return {'xato': 'Topshiriq matni yo‘q.'}
+    grp = _work_group()
+    if not grp:
+        return {'xato': 'Bot hali hech qaysi guruhda yo‘q — botni ish guruhiga qo‘shing.'}
+    mention, who = '', (kimga or '').strip()
+    if who:
+        like = f'%{who.split()[0]}%'
+        r = q("""SELECT full_name, telegram_id FROM users WHERE active=1 AND telegram_id IS NOT NULL AND full_name LIKE ?
+                 UNION ALL SELECT full_name, telegram_id FROM tg_members WHERE telegram_id IS NOT NULL AND full_name LIKE ?
+                 LIMIT 1""", (like, like), one=True)
+        mention = (f'<a href="tg://user?id={int(r["telegram_id"])}">{html.escape(r["full_name"])}</a>' if r and
+                   str(r['telegram_id']).lstrip('-').isdigit() else html.escape(who))
+    sender = (user['full_name'] or 'Rahbar').split(' ')[0]
+    text = f'📌 <b>Topshiriq</b>{" — " + mention if mention else ""}\n{html.escape(matn)}\n— {html.escape(sender)}'
+    try:
+        tg_api('sendMessage', {'chat_id': grp['chat_id'], 'text': text, 'parse_mode': 'HTML'})
+    except Exception as exc:
+        return {'xato': f'Guruhga yuborib bo‘lmadi: {exc}'}
+    try:                                        # the same task spoken in Uzbek (when Gemini is connected)
+        from . import gemini
+        from .outbox import telegram_upload
+        if gemini.enabled():
+            spoken = f'{who + ", " if who else ""}{matn}'
+            telegram_upload('sendVoice', {'chat_id': grp['chat_id']},
+                            {'voice': ('topshiriq.mp3', gemini.mp3(gemini.tts(spoken)), 'audio/mpeg')})
+    except Exception:
+        pass
+    with tx() as db:
+        from .security import audit
+        audit(db, None, 'TG_TASK', 'tg_chat', grp['chat_id'], new={'kimga': who, 'matn': matn, 'kim': user['full_name']})
+    return {'yuborildi': True, 'guruh': grp['title'], 'kimga': who or 'hammaga'}
+
+
 ACTIONS = {
     'xarajat_tasdiq': ('expenses.approve', 'Xarajatni tasdiqlash'),
     'qarz_yopish': ('payouts.prepare', 'Qarzdorlikni yopish (pul oldin berilgan)'),
@@ -441,6 +503,11 @@ TOOLS = {
                      'tur': {'type': 'string', 'enum': list(ACTIONS)}, 'expense_id': {'type': 'integer'},
                      'worker_id': {'type': 'integer'}, 'amount': {'type': 'integer'}, 'cashbox_id': {'type': 'integer'},
                      'sabab': {'type': 'string'}}, 'required': ['tur']}}),
+    't_topshiriq': ('kuzatuv.request', {'name': 'topshiriq', 'description': 'Rahbarning topshirig‘ini ish guruhiga yuborish '
+                    '(yozuv + o‘zbekcha ovozli xabar). FAQAT rahbar aniq “yubor / ayt / topshiriq ber” desa chaqir. '
+                    'kimga: odamning ismi (bo‘sh — hammaga), matn: qisqa va aniq topshiriq.',
+                    'input_schema': {'type': 'object', 'properties': {'kimga': {'type': 'string'}, 'matn': {'type': 'string'}},
+                                     'required': ['matn']}}),
     't_sahifa': (None, {'name': 'sahifa_tugmasi', 'description': 'Odamga kerakli ekranni ochadigan tugma berish. nom: '
                         + ', '.join(PAGES), 'input_schema': {'type': 'object', 'properties': {
                             'nom': {'type': 'string', 'enum': list(PAGES)}}, 'required': ['nom']}}),
@@ -591,14 +658,20 @@ def ask(user, text, channel='site', group=False):
     u = month_usage()
     if u['limit'] and u['questions'] >= u['limit']:
         raise UserError(f'Bu oyning chegarasi tugadi ({u["limit"]} ta savol). Admin Sozlamalarda oshirishi mumkin.')
-    past = history(user['id'])
+    is_guest = user['role'] == 'guest'
+    if is_guest:
+        group = True                      # a stranger only ever gets the group's safe answers
+    past = [] if is_guest else history(user['id'])
     messages = [{'role': m['role'], 'content': m['text']} for m in past if m['text']]
     while messages and messages[0]['role'] != 'user':
         messages.pop(0)
     messages.append({'role': 'user', 'content': text})
-    with tx() as db:
-        db.execute("INSERT INTO yordamchi_messages(user_id, role, text, created_at) VALUES (?, 'user', ?, ?)",
-                   (user['id'], text, now_str()))
+    if is_guest:
+        _count_guest()
+    else:
+        with tx() as db:
+            db.execute("INSERT INTO yordamchi_messages(user_id, role, text, created_at) VALUES (?, 'user', ?, ?)",
+                       (user['id'], text, now_str()))
     client, tools, system = _client(), tools_for(user, group), _system(user)
     if channel == 'telegram':
         system = system + [{'type': 'text', 'text': (
@@ -636,6 +709,8 @@ def ask(user, text, channel='site', group=False):
     answer = re.sub(r'(?<=\d) (?=\d{3}\b)', '\u00a0', answer)      # 12 450 kg never breaks across lines
     if not answer:
         answer = 'Kechirasiz, javobni tayyorlay olmadim — savolni boshqacha aytib ko‘ring.'
+    if is_guest:
+        return {'text': answer, 'links': [x for x in links if 'url' in x], 'cards': []}
     with tx() as db:
         db.execute('''INSERT INTO yordamchi_messages(user_id, role, text, links_json, tokens_in, tokens_out, created_at)
                       VALUES (?, 'assistant', ?, ?, ?, ?, ?)''',
