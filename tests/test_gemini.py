@@ -28,7 +28,7 @@ def test_uzbek_voice_reads_only_the_assistants_answers(app, world, monkeypatch):
         page = admin.get('/admin/integratsiyalar').get_data(as_text=True)
         assert 'o‘zbekcha ovozi' in page and 'Ulanmagan — telefon ovozi' in page
         assert 'UZ_VOICE = false' in rahbar.get('/ai').get_data(as_text=True)
-        assert not admin.post('/admin/integratsiyalar', {'action': 'gemini_key_save', 'gemini_key': 'xato'}).get_json()['ok']
+        assert not admin.post('/admin/integratsiyalar', {'action': 'gemini_key_save', 'gemini_key': 'qisqa'}).get_json()['ok']
         key = 'AIza' + 'k' * 35
         assert admin.post('/admin/integratsiyalar', {'action': 'gemini_key_save', 'gemini_key': key}).get_json()['ok']
         with app.app_context():

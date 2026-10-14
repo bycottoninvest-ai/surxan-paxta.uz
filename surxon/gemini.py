@@ -23,7 +23,7 @@ from .settings import get_setting
 from .utils import UserError
 
 KEY_FILE = 'gemini-api.key'
-KEY_RE = re.compile(r'AIza[0-9A-Za-z_-]{30,}')
+KEY_RE = re.compile(r'[A-Za-z0-9._-]{30,200}')     # AIza… and Google's newer key formats — Google itself checks it
 API = 'https://generativelanguage.googleapis.com/v1beta'
 DEFAULT_MODEL = 'gemini-3.8-flash-tts'
 DEFAULT_VOICE = 'Kore'
@@ -82,10 +82,10 @@ def _verify(key):
 
 
 def save_key(raw):
-    key = re.sub(r'\s+', '', raw or '')
+    key = re.sub(r'\s+', '', raw or '').strip('\'"«»“”')
     if not KEY_RE.fullmatch(key):
-        raise UserError('Kalit ko‘rinishi noto‘g‘ri — aistudio.google.com → “Get API key” dan “AIza…” bilan boshlanadigan '
-                        'kalitni to‘liq nusxalang.')
+        raise UserError('Kalit to‘liq nusxalanmagan — aistudio.google.com → API Keys → kalit yonidagi 📋 belgisini bosib, '
+                        'qaytadan qo‘ying.')
     ok = _verify(key)
     if ok is False:
         raise UserError('Google bu kalitni qabul qilmadi — kalit o‘chirilgan yoki to‘liq nusxalanmagan. Yangi kalit yarating.')
