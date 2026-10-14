@@ -1027,7 +1027,7 @@ def void_payment(actor, payment_id, reason):
         audit(db, actor, 'VOID', 'payment', payment_id, old=row_dict(p), reason=reason)
 
 
-EXPENSE_CATEGORIES = ['Yoqilg‘i', 'Ovqat', 'Transport', 'Ta‘mirlash', 'Ehtiyot qism', 'Punkt xarajati', 'O‘g‘it / kimyo', 'Suv', 'Ijara',
+EXPENSE_CATEGORIES = ['Yoqilg‘i', 'Ovqat', 'Transport', 'Brigadir / starshi', 'Sovg‘a', 'Ta‘mirlash', 'Ehtiyot qism', 'Punkt xarajati', 'O‘g‘it / kimyo', 'Suv', 'Ijara',
                       'Boshqa']
 # wages, advances and combine pay have their own flows (payment orders); written again as an expense they would be
 # counted twice, so they are refused as expense categories

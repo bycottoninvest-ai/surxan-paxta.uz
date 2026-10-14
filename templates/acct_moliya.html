@@ -1,0 +1,144 @@
+{% extends 'base.html' %}
+{% from 'macros.html' import icon, csrf, uuid_field with context %}
+{% set page_title = 'Moliya' %}
+{% set writer = can('payouts.prepare') %}
+{% block content %}
+<div class="mo">
+  <div class="mo-head">
+    <div><h1>💼 Buxgalter / Moliya</h1><span>{{ d.label }} · {{ d.a|d }}{% if d.b != d.a %} – {{ d.b|d }}{% endif %}</span></div>
+  </div>
+  <div class="mo-per">{% for k, v in d.periods %}{% if k != 'oraliq' %}<a class="{{ 'on' if d.p == k }}" href="?p={{ k }}">{{ v }}</a>{% endif %}{% endfor %}
+    <form class="mo-range" method="get"><input type="hidden" name="p" value="oraliq"><input type="date" name="dan" value="{{ d.a }}"><input type="date" name="gacha" value="{{ d.b }}"><button class="btn btn-light btn-sm">Ko‘rish</button></form></div>
+
+  <div class="mo-grid">
+    <div class="mo-k k-green"><span>Jami kirim</span><b>{{ d.cash_in|num }}</b><em>so‘m · {{ d.label|lower }}</em></div>
+    <div class="mo-k k-red"><span>Jami chiqim</span><b>{{ d.cash_out|num }}</b><em>so‘m · {{ d.label|lower }}</em></div>
+    <div class="mo-k k-navy"><span>Kassadagi qoldiq</span><b>{{ d.balance|num }}</b><em>so‘m · hozir (hisob bo‘yicha)</em></div>
+    <div class="mo-k"><span>Terimchilarga hisoblangan</span><b>{{ d.earned|num }}</b><em>{{ d.kg|num }} kg · {{ d.people }} kishi</em></div>
+    <div class="mo-k"><span>Terimchilarga to‘langan</span><b>{{ d.paid|num }}</b><em>kassadan{% if d.closed %} · + {{ d.closed|num }} kassasiz yopilgan{% endif %}</em></div>
+    <div class="mo-k k-orange"><span>To‘lanmagan qarzdorlik</span><b>{{ d.debt_now|num }}</b><em>{{ d.debt_people }} kishi · hozir{% if d.over_now %} · ortiqcha to‘langan {{ d.over_now|num }}{% endif %}</em></div>
+  </div>
+
+  <div class="mo-row2">
+    <section class="mo-card">
+      <h3>🌾 Terim xarajatlari <small>{{ d.label|lower }}</small></h3>
+      <div class="mo-lines">
+        <div><span>Terimchilarga</span><b>{{ d.earned|num }}</b></div>
+        <div><span>Transport (shofyor, avtobus)</span><b>{{ d.transport|num }}</b></div>
+        <div><span>Brigadir / starshi</span><b>{{ d.starshi|num }}</b></div>
+        <div><span>Sovg‘alar</span><b>{{ d.gifts|num }}</b></div>
+        <div class="tot"><span>Umumiy terim tannarxi</span><b>{{ d.terim_total|num }} so‘m</b></div>
+      </div>
+      <div class="mo-perkg">
+        <div><span>Terimchiga tarif</span><b>{{ d.rate|num if d.rate else '—' }}</b><em>so‘m/kg</em></div>
+        <div class="real"><span>Real terim xarajati</span><b>{{ d.real_per_kg|num if d.real_per_kg else '—' }}</b><em>so‘m/kg</em></div>
+      </div>
+    </section>
+    <section class="mo-card">
+      <h3>🧾 Boshqa xarajatlar <small>{{ d.label|lower }}</small></h3>
+      <div class="mo-lines">
+        <div><span>⛽ Yoqilg‘i</span><b>{{ d.fuel|num }}</b></div>
+        <div><span>🔧 Ehtiyot qism, ta’mirlash</span><b>{{ d.parts|num }}</b></div>
+        <div><span>🧰 Xizmat va boshqa</span><b>{{ d.other|num }}</b></div>
+      </div>
+      <h3 style="margin-top:14px">📅 Kirim / chiqim</h3>
+      <div class="mo-quick">{% for x in d.quick %}<div><span>{{ x.label }}</span><b class="g">+{{ x.in|num }}</b><b class="r">−{{ x.out|num }}</b></div>{% endfor %}</div>
+    </section>
+  </div>
+
+  <section class="mo-card">
+    <div class="mo-dh"><h3>⏳ To‘lanmaganlar — {{ d.debt_people }} kishi · {{ d.debt_now|num }} so‘m</h3>
+      <form method="get" class="mo-search"><input type="hidden" name="p" value="{{ d.p }}"><input name="q" value="{{ s }}" placeholder="Ism, telefon, brigada…"><button class="btn btn-light btn-sm">{{ icon('search','sm') }}</button></form></div>
+    <p class="small muted">Kimgadir pul real hayotda <b>oldin naqd berilgan</b>, lekin tizimda hali qarz bo‘lib turgan bo‘lsa — belgilang va “To‘langan deb belgilash”ni bosing. Kassadan pul ikkinchi marta ayrilmaydi; hammasi tarixda qoladi.</p>
+    <form method="post" action="{{ url_for('acct.debt_close') }}" id="mo-form">{{ csrf() }}{{ uuid_field() }}<input type="hidden" name="next" value="{{ request.full_path }}">
+    <div class="table-wrap"><table class="t mo-t"><thead><tr>{% if writer %}<th><input type="checkbox" id="mo-all" aria-label="Hammasi"></th>{% endif %}<th>Ism</th><th class="hide-m">Brigada</th><th class="num">Kg</th><th class="num">Hisoblangan</th><th class="num">To‘langan</th><th class="num">Qarz</th><th>Holat</th></tr></thead>
+    <tbody>{% for r in rows %}<tr>{% if writer %}<td><input type="checkbox" name="worker_id" value="{{ r.id }}" data-sum="{{ r.payable }}"></td>{% endif %}
+      <td><a href="{{ url_for('acct.worker', worker_id=r.id) }}" class="b">{{ r.full_name }}</a>{% if r.fixes %} <span class="badge b-purple" title="kg tuzatilgan">TUZATILGAN</span>{% endif %}</td>
+      <td class="hide-m small">{{ r.brigadier_name or '—' }}</td><td class="num">{{ r.kg|num(1) }}</td><td class="num">{{ r.earned|num }}</td>
+      <td class="num">{{ (r.paid + r.advances + r.closed)|num }}</td><td class="num b">{{ r.payable|num }}</td><td><span class="badge {{ r.badge }}">{{ r.status }}</span></td></tr>
+    {% else %}<tr><td colspan="8" class="muted">Qarzdor yo‘q 👍</td></tr>{% endfor %}</tbody></table></div>
+    {% if writer and rows %}
+    <div class="mo-bar" id="mo-bar" hidden><span>Tanlandi: <b id="mo-n">0</b> kishi · Jami qarz: <b id="mo-s">0</b> so‘m</span>
+      <button type="button" class="btn btn-green" id="mo-open">TANLANGANLARNI TO‘LANGAN DEB BELGILASH</button></div>
+    <dialog class="modal mo-dlg" id="mo-dlg">
+      <h3>Qarzdorlikni yopish</h3>
+      <p class="mo-sum"><b id="mo-n2">0</b> kishi · <b id="mo-s2">0</b> so‘m</p>
+      <div class="f"><label>Pul hozir chiqyaptimi? <span class="req">*</span></label>
+        {% for k, v in d.methods.items() %}<label class="mo-radio"><input type="radio" name="method" value="{{ k }}" {{ 'checked' if k == 'oldin_naqd' }}> {{ v }}</label>{% endfor %}</div>
+      {% if boxes %}<div class="f mo-box" hidden><label>Qaysi kassadan</label><select class="input" name="cashbox_id">{% for b in boxes %}<option value="{{ b.id }}">{{ b.name }} — {{ b.balance|num }} so‘m</option>{% endfor %}</select></div>{% endif %}
+      <div class="f"><label>Izoh <span class="req">*</span></label><textarea name="note" required minlength="3" placeholder="Masalan: oldin naqd berilgan, programmada yopilmay qolgan (Mirjalol orqali, 10.10)"></textarea></div>
+      <p class="tiny muted">Yopilgan qarz o‘chmaydi: kim, qachon, nima uchun — tarixda. Kassasiz yopilganlar haqida direktorga Telegram xabar boradi.</p>
+      <div class="row"><span class="spacer"></span><button type="button" class="btn btn-light" data-close-dialog>Bekor</button><button class="btn btn-green">TO‘LANGAN DEB BELGILASH</button></div>
+    </dialog>
+    {% endif %}
+    </form>
+  </section>
+
+  <section class="mo-card">
+    <h3>📜 Tuzatish va yopish tarixi</h3>
+    {% for h in d.history %}<div class="mo-log"><div><b>{{ h.name or ('№' ~ h.entity_id) }}</b> · {{ {'DEBT_CLOSE': 'Qarzdorlik yopildi', 'DEBT_CLOSE_VOID': 'Yopish bekor qilindi', 'KG_FIX': 'KG tuzatildi'}[h.action] }}
+        {% if h.action == 'KG_FIX' %}: {{ h.old.kg }} → {{ h.new.kg }} kg{% elif h.action == 'DEBT_CLOSE' %}: {{ h.old.qarz|num }} → {{ h.new.qarz|num }} so‘m{% endif %}</div>
+      <small>{{ h.created_at[:16] }} · {{ h.who }} ({{ role_labels.get(h.role, h.role) }}){% if h.reason %} · {{ h.reason }}{% endif %}</small></div>
+    {% else %}<p class="small muted">Hali tuzatish yoki yopish yo‘q.</p>{% endfor %}
+    <p class="small"><a href="{{ url_for('finance.cash') }}">Barcha kirim-chiqim (Kassa kitobi) →</a> · <a href="{{ url_for('reports.audit_log') }}">Audit tarixi →</a></p>
+  </section>
+</div>
+<style>
+.mo{max-width:1100px}
+.mo-head h1{margin:0;font-size:24px;color:#0b2a55}.mo-head span{color:#5b6b82;font-size:14px;font-weight:600}
+.mo-per{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:12px 0}
+.mo-per a{padding:8px 14px;border-radius:999px;background:#fff;color:#0b2a55;font-weight:700;font-size:14px;text-decoration:none;box-shadow:0 1px 4px rgba(11,42,85,.08)}
+.mo-per a.on{background:#0b2a55;color:#fff}
+.mo-range{display:flex;gap:6px;align-items:center;flex-wrap:wrap}.mo-range input{border:1px solid #d6e0ef;border-radius:10px;padding:6px 8px;font:inherit;font-size:13px}
+.mo-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+@media (max-width:700px){.mo-grid{grid-template-columns:repeat(2,1fr)}}
+.mo-k{background:#fff;border-radius:16px;padding:12px 14px;box-shadow:0 3px 12px rgba(11,42,85,.07);border-top:4px solid #94a3b8}
+.mo-k span{display:block;font-size:12.5px;font-weight:700;color:#5b6b82}.mo-k b{display:block;font-size:22px;font-weight:900;color:#0b2a55;font-variant-numeric:tabular-nums;margin:2px 0}
+.mo-k em{font-style:normal;font-size:11.5px;color:#7a8aa0}
+.k-green{border-top-color:#16a34a}.k-red{border-top-color:#dc2626}.k-navy{border-top-color:#0b2a55;background:linear-gradient(135deg,#0b2a55,#1d4ed8)}
+.k-navy span,.k-navy em{color:#dbe7ff}.k-navy b{color:#fff}.k-orange{border-top-color:#f59e0b}
+.mo-row2{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}@media (max-width:700px){.mo-row2{grid-template-columns:1fr}}
+.mo-card{background:#fff;border-radius:18px;padding:14px 16px;box-shadow:0 3px 12px rgba(11,42,85,.07);margin-top:10px}
+.mo-card h3{margin:0 0 8px;font-size:16px;color:#0b2a55}.mo-card h3 small{font-weight:600;color:#7a8aa0;font-size:12px}
+.mo-lines div{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px dashed #e5ebf3;font-size:14px}
+.mo-lines b{font-variant-numeric:tabular-nums}.mo-lines .tot{border-bottom:0;font-size:15px}.mo-lines .tot b{color:#0b2a55;font-size:17px}
+.mo-perkg{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
+.mo-perkg div{border-radius:14px;padding:10px;background:#f1f5fb;text-align:center}.mo-perkg span{display:block;font-size:12px;font-weight:700;color:#5b6b82}
+.mo-perkg b{display:block;font-size:24px;font-weight:900;color:#0b2a55}.mo-perkg em{font-style:normal;font-size:11px;color:#7a8aa0}
+.mo-perkg .real{background:linear-gradient(135deg,#fff7ed,#ffedd5)}.mo-perkg .real b{color:#c2410c}
+.mo-quick{display:grid;grid-template-columns:repeat(5,1fr);gap:6px}@media (max-width:700px){.mo-quick{grid-template-columns:repeat(2,1fr)}}
+.mo-quick div{background:#f6f8fc;border-radius:12px;padding:8px}.mo-quick span{display:block;font-size:12px;font-weight:700;color:#5b6b82}
+.mo-quick b{display:block;font-size:13px;font-variant-numeric:tabular-nums}.mo-quick .g{color:#15803d}.mo-quick .r{color:#b91c1c}
+.mo-dh{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
+.mo-search{display:flex;gap:6px}.mo-search input{border:1px solid #d6e0ef;border-radius:10px;padding:7px 10px;font:inherit;min-width:180px}
+.mo-t td,.mo-t th{white-space:nowrap}
+.mo-bar{position:sticky;bottom:76px;z-index:20;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;
+  background:#0b2a55;color:#fff;border-radius:16px;padding:10px 14px;margin-top:10px;box-shadow:0 8px 24px rgba(11,42,85,.3)}
+.mo-dlg{max-width:520px;width:calc(100% - 24px);padding:18px 20px;border:0;border-radius:18px}.mo-dlg h3{margin:0 0 4px}.mo-sum{font-size:18px;margin:4px 0 10px}.mo-radio{display:flex;gap:8px;align-items:center;padding:6px 0;font-weight:600}
+.mo-log{padding:8px 0;border-bottom:1px solid #eef2f7;font-size:14px}.mo-log small{display:block;color:#6b7c93}
+</style>
+{% endblock %}
+{% block scripts %}
+<script>
+(function () {
+  const boxes = Array.from(document.querySelectorAll('.mo-t input[name=worker_id]'));
+  const bar = document.getElementById('mo-bar'), all = document.getElementById('mo-all'), dlg = document.getElementById('mo-dlg');
+  if (!bar) return;
+  const fmt = (n) => n.toLocaleString('ru-RU').replace(/,/g, ' ');
+  function sum() {
+    const on = boxes.filter((b) => b.checked);
+    const s = on.reduce((a, b) => a + Number(b.dataset.sum || 0), 0);
+    ['mo-n', 'mo-n2'].forEach((id) => { document.getElementById(id).textContent = on.length; });
+    ['mo-s', 'mo-s2'].forEach((id) => { document.getElementById(id).textContent = fmt(s); });
+    bar.hidden = !on.length;
+  }
+  boxes.forEach((b) => b.addEventListener('change', sum));
+  if (all) all.addEventListener('change', () => { boxes.forEach((b) => { b.checked = all.checked; }); sum(); });
+  document.getElementById('mo-open').addEventListener('click', () => dlg.showModal());
+  const box = dlg.querySelector('.mo-box');
+  dlg.querySelectorAll('input[name=method]').forEach((r) => r.addEventListener('change', () => {
+    if (box) box.hidden = dlg.querySelector('input[name=method]:checked').value !== 'hozir_naqd';
+  }));
+})();
+</script>
+{% endblock %}

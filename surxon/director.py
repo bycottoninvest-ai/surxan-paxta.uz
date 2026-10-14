@@ -179,7 +179,7 @@ def cash_ops(a, b, limit=30):
 def wages(year, a, b):
     rows = A.worker_balances(year)
     earned = sum(r['earned'] for r in rows)
-    given = sum(r['paid'] + r['advances'] for r in rows)
+    given = sum(r['paid'] + r['advances'] + r['closed'] for r in rows)
     debt = sum(r['balance'] for r in rows if r['balance'] > 0)
     over = sum(-r['balance'] for r in rows if r['balance'] < 0)
     per = q('''SELECT COALESCE(SUM(amount),0) amt, COALESCE(SUM(CASE WHEN amount IS NULL THEN kg END),0) uncalc,

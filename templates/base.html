@@ -76,6 +76,7 @@
       {{ nav('reports.field_yield', 'Dala hosili (terimlar)', 'map', 'reports.view') }}
       {% endcall %}
       {% call group('Buxgalteriya', 'calc') %}
+      {{ nav('acct.moliya', 'Moliya (buxgalter dashboard)', 'chart', 'acct.view') }}
       {{ nav('acct.home', 'Buxgalteriya (bosh)', 'calc', 'acct.view', ['acct.home', 'acct.income', 'acct.workers', 'acct.worker', 'acct.combines', 'acct.cotton', 'acct.cash', 'acct.day_close', 'acct.debts', 'acct.report', 'acct.expenses']) }}
       {% if current_user['role'] == 'accountant' %}{{ nav('hamyon.home', 'Mening kassam', 'wallet', None, ['hamyon.home', 'hamyon.pay', 'hamyon.pay_worker', 'hamyon.expense', 'hamyon.income', 'hamyon.entry', 'hamyon.fix']) }}
       {{ nav('hamyon.today', 'Bugungi amallar', 'list') }}{% endif %}

@@ -10,7 +10,7 @@ from contextlib import contextmanager
 
 from flask import current_app, g
 
-SCHEMA_VERSION = 31
+SCHEMA_VERSION = 32
 
 SCHEMA = r'''
 CREATE TABLE IF NOT EXISTS brigadiers (
@@ -724,6 +724,22 @@ CREATE TABLE IF NOT EXISTS tezpul_sheets (  -- v28: a starshi talon's photograph
   created_by INTEGER REFERENCES users(id),
   UNIQUE(talon_id, sheet)
 );
+CREATE TABLE IF NOT EXISTS debt_closures (  -- v32: a worker's debt closed with no cash now (paid earlier outside the system, by bank, …)
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  season_year INTEGER NOT NULL,
+  worker_id INTEGER NOT NULL REFERENCES workers(id),
+  amount INTEGER NOT NULL CHECK (amount > 0),
+  method TEXT NOT NULL CHECK (method IN ('oldin_naqd','bank','boshqa')),
+  note TEXT NOT NULL,
+  batch TEXT,
+  client_uuid TEXT UNIQUE,
+  created_by INTEGER REFERENCES users(id),
+  created_at TEXT NOT NULL,
+  void_reason TEXT,
+  voided_by INTEGER REFERENCES users(id),
+  voided_at TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_debt_closures_worker ON debt_closures(worker_id);
 CREATE TABLE IF NOT EXISTS yordamchi_messages (  -- v31: the AI assistant's conversations (kept here, never at Claude)
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   user_id INTEGER NOT NULL REFERENCES users(id),
@@ -1214,6 +1230,9 @@ def migrate(db):
     # v30: a trip made at the punkt from a field waybill (PB v3): which paper and which of its rows
     _add_column(db, 'trailer_loads', 'pb_blank_id', 'INTEGER')
     _add_column(db, 'trailer_loads', 'pb_row', 'INTEGER')
+    # v32: a kg correction writes a new weighing and cancels the old one; the new one points to the one it corrects
+    _add_column(db, 'harvests', 'corrects_id', 'INTEGER')
+    _add_column(db, 'harvests', 'fix_reason', 'TEXT')
     # Future column changes go here as: if version < N: ALTER TABLE ...
     db.execute('UPDATE schema_version SET version=? WHERE version < ?', (SCHEMA_VERSION, SCHEMA_VERSION))
 

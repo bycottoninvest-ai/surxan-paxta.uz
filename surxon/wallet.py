@@ -64,7 +64,7 @@ def worker_figures(db, year, worker_id):
         raise UserError('Ishchi topilmadi.')
     r = next(iter(A.worker_balances(year, worker_id=worker_id)), None)
     earned = r['earned'] if r else 0
-    given = (r['paid'] + r['advances']) if r else 0
+    given = (r['paid'] + r['advances'] + r['closed']) if r else 0
     debt = earned - given
     pending = r['pending'] if r else 0
     last = db.execute('''SELECT b.name brigade, f.name field, h.work_date FROM harvests h

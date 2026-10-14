@@ -236,7 +236,7 @@ def _worker_status(r):
         return 'AVANS ORTIQCHA'
     if r['earned'] > 0 and r['balance'] == 0:
         return 'TO‘LANDI'
-    if r['paid'] + r['advances'] > 0:
+    if r['paid'] + r['advances'] + r.get('closed', 0) > 0:
         return 'QISMAN TO‘LANDI'
     return 'HISOBLANDI'
 
@@ -260,7 +260,7 @@ def worker_balances(year, *, worker_id=None, search='', status=None, brigadier_i
     rows = q(f'''SELECT w.id, w.full_name, w.phone, b.name brigadier_name,
                    COALESCE(h.kg,0) kg, COALESCE(h.earned,0) earned, COALESCE(h.uncalc_kg,0) uncalc_kg, h.last_day, h.days,
                    COALESCE(c.paid,0) paid, COALESCE(c.advances,0) advances, COALESCE(p.pending,0) pending, p.pending_id,
-                   p.pending_doc
+                   p.pending_doc, COALESCE(dc.closed,0) closed, COALESCE(hf.fixes,0) fixes
                 FROM workers w LEFT JOIN brigadiers b ON b.id=w.brigadier_id
                 LEFT JOIN (SELECT worker_id, SUM(kg) kg, SUM(amount) earned, SUM(CASE WHEN amount IS NULL THEN kg END) uncalc_kg,
                                   MAX(work_date) last_day, COUNT(DISTINCT work_date) days
@@ -273,12 +273,16 @@ def worker_balances(year, *, worker_id=None, search='', status=None, brigadier_i
                            GROUP BY worker_id) c ON c.worker_id=w.id
                 LEFT JOIN (SELECT worker_id, SUM(amount) pending, MAX(id) pending_id, MAX(doc_no) pending_doc FROM payouts
                            WHERE season_year=? AND kind='worker' AND status='TAYYOR' GROUP BY worker_id) p ON p.worker_id=w.id
+                LEFT JOIN (SELECT worker_id, SUM(amount) closed FROM debt_closures
+                           WHERE season_year=? AND voided_at IS NULL GROUP BY worker_id) dc ON dc.worker_id=w.id
+                LEFT JOIN (SELECT worker_id, COUNT(*) fixes FROM harvests
+                           WHERE season_year=? AND corrects_id IS NOT NULL AND voided_at IS NULL GROUP BY worker_id) hf ON hf.worker_id=w.id
                 WHERE (h.worker_id IS NOT NULL OR c.worker_id IS NOT NULL OR p.worker_id IS NOT NULL) AND {' AND '.join(where)}
-                ORDER BY h.last_day DESC, w.full_name''', [year, year, year] + params)
+                ORDER BY h.last_day DESC, w.full_name''', [year, year, year, year, year] + params)
     out = []
     for r in rows:
         d = dict(r)
-        d['balance'] = d['earned'] - d['paid'] - d['advances']
+        d['balance'] = d['earned'] - d['paid'] - d['advances'] - d['closed']   # closed: paid earlier outside the kassa
         d['payable'] = max(0, d['balance'] - d['pending'])
         d['status'] = _worker_status(d)
         d['badge'] = WORKER_STATUS[d['status']]
@@ -290,8 +294,9 @@ def worker_balances(year, *, worker_id=None, search='', status=None, brigadier_i
 
 def worker_history(worker_id, year):
     """Every weighing with the rate it was paid at, plus every advance/payment/order."""
-    harvests = q('''SELECT h.work_date, h.kg, h.rate, h.rate_unit, h.amount, h.created_at, f.name field_name,
-                           tl.trip_no, b.name brigadier_name, h.voided_at
+    harvests = q('''SELECT h.id, h.work_date, h.kg, h.rate, h.rate_unit, h.amount, h.created_at, f.name field_name,
+                           tl.trip_no, b.name brigadier_name, h.voided_at, h.void_reason, h.corrects_id, h.fix_reason,
+                           (SELECT number FROM tezpul_talons t WHERE t.harvest_id=h.id) talon_no
                     FROM harvests h LEFT JOIN fields f ON f.id=h.field_id LEFT JOIN trailer_loads tl ON tl.id=h.load_id
                     LEFT JOIN brigadiers b ON b.id=h.brigadier_id
                     WHERE h.worker_id=? AND h.season_year=? AND h.method='hand' ORDER BY h.id DESC''', (worker_id, year))
@@ -740,7 +745,7 @@ def refund_payout(actor, payout_id, reason):
 
 EXPENSE_BUTTONS = [
     ('Yoqilg‘i', 'truck'), ('Ovqat', 'cotton'), ('Transport', 'trailer'), ('Ta‘mirlash', 'wrench'), ('Ehtiyot qism', 'gear'),
-    ('Punkt xarajati', 'factory'), ('Boshqa', 'receipt'),
+    ('Punkt xarajati', 'factory'), ('Brigadir / starshi', 'users'), ('Sovg‘a', 'flag'), ('Boshqa', 'receipt'),
 ]
 # these three are not ordinary expenses — they open their own flows (money owed to a person or combine)
 EXPENSE_SHORTCUTS = [('Kombayn', 'combine', 'acct.combines'), ('Ish haqi', 'users', 'acct.workers'),

@@ -435,7 +435,10 @@ def worker(worker_id):
             r = rates.setdefault(key, {'rate': key, 'kg': 0, 'amount': 0})
             r['kg'] += h['kg']
             r['amount'] += h['amount'] or 0
+    from .. import moliya as M
+    log, closures = M.worker_log(worker_id)
     return render_template('acct_worker.html', w=w, bal=bal, harvests=harvests, money=money, orders=orders,
+                           log=log, closures=closures, methods=M.CLOSE_METHODS, fix_reasons=M.FIX_REASONS,
                            rates=sorted(rates.values(), key=lambda r: (r['rate'] is None, r['rate'] or 0)), year=year,
                            categories=__import__('surxon.services', fromlist=['CASH_CATEGORIES']).CASH_CATEGORIES)
 
@@ -812,3 +815,54 @@ def report():
         return Response(pdf, mimetype='application/pdf', headers={'Content-Disposition': f'inline; filename=moliya_{a}_{b}.pdf'})
     from ..reporting import brigade_summary
     return render_template('acct_report.html', **_ctx(s=s, title=title, brig=brigade_summary(a, b)))
+
+
+# ------------------------------------------------------------------ BUXGALTER / MOLIYA (surxon.moliya)
+
+@bp.get('/buxgalteriya/moliya')
+@perm_required('acct.view')
+def moliya():
+    from .. import moliya as M
+    from ..wallet import boxes_with_balance
+    d = M.dashboard(request.args.get('p', 'bugun'), request.args.get('dan'), request.args.get('gacha'))
+    flt = request.args.get('f', '')
+    s = (request.args.get('q') or '').strip().lower()
+    rows = d['debtors']
+    if s:
+        rows = [r for r in rows if s in (r['full_name'] or '').lower() or s in (r['phone'] or '')
+                or s in (r['brigadier_name'] or '').lower()]
+    return render_template('acct_moliya.html', d=d, rows=rows[:500], s=s, flt=flt,
+                           boxes=boxes_with_balance(g.user) if can('payouts.pay') else [])
+
+
+@bp.post('/buxgalteriya/qarz-yopish')
+@perm_required('payouts.prepare')
+def debt_close():
+    from .. import moliya as M
+    ids = [parse_int(x, 'Ishchi') for x in request.form.getlist('worker_id') if x]
+    amount = parse_money(request.form.get('amount'), required=False) if len(ids) == 1 else None
+    r = M.close_debts(post_actor(), [(i, amount) for i in ids], method=request.form.get('method', ''),
+                      note=request.form.get('note', ''), cashbox_id=parse_int(request.form.get('cashbox_id'), 'Kassa', required=False),
+                      client_uuid=form_uuid())
+    msg = (f'{r["n"]} kishiga {A.fmt_som(r["total"])} kassadan berildi.' if r['cash'] else
+           f'{r["n"]} kishining qarzdorligi yopildi: {A.fmt_som(r["total"])}. Kassadan pul chiqmadi; direktorga xabar ketdi.')
+    return done(msg, request.form.get('next') or url_for('acct.moliya'))
+
+
+@bp.post('/buxgalteriya/qarz-yopish/<int:closure_id>/bekor')
+@perm_required('payouts.prepare')
+def debt_close_void(closure_id):
+    from .. import moliya as M
+    M.void_closure(post_actor(), closure_id, request.form.get('reason'))
+    return done('Yopish bekor qilindi — qarz qaytdi.', request.form.get('next') or url_for('acct.moliya'))
+
+
+@bp.post('/buxgalteriya/tortish/<int:harvest_id>/kg')
+@perm_required('payouts.prepare')
+def harvest_fix_kg(harvest_id):
+    from .. import moliya as M
+    r = M.fix_kg(post_actor(), harvest_id, request.form.get('kg'), reason=request.form.get('reason', ''),
+                 note=request.form.get('note', ''))
+    return done(f'KG tuzatildi: {r["old_kg"]:g} → {r["new_kg"]:g} kg · summa {A.fmt_som(r["old_amount"] or 0)} → '
+                f'{A.fmt_som(r["new_amount"] or 0)} ({r["diff"]:+,.0f} so‘m). {r["effect"]}.'.replace(',', ' '),
+                request.form.get('next') or url_for('acct.moliya'))
