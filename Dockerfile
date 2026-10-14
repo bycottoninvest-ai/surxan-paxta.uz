@@ -9,6 +9,8 @@ COPY app.py ./
 COPY surxon ./surxon
 COPY templates ./templates
 COPY static ./static
+# the AI assistant reads the instructions (docs/*.md) to teach the system
+COPY docs/*.md ./docs/
 RUN useradd -m surxon && mkdir -p /data && chown surxon /data
 USER surxon
 ENV DATA_DIR=/data

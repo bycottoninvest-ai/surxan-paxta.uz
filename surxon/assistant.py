@@ -1,0 +1,446 @@
+"""YORDAMCHI (AI) — a colleague inside the system: the director, the punkt operator (Yunus) and the accountant talk to it
+(voice or text) on the phone; it answers from the live database, says what is left to do today, and teaches the system
+step by step (its book: docs/YORDAMCHI_BILIM.md + the detailed docs).
+
+The brain is Claude (the key on Admin → Integratsiyalar, as for the talon reading); everything else stays here: the
+knowledge, the read-only tools, who may see what (the user's own permissions), the conversation memory (our database,
+never Claude's) and the monthly limit.
+
+It never writes: no kg, no money, no status. To change anything it explains the steps and gives a button to the screen
+where the person does it with their own name. Workers' (terimchilar) names are never sent — only brigades, trips and kg.
+"""
+import json
+from datetime import date, timedelta
+from pathlib import Path
+
+from flask import current_app, url_for
+
+from .db import get_db, q, scalar, tx
+from .security import has_perm
+from .settings import get_bool, get_setting
+from .utils import UserError, now_str, today_str
+
+ROLES = ('admin', 'manager', 'accountant', 'station')
+ROLE_NAMES = {'admin': 'admin (tizim egasi)', 'manager': 'direktor / rahbar', 'accountant': 'buxgalter',
+              'station': 'punkt operatori'}
+MEMORY = 12                     # last messages kept in the conversation
+MAX_STEPS = 6                   # tool rounds per answer
+DOCS = {'punkt': 'PUNKT.md', 'tezpul': 'TEZPUL.md', 'buxgalteriya': 'BUXGALTERIYA.md', 'kuzatuv': 'KUZATUV.md',
+        'vakolatlar': 'VAKOLATLAR.md'}
+
+# the screens it may offer as a button: key → (endpoint, title, permission)
+PAGES = {
+    'sverka': ('rahbar.sverka', 'Kunlik sverka', 'reports.finance'),
+    'direktor': ('rahbar.home', 'Direktor paneli', 'reports.finance'),
+    'yolda': ('rahbar.moving', 'Yo‘ldagi telashkalar', 'reports.finance'),
+    'tekshirish': ('rahbar.checks', 'Tekshirish (qizillar)', 'reports.finance'),
+    'nazorat': ('acct.nazorat', 'Nazorat', 'acct.view'),
+    'buxgalteriya': ('acct.home', 'Buxgalteriya', 'acct.view'),
+    'faktura': ('acct.faktura', 'Faktura (PQ-17)', 'nayman.write'),
+    'xarajatlar': ('acct.expenses', 'Xarajatlar', 'acct.view'),
+    'kun_yopish': ('acct.day_close', 'Kunni yopish', 'acct.view'),
+    'tezpul_panel': ('tezpul.panel', 'TEZ-PUL panel', 'tezpul.panel'),
+    'tezpul_kassa': ('tezpul.kassa', 'TEZ-PUL kassa', 'payouts.pay'),
+    'shofyorlar': ('tezpul.drivers', 'Shofyorlar', 'tezpul.panel'),
+    'kassir': ('acct.cashier', 'Pul beriladiganlar', 'payouts.pay'),
+    'telashkalar': ('ops.loads', 'Telashkalar', 'dashboard'),
+    'punkt': ('punkt.home', 'Punkt (umumiy yuk)', 'station.view'),
+    'punkt_tarix': ('punkt.history', 'Bugungi tarix (punkt)', 'station.view'),
+    'blankalar': ('admin.blanks', 'Punkt blanklari (PB chop etish)', 'masterdata.write'),
+}
+
+
+# ------------------------------------------------------------------ switches
+
+def enabled():
+    from . import talon_ai
+    return get_bool('ai_yordamchi_on') and talon_ai.enabled()
+
+
+def allowed(user):
+    return bool(user) and user['role'] in ROLES and enabled()
+
+
+def model():
+    from . import talon_ai
+    m = (get_setting('ai_yordamchi_model') or '').strip()
+    return m if m in talon_ai.MODELS else talon_ai.model()
+
+
+def month_usage():
+    r = q("""SELECT COUNT(*) n, COALESCE(SUM(tokens_in),0) tin, COALESCE(SUM(tokens_out),0) tout FROM yordamchi_messages
+             WHERE role='user' AND substr(created_at,1,7)=?""", (today_str()[:7],), one=True)
+    t = q("""SELECT COALESCE(SUM(tokens_in),0) tin, COALESCE(SUM(tokens_out),0) tout FROM yordamchi_messages
+             WHERE role='assistant' AND substr(created_at,1,7)=?""", (today_str()[:7],), one=True)
+    try:
+        limit = int(float(get_setting('ai_yordamchi_limit') or 0))
+    except ValueError:
+        limit = 0
+    return {'questions': r['n'], 'tokens_in': t['tin'], 'tokens_out': t['tout'], 'limit': limit}
+
+
+# ------------------------------------------------------------------ tools (read-only, the asker's own permissions)
+
+def _n(v):
+    return f'{(v or 0):,.0f}'.replace(',', ' ')
+
+
+def _day(arg):
+    s = (arg or '').strip().lower()
+    t = date.fromisoformat(today_str())
+    if s in ('', 'bugun', 'today'):
+        return t.isoformat()
+    if s in ('kecha', 'yesterday'):
+        return (t - timedelta(days=1)).isoformat()
+    try:
+        return date.fromisoformat(s[:10]).isoformat()
+    except ValueError:
+        return t.isoformat()
+
+
+def _station(user):
+    return user['station_id'] if user['role'] == 'station' else None
+
+
+def t_bugungi_holat(user, sana=''):
+    """The day's cotton: picked, sent, received, on the road, open; for the punkt operator — only his punkt."""
+    day = _day(sana)
+    st = _station(user)
+    sw = ' AND tl.station_id=?' if st else ''
+    args = (day, st) if st else (day,)
+    trips = q(f'''SELECT COUNT(*) n, COALESCE(SUM(CASE WHEN COALESCE(tl.method,'hand')='hand' THEN COALESCE(wb.net_kg, tl.internal_kg) END),0) hand,
+                         COALESCE(SUM(CASE WHEN tl.method='combine' THEN COALESCE(wb.net_kg, tl.internal_kg) END),0) comb
+                  FROM trailer_loads tl LEFT JOIN waybills wb ON wb.load_id=tl.id AND wb.status<>'BEKOR'
+                  WHERE tl.status<>'BEKOR' AND tl.load_date=?{sw}''', args, one=True)
+    rec = q(f'''SELECT COUNT(*) n, COALESCE(SUM(nr.accepted_kg),0) acc, COALESCE(SUM(wb.net_kg),0) sent
+                FROM nayman_receipts nr JOIN waybills wb ON wb.id=nr.waybill_id JOIN trailer_loads tl ON tl.id=wb.load_id
+                WHERE wb.status<>'BEKOR' AND nr.received_date=?{sw}''', args, one=True)
+    road = q(f'''SELECT COUNT(*) n, COALESCE(SUM(wb.net_kg),0) kg FROM waybills wb JOIN trailer_loads tl ON tl.id=wb.load_id
+                 WHERE wb.status='YARATILDI'{sw}''', (st,) if st else (), one=True)
+    out = {'sana': day, 'reyslar': trips['n'], 'qol_terimi_kg': trips['hand'], 'kombayn_kg': trips['comb'],
+           'punkt_qabul': {'reys': rec['n'], 'netto_kg': rec['acc'], 'nakladnoy_kg': rec['sent'],
+                           'farq_kg': round(rec['acc'] - rec['sent'], 1) if rec['n'] else None},
+           'hozir_punktga_kelmagan_yoki_navbatda': {'reys': road['n'], 'kg': road['kg']},
+           'dalada_ochiq_telashka': scalar("SELECT COUNT(*) FROM trailer_loads WHERE status='OCHIQ'")}
+    if st:
+        from . import groups as G
+        out['ochiq_umumiy_yuklar'] = [{'UY': g['number'], 'holat': g['status'], 'telashkalar': g['n'], 'kg': g['kg']}
+                                      for g in G.active(st)]
+    return out
+
+
+def t_sverka(user, sana=''):
+    from . import sverka as S
+    c = S.check(_day(sana))
+    rows = [{'brigada': r['name'], 'tur': 'kombayn' if r['method'] == 'combine' else 'qo‘l', 'telashka': r['trips'],
+             'dala_kg': r['dala'], 'punkt_kg': r['punkt'], 'pul_talon_kg': r['talon_kg'], 'talon_summa': r['amount'],
+             'berilgan': r['paid'], 'punkt_kutilmoqda_kg': r['waiting_kg'], 'holat': r['level'], 'izoh': r['why'],
+             'mavsum': r.get('season')} for r in c['rows']]
+    return {'sana': c['day'], 'umumiy_holat': c['level'], 'jami': c['totals'], 'brigadalar': rows,
+            'qizil_chegara_foiz': c['alert_pct']}
+
+
+def t_nazorat(user):
+    from .nazorat import issues
+    found = issues()
+    if user['role'] == 'station':
+        found = [i for i in found if 'punkt' in (i['title'] + i['detail']).lower() or 'UY' in i['title']]
+    return {'muammolar': [{'daraja': 'qizil' if i['level'] == 'red' else 'sariq', 'nima': i['title'], 'batafsil': i['detail']}
+                          for i in found[:25]], 'jami': len(found)}
+
+
+def t_kassa(user, sana=''):
+    from . import director as D
+    day = _day(sana)
+    c = D.cash(day, day)
+    return {'sana': day, 'kassalar': [{'kassa': b['name'], 'hozir_qoldiq': b['now'], 'kirim': b['inflow'], 'chiqim': b['outflow']}
+                                      for b in c['boxes'] if b['active']],
+            'jami_hozir': c['total']['now'], 'chiqim_turlari': c['out_groups'], 'xarajatlar': c['expenses']}
+
+
+def t_telashkalar(user, holat='yolda'):
+    """Trips now: yolda (sent, not received), ochiq (open in the field), bugun (today's)."""
+    st = _station(user)
+    where = {'ochiq': "tl.status='OCHIQ'", 'bugun': f"tl.status<>'BEKOR' AND tl.load_date='{today_str()}'"}.get(
+        holat, "wb.status='YARATILDI'")
+    if st:
+        where += f' AND tl.station_id={int(st)}'
+    rows = q(f'''SELECT tl.trip_no, t.code telashka, f.code dala, b.name brigada, COALESCE(tl.method,'hand') tur,
+                        COALESCE(wb.net_kg, tl.internal_kg) kg, tl.status, wb.created_at yuborilgan, wb.arrived_at keldi,
+                        tl.opened_at ochilgan
+                 FROM trailer_loads tl JOIN equipment t ON t.id=tl.trailer_id LEFT JOIN fields f ON f.id=tl.field_id
+                 LEFT JOIN brigadiers b ON b.id=tl.brigadier_id
+                 LEFT JOIN waybills wb ON wb.load_id=tl.id AND wb.status<>'BEKOR'
+                 WHERE {where} ORDER BY tl.id DESC LIMIT 40''')
+    return {'holat': holat, 'soni': len(rows), 'reyslar': [dict(r) for r in rows]}
+
+
+def t_vazifalar(user):
+    """What this person should do today — from the system's own state."""
+    role, todo = user['role'], []
+    if role in ('admin', 'manager'):
+        from . import sverka as S
+        c = S.check(today_str())
+        for r in c['rows']:
+            if r['level'] in ('red', 'yellow'):
+                todo.append(f'Sverka: {r["name"]} — {r["why"]}')
+        from .nazorat import issues
+        reds = [i for i in issues() if i['level'] == 'red']
+        todo += [f'Nazorat: {i["title"]}' for i in reds[:8]]
+    if role in ('admin', 'accountant'):
+        from .yordamchi import faktura_queue
+        fq = faktura_queue()
+        sign, inv = sum(c['sign'] for c in fq), sum(c['invoice'] for c in fq)
+        if sign:
+            todo.append(f'{sign} ta PQ-17 ni hosil-qabuli.uz da imzolash')
+        if inv:
+            todo.append(f'{inv} ta PQ-17 ga faktura yaratish')
+        un = scalar("SELECT COUNT(*) FROM expenses WHERE status='TEKSHIRILMAGAN' AND voided_at IS NULL")
+        if un:
+            todo.append(f'{un} ta xarajatni tasdiqlash (kassir yozgan)')
+        closed = scalar('SELECT COUNT(*) FROM cash_days WHERE day=?', (today_str(),))
+        if not closed:
+            todo.append('Kun oxirida kassani yopish (real pulni sanab kiritish)')
+        unpaid = q("SELECT COUNT(*) n, COALESCE(SUM(amount),0) s FROM tezpul_talons WHERE status='TAYYOR'", one=True)
+        if unpaid['n']:
+            todo.append(f'{unpaid["n"]} ta talon to‘lanmagan ({_n(unpaid["s"])} so‘m) — kassada pul yetarlimi')
+    if role == 'station':
+        from . import groups as G
+        for g in G.active(_station(user)):
+            todo.append(f'{g["number"]}: {"ochiq — telashkalar qo‘shilmoqda" if g["status"] == "OCHIQ" else "yopilgan — punkt tortishi (brutto/tara) kutilmoqda"}'
+                        f' ({g["n"]} telashka, {_n(g["kg"])} kg)')
+        road = scalar("""SELECT COUNT(*) FROM waybills wb JOIN trailer_loads tl ON tl.id=wb.load_id
+                         WHERE wb.status='YARATILDI' AND tl.station_id=?""", (_station(user),))
+        if road:
+            todo.append(f'{road} ta telashka hali qabul qilinmagan')
+    return {'vazifalar': todo or ['Hozircha shoshilinch ish yo‘q 👍']}
+
+
+def t_mavsum(user):
+    from .accounting import cotton_totals
+    from .services import current_season
+    year = current_season(get_db())
+    c = cotton_totals(year)
+    pq = q('SELECT COUNT(*) n, COALESCE(SUM(kond_kg),0) kond, COALESCE(SUM(amount),0) amount FROM pq17_docs', one=True)
+    got = scalar('SELECT COALESCE(SUM(amount),0) FROM payments WHERE season_year=? AND voided_at IS NULL', (year,))
+    out = {'mavsum': year, 'dala_kg': c['field_kg'], 'punkt_kg': c['punkt_kg'], 'pq17_soni': pq['n'],
+           'pq17_tolanadigan_kg': pq['kond'], 'pq17_summa': pq['amount'], 'klaster_tolagan': got,
+           'klaster_qarzi': pq['amount'] - got}
+    t = q("SELECT COALESCE(SUM(kg),0) kg, COALESCE(SUM(amount),0) s FROM tezpul_talons WHERE status='TOLANDI'", one=True)
+    out['talon_berilgan'] = {'kg': t['kg'], 'som': t['s']}
+    return out
+
+
+def t_yoriqnoma(user, mavzu=''):
+    """The detailed instructions on a topic (the short book is already in the conversation)."""
+    key = (mavzu or '').strip().lower()
+    name = next((v for k, v in DOCS.items() if k in key or key in k), None) if key else None
+    if not name:
+        return {'mavzular': list(DOCS), 'izoh': 'Mavzuni tanlang.'}
+    path = Path(current_app.root_path).parent / 'docs' / name
+    try:
+        return {'mavzu': name, 'matn': path.read_text(encoding='utf-8')[:9000]}
+    except OSError:
+        return {'xato': 'yo‘riqnoma topilmadi'}
+
+
+def t_sahifa(user, nom=''):
+    p = PAGES.get((nom or '').strip())
+    if not p or not has_perm(user, p[2]):
+        return {'xato': 'Bu sahifa yo‘q yoki sizga yopiq.', 'mavjud': [k for k, v in PAGES.items() if has_perm(user, v[2])]}
+    return {'tugma': {'title': p[1], 'url': url_for(p[0])}, 'izoh': 'Tugma suhbatda ko‘rinadi.'}
+
+
+_SANA = {'type': 'object', 'properties': {'sana': {'type': 'string', 'description': '“bugun”, “kecha” yoki YYYY-MM-DD'}}}
+TOOLS = {
+    't_vazifalar': (None, {'name': 'vazifalarim', 'description': 'Shu odam bugun nima qilishi kerak — tizim holatidan (sverka, '
+                           'Nazorat, PQ-17, xarajatlar, kassa, punkt UY). Suhbat boshida va “nima qilay?” deganda chaqiring.',
+                           'input_schema': {'type': 'object', 'properties': {}}}),
+    't_bugungi_holat': (None, {'name': 'kun_holati', 'description': 'Bir kunlik paxta: terilgan (qo‘l/kombayn), punkt qabul, '
+                               'farq, yo‘lda, ochiq telashkalar. Punkt operatoriga faqat o‘z punkti.', 'input_schema': _SANA}),
+    't_telashkalar': (None, {'name': 'telashkalar', 'description': 'Reyslar ro‘yxati: yolda (punkt qabul qilmagan), ochiq '
+                             '(dalada), bugun.', 'input_schema': {'type': 'object', 'properties': {
+                                 'holat': {'type': 'string', 'enum': ['yolda', 'ochiq', 'bugun']}}}}),
+    't_sverka': ('reports.finance', {'name': 'sverka', 'description': 'Kunlik sverka: har brigada dala nakladnoy kg · punkt netto · '
+                                     'talonga yozilgan (pul) kg, holat va izoh, mavsum farqi.', 'input_schema': _SANA}),
+    't_nazorat': ('acct.view', {'name': 'nazorat', 'description': 'Nazorat: tizim o‘zi topgan ochiq muammolar (qizil/sariq).',
+                                'input_schema': {'type': 'object', 'properties': {}}}),
+    't_kassa': ('cash.view', {'name': 'kassa', 'description': 'Kassalar: hozirgi qoldiq, kunlik kirim/chiqim, xarajat turlari.',
+                              'input_schema': _SANA}),
+    't_mavsum': ('reports.finance', {'name': 'mavsum', 'description': 'Mavsum jami: dala va punkt kg, PQ-17, klaster qarzi, '
+                                     'talon bo‘yicha berilgan pul.', 'input_schema': {'type': 'object', 'properties': {}}}),
+    't_yoriqnoma': (None, {'name': 'yoriqnoma', 'description': 'Batafsil yo‘riqnoma: ' + ', '.join(DOCS) + '. Tizimni '
+                           'o‘rgatishda, aniq qadamlar kerak bo‘lsa.', 'input_schema': {'type': 'object', 'properties': {
+                               'mavzu': {'type': 'string', 'enum': list(DOCS)}}, 'required': ['mavzu']}}),
+    't_sahifa': (None, {'name': 'sahifa_tugmasi', 'description': 'Odamga kerakli ekranni ochadigan tugma berish. nom: '
+                        + ', '.join(PAGES), 'input_schema': {'type': 'object', 'properties': {
+                            'nom': {'type': 'string', 'enum': list(PAGES)}}, 'required': ['nom']}}),
+}
+FUNCS = {spec['name']: globals()[fn] for fn, (_, spec) in TOOLS.items()}
+
+
+def tools_for(user):
+    return [spec for _, (perm, spec) in TOOLS.items() if perm is None or has_perm(user, perm)]
+
+
+def run_tool(user, name, args):
+    spec = next((s for s in tools_for(user) if s['name'] == name), None)
+    if not spec:
+        return {'xato': 'Bu ma’lumot sizga yopiq.'}
+    try:
+        return FUNCS[name](user, **{k: v for k, v in (args or {}).items() if isinstance(v, str)})
+    except UserError as err:
+        return {'xato': str(err)}
+    except Exception as exc:                 # a broken tool never breaks the conversation
+        print(f'yordamchi tool {name} failed: {exc}', flush=True)
+        return {'xato': 'Ma’lumotni olib bo‘lmadi.'}
+
+
+# ------------------------------------------------------------------ the conversation
+
+PERSONA = """Sen — SURXAN-PAXTA.UZ tizimining ichidagi yordamchisan: SURXON (Taxiatosh Textile) paxta korxonasi xodimlarining \
+mehribon, aqlli hamkasbisan. Odamlar bilan telefonda, ko‘pincha ovoz orqali gaplashasan.
+
+Qanday gaplashasan:
+- Faqat o‘zbek tilida (lotin yozuvi), oddiy, iliq, samimiy — xuddi yaxshi hamkasb kabi. Odamni ismi bilan “siz” deb chaqir.
+- Qisqa gapir: 1–4 jumla, kerak bo‘lsa qisqa ro‘yxat. Javobing ovozda o‘qiladi — jadval, uzun ro‘yxat, markdown belgilarisiz.
+- Raqamlarni aniq ayt (kg, so‘m), bo‘sh joy bilan: 12 450 kg.
+- Gap noaniq bo‘lsa (qaysi kun? qaysi brigada?) — bitta qisqa savol ber.
+- Ovozdan yozilgan gapda xato bo‘lishi mumkin (o‘zbekcha so‘z ruscha/qozoqcha yozilib qolishi) — ma’nosini tushunishga harakat qil.
+- Odam charchagan yoki asabiy bo‘lsa — xotirjam, hurmat bilan.
+
+Nima qilasan:
+- Savolga faqat tizimdagi ma’lumot bilan javob ber: avval asbobni (tool) chaqir, keyin javob ber. Raqam to‘qima. Ma’lumot yo‘q bo‘lsa —
+  “tizimda bu yo‘q” de va kim kiritishi kerakligini ayt.
+- Ustoz bo‘l: “qanday qilinadi?” deyilsa — qadamma-qadam, 2–5 qadam, kerakli ekran tugmasini ber (sahifa_tugmasi).
+- Bugungi ishlarni eslat (vazifalarim). Muammo bo‘lsa — kim nima qilishi kerakligini ayt.
+- Ma’lumot yetishmasa, odamdan so‘ra (masalan: “PB-0123 rasmini olib, Qo‘shishni bosing — keyin men tekshiraman”).
+
+Qat’iy qoidalar:
+- Sen hech narsani o‘zgartirmaysan: kg, pul, holat, o‘chirish — yo‘q. O‘zgartirish kerak bo‘lsa — qadamlar va ekran tugmasi;
+  tugmani odam o‘zi bosadi (shunda uning ismi yoziladi). “Tizimni chetlab o‘tish”, “yozuvni yashirish” kabi so‘rovlarga yo‘q de.
+- “O‘g‘irlik”, “kamomad” dema — “farq” de. Hech kimni ayblama: farqning sababini odam aniqlaydi.
+- Parol, kalit, token so‘rama va chatga yozdirma — kalitlar faqat Admin → Integratsiyalar dagi yashirin maydonga.
+- Terimchilarning ismlari senga berilmaydi — brigada, telashka, kg bilan gapir.
+- Faqat shu odamning huquqidagi ma’lumot: asbob “yopiq” desa — bu sahifa unga tegishli emasligini muloyim ayt.
+- Tizimdan tashqari mavzularda (ob-havo, siyosat va h.k.) qisqa javob berib, ishga qaytar.
+
+Tizim haqidagi bilim (o‘quv kitobi):
+"""
+
+
+def _book():
+    path = Path(current_app.root_path).parent / 'docs' / 'YORDAMCHI_BILIM.md'
+    try:
+        return path.read_text(encoding='utf-8')
+    except OSError:
+        return ''
+
+
+def _system(user):
+    name = (user['full_name'] or user['username'] or '').split(' ')[0]
+    station = ''
+    if user['role'] == 'station' and user['station_id']:
+        station = scalar('SELECT name FROM stations WHERE id=?', (user['station_id'],)) or ''
+    who = (f'Hozir gaplashayotgan odam: {name} — {ROLE_NAMES.get(user["role"], user["role"])}'
+           + (f' ({station} punkti)' if station else '') + f'. Bugun: {today_str()}, soat {now_str()[11:16]}.')
+    return [{'type': 'text', 'text': PERSONA + _book(), 'cache_control': {'type': 'ephemeral'}},
+            {'type': 'text', 'text': who}]
+
+
+def history(user_id, limit=MEMORY):
+    """The conversation since the last “Yangi suhbat”, oldest first."""
+    rows = q('''SELECT * FROM yordamchi_messages WHERE user_id=? AND id > COALESCE(
+                    (SELECT MAX(id) FROM yordamchi_messages WHERE user_id=? AND role='reset'), 0)
+                ORDER BY id DESC LIMIT ?''', (user_id, user_id, limit))
+    return [dict(r, links=json.loads(r['links_json'] or '[]')) for r in reversed(rows) if r['role'] != 'reset']
+
+
+def reset(user_id):
+    with tx() as db:
+        db.execute("INSERT INTO yordamchi_messages(user_id, role, text, created_at) VALUES (?, 'reset', '', ?)",
+                   (user_id, now_str()))
+
+
+def _client():
+    import anthropic
+    from . import talon_ai
+    return anthropic.Anthropic(api_key=talon_ai.api_key(), timeout=60, max_retries=2)
+
+
+def _call(client, **kw):
+    import anthropic
+    try:
+        return client.messages.create(**kw)
+    except anthropic.AuthenticationError:
+        raise UserError('AI kaliti noto‘g‘ri — admin Integratsiyalar sahifasida tekshirsin.')
+    except anthropic.RateLimitError:
+        raise UserError('Hozir band ekanman — bir daqiqadan keyin yana so‘rang.')
+    except anthropic.APIConnectionError:
+        raise UserError('Internetga ulanib bo‘lmadi — birozdan keyin qayta urinib ko‘ring.')
+    except anthropic.APIStatusError as err:
+        raise UserError(f'AI xatosi ({err.status_code}) — birozdan keyin qayta urinib ko‘ring.')
+
+
+def ask(user, text):
+    """One turn: the question → (tools …) → the answer. Returns {text, links}. Both sides are kept in our database."""
+    text = (text or '').strip()[:1500]
+    if not text:
+        raise UserError('Savolni yozing yoki ayting.')
+    if not allowed(user):
+        raise UserError('Yordamchi siz uchun yoqilmagan.')
+    u = month_usage()
+    if u['limit'] and u['questions'] >= u['limit']:
+        raise UserError(f'Bu oyning chegarasi tugadi ({u["limit"]} ta savol). Admin Sozlamalarda oshirishi mumkin.')
+    past = history(user['id'])
+    messages = [{'role': m['role'], 'content': m['text']} for m in past if m['text']]
+    while messages and messages[0]['role'] != 'user':
+        messages.pop(0)
+    messages.append({'role': 'user', 'content': text})
+    with tx() as db:
+        db.execute("INSERT INTO yordamchi_messages(user_id, role, text, created_at) VALUES (?, 'user', ?, ?)",
+                   (user['id'], text, now_str()))
+    client, tools, system = _client(), tools_for(user), _system(user)
+    links, tin, tout, resp = [], 0, 0, None
+    for _ in range(MAX_STEPS):
+        resp = _call(client, model=model(), max_tokens=4000, system=system, tools=tools, messages=messages,
+                     output_config={'effort': 'low'})
+        tin += (resp.usage.input_tokens or 0) + (getattr(resp.usage, 'cache_read_input_tokens', 0) or 0)
+        tout += resp.usage.output_tokens or 0
+        if resp.stop_reason == 'pause_turn':
+            messages.append({'role': 'assistant', 'content': resp.content})
+            continue
+        uses = [b for b in resp.content if b.type == 'tool_use']
+        if resp.stop_reason != 'tool_use' or not uses:
+            break
+        messages.append({'role': 'assistant', 'content': resp.content})
+        results = []
+        for b in uses:
+            out = run_tool(user, b.name, b.input)
+            if isinstance(out, dict) and out.get('tugma') and out['tugma'] not in links:
+                links.append(out['tugma'])
+            results.append({'type': 'tool_result', 'tool_use_id': b.id,
+                            'content': json.dumps(out, ensure_ascii=False, default=str)[:12000]})
+        messages.append({'role': 'user', 'content': results})
+    answer = '\n'.join(b.text for b in (resp.content if resp else []) if b.type == 'text').strip()
+    if resp is not None and resp.stop_reason == 'refusal':
+        answer = 'Bu savolga javob bera olmayman. Ishga oid boshqa savol bering.'
+    import re
+    answer = re.sub(r'(?<=\d) (?=\d{3}\b)', '\u00a0', answer)      # 12 450 kg never breaks across lines
+    if not answer:
+        answer = 'Kechirasiz, javobni tayyorlay olmadim — savolni boshqacha aytib ko‘ring.'
+    with tx() as db:
+        db.execute('''INSERT INTO yordamchi_messages(user_id, role, text, links_json, tokens_in, tokens_out, created_at)
+                      VALUES (?, 'assistant', ?, ?, ?, ?, ?)''',
+                   (user['id'], answer, json.dumps(links, ensure_ascii=False), tin, tout, now_str()))
+    return {'text': answer, 'links': links}
+
+
+def suggestions(user):
+    """The chips under the greeting — by role."""
+    common = ['Bugun nima qilishim kerak?', 'Tizimni menga o‘rgating']
+    return {'manager': ['Bugun nima bo‘ldi?', 'Sverkada farq bormi?', 'Qaysi telashka punktga kelmadi?', 'Kassada qancha pul bor?'],
+            'admin': ['Bugun nima bo‘ldi?', 'Sverkada farq bormi?', 'Klaster qancha qarz?'],
+            'accountant': ['Faktura kerak PQ-17 bormi?', 'Kassada qancha pul bor?', 'To‘lanmagan talonlar'],
+            'station': ['Qaysi telashkalar kelishi kerak?', 'Nakladnoyni qanday qo‘shaman?', 'UY ni qanday yopaman?'],
+            }.get(user['role'], []) + common

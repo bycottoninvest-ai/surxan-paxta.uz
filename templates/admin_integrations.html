@@ -66,6 +66,10 @@
       <form method="post" class="row">{{ csrf() }}<input type="hidden" name="action" value="ai_model">
         <select class="input" name="model" style="width:auto">{% for k, v in ai_models.items() %}<option value="{{ k }}" {{ 'selected' if k == ai_model }}>{{ v }}</option>{% endfor %}</select>
         <button class="btn btn-light">Saqlash</button></form>
+      {% set au = ai_usage() %}
+      <p class="small mt-s"><b>3.</b> 🎤 AI yordamchi (direktor, punkt operatori, buxgalter): bu oy <b>{{ au.questions }}</b> ta savol{% if au.limit %} / chegara {{ au.limit }}{% endif %}
+        · {{ (au.tokens_in / 1000)|round(0)|int }}k + {{ (au.tokens_out / 1000)|round(0)|int }}k token.
+        Yoqish/o‘chirish va chegara: Sozlamalar → <code>ai_yordamchi_on</code>, <code>ai_yordamchi_limit</code>, <code>ai_yordamchi_model</code>.</p>
     </div>
   </section>
 

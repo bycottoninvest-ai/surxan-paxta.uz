@@ -206,6 +206,14 @@
   <a href="#" data-open-nav>{{ icon('menu') }}Boshqa</a>
   {% endif %}
 </nav>
+{% if ai_on %}<a class="ai-fab no-print" href="{{ url_for('assistant.page') }}" aria-label="Yordamchi"><img src="{{ url_for('static', filename='img/cotton.png') }}" alt=""><span>🎤</span></a>
+<style>.ai-fab{position:fixed;right:16px;bottom:calc(84px + env(safe-area-inset-bottom));z-index:60;width:60px;height:60px;border-radius:50%;
+  background:radial-gradient(circle at 30% 30%,#3b82f6,#0b2a55 75%);display:grid;place-items:center;box-shadow:0 10px 24px rgba(11,42,85,.4);text-decoration:none}
+.ai-fab img{width:34px;height:34px;filter:drop-shadow(0 1px 2px rgba(0,0,0,.25))}
+.ai-fab span{position:absolute;right:-2px;bottom:-2px;width:26px;height:26px;border-radius:50%;background:#16a34a;display:grid;place-items:center;font-size:13px;border:2px solid #fff}
+.ai-fab::before{content:"";position:absolute;inset:-5px;border-radius:50%;border:2px solid rgba(59,130,246,.45);animation:aifab 2.4s infinite}
+@keyframes aifab{0%{transform:scale(.95);opacity:1}100%{transform:scale(1.3);opacity:0}}
+@media (min-width:900px){.ai-fab{bottom:24px;right:24px}}</style>{% endif %}
 <dialog class="modal" id="reason-dialog">
   <div class="card-h"><h3 data-title>Sabab</h3></div>
   <form method="post">

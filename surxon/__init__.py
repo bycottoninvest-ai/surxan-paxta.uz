@@ -51,9 +51,9 @@ def create_app(**overrides):
         dbmod.migrate(conn)
         seed(conn, cfg)
 
-    from .views import acct, admin, apps, auth, dala, finance, hamyon, integrations, kuzatuv, loans, main, ops, people, punkt, reports, yoqilgi, rahbar, tezpul
+    from .views import acct, assistant, admin, apps, auth, dala, finance, hamyon, integrations, kuzatuv, loans, main, ops, people, punkt, reports, yoqilgi, rahbar, tezpul
     for bp in (auth.bp, main.bp, ops.bp, people.bp, finance.bp, reports.bp, admin.bp, integrations.bp, punkt.bp, acct.bp,
-               kuzatuv.bp, dala.bp, hamyon.bp, yoqilgi.bp, rahbar.bp, loans.bp, tezpul.bp, apps.bp):
+               kuzatuv.bp, dala.bp, hamyon.bp, yoqilgi.bp, rahbar.bp, loans.bp, tezpul.bp, apps.bp, assistant.bp):
         app.register_blueprint(bp)
     from .telegram_bot import bp as tg_bp
     app.register_blueprint(tg_bp)
@@ -199,6 +199,7 @@ def register_template_helpers(app):
             'pq17_todo': _pq17_todo() if user and can('nayman.write') else None,
             'paper_field': user is not None and __import__('surxon.settings', fromlist=['get_bool']).get_bool('dala_qogoz'),
             'offline_queue': user is not None and __import__('surxon.settings', fromlist=['get_bool']).get_bool('offline_queue'),
+            'ai_on': _ai_on(user),
         }
 
     def _pq17_todo():
@@ -225,12 +226,24 @@ def register_template_helpers(app):
         except Exception:
             return None
 
+    def _ai_on(user):
+        try:
+            from .assistant import allowed
+            return allowed(user)
+        except Exception:          # the button never breaks a page
+            return False
+
     def _gmaps_key():
         # server .env wins; otherwise the key the admin saved on the Integrations page
         if app.config['SURXON'].GOOGLE_MAPS_KEY:
             return app.config['SURXON'].GOOGLE_MAPS_KEY
         row = dbmod.q("SELECT value FROM settings WHERE key='google_maps_key'", one=True)
         return (row['value'] or '').strip() if row else ''
+
+    @app.template_global()
+    def ai_usage():
+        from .assistant import month_usage
+        return month_usage()
 
     @app.template_global()
     def photo_url(path):

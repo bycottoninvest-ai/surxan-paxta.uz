@@ -1,0 +1,217 @@
+<!doctype html>
+<html lang="uz">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0b2a55">
+<title>Yordamchi · SURXON</title>
+<link rel="icon" href="{{ url_for('static', filename='img/cotton.png') }}">
+<style>
+:root{--navy:#0b2a55;--blue:#2563eb;--green:#16a34a;--bg:#eef3fb;--ink:#0f1f3a;--muted:#6b7c93;--card:#fff}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%;background:var(--bg);font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;color:var(--ink)}
+.ai{display:flex;flex-direction:column;height:100dvh;max-width:640px;margin:0 auto;background:linear-gradient(180deg,#eaf1fc 0%,#f6f8fc 60%)}
+.ai-top{display:flex;align-items:center;gap:12px;padding:calc(10px + env(safe-area-inset-top)) 14px 12px;background:linear-gradient(135deg,#0b2a55,#1d4ed8);color:#fff;box-shadow:0 6px 20px rgba(11,42,85,.25);border-radius:0 0 22px 22px}
+.ai-back{width:38px;height:38px;border-radius:12px;display:grid;place-items:center;color:#fff;text-decoration:none;font-size:24px;background:rgba(255,255,255,.12)}
+.ai-ava{width:46px;height:46px;border-radius:50%;background:#fff;display:grid;place-items:center;position:relative;flex:none;box-shadow:0 0 0 3px rgba(255,255,255,.25)}
+.ai-ava img{width:32px;height:32px;object-fit:contain}
+.ai-ava::after{content:"";position:absolute;right:0;bottom:1px;width:11px;height:11px;border-radius:50%;background:#22c55e;border:2px solid #1d4ed8}
+.ai-who{flex:1;min-width:0}.ai-who b{display:block;font-size:18px;font-weight:800;letter-spacing:.2px}
+.ai-who span{display:block;font-size:12.5px;opacity:.85;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ai-tool{width:38px;height:38px;border-radius:12px;border:0;background:rgba(255,255,255,.12);color:#fff;font-size:18px;display:grid;place-items:center;cursor:pointer}
+.ai-tool.off{opacity:.45}
+.ai-msgs{flex:1;overflow-y:auto;padding:16px 14px 10px;scroll-behavior:smooth}
+.ai-hello{text-align:center;padding:18px 8px 6px}
+.ai-hello .big{width:96px;height:96px;margin:0 auto 12px;border-radius:50%;background:#fff;display:grid;place-items:center;box-shadow:0 10px 30px rgba(37,99,235,.25),0 0 0 8px rgba(37,99,235,.08)}
+.ai-hello .big img{width:64px;height:64px}
+.ai-hello h1{font-size:23px;margin:0 0 6px;color:var(--navy)}
+.ai-hello p{margin:0 auto;max-width:360px;font-size:15px;line-height:1.5;color:#40536f}
+.ai-chips{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin:16px 0 4px}
+.ai-chip{border:1.5px solid #c7d7f3;background:#fff;color:var(--navy);border-radius:999px;padding:9px 14px;font-size:14px;font-weight:600;cursor:pointer;box-shadow:0 2px 6px rgba(11,42,85,.06)}
+.ai-chip:active{transform:scale(.97)}
+.m{display:flex;margin:8px 0}.m.new{animation:pop .25s ease}
+.m.u{justify-content:flex-end}
+.b{max-width:84%;padding:11px 14px;border-radius:20px;font-size:15.5px;line-height:1.5;white-space:pre-wrap;word-wrap:break-word}
+.m.u .b{background:linear-gradient(135deg,#1d4ed8,#0b2a55);color:#fff;border-bottom-right-radius:6px;box-shadow:0 4px 12px rgba(29,78,216,.25)}
+.m.a .b{background:var(--card);border-bottom-left-radius:6px;box-shadow:0 3px 12px rgba(11,42,85,.08)}
+.m.a .mini{width:30px;height:30px;border-radius:50%;background:#fff;display:grid;place-items:center;margin:auto 8px 2px 0;flex:none;box-shadow:0 2px 6px rgba(11,42,85,.12)}
+.m.a .mini img{width:20px;height:20px}
+.links{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.links a{display:inline-flex;align-items:center;gap:6px;background:#e8f0ff;color:#1d4ed8;font-weight:700;font-size:14px;text-decoration:none;padding:8px 12px;border-radius:12px}
+.m.err .b{background:#fff1f1;color:#b91c1c}
+.typing{display:inline-flex;gap:5px;padding:14px 16px}
+.typing i{width:8px;height:8px;border-radius:50%;background:#94a3b8;animation:dot 1.2s infinite}
+.typing i:nth-child(2){animation-delay:.15s}.typing i:nth-child(3){animation-delay:.3s}
+@keyframes dot{0%,60%,100%{transform:translateY(0);opacity:.5}30%{transform:translateY(-5px);opacity:1}}
+@keyframes pop{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+.dock{padding:8px 12px calc(12px + env(safe-area-inset-bottom));background:linear-gradient(180deg,rgba(246,248,252,0),#f6f8fc 30%)}
+.hear{text-align:center;font-size:14px;color:#b91c1c;font-weight:700;min-height:20px;margin-bottom:4px}
+.row{display:flex;align-items:flex-end;gap:10px}
+.inp{flex:1;display:flex;align-items:flex-end;background:#fff;border-radius:26px;padding:6px 6px 6px 16px;box-shadow:0 4px 16px rgba(11,42,85,.1);border:1.5px solid #dbe5f5}
+.inp textarea{flex:1;border:0;outline:0;resize:none;font:inherit;font-size:16px;line-height:1.4;max-height:120px;padding:8px 0;background:transparent;color:var(--ink)}
+.send{width:40px;height:40px;border-radius:50%;border:0;background:var(--blue);color:#fff;font-size:18px;cursor:pointer;flex:none;display:grid;place-items:center}
+.send:disabled{background:#cbd5e1}
+.mic{width:62px;height:62px;border-radius:50%;border:0;flex:none;cursor:pointer;color:#fff;font-size:26px;display:grid;place-items:center;position:relative;
+  background:radial-gradient(circle at 30% 30%,#4ade80,#16a34a 70%);box-shadow:0 8px 22px rgba(22,163,74,.45)}
+.mic.on{background:radial-gradient(circle at 30% 30%,#f87171,#dc2626 70%);box-shadow:0 8px 22px rgba(220,38,38,.45)}
+.mic.on::before,.mic.on::after{content:"";position:absolute;inset:-6px;border-radius:50%;border:3px solid rgba(220,38,38,.45);animation:ring 1.4s infinite}
+.mic.on::after{animation-delay:.7s}
+@keyframes ring{from{transform:scale(1);opacity:1}to{transform:scale(1.5);opacity:0}}
+.hint{text-align:center;font-size:12px;color:var(--muted);margin-top:6px}
+</style>
+</head>
+<body>
+<div class="ai">
+  <div class="ai-top">
+    <a class="ai-back" href="{{ url_for('main.dashboard') }}" aria-label="Orqaga">‹</a>
+    <div class="ai-ava"><img src="{{ url_for('static', filename='img/cotton.png') }}" alt=""></div>
+    <div class="ai-who"><b>Yordamchi</b><span id="state">onlayn · gapiring yoki yozing</span></div>
+    <button class="ai-tool" id="voice" title="Ovozli javob">🔊</button>
+    <button class="ai-tool" id="reset" title="Yangi suhbat">⟳</button>
+  </div>
+
+  <div class="ai-msgs" id="msgs">
+    <div class="ai-hello" id="hello" {% if messages %}hidden{% endif %}>
+      <div class="big"><img src="{{ url_for('static', filename='img/cotton.png') }}" alt=""></div>
+      <h1>Assalomu alaykum, {{ name }}! 👋</h1>
+      <p>Men sizning yordamchingizman. Paxta, sverka, punkt, kassa — nima kerak bo‘lsa so‘rang. Tizimni ham birga o‘rganamiz.</p>
+      <div class="ai-chips">{% for c in chips %}<button class="ai-chip" type="button">{{ c }}</button>{% endfor %}</div>
+    </div>
+    {% for m in messages %}
+    <div class="m {{ 'u' if m.role == 'user' else 'a' }}">{% if m.role != 'user' %}<div class="mini"><img src="{{ url_for('static', filename='img/cotton.png') }}" alt=""></div>{% endif %}
+      <div class="b">{{ m.text }}{% if m.links %}<div class="links">{% for l in m.links %}<a href="{{ l.url }}">{{ l.title }} ›</a>{% endfor %}</div>{% endif %}</div></div>
+    {% endfor %}
+  </div>
+
+  <div class="dock">
+    <div class="hear" id="hear"></div>
+    <div class="row">
+      <div class="inp"><textarea id="text" rows="1" placeholder="Savolingizni yozing…"></textarea><button class="send" id="send" disabled aria-label="Yuborish">➤</button></div>
+      <button class="mic" id="mic" aria-label="Gapirish">🎤</button>
+    </div>
+    <div class="hint">🎤 ni bosing va gapiring · yordamchi hech narsani o‘zgartirmaydi, faqat ko‘rsatadi va o‘rgatadi</div>
+  </div>
+</div>
+<input type="hidden" id="csrf" value="{{ csrf_token() }}">
+<script>
+(function () {
+  const $ = (id) => document.getElementById(id);
+  const msgs = $('msgs'), text = $('text'), send = $('send'), mic = $('mic'), hear = $('hear');
+  const ICON = '{{ url_for("static", filename="img/cotton.png") }}';
+  let busy = false, voiceOn = true;
+  try { voiceOn = localStorage.getItem('ai_voice') !== '0'; } catch (e) {}
+  const paintVoice = () => $('voice').classList.toggle('off', !voiceOn);
+  paintVoice();
+  const down = () => { msgs.scrollTop = msgs.scrollHeight; };
+  down();
+
+  function bubble(role, body, links) {
+    $('hello').hidden = true;
+    const m = document.createElement('div');
+    m.className = 'm new ' + role;
+    if (role !== 'u') m.innerHTML = '<div class="mini"><img src="' + ICON + '" alt=""></div>';
+    const b = document.createElement('div');
+    b.className = 'b';
+    b.textContent = body || '';
+    m.appendChild(b);
+    msgs.appendChild(m);
+    if (links && links.length) addLinks(b, links);
+    down();
+    return b;
+  }
+  function addLinks(b, links) {
+    const box = document.createElement('div');
+    box.className = 'links';
+    links.forEach((l) => { const a = document.createElement('a'); a.href = l.url; a.textContent = l.title + ' ›'; box.appendChild(a); });
+    b.appendChild(box);
+  }
+  function typeOut(b, full, links) {           // the answer appears like someone typing it
+    let i = 0;
+    const step = Math.max(1, Math.round(full.length / 90));
+    (function tick() {
+      i = Math.min(full.length, i + step);
+      b.textContent = full.slice(0, i);
+      down();
+      if (i < full.length) setTimeout(tick, 16); else if (links && links.length) { addLinks(b, links); down(); }
+    })();
+  }
+  function speak(t) {
+    if (!voiceOn || !('speechSynthesis' in window)) return;
+    try {
+      speechSynthesis.cancel();
+      const u = new SpeechSynthesisUtterance(t.replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}›•]/gu, '').replace(/\s+/g, ' '));
+      const vs = speechSynthesis.getVoices();
+      const v = vs.find((x) => /^uz/i.test(x.lang)) || vs.find((x) => /^tr/i.test(x.lang));
+      if (v) { u.voice = v; u.lang = v.lang; } else { u.lang = 'uz-UZ'; }
+      u.rate = 1.0;
+      speechSynthesis.speak(u);
+    } catch (e) {}
+  }
+  async function ask(q) {
+    q = (q || '').trim();
+    if (!q || busy) return;
+    busy = true; send.disabled = true; text.value = ''; grow();
+    bubble('u', q);
+    $('hello').hidden = true;
+    const t = document.createElement('div');
+    t.className = 'm new a';
+    t.innerHTML = '<div class="mini"><img src="' + ICON + '" alt=""></div><div class="b typing"><i></i><i></i><i></i></div>';
+    msgs.appendChild(t); down();
+    $('state').textContent = 'yozmoqda…';
+    try {
+      const fd = new FormData(); fd.append('text', q); fd.append('_csrf', $('csrf').value);
+      const r = await fetch('{{ url_for("assistant.ask") }}', { method: 'POST', body: fd, headers: { 'X-Requested-With': 'fetch' } });
+      const j = await r.json().catch(() => ({ ok: false, error: 'Javob kelmadi — internetni tekshiring.' }));
+      t.remove();
+      if (j.ok) { typeOut(bubble('a', ''), j.text, j.links); speak(j.text); }
+      else { const e = bubble('a', j.error || 'Xatolik'); e.parentNode.classList.add('err'); }
+    } catch (e) {
+      t.remove();
+      const b = bubble('a', 'Internet yo‘q — birozdan keyin qayta yuboring.'); b.parentNode.classList.add('err');
+    }
+    $('state').textContent = 'onlayn · gapiring yoki yozing';
+    busy = false; send.disabled = !text.value.trim();
+  }
+  function grow() { text.style.height = 'auto'; text.style.height = Math.min(120, text.scrollHeight) + 'px'; }
+  text.addEventListener('input', () => { grow(); send.disabled = busy || !text.value.trim(); });
+  text.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); ask(text.value); } });
+  send.addEventListener('click', () => ask(text.value));
+  document.querySelectorAll('.ai-chip').forEach((c) => c.addEventListener('click', () => ask(c.textContent)));
+  $('voice').addEventListener('click', () => {
+    voiceOn = !voiceOn; paintVoice();
+    try { localStorage.setItem('ai_voice', voiceOn ? '1' : '0'); } catch (e) {}
+    if (!voiceOn && 'speechSynthesis' in window) speechSynthesis.cancel();
+  });
+  $('reset').addEventListener('click', async () => {
+    if (!confirm('Yangi suhbat boshlansinmi? (eskisi tarixda qoladi)')) return;
+    const fd = new FormData(); fd.append('_csrf', $('csrf').value);
+    await fetch('{{ url_for("assistant.reset") }}', { method: 'POST', body: fd, headers: { 'X-Requested-With': 'fetch' } }).catch(() => {});
+    msgs.querySelectorAll('.m').forEach((m) => m.remove());
+    $('hello').hidden = false;
+  });
+
+  // voice in: the phone turns speech into text (free); the text is shown, then sent
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  let rec = null, heard = '';
+  mic.addEventListener('click', () => {
+    if (!SR) { hear.textContent = 'Bu telefon ovozni tanimaydi — yozib yuboring.'; setTimeout(() => { hear.textContent = ''; }, 4000); return; }
+    if (rec) { rec.stop(); return; }
+    if ('speechSynthesis' in window) speechSynthesis.cancel();
+    rec = new SR(); rec.lang = 'uz-UZ'; rec.interimResults = true; rec.continuous = false; heard = '';
+    rec.onstart = () => { mic.classList.add('on'); hear.textContent = 'Eshityapman…'; };
+    rec.onresult = (e) => {
+      heard = Array.from(e.results).map((r) => r[0].transcript).join(' ');
+      text.value = heard; grow(); send.disabled = !heard.trim();
+    };
+    rec.onerror = (e) => { hear.textContent = e.error === 'not-allowed' ? 'Mikrofonga ruxsat bering (brauzer sozlamasi).' : 'Eshitilmadi — yana bosing.'; };
+    rec.onend = () => {
+      mic.classList.remove('on'); rec = null;
+      if (heard.trim()) { hear.textContent = ''; ask(heard); } else if (hear.textContent === 'Eshityapman…') hear.textContent = '';
+    };
+    rec.start();
+  });
+  if ('speechSynthesis' in window) speechSynthesis.getVoices();
+})();
+</script>
+</body>
+</html>
