@@ -59,3 +59,26 @@ def test_uzbek_voice_reads_only_the_assistants_answers(app, world, monkeypatch):
             assert not gemini.enabled()
     finally:
         app.config['SURXON'].ANTHROPIC_API_KEY = ''
+
+
+def test_renamed_model_is_found_by_itself(app, world, monkeypatch):
+    import requests
+    calls = []
+    good = fake_google([])
+
+    def post(url, headers=None, data=None, timeout=None):
+        calls.append(url)
+        if 'gemini-3.8-flash-tts:' in url:
+            return NS(status_code=404, json=lambda: {'error': {'message': 'models/gemini-3.8-flash-tts is not found'}})
+        return good(url, headers, data, timeout)
+    monkeypatch.setattr(requests, 'post', post)
+    monkeypatch.setattr(requests, 'get', lambda url, params=None, headers=None, timeout=None: NS(
+        status_code=200, json=lambda: {'models': [{'name': 'models/gemini-3.1-flash-tts-preview'}, {'name': 'models/gemini-3.1-pro'}]}))
+    app.config['SURXON'].GEMINI_API_KEY = 'AIza' + 'z' * 35
+    try:
+        with app.app_context():
+            assert gemini.tts('Salom, paxta')[:4] == b'RIFF'
+            assert gemini.model() == 'gemini-3.1-flash-tts-preview'
+        assert 'gemini-3.1-flash-tts-preview:generateContent' in calls[-1]
+    finally:
+        app.config['SURXON'].GEMINI_API_KEY = ''

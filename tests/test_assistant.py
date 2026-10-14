@@ -132,3 +132,63 @@ def test_monthly_limit(app, world, ai):
     assert r.status_code == 422 and 'chegarasi' in r.get_json()['error']
     with app.app_context():
         assert A.month_usage()['questions'] == 1
+
+
+def test_teacher_prepares_a_change_and_the_accountant_confirms_it(app, world, ai):
+    """“Asadbek, keling birga qilamiz”: the assistant prepares the change as a card; nothing changes until the
+    accountant taps “Bajarish” — then it runs in his name through the ordinary service."""
+    from test_hamyon import cash_in
+    bux, kassa = world['bux'], world['kassa']
+    cash_in(bux, '500000')
+    r = kassa.post('/hamyon/xarajat/tekshir', {'category': 'Ovqat', 'amount': '45000', 'payer': 'Oshxona'}).get_json()
+    if r and r.get('ok'):
+        kassa.post('/hamyon/xarajat/tasdiq', {'category': 'Ovqat', 'amount': '45000', 'payer': 'Oshxona', 'expect': r['expect'],
+                                              'client_uuid': __import__('conftest').uuid4()})
+    with app.app_context():
+        e = q("SELECT id FROM expenses WHERE status='TEKSHIRILMAGAN'", one=True)
+        if not e:      # the cashier's phone flow differs: write one unchecked expense directly
+            db = get_db()
+            db.execute("""INSERT INTO expenses(season_year, expense_date, category, amount, payer, status, created_by, created_at)
+                          VALUES (2026, date('now'), 'Ovqat', 45000, 'Oshxona', 'TEKSHIRILMAGAN',
+                                  (SELECT id FROM users WHERE username='asadbek'), datetime('now'))""")
+            db.commit()
+            e = q("SELECT id FROM expenses WHERE status='TEKSHIRILMAGAN'", one=True)
+        eid = e['id']
+    # the round button invites him with today's count
+    home = bux.get('/hamyon').get_data(as_text=True)
+    assert 'ai-bubble' in home and 'bugun' in home and 'boshla=1' in home
+    assert 'Bugungi ishlarni birga qilamiz' in bux.get('/ai?boshla=1').get_data(as_text=True)
+    fake = ai(tool('vazifalarim'), tool('tekshirilmagan_xarajatlar', tid='t2'),
+              tool('taklif', {'tur': 'xarajat_tasdiq', 'expense_id': eid, 'sabab': 'Chek rasmi bor, summa to‘g‘ri'}, 't3'),
+              say('Asadbek, keling birga qilamiz. Birinchisi — kassir yozgan xarajat. Tekshirib “Bajarish”ni bosing.'))
+    r = bux.post('/ai/savol', {'text': '🚀 Bugungi ishlarni birga qilamiz'}).get_json()
+    assert r['ok'] and r['text'].startswith('Asadbek') and len(r['cards']) == 1
+    c = r['cards'][0]
+    assert c['kind'] == 'xarajat_tasdiq' and c['status'] == 'TAKLIF' and '45' in c['lines'][0] and 'Ovqat' in c['lines'][0]
+    with app.app_context():
+        assert q('SELECT status FROM expenses WHERE id=?', (eid,), one=True)['status'] == 'TEKSHIRILMAGAN'   # nothing yet
+    names = {t['name'] for t in fake.sent[0]['tools']}
+    assert {'taklif', 'tekshirilmagan_xarajatlar', 'qarzdorlar', 'kassa_kun'} <= names
+    # someone else cannot run his card; he can
+    assert not world['rahbar'].post(f'/ai/bajar/{c["id"]}', {}).get_json()['ok']
+    r = bux.post(f'/ai/bajar/{c["id"]}', {}).get_json()
+    assert r['ok'] and 'tasdiqlandi' in r['text']
+    with app.app_context():
+        assert q('SELECT status FROM expenses WHERE id=?', (eid,), one=True)['status'] == 'TASDIQLANGAN'
+        a = q("SELECT * FROM audit_logs WHERE action='APPROVE' AND entity_type='expense'", one=True)
+        assert a['user_id'] == q("SELECT id FROM users WHERE username='buxgalter'", one=True)['id']
+    assert bux.post(f'/ai/bajar/{c["id"]}', {}).get_json()['already']                     # twice = once
+    page = bux.get('/ai').get_data(as_text=True)
+    assert 'card-data' in page and 'BAJARILDI' in page
+    # closing the day: he counts the cash himself
+    ai(tool('taklif', {'tur': 'kun_yopish', 'cashbox_id': 1}), say('Kassadagi pulni sanab yozing.'))
+    c = bux.post('/ai/savol', {'text': 'Kassani yopishga yordam bering'}).get_json()['cards'][0]
+    assert c['kind'] == 'kun_yopish' and any(f['name'] == 'counted' for f in c['fields'])
+    assert not bux.post(f'/ai/bajar/{c["id"]}', {'counted': ''}).get_json()['ok']
+    r = bux.post(f'/ai/bajar/{c["id"]}', {'counted': '455000'}).get_json()
+    assert r['ok'] and 'Kassa yopildi' in r['text']
+    # the punkt operator cannot be offered the accountant's changes
+    from surxon.security import has_perm
+    with app.app_context():
+        st = {'role': 'station', 'id': 0}
+        assert A.t_taklif(st, tur='xarajat_tasdiq', expense_id=eid)['xato']

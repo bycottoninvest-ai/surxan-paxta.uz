@@ -200,6 +200,7 @@ def register_template_helpers(app):
             'paper_field': user is not None and __import__('surxon.settings', fromlist=['get_bool']).get_bool('dala_qogoz'),
             'offline_queue': user is not None and __import__('surxon.settings', fromlist=['get_bool']).get_bool('offline_queue'),
             'ai_on': _ai_on(user),
+            'ai_todo': _ai_todo(user),
         }
 
     def _pq17_todo():
@@ -232,6 +233,15 @@ def register_template_helpers(app):
             return allowed(user)
         except Exception:          # the button never breaks a page
             return False
+
+    def _ai_todo(user):
+        try:
+            if not user or request.endpoint in ('assistant.page', 'static'):
+                return 0
+            from .assistant import todo_count
+            return todo_count(user)
+        except Exception:
+            return 0
 
     def _gmaps_key():
         # server .env wins; otherwise the key the admin saved on the Integrations page

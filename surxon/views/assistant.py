@@ -20,7 +20,7 @@ def page():
     name = (g.user['full_name'] or g.user['username'] or '').split(' ')[0]
     from .. import gemini
     return render_template('assistant.html', messages=A.history(g.user['id'], limit=40), name=name,
-                           chips=A.suggestions(g.user), uz_voice=gemini.enabled())
+                           chips=A.suggestions(g.user), uz_voice=gemini.enabled(), start=request.args.get('boshla') == '1')
 
 
 @bp.post('/ai/savol')
@@ -56,5 +56,19 @@ def voice():
         return jsonify(ok=False, error='Bu matn yordamchining javobi emas.'), 422
     try:
         return Response(gemini.tts(want), mimetype='audio/wav', headers={'Cache-Control': 'private, max-age=86400'})
+    except UserError as err:
+        return jsonify(ok=False, error=str(err)), 422
+
+
+@bp.post('/ai/bajar/<int:action_id>')
+@login_required
+def act(action_id):
+    """The person confirms the change the assistant prepared — it runs in their name through the ordinary service."""
+    from ..security import current_actor, validate_csrf
+    validate_csrf()
+    if not A.allowed(g.user):
+        abort(404)
+    try:
+        return jsonify(ok=True, **A.act(g.user, current_actor(), action_id, request.form))
     except UserError as err:
         return jsonify(ok=False, error=str(err)), 422

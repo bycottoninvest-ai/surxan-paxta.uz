@@ -195,12 +195,22 @@ def t_vazifalar(user):
             todo.append(f'{sign} ta PQ-17 ni hosil-qabuli.uz da imzolash')
         if inv:
             todo.append(f'{inv} ta PQ-17 ga faktura yaratish')
+        from .yordamchi import pq17_missing
+        miss = pq17_missing()
+        if miss:
+            todo.append(f'{len(miss)} ta yukning PQ-17 si yuklanmagan ({_n(sum(m[2] or 0 for m in miss))} kg) — hosil-qabuli.uz dan yuklash '
+                        '(sahifa: faktura)')
         un = scalar("SELECT COUNT(*) FROM expenses WHERE status='TEKSHIRILMAGAN' AND voided_at IS NULL")
         if un:
-            todo.append(f'{un} ta xarajatni tasdiqlash (kassir yozgan)')
+            todo.append(f'{un} ta xarajatni tasdiqlash (kassir yozgan) — tekshirilmagan_xarajatlar, keyin taklif')
         closed = scalar('SELECT COUNT(*) FROM cash_days WHERE day=?', (today_str(),))
         if not closed:
-            todo.append('Kun oxirida kassani yopish (real pulni sanab kiritish)')
+            todo.append('Kun oxirida kassani yopish (real pulni sanab kiritish) — kassa_kun, keyin taklif')
+        from .accounting import season_of, worker_balances
+        owed = [r for r in worker_balances(season_of(get_db())) if r['payable'] > 0]
+        if owed:
+            todo.append(f'{len(owed)} kishiga {_n(sum(r["payable"] for r in owed))} so‘m to‘lanmagan — oldin naqd berilganlari bo‘lsa, '
+                        'yopish kerak (sahifa: moliya)')
         unpaid = q("SELECT COUNT(*) n, COALESCE(SUM(amount),0) s FROM tezpul_talons WHERE status='TAYYOR'", one=True)
         if unpaid['n']:
             todo.append(f'{unpaid["n"]} ta talon to‘lanmagan ({_n(unpaid["s"])} so‘m) — kassada pul yetarlimi')
@@ -251,6 +261,147 @@ def t_sahifa(user, nom=''):
     return {'tugma': {'title': p[1], 'url': url_for(p[0])}, 'izoh': 'Tugma suhbatda ko‘rinadi.'}
 
 
+def t_xarajatlar(user):
+    rows = q("""SELECT e.id, e.expense_date, e.category, e.amount, e.payer, e.note, u.full_name yozgan,
+                      (SELECT COUNT(*) FROM photos p WHERE p.entity_type='expense' AND p.entity_id=e.id AND p.voided_at IS NULL) rasm
+               FROM expenses e LEFT JOIN users u ON u.id=e.created_by
+               WHERE e.status='TEKSHIRILMAGAN' AND e.voided_at IS NULL ORDER BY e.id LIMIT 30""")
+    return {'tekshirilmagan': [dict(r) for r in rows], 'izoh': 'Har biri: chek rasmi va summa to‘g‘rimi — keyin taklif(xarajat_tasdiq).'}
+
+
+def t_qarzdorlar(user):
+    """Who is still owed (ids only — the names stay here; the card shows them to the person)."""
+    from .accounting import season_of, worker_balances
+    rows = sorted([r for r in worker_balances(season_of(get_db())) if r['payable'] > 0], key=lambda r: -r['payable'])
+    return {'soni': len(rows), 'jami': sum(r['payable'] for r in rows),
+            'qarzdorlar': [{'worker_id': r['id'], 'brigada': r['brigadier_name'], 'kg': r['kg'], 'hisoblangan': r['earned'],
+                            'tolangan': r['paid'] + r['advances'] + r['closed'], 'qarz': r['payable']} for r in rows[:30]],
+            'izoh': 'Ismlar sizga berilmaydi — odamga “№ worker_id” yoki kartadagi ism bilan ko‘rinadi.'}
+
+
+def t_kassa_kun(user):
+    from .accounting import day_figures
+    db, day = get_db(), today_str()
+    out = []
+    for b in q('SELECT id, name FROM cashboxes WHERE active=1 ORDER BY id'):
+        closed = q('SELECT counted, diff FROM cash_days WHERE cashbox_id=? AND day=?', (b['id'], day), one=True)
+        out.append({'cashbox_id': b['id'], 'kassa': b['name'], **day_figures(db, b['id'], day),
+                    'yopilgan': bool(closed), 'sanalgan': closed['counted'] if closed else None})
+    return {'sana': day, 'kassalar': out, 'izoh': 'system = tizim bo‘yicha bo‘lishi kerak bo‘lgan pul; odam real pulni sanaydi.'}
+
+
+ACTIONS = {
+    'xarajat_tasdiq': ('expenses.approve', 'Xarajatni tasdiqlash'),
+    'qarz_yopish': ('payouts.prepare', 'Qarzdorlikni yopish (pul oldin berilgan)'),
+    'kun_yopish': ('dayclose', 'Kassani (kunni) yopish'),
+}
+
+
+def t_taklif(user, tur='', expense_id=None, worker_id=None, amount=None, cashbox_id=None, sabab=''):
+    """Prepare one change as a card; the person checks it and taps the button (nothing changes until then)."""
+    spec = ACTIONS.get(tur)
+    if not spec or not has_perm(user, spec[0]):
+        return {'xato': 'Bunday taklif yo‘q yoki bu odamga yopiq.'}
+    params = {}
+    if tur == 'xarajat_tasdiq':
+        e = q("SELECT id FROM expenses WHERE id=? AND status='TEKSHIRILMAGAN' AND voided_at IS NULL", (_int(expense_id),), one=True)
+        if not e:
+            return {'xato': 'Bu xarajat topilmadi yoki tasdiqlangan.'}
+        params = {'expense_id': e['id']}
+    elif tur == 'qarz_yopish':
+        from .accounting import season_of, worker_balances
+        r = next(iter(worker_balances(season_of(get_db()), worker_id=_int(worker_id))), None) if _int(worker_id) else None
+        if not r or r['payable'] <= 0:
+            return {'xato': 'Bu odamda yopiladigan qarz yo‘q.'}
+        amt = min(_int(amount) or r['payable'], r['payable'])
+        params = {'worker_id': r['id'], 'amount': amt}
+    elif tur == 'kun_yopish':
+        b = q('SELECT id FROM cashboxes WHERE id=? AND active=1', (_int(cashbox_id),), one=True)
+        if not b:
+            return {'xato': 'Kassa topilmadi.'}
+        if q('SELECT 1 FROM cash_days WHERE cashbox_id=? AND day=?', (b['id'], today_str()), one=True):
+            return {'xato': 'Bugun bu kassa allaqachon yopilgan.'}
+        params = {'cashbox_id': b['id'], 'day': today_str()}
+    with tx() as db:
+        aid = db.execute('INSERT INTO yordamchi_actions(user_id, kind, params_json, why, created_at) VALUES (?,?,?,?,?)',
+                         (user['id'], tur, json.dumps(params), (sabab or '')[:300], now_str())).lastrowid
+    return {'taklif_id': aid, 'izoh': 'Karta odamga ko‘rsatildi: u tekshirib, tugmani o‘zi bosadi. Natijani keyingi gapda bilasiz.'}
+
+
+def _int(v):
+    try:
+        return int(float(v))
+    except (TypeError, ValueError):
+        return None
+
+
+def action_card(a):
+    """What the person sees on the card (names come from here, never from the AI)."""
+    p = json.loads(a['params_json'])
+    card = {'id': a['id'], 'kind': a['kind'], 'title': ACTIONS.get(a['kind'], ('', a['kind']))[1], 'why': a['why'] or '',
+            'status': a['status'], 'result': a['result'] or '', 'lines': [], 'fields': []}
+    if a['kind'] == 'xarajat_tasdiq':
+        e = q("""SELECT e.*, u.full_name yozgan FROM expenses e LEFT JOIN users u ON u.id=e.created_by WHERE e.id=?""",
+              (p['expense_id'],), one=True)
+        if e:
+            card['lines'] = [f'{e["expense_date"][8:10]}.{e["expense_date"][5:7]} · {e["category"]} · {_n(e["amount"])} so‘m',
+                             f'Yozgan: {e["yozgan"] or "—"}' + (f' · {e["payer"]}' if e['payer'] else '') + (f' · {e["note"]}' if e['note'] else '')]
+            card['link'] = {'title': 'Chek rasmini ko‘rish', 'url': url_for('acct.expenses')}
+    elif a['kind'] == 'qarz_yopish':
+        w = q('SELECT full_name FROM workers WHERE id=?', (p['worker_id'],), one=True)
+        card['lines'] = [f'{w["full_name"] if w else "№" + str(p["worker_id"])} — {_n(p["amount"])} so‘m',
+                         'Kassadan pul chiqmaydi: faqat “oldin naqd berilgan” deb yopiladi.']
+        card['fields'] = [{'name': 'note', 'label': 'Kim, qachon bergan? (majburiy)', 'type': 'text', 'value': ''}]
+        card['link'] = {'title': 'Kartochkasi', 'url': url_for('acct.worker', worker_id=p['worker_id'])}
+    elif a['kind'] == 'kun_yopish':
+        from .accounting import DAY_DIFF_REASONS, day_figures
+        b = q('SELECT name FROM cashboxes WHERE id=?', (p['cashbox_id'],), one=True)
+        f = day_figures(get_db(), p['cashbox_id'], p['day'])
+        card['lines'] = [f'{b["name"] if b else "Kassa"} · {p["day"][8:10]}.{p["day"][5:7]}',
+                         f'Tizim bo‘yicha: {_n(f["system"])} so‘m (boshida {_n(f["opening"])} + kirim {_n(f["inflow"])} − chiqim {_n(f["outflow"])})']
+        card['fields'] = [{'name': 'counted', 'label': 'Kassadagi real pul (sanab yozing)', 'type': 'number', 'value': ''},
+                          {'name': 'reason', 'label': 'Farq bo‘lsa sababi', 'type': 'select', 'options': [''] + DAY_DIFF_REASONS, 'value': ''}]
+    return card
+
+
+def act(user, actor, action_id, form):
+    """The person tapped “Bajarish”: the prepared change runs in their name, through the ordinary service."""
+    a = q('SELECT * FROM yordamchi_actions WHERE id=? AND user_id=?', (action_id, user['id']), one=True)
+    if not a:
+        raise UserError('Taklif topilmadi.')
+    if a['status'] == 'BAJARILDI':
+        return {'text': a['result'], 'already': True}
+    if form.get('bekor'):
+        with tx() as db:
+            db.execute("UPDATE yordamchi_actions SET status='BEKOR', done_at=? WHERE id=?", (now_str(), action_id))
+        return {'text': 'Bekor qilindi.'}
+    p = json.loads(a['params_json'])
+    if a['kind'] == 'xarajat_tasdiq':
+        from .accounting import approve_expense
+        approve_expense(actor, p['expense_id'])
+        text = 'Xarajat tasdiqlandi.'
+    elif a['kind'] == 'qarz_yopish':
+        from .moliya import close_debts
+        note = (form.get('note') or '').strip()
+        r = close_debts(actor, [(p['worker_id'], p['amount'])], method='oldin_naqd',
+                        note=f'{note} (yordamchi taklifi)' if note else '', client_uuid=f'ai-{action_id}')
+        text = f'Qarzdorlik yopildi: {_n(r["total"])} so‘m (kassadan pul chiqmadi).'
+    elif a['kind'] == 'kun_yopish':
+        from .accounting import close_day
+        try:
+            counted = int(str(form.get('counted') or '').replace(' ', ''))
+        except ValueError:
+            raise UserError('Kassadagi real pulni raqam bilan yozing.')
+        r = close_day(actor, cashbox_id=p['cashbox_id'], day=p['day'], counted=counted, reason=form.get('reason') or '',
+                      note='yordamchi bilan')
+        text = 'Kassa yopildi.' + (f' Farq {_n(r["diff"])} so‘m.' if r['diff'] else ' Farq yo‘q 👍')
+    else:
+        raise UserError('Noma’lum taklif.')
+    with tx() as db:
+        db.execute("UPDATE yordamchi_actions SET status='BAJARILDI', result=?, done_at=? WHERE id=?", (text, now_str(), action_id))
+    return {'text': text}
+
+
 _SANA = {'type': 'object', 'properties': {'sana': {'type': 'string', 'description': '“bugun”, “kecha” yoki YYYY-MM-DD'}}}
 TOOLS = {
     't_vazifalar': (None, {'name': 'vazifalarim', 'description': 'Shu odam bugun nima qilishi kerak — tizim holatidan (sverka, '
@@ -272,6 +423,19 @@ TOOLS = {
     't_yoriqnoma': (None, {'name': 'yoriqnoma', 'description': 'Batafsil yo‘riqnoma: ' + ', '.join(DOCS) + '. Tizimni '
                            'o‘rgatishda, aniq qadamlar kerak bo‘lsa.', 'input_schema': {'type': 'object', 'properties': {
                                'mavzu': {'type': 'string', 'enum': list(DOCS)}}, 'required': ['mavzu']}}),
+    't_xarajatlar': ('expenses.approve', {'name': 'tekshirilmagan_xarajatlar', 'description': 'Kassir yozgan, hali tasdiqlanmagan '
+                     'xarajatlar (id, sana, tur, summa, kim yozgan, chek rasmi bormi).', 'input_schema': {'type': 'object', 'properties': {}}}),
+    't_qarzdorlar': ('payouts.prepare', {'name': 'qarzdorlar', 'description': 'Terimchilar ichida qarzi borlar (worker_id, brigada, kg, '
+                     'hisoblangan, to‘langan, qarz). Ismlar berilmaydi.', 'input_schema': {'type': 'object', 'properties': {}}}),
+    't_kassa_kun': ('dayclose', {'name': 'kassa_kun', 'description': 'Bugungi kassa: har kassa uchun boshidagi qoldiq, kirim, chiqim, '
+                    'tizim bo‘yicha qoldiq, yopilganmi.', 'input_schema': {'type': 'object', 'properties': {}}}),
+    't_taklif': (None, {'name': 'taklif', 'description': 'Bitta o‘zgarishni TAYYORLASH (karta): odam tekshiradi va “Bajarish”ni o‘zi '
+                 'bosadi. tur: xarajat_tasdiq (expense_id) · qarz_yopish (worker_id, amount — FAQAT odam “oldin naqd berilgan” desa) · '
+                 'kun_yopish (cashbox_id — kechqurun). sabab: odamga qisqa tushuntirish.',
+                 'input_schema': {'type': 'object', 'properties': {
+                     'tur': {'type': 'string', 'enum': list(ACTIONS)}, 'expense_id': {'type': 'integer'},
+                     'worker_id': {'type': 'integer'}, 'amount': {'type': 'integer'}, 'cashbox_id': {'type': 'integer'},
+                     'sabab': {'type': 'string'}}, 'required': ['tur']}}),
     't_sahifa': (None, {'name': 'sahifa_tugmasi', 'description': 'Odamga kerakli ekranni ochadigan tugma berish. nom: '
                         + ', '.join(PAGES), 'input_schema': {'type': 'object', 'properties': {
                             'nom': {'type': 'string', 'enum': list(PAGES)}}, 'required': ['nom']}}),
@@ -288,7 +452,7 @@ def run_tool(user, name, args):
     if not spec:
         return {'xato': 'Bu ma’lumot sizga yopiq.'}
     try:
-        return FUNCS[name](user, **{k: v for k, v in (args or {}).items() if isinstance(v, str)})
+        return FUNCS[name](user, **{k: v for k, v in (args or {}).items() if isinstance(v, (str, int, float))})
     except UserError as err:
         return {'xato': str(err)}
     except Exception as exc:                 # a broken tool never breaks the conversation
@@ -315,6 +479,16 @@ Nima qilasan:
 - Ustoz bo‘l: “qanday qilinadi?” deyilsa — qadamma-qadam, 2–5 qadam, kerakli ekran tugmasini ber (sahifa_tugmasi).
 - Bugungi ishlarni eslat (vazifalarim). Muammo bo‘lsa — kim nima qilishi kerakligini ayt.
 - Ma’lumot yetishmasa, odamdan so‘ra (masalan: “PB-0123 rasmini olib, Qo‘shishni bosing — keyin men tekshiraman”).
+
+Ustoz bo‘lib ishlash (ayniqsa buxgalter va punkt operatori bilan):
+- Odam “bugungi ishlar”, “boshlaymiz” desa yoki suhbat endi boshlansa — vazifalarim ni chaqir va ismi bilan boshla:
+  “Asadbek, bugun 3 ta ish bor. Keling, birga qilamiz — birinchisi …”. Eng muhimidan (pul, kassa) boshla.
+- Bir vaqtda BITTA ish: nima va nega (1 jumla) → qadamlar (2–4 ta) → ekran tugmasi (sahifa_tugmasi) yoki tayyor karta (taklif).
+- Tuzatishni o‘zing tayyorla (taklif): xarajatni tasdiqlash, kunni yopish, “oldin naqd berilgan” qarzni yopish. Karta odamga
+  chiqadi, u tekshirib “Bajarish”ni O‘ZI bosadi — shunda uning ismi yoziladi. Qarzni yopish taklifini faqat odam o‘zi
+  “oldin naqd berilgan” desa ber. Kunni yopishda real pulni odam o‘zi sanab yozadi.
+- Odam “bajarildi”, “✅ …” desa — vazifalarim ni qayta chaqirib tekshir, maqta (“Zo‘r, Asadbek!”) va keyingisiga o‘t.
+- Hammasi tugasa — “Bugungi ishlar tugadi 👍” de va kechqurun nima qilish kerakligini eslat.
 
 Qat’iy qoidalar:
 - Sen hech narsani o‘zgartirmaysan: kg, pul, holat, o‘chirish — yo‘q. O‘zgartirish kerak bo‘lsa — qadamlar va ekran tugmasi;
@@ -353,7 +527,22 @@ def history(user_id, limit=MEMORY):
     rows = q('''SELECT * FROM yordamchi_messages WHERE user_id=? AND id > COALESCE(
                     (SELECT MAX(id) FROM yordamchi_messages WHERE user_id=? AND role='reset'), 0)
                 ORDER BY id DESC LIMIT ?''', (user_id, user_id, limit))
-    return [dict(r, links=json.loads(r['links_json'] or '[]')) for r in reversed(rows) if r['role'] != 'reset']
+    out = []
+    for r in reversed(rows):
+        if r['role'] == 'reset':
+            continue
+        links, cards = expand(json.loads(r['links_json'] or '[]'), user_id)
+        out.append(dict(r, links=links, cards=cards))
+    return out
+
+
+def expand(raw, user_id):
+    """The stored links of an answer → (screen buttons, action cards with their current state)."""
+    links = [x for x in raw if 'url' in x]
+    ids = [x['action'] for x in raw if 'action' in x]
+    cards = [action_card(a) for a in q(f'SELECT * FROM yordamchi_actions WHERE user_id=? AND id IN ({",".join("?" * len(ids))})',
+                                       (user_id, *ids))] if ids else []
+    return links, cards
 
 
 def reset(user_id):
@@ -419,6 +608,8 @@ def ask(user, text):
             out = run_tool(user, b.name, b.input)
             if isinstance(out, dict) and out.get('tugma') and out['tugma'] not in links:
                 links.append(out['tugma'])
+            if isinstance(out, dict) and out.get('taklif_id'):
+                links.append({'action': out['taklif_id']})
             results.append({'type': 'tool_result', 'tool_use_id': b.id,
                             'content': json.dumps(out, ensure_ascii=False, default=str)[:12000]})
         messages.append({'role': 'user', 'content': results})
@@ -433,14 +624,27 @@ def ask(user, text):
         db.execute('''INSERT INTO yordamchi_messages(user_id, role, text, links_json, tokens_in, tokens_out, created_at)
                       VALUES (?, 'assistant', ?, ?, ?, ?, ?)''',
                    (user['id'], answer, json.dumps(links, ensure_ascii=False), tin, tout, now_str()))
-    return {'text': answer, 'links': links}
+    buttons, cards = expand(links, user['id'])
+    return {'text': answer, 'links': buttons, 'cards': cards}
 
 
 def suggestions(user):
     """The chips under the greeting — by role."""
-    common = ['Bugun nima qilishim kerak?', 'Tizimni menga o‘rgating']
+    common = ['Tizimni menga o‘rgating']
     return {'manager': ['Bugun nima bo‘ldi?', 'Sverkada farq bormi?', 'Qaysi telashka punktga kelmadi?', 'Kassada qancha pul bor?'],
             'admin': ['Bugun nima bo‘ldi?', 'Sverkada farq bormi?', 'Klaster qancha qarz?'],
-            'accountant': ['Faktura kerak PQ-17 bormi?', 'Kassada qancha pul bor?', 'To‘lanmagan talonlar'],
-            'station': ['Qaysi telashkalar kelishi kerak?', 'Nakladnoyni qanday qo‘shaman?', 'UY ni qanday yopaman?'],
+            'accountant': ['🚀 Bugungi ishlarni birga qilamiz', 'Tekshirilmagan xarajatlar', 'Kassani yopishga yordam bering',
+                           'Faktura kerak PQ-17 bormi?'],
+            'station': ['🚀 Bugungi ishlarni birga qilamiz', 'Qaysi telashkalar kelishi kerak?', 'Nakladnoyni qanday qo‘shaman?', 'UY ni qanday yopaman?'],
             }.get(user['role'], []) + common
+
+
+def todo_count(user):
+    """The small red number on the assistant's round button: today's open tasks (accountant and punkt only — cheap)."""
+    if user['role'] not in ('accountant', 'station') or not allowed(user):
+        return 0
+    try:
+        t = t_vazifalar(user)['vazifalar']
+        return 0 if t == ['Hozircha shoshilinch ish yo‘q 👍'] else len(t)
+    except Exception:
+        return 0

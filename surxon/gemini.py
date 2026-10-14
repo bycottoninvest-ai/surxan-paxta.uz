@@ -62,7 +62,31 @@ def key_tail():
 
 
 def model():
-    return (get_setting('gemini_tts_model') or '').strip() or DEFAULT_MODEL
+    return (get_setting('gemini_tts_auto_model') or '').strip() or (get_setting('gemini_tts_model') or '').strip() or DEFAULT_MODEL
+
+
+def _find_tts_model():
+    """Google renames its TTS models: ask which ones this key has (names with “tts”), prefer flash, remember it."""
+    import requests
+    try:
+        r = requests.get(f'{API}/models', params={'pageSize': 1000}, headers={'x-goog-api-key': api_key()}, timeout=20)
+        names = [m['name'].split('/', 1)[-1] for m in r.json().get('models', []) if 'tts' in m.get('name', '')]
+    except Exception:
+        return None
+    if not names:
+        return None
+    best = sorted(names, key=lambda n: (-_version(n), 'flash' not in n, 'lite' in n))[0]
+    from .db import tx
+    from .utils import now_str
+    with tx() as db:
+        db.execute("INSERT INTO settings(key, value, updated_at) VALUES ('gemini_tts_auto_model', ?, ?) ON CONFLICT(key) DO "
+                   "UPDATE SET value=excluded.value, updated_at=excluded.updated_at", (best, now_str()))
+    return best
+
+
+def _version(name):
+    m = re.search(r'gemini-(\d+(?:\.\d+)?)', name)
+    return float(m.group(1)) if m else 0.0
 
 
 def voice():
@@ -140,9 +164,16 @@ def tts(text):
     body = {'contents': [{'parts': [{'text': text}]}],
             'generationConfig': {'responseModalities': ['AUDIO'],
                                  'speechConfig': {'voiceConfig': {'prebuiltVoiceConfig': {'voiceName': voice()}}}}}
+
+    def call(name):
+        return requests.post(f'{API}/models/{name}:generateContent', headers={'x-goog-api-key': api_key(),
+                             'Content-Type': 'application/json'}, data=json.dumps(body), timeout=60)
     try:
-        r = requests.post(f'{API}/models/{model()}:generateContent', headers={'x-goog-api-key': api_key(),
-                          'Content-Type': 'application/json'}, data=json.dumps(body), timeout=60)
+        r = call(model())
+        if r.status_code == 404:                  # the model was renamed: find the one this key has and try once more
+            found = _find_tts_model()
+            if found:
+                r = call(found)
     except requests.RequestException:
         raise UserError('Google’ga ulanib bo‘lmadi (internet).')
     if r.status_code != 200:

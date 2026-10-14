@@ -28,7 +28,7 @@ ROLES = {
 STATION_ENDPOINTS = {'static', 'auth.login', 'auth.do_login', 'auth.logout', 'auth.change_password', 'main.health', 'main.verify_receipt', 'main.manifest',
                      'main.service_worker', 'main.offline', 'main.dashboard', 'main.trailer_qr',
                      'apps.install', 'apps.open_app', 'apps.manifest', 'apps.icon',
-                     'assistant.page', 'assistant.ask', 'assistant.reset', 'assistant.voice'}
+                     'assistant.page', 'assistant.ask', 'assistant.reset', 'assistant.voice', 'assistant.act'}
 # trip photos on the punkt cards (checked per photo in main.media: only trips sent to that punkt)
 STATION_EXTRA = {'main.media'}
 

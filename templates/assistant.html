@@ -57,6 +57,17 @@ html,body{margin:0;height:100%;background:var(--bg);font-family:system-ui,-apple
 .mic.on::before,.mic.on::after{content:"";position:absolute;inset:-6px;border-radius:50%;border:3px solid rgba(220,38,38,.45);animation:ring 1.4s infinite}
 .mic.on::after{animation-delay:.7s}
 @keyframes ring{from{transform:scale(1);opacity:1}to{transform:scale(1.5);opacity:0}}
+.act{margin:6px 0 10px 38px;max-width:84%;background:#fff;border:2px solid #bfdbfe;border-radius:18px;padding:12px 14px;box-shadow:0 4px 14px rgba(37,99,235,.12);animation:pop .25s ease}
+.act h4{margin:0 0 4px;font-size:15px;color:#1d4ed8}.act .why{font-size:13px;color:#475569;margin-bottom:6px}
+.act .ln{font-size:14.5px;font-weight:700;color:#0f1f3a;margin:2px 0}.act .ln2{font-size:13px;color:#475569}
+.act label{display:block;font-size:12.5px;font-weight:700;color:#475569;margin-top:8px}
+.act input,.act select{width:100%;font:inherit;font-size:16px;padding:9px 10px;border:1.5px solid #cbd5e1;border-radius:12px;margin-top:3px}
+.act .btns{display:flex;gap:8px;margin-top:10px;align-items:center;flex-wrap:wrap}
+.act .go{flex:1;border:0;border-radius:12px;padding:12px;background:linear-gradient(135deg,#16a34a,#15803d);color:#fff;font-weight:800;font-size:15px;cursor:pointer}
+.act .no{border:0;background:#f1f5f9;color:#475569;border-radius:12px;padding:12px 14px;font-weight:700;cursor:pointer}
+.act .lk{font-size:13px;color:#2563eb;font-weight:700;text-decoration:none}
+.act.done{border-color:#86efac;background:#f0fdf4}.act.done h4{color:#15803d}.act .res{font-weight:800;color:#15803d;margin-top:6px}
+.act.off{opacity:.6;border-color:#e2e8f0}.act .err{color:#b91c1c;font-weight:700;font-size:13px;margin-top:6px}
 .hint{text-align:center;font-size:12px;color:var(--muted);margin-top:6px}
 </style>
 </head>
@@ -80,6 +91,7 @@ html,body{margin:0;height:100%;background:var(--bg);font-family:system-ui,-apple
     {% for m in messages %}
     <div class="m {{ 'u' if m.role == 'user' else 'a' }}">{% if m.role != 'user' %}<div class="mini"><img src="{{ url_for('static', filename='img/cotton.png') }}" alt=""></div>{% endif %}
       <div class="b">{{ m.text }}{% if m.links %}<div class="links">{% for l in m.links %}<a href="{{ l.url }}">{{ l.title }} ›</a>{% endfor %}</div>{% endif %}</div></div>
+    {% for c in m.cards %}<script type="application/json" class="card-data">{{ c|tojson }}</script>{% endfor %}
     {% endfor %}
   </div>
 
@@ -89,7 +101,7 @@ html,body{margin:0;height:100%;background:var(--bg);font-family:system-ui,-apple
       <div class="inp"><textarea id="text" rows="1" placeholder="Savolingizni yozing…"></textarea><button class="send" id="send" disabled aria-label="Yuborish">➤</button></div>
       <button class="mic" id="mic" aria-label="Gapirish">🎤</button>
     </div>
-    <div class="hint">🎤 ni bosing va gapiring · yordamchi hech narsani o‘zgartirmaydi, faqat ko‘rsatadi va o‘rgatadi</div>
+    <div class="hint">🎤 ni bosing va gapiring · yordamchi tayyorlaydi, o‘zgarishni siz “✔ Bajarish” bilan tasdiqlaysiz</div>
   </div>
 </div>
 <input type="hidden" id="csrf" value="{{ csrf_token() }}">
@@ -119,6 +131,53 @@ html,body{margin:0;height:100%;background:var(--bg);font-family:system-ui,-apple
     down();
     return b;
   }
+  function card(c) {               // a change the assistant prepared: the person checks it and taps the button
+    const box = document.createElement('div');
+    box.className = 'act' + (c.status === 'BAJARILDI' ? ' done' : (c.status === 'BEKOR' ? ' off' : ''));
+    const h = document.createElement('h4'); h.textContent = (c.status === 'BAJARILDI' ? '✅ ' : '🛠 ') + c.title; box.appendChild(h);
+    if (c.why) { const w = document.createElement('div'); w.className = 'why'; w.textContent = c.why; box.appendChild(w); }
+    c.lines.forEach((l, i) => { const d = document.createElement('div'); d.className = i ? 'ln2' : 'ln'; d.textContent = l; box.appendChild(d); });
+    if (c.status === 'BAJARILDI') {
+      const r = document.createElement('div'); r.className = 'res'; r.textContent = c.result; box.appendChild(r);
+    } else if (c.status === 'TAKLIF') {
+      const inputs = {};
+      c.fields.forEach((f) => {
+        const lb = document.createElement('label'); lb.textContent = f.label; box.appendChild(lb);
+        let el;
+        if (f.type === 'select') { el = document.createElement('select'); f.options.forEach((o) => { const op = document.createElement('option'); op.value = o; op.textContent = o || '— farq yo‘q —'; el.appendChild(op); }); }
+        else { el = document.createElement('input'); el.inputMode = f.type === 'number' ? 'numeric' : 'text'; }
+        el.value = f.value || ''; box.appendChild(el); inputs[f.name] = el;
+      });
+      const err = document.createElement('div'); err.className = 'err';
+      const btns = document.createElement('div'); btns.className = 'btns';
+      const go = document.createElement('button'); go.className = 'go'; go.textContent = '✔ Bajarish';
+      const no = document.createElement('button'); no.className = 'no'; no.textContent = 'Kerak emas';
+      btns.appendChild(go); btns.appendChild(no);
+      if (c.link) { const a = document.createElement('a'); a.className = 'lk'; a.href = c.link.url; a.textContent = c.link.title + ' ›'; btns.appendChild(a); }
+      box.appendChild(btns); box.appendChild(err);
+      async function send(extra) {
+        go.disabled = no.disabled = true; err.textContent = '';
+        const fd = new FormData(); fd.append('_csrf', $('csrf').value);
+        Object.keys(inputs).forEach((k) => fd.append(k, inputs[k].value));
+        Object.keys(extra || {}).forEach((k) => fd.append(k, extra[k]));
+        try {
+          const r = await fetch('{{ url_for("assistant.act", action_id=0) }}'.replace(/0$/, c.id), { method: 'POST', body: fd, headers: { 'X-Requested-With': 'fetch' } });
+          const j = await r.json();
+          if (!j.ok) { err.textContent = j.error || 'Xatolik'; go.disabled = no.disabled = false; return; }
+          box.replaceWith(card(Object.assign({}, c, extra && extra.bekor ? { status: 'BEKOR' } : { status: 'BAJARILDI', result: j.text })));
+          if (!(extra && extra.bekor)) ask('✅ Bajarildi: ' + c.title + ' — ' + j.text);   // the assistant checks and goes on
+        } catch (e) { err.textContent = 'Internet yo‘q — qayta bosing.'; go.disabled = no.disabled = false; }
+      }
+      go.addEventListener('click', () => send());
+      no.addEventListener('click', () => send({ bekor: '1' }));
+    }
+    return box;
+  }
+  function addCards(cards) {
+    (cards || []).forEach((c) => { msgs.appendChild(card(c)); });
+    down();
+  }
+  document.querySelectorAll('script.card-data').forEach((sc) => { sc.replaceWith(card(JSON.parse(sc.textContent))); });
   function addLinks(b, links) {
     const box = document.createElement('div');
     box.className = 'links';
@@ -192,7 +251,7 @@ html,body{margin:0;height:100%;background:var(--bg);font-family:system-ui,-apple
       const r = await fetch('{{ url_for("assistant.ask") }}', { method: 'POST', body: fd, headers: { 'X-Requested-With': 'fetch' } });
       const j = await r.json().catch(() => ({ ok: false, error: 'Javob kelmadi — internetni tekshiring.' }));
       t.remove();
-      if (j.ok) { typeOut(bubble('a', ''), j.text, j.links); speak(j.text); }
+      if (j.ok) { typeOut(bubble('a', ''), j.text, j.links); addCards(j.cards); speak(j.text); }
       else { const e = bubble('a', j.error || 'Xatolik'); e.parentNode.classList.add('err'); }
     } catch (e) {
       t.remove();
@@ -206,6 +265,8 @@ html,body{margin:0;height:100%;background:var(--bg);font-family:system-ui,-apple
   text.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); ask(text.value); } });
   send.addEventListener('click', () => ask(text.value));
   document.querySelectorAll('.ai-chip').forEach((c) => c.addEventListener('click', () => ask(c.textContent)));
+  {% if start %}if (history.replaceState) history.replaceState(null, '', location.pathname);     // opened from “bugun N ta ish bor”
+  setTimeout(() => ask('🚀 Bugungi ishlarni birga qilamiz'), 300);{% endif %}
   $('voice').addEventListener('click', () => {
     voiceOn = !voiceOn; paintVoice();
     try { localStorage.setItem('ai_voice', voiceOn ? '1' : '0'); } catch (e) {}

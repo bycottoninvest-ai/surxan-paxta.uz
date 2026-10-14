@@ -207,14 +207,27 @@
   <a href="#" data-open-nav>{{ icon('menu') }}Boshqa</a>
   {% endif %}
 </nav>
-{% if ai_on %}<a class="ai-fab no-print" href="{{ url_for('assistant.page') }}" aria-label="Yordamchi"><img src="{{ url_for('static', filename='img/cotton.png') }}" alt=""><span>🎤</span></a>
+{% if ai_on %}<a class="ai-fab no-print" href="{{ url_for('assistant.page', boshla=1) if ai_todo else url_for('assistant.page') }}" aria-label="Yordamchi"><img src="{{ url_for('static', filename='img/cotton.png') }}" alt=""><span>🎤</span>{% if ai_todo %}<i class="ai-cnt">{{ ai_todo }}</i>{% endif %}</a>
+{% if ai_todo %}<a class="ai-bubble no-print" id="ai-bubble" href="{{ url_for('assistant.page', boshla=1) }}" hidden><b>{{ (current_user['full_name'] or current_user['username']).split(' ')[0] }}, bugun {{ ai_todo }} ta ish bor 👋</b><span>Keling, birga qilamiz — bosing</span><em data-x aria-label="Yopish">×</em></a>
+<script>(function () {
+  var b = document.getElementById('ai-bubble'), key = 'ai_bubble_' + new Date().toISOString().slice(0, 10);
+  try { if (localStorage.getItem(key)) return; } catch (e) {}
+  b.hidden = false;
+  b.querySelector('[data-x]').addEventListener('click', function (e) { e.preventDefault(); b.hidden = true; try { localStorage.setItem(key, '1'); } catch (x) {} });
+})();</script>{% endif %}
 <style>.ai-fab{position:fixed;right:16px;bottom:calc(84px + env(safe-area-inset-bottom));z-index:60;width:60px;height:60px;border-radius:50%;
   background:radial-gradient(circle at 30% 30%,#3b82f6,#0b2a55 75%);display:grid;place-items:center;box-shadow:0 10px 24px rgba(11,42,85,.4);text-decoration:none}
 .ai-fab img{width:34px;height:34px;filter:drop-shadow(0 1px 2px rgba(0,0,0,.25))}
 .ai-fab span{position:absolute;right:-2px;bottom:-2px;width:26px;height:26px;border-radius:50%;background:#16a34a;display:grid;place-items:center;font-size:13px;border:2px solid #fff}
 .ai-fab::before{content:"";position:absolute;inset:-5px;border-radius:50%;border:2px solid rgba(59,130,246,.45);animation:aifab 2.4s infinite}
 @keyframes aifab{0%{transform:scale(.95);opacity:1}100%{transform:scale(1.3);opacity:0}}
-@media (min-width:900px){.ai-fab{bottom:24px;right:24px}}</style>{% endif %}
+@media (min-width:900px){.ai-fab{bottom:24px;right:24px}}
+.ai-cnt{position:absolute;left:-4px;top:-4px;min-width:22px;height:22px;border-radius:11px;background:#ef4444;color:#fff;font-style:normal;font-size:12px;font-weight:800;display:grid;place-items:center;padding:0 5px;border:2px solid #fff}
+.ai-bubble{position:fixed;right:16px;bottom:calc(152px + env(safe-area-inset-bottom));z-index:60;max-width:250px;background:#fff;border-radius:16px 16px 4px 16px;padding:10px 30px 10px 12px;box-shadow:0 10px 26px rgba(11,42,85,.25);text-decoration:none;color:#0b2a55;animation:aib .4s ease}
+.ai-bubble b{display:block;font-size:14px}.ai-bubble span{display:block;font-size:12.5px;color:#2563eb;margin-top:2px;font-weight:700}
+.ai-bubble em{position:absolute;right:8px;top:4px;font-style:normal;font-size:18px;color:#94a3b8}
+@keyframes aib{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+@media (min-width:900px){.ai-bubble{bottom:92px;right:24px}}</style>{% endif %}
 <dialog class="modal" id="reason-dialog">
   <div class="card-h"><h3 data-title>Sabab</h3></div>
   <form method="post">
