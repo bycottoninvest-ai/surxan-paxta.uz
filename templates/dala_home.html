@@ -17,10 +17,6 @@
 
   {% if standin == 'cashier' %}<a class="btn btn-block d-big" href="{{ url_for('tezpul.kassa') }}" style="background:#e8730c;border-color:#e8730c;color:#fff;white-space:normal;line-height:1.2">🔁 KASSA<small style="display:block;font-size:14px;font-weight:600;margin-top:2px">bugun kassir o‘rnidasiz</small></a>{% endif %}
   {% if tezpul %}<a class="btn btn-block d-big" href="{{ url_for('tezpul.kechki') }}" style="background:#0b2a55;border-color:#0b2a55;color:#fff">🌙 Kechki hisob — starshi talonlari</a>{% endif %}
-  {% if paper %}
-  <div class="notice" style="display:block;margin-top:12px;line-height:1.5">📝 <b>Telashka endi telefonda ochilmaydi.</b> Telashka to‘lsa dala nakladnoyiga
-    qog‘ozda yoziladi (brigadir ✓, dala, kg) — punktda Yunus rasmga oladi. Sizda faqat kechqurun <b>🌙 Kechki hisob</b>.</div>
-  {% else %}
   <button type="button" class="btn btn-block d-big" id="d-tqbtn" style="background:#1e9e4a;border-color:#1e9e4a;color:#fff">📷 Telashka QR ni skanerlash</button>
   <div id="d-tq" hidden style="margin:8px 0 10px"><div style="position:relative;border-radius:14px;overflow:hidden;background:#1d232b;height:300px">
     <video id="d-tq-v" playsinline muted style="width:100%;height:100%;object-fit:cover"></video></div>
@@ -35,9 +31,8 @@
   </div>
   <script id="d-home-fields" type="application/json">[{% for f in fields %}{"id": {{ f.id }}, "label": {{ (f.code ~ ' · ' ~ f.name)|tojson }}, "code": {{ f.code|tojson }}, "kg": {{ f.kg or 0 }}, "ha": {{ f.ha or 0 }}, "poly": {{ f.polygon_json|safe }}}{{ ',' if not loop.last }}{% endfor %}]</script>
   {% endif %}
-  {% endif %}
 
-  {% if done_trips and not paper %}
+  {% if done_trips %}
   <h3 class="d-h3">Yopilgan telashkalarim (7 kun)</h3>
   {% for t in done_trips %}
   <a class="d-row" href="{{ url_for('dala.docs', load_id=t.id) }}"><div><b>{{ t.trip_no }}</b> · {{ t.trailer_code }}<div class="tiny muted">{{ t.field_name }} · {{ (t.full_at or '')[:16] }}</div></div>
@@ -53,7 +48,7 @@ const handTrips = {{ (open_trips|selectattr('method', 'ne', 'combine')|map(attri
 if (navigator.onLine && Array.isArray(handTrips)) handTrips.forEach(id => ['/dala/reys/' + id, '/dala/reys/' + id + '/yopish'].forEach(u =>
   fetch(u, { headers: { 'X-SPX-Prefetch': '1' }, credentials: 'same-origin' }).catch(() => {})));
 </script>{% endif %}
-{% if not paper %}<script>
+<script>
 (() => {   // the QR stuck on a trailer: opens its trip (or the opening page with this trailer chosen)
   const btn = document.getElementById('d-tqbtn'), box = document.getElementById('d-tq'), msg = document.getElementById('d-tq-msg');
   let stop = null;
@@ -68,8 +63,7 @@ if (navigator.onLine && Array.isArray(handTrips)) handTrips.forEach(id => ['/dal
   });
 })();
 </script>
-{% endif %}
-{% if fields and not paper %}<link rel="stylesheet" href="{{ url_for('static', filename='vendor/leaflet/leaflet.css') }}">
+{% if fields %}<link rel="stylesheet" href="{{ url_for('static', filename='vendor/leaflet/leaflet.css') }}">
 <script src="{{ url_for('static', filename='vendor/leaflet/leaflet.js') }}"></script>
 <script src="{{ url_for('static', filename='js/basemap.js') }}"></script>
 <script src="{{ url_for('static', filename='js/fieldgeo.js') }}"></script>

@@ -245,12 +245,13 @@ def test_trailer_qr_opens_the_trip_or_its_opening_page(app, world):
     html = page.get_data(as_text=True)
     assert page.status_code == 200 and 'Telashkani yopish — kg yozish' in html and f'/dala/reys/{lid}/yopish' in html
     assert 'Talonni skanerlang' not in html and 'Kechki hisob' in html
-    assert f'href="/dala/reys/{lid}"' in tally.get('/dala').get_data(as_text=True)
     assert 'Ismni qidiring' in tally.get(f'/dala/reys/{lid}?eski=1').get_data(as_text=True)
     home = tally.get('/dala').get_data(as_text=True)                    # paper mode (default): only the evening count
-    assert 'Telashka QR' not in home and 'telefonda ochilmaydi' in home and 'Kechki hisob' in home
+    assert 'Telashka QR' not in home and 'KECHKI HISOB' in home and 'BOSHLASH' in home
+    assert f'href="/dala/reys/{lid}"' not in home                      # old open trailers are not shown to the tally
     world['admin'].post('/admin/sozlamalar', {'set_dala_qogoz': '0'})
-    assert 'Telashka QR' in tally.get('/dala').get_data(as_text=True)
+    home = tally.get('/dala').get_data(as_text=True)
+    assert 'Telashka QR' in home and f'href="/dala/reys/{lid}"' in home
 
 
 def test_trailer_qr_after_another_clerks_trip(app, world):

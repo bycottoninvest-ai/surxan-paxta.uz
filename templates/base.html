@@ -188,7 +188,7 @@
   <a href="{{ url_for('auth.logout') }}">{{ icon('logout') }}Chiqish</a>
   {% elif current_user['role'] == 'tally' %}
   <a href="{{ url_for('dala.home') }}" class="{{ 'active' if ep == 'dala.home' }}">{{ icon('home') }}Bosh</a>
-  {% if paper_field %}<a href="{{ url_for('tezpul.kechki') }}" class="primary">🌙Kechki</a>{% else %}<a href="{{ url_for('dala.new_trip') }}" class="primary">{{ icon('plus') }}Yangi</a>{% endif %}
+  {% if paper_field %}<a href="{{ url_for('tezpul.kechki') }}" class="primary"><span class="ico" style="display:grid;place-items:center;font-size:19px;background:#0b2a55;box-shadow:0 4px 12px rgba(11,42,85,.4)">🌙</span>Kechki</a>{% else %}<a href="{{ url_for('dala.new_trip') }}" class="primary">{{ icon('plus') }}Yangi</a>{% endif %}
   <a href="{{ url_for('auth.logout') }}">{{ icon('logout') }}Chiqish</a>
   {% elif current_user['role'] == 'station' %}
   <a href="{{ url_for('punkt.home') }}" class="{{ 'active' if ep == 'punkt.home' }}">{{ icon('factory') }}Punkt</a>

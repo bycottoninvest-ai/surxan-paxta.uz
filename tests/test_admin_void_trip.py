@@ -71,7 +71,8 @@ def test_admin_reopens_closed_trip_and_same_waybill_comes_back(app, world):
         assert scalar('SELECT status FROM trailer_loads WHERE id=?', (lid,)) == 'OCHIQ'
         assert scalar('SELECT status FROM waybills WHERE id=?', (wb,)) == 'BEKOR'
         assert scalar('SELECT COUNT(*) FROM weighings WHERE load_id=?', (lid,)) == 0
-    # the tally sees it as open again and continues on the same trip
+    # the tally sees it as open again and continues on the same trip (screen-mode home lists open trips)
+    admin.post('/admin/sozlamalar', {'set_dala_qogoz': '0'})
     assert 'reys/%d' % lid in tally.get('/dala').get_data(as_text=True)
     assert tally.post(f'/dala/reys/{lid}/tortish', {'worker_name': 'Yangi odam', 'kg': '90', 'client_uuid': uuid4()}).get_json()['ok']
     from conftest import jpeg

@@ -1,0 +1,55 @@
+{% extends 'base.html' %}
+{% from 'macros.html' import icon with context %}
+{% set page_title = 'Kechki hisob' %}
+{% block content %}
+{# Paper in the field (dala_qogoz): the trailers are written on the field waybill and read at the punkt — the clerk's
+   phone is for the evening count only: one big start, three steps, today's talons. #}
+<div class="ph-wrap">
+  <div class="ph-hi">Salom, {{ current_user['full_name'].split()[0] }} 👋</div>
+
+  {% if standin == 'cashier' %}<a class="ph-kassa" href="{{ url_for('tezpul.kassa') }}">🔁 KASSA <small>bugun kassir o‘rnidasiz</small></a>{% endif %}
+
+  <div class="ph-hero">
+    <div class="ph-moon">🌙</div>
+    <div class="ph-title">KECHKI HISOB</div>
+    <div class="ph-sub">starshi talonlari — pul berishdan oldin</div>
+    <ol class="ph-steps">
+      <li><b>1</b><span>Brigadani tanlang</span></li>
+      <li><b>2</b><span>Starshi talonining QR ini skanerlang</span></li>
+      <li><b>3</b><span>Varaqlarni rasmga oling → tizim qo‘shadi → <i>SAQLASH</i></span></li>
+    </ol>
+    <a class="ph-go" href="{{ url_for('tezpul.kechki') }}">BOSHLASH ›</a>
+  </div>
+
+  {% set kg = evening|sum(attribute='kg') %}
+  <div class="ph-today">
+    <div><b>{{ evening|length }}</b><span>talon bugun</span></div>
+    <div><b>{{ kg|num }}</b><span>kg</span></div>
+    <div><b>{{ evening|selectattr('status', 'equalto', 'TOLANDI')|list|length }}</b><span>to‘langan</span></div>
+  </div>
+  {% for t in evening %}
+  <div class="ph-row"><div><b>№ {{ num(t.number) }}</b><span>{{ t.brigade or '' }}{% if t.people %} · {{ t.people }} odam{% endif %}</span></div>
+    <div class="ph-r"><b>{{ t.kg|num }} kg</b><em class="{{ 'ok' if t.status == 'TOLANDI' else 'wait' }}">{{ 'to‘landi' if t.status == 'TOLANDI' else 'kassada' }}</em></div></div>
+  {% endfor %}
+
+</div>
+<style>
+.ph-wrap{max-width:520px;margin:0 auto;padding:6px 2px 90px}
+.ph-hi{font-size:24px;font-weight:900;color:#0b2a55;margin:4px 2px 12px}
+.ph-kassa{display:block;background:#e8730c;color:#fff;border-radius:16px;padding:14px;text-align:center;font-weight:900;font-size:19px;margin-bottom:12px;text-decoration:none}
+.ph-kassa small{display:block;font-size:13px;font-weight:600}
+.ph-hero{background:linear-gradient(160deg,#0b2a55 0%,#14407e 100%);color:#fff;border-radius:24px;padding:22px 18px 18px;box-shadow:0 10px 26px rgba(11,42,85,.28);text-align:center}
+.ph-moon{font-size:46px;line-height:1}.ph-title{font-size:30px;font-weight:950;letter-spacing:1px;margin-top:6px}
+.ph-sub{font-size:14px;opacity:.8;margin-bottom:14px}
+.ph-steps{list-style:none;margin:0 0 16px;padding:0;text-align:left;display:flex;flex-direction:column;gap:8px}
+.ph-steps li{display:flex;gap:10px;align-items:center;background:rgba(255,255,255,.1);border-radius:12px;padding:9px 10px;font-size:15.5px}
+.ph-steps b{flex:none;width:28px;height:28px;border-radius:50%;background:#5be38a;color:#0b2a55;display:grid;place-items:center;font-weight:950}
+.ph-steps i{font-style:normal;font-weight:900;color:#5be38a}
+.ph-go{display:block;background:#1e9e4a;color:#fff;border-radius:18px;padding:20px;font-size:26px;font-weight:950;letter-spacing:1px;text-decoration:none;box-shadow:0 6px 16px rgba(30,158,74,.45)}
+.ph-today{display:flex;gap:8px;margin:16px 0 8px}.ph-today div{flex:1;background:#fff;border-radius:14px;padding:10px 6px;text-align:center;box-shadow:0 1px 4px rgba(10,44,90,.08)}
+.ph-today b{display:block;font-size:22px;color:#0b2a55}.ph-today span{font-size:12px;color:#6b7c93}
+.ph-row{display:flex;justify-content:space-between;align-items:center;background:#fff;border-radius:14px;padding:11px 14px;margin-top:6px}
+.ph-row span{display:block;font-size:13px;color:#6b7c93}.ph-r{text-align:right}.ph-r b{display:block;font-size:17px}
+.ph-r em{font-style:normal;font-size:12px;font-weight:800;border-radius:10px;padding:2px 8px}.ph-r em.ok{background:#e5f6eb;color:#137a37}.ph-r em.wait{background:#fff4e0;color:#8a4a00}
+</style>
+{% endblock %}
