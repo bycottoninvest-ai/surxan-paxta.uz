@@ -26,7 +26,7 @@
       <button type="button" class="btn btn-light btn-sm" id="d-gps">📍 Joylashuvdan aniqlash</button></div>
     <div id="d-gps-msg" class="tiny" hidden></div>
     <div id="d-minimap" style="height:190px;border-radius:12px;overflow:hidden;margin:6px 0 8px;background:#e9eef5" hidden></div>
-    <select name="field_id" required id="d-field">{% for f in fields %}<option value="{{ f.id }}" data-brig="{{ f.brigadier_id or '' }}"{{ ' selected' if preselect == f.id }}>{{ f.code }} · {{ f.name }}</option>{% endfor %}</select>
+    <select name="field_id" required id="d-field"><option value="">— dala tanlanmagan —</option>{% for f in fields %}<option value="{{ f.id }}" data-brig="{{ f.brigadier_id or '' }}"{{ ' selected' if preselect == f.id }}>{{ f.code }} · {{ f.name }}{% if f.brigadier_name %} — {{ f.brigadier_name }}{% endif %}</option>{% endfor %}</select>
     <label class="d-l">Terim</label>
     <div class="d-seg" id="d-round">{% for r in (1, 2, 3) %}<label><input type="radio" name="round" value="{{ r }}" {{ 'checked' if r == 1 }}><span>{{ r }}-terim</span></label>{% endfor %}</div>
     <script id="d-rounds" type="application/json">{{ rounds|tojson }}</script>
@@ -44,7 +44,7 @@
       <button type="button" class="btn btn-light btn-sm" id="d-gps">📍 Joylashuvdan aniqlash</button></div>
     <div id="d-gps-msg" class="tiny" hidden></div>
     <div id="d-minimap" style="height:190px;border-radius:12px;overflow:hidden;margin:6px 0 8px;background:#e9eef5" hidden></div>
-    <select name="field_id" required id="d-field">{% for f in fields %}<option value="{{ f.id }}" data-brig="{{ f.brigadier_id or '' }}"{{ ' selected' if preselect == f.id }}>{{ f.code }} · {{ f.name }}</option>{% endfor %}</select>
+    <select name="field_id" required id="d-field"><option value="">— dala tanlanmagan —</option>{% for f in fields %}<option value="{{ f.id }}" data-brig="{{ f.brigadier_id or '' }}"{{ ' selected' if preselect == f.id }}>{{ f.code }} · {{ f.name }}{% if f.brigadier_name %} — {{ f.brigadier_name }}{% endif %}</option>{% endfor %}</select>
     <label class="d-l">Terim</label>
     <div class="d-seg" id="d-round">{% for r in (1, 2, 3) %}<label><input type="radio" name="round" value="{{ r }}" {{ 'checked' if r == 1 }}><span>{{ r }}-terim</span></label>{% endfor %}</div>
     <script id="d-rounds" type="application/json">{{ rounds|tojson }}</script>
@@ -139,15 +139,25 @@
       const p = [pos.coords.latitude, pos.coords.longitude], acc = Math.round(pos.coords.accuracy || 0);
       last = { p, acc };
       document.getElementById('d-lat').value = p[0]; document.getElementById('d-lon').value = p[1]; document.getElementById('d-acc').value = acc;
+      // only the field the phone stands in (GPS error allowed at its edge) is chosen by itself; a nearby one is only offered —
+      // the list's first field never stays chosen silently (that put a day's talons to the wrong brigade)
+      const tol = Math.min(acc || 0, 60) + 20;
       let hit = fields.find(f => inside(p, f.poly)), d = 0;
       if (!hit) {
         let best = null;
         fields.forEach(f => { const m = dist(p, f.poly); if (!best || m < best.m) best = { f, m }; });
-        if (best && best.m <= 500) { hit = best.f; d = Math.round(best.m); }
-        else { mini(p, acc); return say(best ? `Hech qaysi dala ichida emassiz (eng yaqini ${best.f.label}, ${(best.m / 1000).toFixed(1)} km). Ro‘yxatdan tanlang.` : 'Dalalar xaritada chizilmagan — ro‘yxatdan tanlang.'); }
+        if (best && best.m <= tol) { hit = best.f; d = Math.round(best.m); }
+        else {
+          window.spxGpsField = null; mini(p, acc);
+          if (best && best.m <= 500) {
+            say(`Hech qaysi dala ichida emassiz. Eng yaqini ${best.f.label} — ${Math.round(best.m)} m. Shu dalami? Ro‘yxatdan tanlang.`);
+          } else say(best ? `Hech qaysi dala ichida emassiz (eng yaqini ${best.f.label}, ${(best.m / 1000).toFixed(1)} km). Dalani ro‘yxatdan tanlang.` : 'Dalalar xaritada chizilmagan — ro‘yxatdan tanlang.');
+          return;
+        }
       }
+      window.spxGpsField = { id: String(hit.id), label: hit.label };
       sel.value = String(hit.id); sel.dispatchEvent(new Event('change'));
-      say(d ? `📍 ${hit.label} — dala chetidan ${d} m (±${acc} m). To‘g‘ri bo‘lmasa, ro‘yxatdan o‘zgartiring.` : `📍 Siz ${hit.label} ichidasiz (±${acc} m).`, true);
+      say(d ? `📍 ${hit.label} — dala chetida (${d} m, ±${acc} m).` : `📍 Siz ${hit.label} ichidasiz (±${acc} m).`, true);
     }, err => say(err.code === 1 ? 'Joylashuvga ruxsat berilmadi. Brauzer sozlamasida ruxsat bering yoki dalani ro‘yxatdan tanlang.' : 'Joylashuv topilmadi — ochiq joyda qayta urinib ko‘ring yoki ro‘yxatdan tanlang.'),
     { enableHighAccuracy: true, timeout: 20000, maximumAge: fresh ? 0 : 60000 });
   }
@@ -175,10 +185,20 @@
     document.querySelectorAll('.d-trl button').forEach(btn => btn.addEventListener('click', () => {
       document.getElementById('d-trailer').value = btn.dataset.id;
       const form = document.getElementById('d-open');
-      if (!b.value || !r.value) { document.getElementById('d-rest').open = true; (b.value ? r : b).focus(); return; }
+      if (!f.value || !b.value || !r.value) { document.getElementById('d-rest').open = true; (!f.value ? f : b.value ? r : b).focus();
+        if (!f.value) alert('Dala aniqlanmadi — telefon hech qaysi dala ichida emas. Dalani ro‘yxatdan tanlang.'); return; }
+      if (!fieldOk()) return;
       if (form.requestSubmit) form.requestSubmit(); else form.submit();
     }));
   }
+  // the phone stands in one field, another is chosen: say so before the trip opens (the rahbar sees it in Nazorat too)
+  function fieldOk() {
+    const g = window.spxGpsField;
+    if (!g || !f.value || g.id === f.value) return true;
+    return confirm(`📍 Telefon ${g.label} ichida, lekin ${f.selectedOptions[0].textContent} tanlangan.\n\nTelashka rostdan shu dalaga ochilsinmi?`);
+  }
+  const formEl = document.getElementById('d-open');
+  if (formEl && !document.getElementById('d-auto')) formEl.addEventListener('submit', e => { if (!fieldOk()) e.preventDefault(); }, true);
   let typed = false; r.addEventListener('input', () => typed = true);
   document.querySelectorAll('input[name=method]').forEach(m => m.addEventListener('change', () => { if (!typed) r.value = m.dataset.rate || ''; }));
 })();

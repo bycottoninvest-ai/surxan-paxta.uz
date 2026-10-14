@@ -539,6 +539,43 @@ def void_load(actor, load_id, reason):
         audit(db, actor, 'VOID', 'trailer_load', load_id, old={'status': load['status']}, new={'status': 'BEKOR'}, reason=reason)
 
 
+def move_load(actor, load_id, *, field_id, brigadier_id, reason):
+    """The trip was opened on the wrong field / brigade (e.g. the list's first field stayed chosen): it and everything
+    picked on it — weighings, starshi talons, photos — move to the right field and brigade. Kg and money do not change."""
+    _need(actor, 'records.void')
+    reason = _require_reason(reason, 'Tuzatish')
+    with tx() as db:
+        ld = load_row(db, load_id)
+        if ld['status'] == 'BEKOR':
+            raise UserError('Bekor qilingan telashka.')
+        f = db.execute('SELECT id, code, name FROM fields WHERE id=?', (field_id,)).fetchone()
+        b = db.execute('SELECT id, name FROM brigadiers WHERE id=?', (brigadier_id,)).fetchone()
+        if not f or not b:
+            raise UserError('Dala va brigadani tanlang.')
+        if (ld['field_id'], ld['brigadier_id']) == (f['id'], b['id']):
+            raise UserError('O‘zgarish yo‘q — dala va brigada shundoq ham shu.')
+        db.execute('UPDATE trailer_loads SET field_id=?, brigadier_id=?, picked_split=NULL, gps_checked=1 WHERE id=?',
+                   (f['id'], b['id'], load_id))
+        n = db.execute('UPDATE harvests SET field_id=?, brigadier_id=? WHERE load_id=?', (f['id'], b['id'], load_id)).rowcount
+        db.execute('UPDATE photos SET field_id=?, brigadier_id=? WHERE load_id=?', (f['id'], b['id'], load_id))
+        db.execute('''UPDATE workers SET brigadier_id=? WHERE id IN (SELECT worker_id FROM tezpul_talons WHERE load_id=?
+                      AND worker_id IS NOT NULL)''', (b['id'], load_id))
+        t = db.execute('UPDATE tezpul_talons SET brigadier_id=? WHERE load_id=?', (b['id'], load_id)).rowcount
+        audit(db, actor, 'MOVE', 'trailer_load', load_id,
+              old={'field_id': ld['field_id'], 'brigadier_id': ld['brigadier_id']},
+              new={'field_id': f['id'], 'brigadier_id': b['id'], 'harvests': n, 'talons': t}, reason=reason)
+        return {'field': f'{f["code"]} · {f["name"]}', 'brigade': b['name'], 'harvests': n, 'talons': t}
+
+
+def confirm_load_field(actor, load_id):
+    """The rahbar checked: the field chosen at opening is right although the phone was elsewhere."""
+    _need(actor, 'records.void')
+    with tx() as db:
+        load_row(db, load_id)
+        db.execute('UPDATE trailer_loads SET gps_checked=1 WHERE id=?', (load_id,))
+        audit(db, actor, 'UPDATE', 'trailer_load', load_id, new={'gps_checked': 1})
+
+
 # ------------------------------------------------------------------ weighbridge
 
 def record_gross(actor, load_id, gross_kg, *, vehicle_plate='', driver_name='', scale_no='', photo=None, source='web'):

@@ -219,6 +219,24 @@ def issues(year=None):
         if c['uncalc_kg']:
             add(f'comb:uncalc:{c["id"]}', 'red', f'{c["code"]}: {_kg(c["uncalc_kg"])} kg narxsiz',
                 'tarif qo‘yilmagan — summaga kirmayapti', url)
+    # 8. a trip opened on one field while the phone stood in another (the list's choice, not the place) — the kg, talons
+    #    and money then go to the wrong brigade
+    for r in q('''SELECT tl.id, tl.trip_no, eq.code trailer, f.code fc, f.name fn, b.name bn, gf.code gc, gf.name gn,
+                         gb.name gbn, tl.opened_by, substr(tl.opened_at,1,16) at
+                  FROM trailer_loads tl JOIN fields f ON f.id=tl.field_id JOIN fields gf ON gf.id=tl.gps_field_id
+                  LEFT JOIN brigadiers b ON b.id=tl.brigadier_id LEFT JOIN brigadiers gb ON gb.id=gf.brigadier_id
+                  LEFT JOIN equipment eq ON eq.id=tl.trailer_id
+                  WHERE tl.season_year=? AND tl.status<>'BEKOR' AND tl.gps_field_id<>tl.field_id
+                  AND COALESCE(tl.gps_checked,0)=0''', (year,)):
+        add(f'trip:field:{r["id"]}', 'red', f'{r["trailer"]} ({r["trip_no"]}) boshqa dalaga ochilgan',
+            f'{r["at"]}: ro‘yxatda {r["fc"]} · {r["fn"]} ({r["bn"] or "—"}) tanlangan, lekin telefon {r["gc"]} · {r["gn"]}'
+            f'{" (" + r["gbn"] + ")" if r["gbn"] else ""} ichida edi — kg va talonlar boshqa brigadaga yozilgan bo‘lishi mumkin',
+            _u('dala.fix_field', load_id=r['id']), who=r['opened_by'],
+            ask=f'{r["trailer"]} telashkasi qaysi dalada edi?',
+            steps=['Havolani oching — telefon turgan dala ko‘rsatilgan.',
+                   'Haqiqatda o‘sha dalada terilgan bo‘lsa: “Ko‘chirish” — telashka, tortishlar va talonlar o‘sha dala va brigadaga o‘tadi.',
+                   'Tanlangan dala to‘g‘ri bo‘lsa: “… to‘g‘ri” tugmasini bosing.'])
+
     out.sort(key=lambda i: i['level'] != 'red')
     return out
 

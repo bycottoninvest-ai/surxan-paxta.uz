@@ -4,6 +4,8 @@
 {% block content %}
 <div class="d-wrap">
   <div class="d-top"><a class="icon-btn" href="{{ url_for('dala.home') }}">{{ icon('chev-left') }}</a><h1 class="d-h1">4. Hujjatlar tayyor</h1></div>
+  {% if can('records.void') and ld.status != 'BEKOR' %}<div class="small" style="margin:4px 0 8px">{{ ld.field_name }} · {{ ld.brigadier_name }} —
+    <a href="{{ url_for('dala.fix_field', load_id=ld.id) }}">dala / brigada noto‘g‘rimi? Tuzatish</a></div>{% endif %}
   {% if ld.status == 'OCHIQ' %}
   <div class="notice">{{ icon('alert','sm') }} Bu telashka hali yopilmagan. <a href="{{ url_for('dala.trip', load_id=ld.id) }}">Davom ettirish</a></div>
   {% else %}

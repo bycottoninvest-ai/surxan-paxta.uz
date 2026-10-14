@@ -124,6 +124,10 @@ def new_trip():
             if gps:
                 db.execute('UPDATE trailer_loads SET open_lat=?, open_lon=?, open_acc=? WHERE id=? AND open_lat IS NULL',
                            gps + (lid,))
+                from ..geo import field_at
+                fid = field_at(db.execute('SELECT id, polygon_json FROM fields WHERE active=1 AND polygon_json IS NOT NULL'),
+                               gps[0], gps[1], tolerance_m=min(gps[2] or 0, 60) + 20)
+                db.execute('UPDATE trailer_loads SET gps_field_id=? WHERE id=?', (fid, lid))
             db.execute('UPDATE trailer_loads SET harvest_round=? WHERE id=?', (rnd if rnd in (1, 2, 3) else 1, lid))
         return done('Telashka ochildi.', url_for('dala.trip', load_id=lid), load_id=lid)
     busy = {r['trailer_id'] for r in q("SELECT trailer_id FROM trailer_loads WHERE status IN ('OCHIQ','TOLDI')")}
@@ -316,6 +320,31 @@ def docs(load_id):
     return render_template('dala_docs.html', ld=ld, totals=_totals(load_id), yld=picking.trip_yield(load_id),
                            blank=BL.of_waybill(ld['waybill_id']) if ld['waybill_id'] else None,
                            rnd=q('SELECT harvest_round FROM trailer_loads WHERE id=?', (load_id,), one=True)[0] or 1)
+
+
+@bp.route('/dala/reys/<int:load_id>/dala-tuzatish', methods=['GET', 'POST'])
+@perm_required('records.void')
+def fix_field(load_id):
+    """Rahbar: the trip was opened on the wrong field / brigade — move it (with its weighings and talons)."""
+    from ..services import confirm_load_field, move_load
+    ld = _trip(load_id)
+    if request.method == 'POST':
+        actor = post_actor()
+        if request.form.get('action') == 'ok':
+            confirm_load_field(actor, load_id)
+            return done('Belgilandi: tanlangan dala to‘g‘ri.', url_for('dala.docs', load_id=load_id))
+        r = move_load(actor, load_id, field_id=parse_int(request.form.get('field_id'), 'Dala'),
+                      brigadier_id=parse_int(request.form.get('brigadier_id'), 'Brigada'), reason=request.form.get('reason'))
+        return done(f'Ko‘chirildi: {r["field"]} · {r["brigade"]} ({r["harvests"]} tortish, {r["talons"]} talon). '
+                    'Pul o‘zgarmadi.', url_for('dala.docs', load_id=load_id))
+    row = q('''SELECT tl.gps_field_id, tl.gps_checked, tl.open_lat, tl.open_lon, tl.open_acc, gf.code gps_code, gf.name gps_name,
+                      gf.brigadier_id gps_brig FROM trailer_loads tl LEFT JOIN fields gf ON gf.id=tl.gps_field_id WHERE tl.id=?''',
+            (load_id,), one=True)
+    return render_template('dala_fix_field.html', ld=ld, gps=row, totals=_totals(load_id),
+                           talons=q('SELECT COUNT(*) n, COALESCE(SUM(kg),0) kg FROM tezpul_talons WHERE load_id=?', (load_id,), one=True),
+                           fields=q('''SELECT f.id, f.code, f.name, f.brigadier_id, b.name brig FROM fields f
+                                       LEFT JOIN brigadiers b ON b.id=f.brigadier_id WHERE f.active=1 ORDER BY f.code'''),
+                           brigadiers=q('SELECT id, name FROM brigadiers WHERE active=1 ORDER BY name'))
 
 
 @bp.get('/dala/reys/<int:load_id>/ishchilar.pdf')

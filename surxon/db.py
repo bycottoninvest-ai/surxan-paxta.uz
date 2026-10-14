@@ -10,7 +10,7 @@ from contextlib import contextmanager
 
 from flask import current_app, g
 
-SCHEMA_VERSION = 29
+SCHEMA_VERSION = 30
 
 SCHEMA = r'''
 CREATE TABLE IF NOT EXISTS brigadiers (
@@ -1197,6 +1197,9 @@ def migrate(db):
     _add_column(db, 'tezpul_talons', 'driver_rate', 'REAL')
     _add_column(db, 'tezpul_talons', 'driver_amount', 'REAL')
     _add_column(db, 'tezpul_talons', 'driver_pay_id', 'INTEGER')
+    # v30: the field the phone was in when the trip was opened (GPS) — told apart from the field chosen in the list
+    _add_column(db, 'trailer_loads', 'gps_field_id', 'INTEGER')
+    _add_column(db, 'trailer_loads', 'gps_checked', 'INTEGER')   # the rahbar looked: the chosen field is right
     # Future column changes go here as: if version < N: ALTER TABLE ...
     db.execute('UPDATE schema_version SET version=? WHERE version < ?', (SCHEMA_VERSION, SCHEMA_VERSION))
 

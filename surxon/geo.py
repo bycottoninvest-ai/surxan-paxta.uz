@@ -223,3 +223,49 @@ def grid_locator(poly_latlon):
         cid = f'{int((lon * kx - x0) // size)}:{int((lat * ky - y0) // size)}'
         return cid if cid in ids else None
     return locate
+
+
+def inside(poly_latlon, lat, lon):
+    """Is the point inside a stored [lat, lon] contour (ray casting)."""
+    c, n = False, len(poly_latlon or [])
+    for i in range(n):
+        yi, xi = poly_latlon[i][0], poly_latlon[i][1]
+        yj, xj = poly_latlon[i - 1][0], poly_latlon[i - 1][1]
+        if (yi > lat) != (yj > lat) and lon < (xj - xi) * (lat - yi) / (yj - yi) + xi:
+            c = not c
+    return c
+
+
+def edge_distance_m(poly_latlon, lat, lon):
+    """Metres from the point to the contour's nearest edge."""
+    k = math.cos(math.radians(lat))
+    xy = lambda p: (math.radians(p[1]) * k * 6371000, math.radians(p[0]) * 6371000)
+    px, py = xy((lat, lon))
+    best = float('inf')
+    for i in range(len(poly_latlon or [])):
+        ax, ay = xy(poly_latlon[i - 1]); bx, by = xy(poly_latlon[i])
+        dx, dy = bx - ax, by - ay
+        L = dx * dx + dy * dy
+        t = max(0.0, min(1.0, ((px - ax) * dx + (py - ay) * dy) / L)) if L else 0.0
+        best = min(best, math.hypot(px - ax - t * dx, py - ay - t * dy))
+    return best
+
+
+def field_at(fields, lat, lon, tolerance_m=40):
+    """The field (row with id, polygon_json) the point is in — or within tolerance_m of its edge (GPS error), the
+    closest one. None when the phone was in no drawn field."""
+    import json
+    best = None
+    for f in fields:
+        try:
+            poly = json.loads(f['polygon_json'] or 'null')
+        except ValueError:
+            continue
+        if not poly or len(poly) < 3:
+            continue
+        if inside(poly, lat, lon):
+            return f['id']
+        d = edge_distance_m(poly, lat, lon)
+        if d <= tolerance_m and (best is None or d < best[0]):
+            best = (d, f['id'])
+    return best[1] if best else None

@@ -57,3 +57,10 @@ Tasdiqlangan dizaynni o‘zgartirish faqat egasining roziligi bilan; o‘zgarsa 
   hisoblanadi — starshi yoki shofyor aytgan son bo‘yicha emas (panelda “starshi: N” qizil bo‘lib farq ko‘rinadi).
   Kassir: TEZ-PUL kassa → 🚐 Shofyorlar → BERILDI — bitta kassa chiqimi (“Shofyor (odam tashish)”), direktor va buxgalterga xabar.
   Narx o‘zgarsa — avval hisoblangan talonlar o‘z narxida qoladi.
+
+## v3.2 (2026-10-14) — telashka dalasi GPS bo‘yicha
+- Telashka ochilganda dala **faqat telefon turgan dala** bo‘lsa o‘zi tanlanadi (chegarada GPS xatosi hisobga olinadi).
+  Telefon hech qaysi dala ichida bo‘lmasa — “— dala tanlanmagan —”, ro‘yxatdagi birinchi dala endi o‘zi qolmaydi.
+- Telefon bir dalada, ro‘yxatda boshqasi tanlansa — ochishdan oldin so‘raladi; ochilsa **Nazorat**da qizil:
+  “TL-02 boshqa dalaga ochilgan”. Rahbar: telashka → Hujjatlar → “dala / brigada noto‘g‘rimi? Tuzatish” — telashka,
+  tortishlar va starshi talonlari to‘g‘ri dala va brigadaga o‘tadi (kg va pul o‘zgarmaydi, auditda qoladi).

@@ -311,3 +311,48 @@ def test_trip_ledger_shows_hand_and_combine_kg_and_pay_without_cancelled(app, wo
     assert t1 in page and t2 not in page and '1 ta bekor reys' in page
     assert 'Jami (1 ta reys) 150 2 225 000' in page
     assert 'Terilgan (dala) 150 kg' in page
+
+
+def test_trip_opened_on_the_wrong_field_is_flagged_and_moved(app, world):
+    """The phone stood in Juma ota's field but the list's field (Nurim ota's) was chosen: the trip remembers where the
+    phone was, Nazorat shows it red, the rahbar moves the trip with its weighings and talons — kg and money unchanged."""
+    import json as _j
+    from surxon import nazorat
+    tally, _ = setup(app, world)
+    juma = [[41.3000, 69.2400], [41.3000, 69.2424], [41.3009, 69.2424], [41.3009, 69.2400]]
+    nurim = [[41.3000, 69.2425], [41.3000, 69.2449], [41.3009, 69.2449], [41.3009, 69.2425]]
+    with app.app_context():
+        get_db().execute('UPDATE fields SET polygon_json=? WHERE id=?', (_j.dumps(juma), world['f']['D-04']))
+        get_db().execute('UPDATE fields SET polygon_json=? WHERE id=?', (_j.dumps(nurim), world['f']['D-01']))
+    page = tally.get('/dala/yangi').get_data(as_text=True)
+    assert '— dala tanlanmagan —' in page and 'Dala 4 — Juma ota' in page        # nothing chosen by itself
+    r = tally.post('/dala/yangi', {'trailer_id': world['eq']['TL-02'], 'field_id': world['f']['D-01'], 'method': 'hand',
+                                   'brigadier_id': world['b']['Nurim ota'], 'rate': '1000', 'client_uuid': uuid4(),
+                                   'lat': '41.30045', 'lon': '69.2410', 'acc': '8'}).get_json()
+    lid = r['load_id']
+    assert tally.post(f'/dala/reys/{lid}/tortish', {'worker_name': 'Ali', 'kg': '120', 'client_uuid': uuid4()}).get_json()['ok']
+    with app.app_context():
+        assert q('SELECT gps_field_id FROM trailer_loads WHERE id=?', (lid,), one=True)[0] == world['f']['D-04']
+        found = [i for i in nazorat.issues() if i['key'] == f'trip:field:{lid}']
+        assert found and found[0]['level'] == 'red' and 'Dala 4' in found[0]['detail']
+    # a trip opened inside its own field is not flagged; one 30 m outside the edge counts as inside (GPS error)
+    ok = tally.post('/dala/yangi', {'trailer_id': world['eq']['TL-03'], 'field_id': world['f']['D-04'], 'method': 'hand',
+                                    'brigadier_id': world['b']['Juma ota'], 'rate': '1000', 'client_uuid': uuid4(),
+                                    'lat': '41.29975', 'lon': '69.2410', 'acc': '15'}).get_json()['load_id']
+    with app.app_context():
+        assert q('SELECT gps_field_id FROM trailer_loads WHERE id=?', (ok,), one=True)[0] == world['f']['D-04']
+        assert not [i for i in nazorat.issues() if i['key'] == f'trip:field:{ok}']
+    # only the rahbar fixes it
+    assert tally.get(f'/dala/reys/{lid}/dala-tuzatish').status_code in (302, 403)
+    rahbar = world['rahbar']
+    page = rahbar.get(f'/dala/reys/{lid}/dala-tuzatish').get_data(as_text=True)
+    assert 'telefon' in page and 'Dala 4' in page
+    r = rahbar.post(f'/dala/reys/{lid}/dala-tuzatish', {'field_id': world['f']['D-04'], 'brigadier_id': world['b']['Juma ota'],
+                                                          'reason': 'hammasi Juma ota dalasida terildi'}, json_resp=False)
+    with app.app_context():
+        tl = q('SELECT field_id, brigadier_id, gps_checked FROM trailer_loads WHERE id=?', (lid,), one=True)
+        assert (tl['field_id'], tl['brigadier_id']) == (world['f']['D-04'], world['b']['Juma ota'])
+        h = q('SELECT field_id, brigadier_id, kg, amount FROM harvests WHERE load_id=?', (lid,), one=True)
+        assert (h['field_id'], h['brigadier_id'], h['kg'], h['amount']) == (world['f']['D-04'], world['b']['Juma ota'], 120, 120_000)
+        assert q("SELECT COUNT(*) FROM audit_logs WHERE action='MOVE' AND entity_type='trailer_load'", one=True)[0] == 1
+        assert not [i for i in nazorat.issues() if i['key'] == f'trip:field:{lid}']

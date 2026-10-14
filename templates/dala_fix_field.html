@@ -1,0 +1,38 @@
+{% extends 'base.html' %}
+{% from 'macros.html' import icon, csrf with context %}
+{% set page_title = 'Dalani tuzatish' %}
+{% block content %}
+<div class="d-wrap">
+  <div class="d-top"><a class="icon-btn" href="{{ url_for('dala.docs', load_id=ld.id) }}">{{ icon('chev-left') }}</a>
+    <div><h1 class="d-h1">{{ ld.trailer_code }} · {{ ld.trip_no }} — dalani tuzatish</h1>
+      <div class="small muted">Hozir: <b>{{ ld.field_name }}</b> · <b>{{ ld.brigadier_name }}</b> · {{ (ld.opened_at or '')[:16] }}</div></div></div>
+
+  {% if gps.gps_field_id and gps.gps_field_id != ld.field_id %}
+  <div class="notice" style="display:block;background:#fde9ee;border-color:#f3a3b5;color:#a0153a;margin:12px 0">
+    📍 Telashka ochilganda telefon <b>{{ gps.gps_code }} · {{ gps.gps_name }}</b> ichida edi (±{{ (gps.open_acc or 0)|int }} m),
+    lekin ro‘yxatda <b>{{ ld.field_name }}</b> tanlangan.</div>
+  {% elif not gps.open_lat %}<div class="notice" style="display:block;margin:12px 0">📍 Ochilganda joylashuv yozilmagan.</div>{% endif %}
+
+  <div class="small" style="margin:6px 0 12px">Ko‘chiriladi: {{ totals.n }} tortish · {{ totals.kg|num }} kg{% if talons.n %} · {{ talons.n }} starshi taloni ({{ talons.kg|num }} kg){% endif %}.
+    <b>Kg va berilgan pul o‘zgarmaydi</b> — faqat qaysi dala va brigadaga tegishliligi tuzatiladi. Hammasi auditga yoziladi.</div>
+
+  <form method="post" class="d-form">{{ csrf() }}
+    <label class="d-l">To‘g‘ri dala</label>
+    <select name="field_id" required id="fx-field">{% for f in fields %}<option value="{{ f.id }}" data-brig="{{ f.brigadier_id or '' }}"
+      {{ 'selected' if (gps.gps_field_id or ld.field_id) == f.id }}>{{ f.code }} · {{ f.name }}{% if f.brig %} — {{ f.brig }}{% endif %}</option>{% endfor %}</select>
+    <label class="d-l">Brigada</label>
+    <select name="brigadier_id" required id="fx-brig">{% for b in brigadiers %}<option value="{{ b.id }}"
+      {{ 'selected' if (gps.gps_brig if gps.gps_field_id else ld.brigadier_id) == b.id }}>{{ b.name }}</option>{% endfor %}</select>
+    <label class="d-l">Sabab</label>
+    <input name="reason" required minlength="3" placeholder="masalan: hammasi Juma ota dalasida terildi">
+    <button class="btn btn-primary btn-block d-big">Ko‘chirish</button>
+  </form>
+  {% if gps.gps_field_id and gps.gps_field_id != ld.field_id and not gps.gps_checked %}
+  <form method="post" style="margin-top:10px">{{ csrf() }}<input type="hidden" name="action" value="ok">
+    <button class="btn btn-light btn-block">✓ Yo‘q, {{ ld.field_name }} to‘g‘ri (belgini olib tashlash)</button></form>{% endif %}
+</div>
+<script>
+(function () { const f = document.getElementById('fx-field'), b = document.getElementById('fx-brig');
+  f.addEventListener('change', () => { const o = f.selectedOptions[0]; if (o && o.dataset.brig) b.value = o.dataset.brig; }); })();
+</script>
+{% endblock %}
