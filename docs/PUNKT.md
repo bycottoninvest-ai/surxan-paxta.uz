@@ -47,3 +47,16 @@ Talon kabi bank chekidek ikki qism, A4 ga 2 ta: chapda **NAZORAT QISMI** (bizda 
 Hisobchi ikkala qismga bir xil yozadi: telashka, kg, qo‘l / kombayn, kombayn №, sana. Raqamlar va QR havolalari
 o‘zgarmagan — oldin chop etilgan PB blankalar ham ishlayveradi, yangilari oxirgi raqamdan davom etadi.
 Tasdiqlangan dizaynni o‘zgartirish faqat egasining roziligi bilan; o‘zgarsa — versiya raqami oshiriladi.
+
+## Dala nakladnoyi v3 (2026-10-14) — dalada telefon yo‘q
+- **Blanka (PB v3):** chapda NAZORAT QISMI — **traktorchida qoladi**, 2–3 kunda bir yig‘ib olinadi. O‘ngda: Telashka TL-__,
+  qo‘l / kombayn №, **3 ta qator** (telashka bir necha joyda to‘lsa — har joy o‘z qatoriga): brigadirga ✓ (ismlar
+  tizimdagi brigadirlardan bosiladi + bo‘sh katak), dala kodi (dalalar xaritasidan), kg, imzo; pastda **JAMI KG**;
+  qisqa yo‘riqnoma va bot QR. Paxta rasmi (static/img/cotton.png).
+- **Dalada:** kim bo‘lsa ham ruchkada yozadi; Telegram botga rasmini yuboradi (2-bosqich); chiziqdan yirtadi.
+- **Punktda (Yunus):** UY varaqni skanerlaydi → **📷 DALA NAKLADNOYINI RASMGA OLISH** → QR telefonda o‘qiladi, yozuvni AI
+  o‘qiydi (talon_ai.read_blank) → Yunus tekshiradi (sariq — aniq o‘qilmagan / dala boshqa brigadirniki) → **✔ Qo‘shish**:
+  har qator alohida yopilgan reys (o‘z nakladnoyi, qog‘ozdagi kg) bo‘lib UY ga qo‘shiladi. Keyin odatdagidek: yopish →
+  yuk xati, brutto / tara → netto kg bo‘yicha bo‘linadi. Bir qog‘ozni ikki marta yuborish — bir marta yoziladi.
+- **Terim hisobchisi:** sozlama `dala_qogoz` = 1 (standart) — telashka ochish/yopish ekranlari yashirin, faqat
+  **🌙 Kechki hisob**. 0 — eski tartib.

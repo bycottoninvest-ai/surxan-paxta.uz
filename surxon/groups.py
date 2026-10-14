@@ -306,11 +306,13 @@ def detail(gid):
     from .accounting import combine_owner
     g = get(gid)
     rows = q('''SELECT i.waybill_id, wb.number, wb.net_kg, wb.status, tl.trip_no, tl.method, tl.station_id, tl.season_year sy,
-                       e.code trailer, f.code field_code, f.name field_name, b.name brigadier_name, pb.number blank,
+                       e.code trailer, f.code field_code, f.name field_name, b.name brigadier_name,
+                       COALESCE(pb.number, pb2.number || ' · ' || tl.pb_row) blank,
                        nr.accepted_kg, nr.diff_kg
                 FROM load_group_items i JOIN waybills wb ON wb.id=i.waybill_id JOIN trailer_loads tl ON tl.id=wb.load_id
                 LEFT JOIN equipment e ON e.id=tl.trailer_id LEFT JOIN fields f ON f.id=tl.field_id
                 LEFT JOIN brigadiers b ON b.id=tl.brigadier_id LEFT JOIN punkt_blanks pb ON pb.waybill_id=wb.id
+                LEFT JOIN punkt_blanks pb2 ON pb2.id=tl.pb_blank_id
                 LEFT JOIN nayman_receipts nr ON nr.waybill_id=wb.id
                 WHERE i.group_id=? ORDER BY i.added_at, i.waybill_id''', (gid,))
     items = []

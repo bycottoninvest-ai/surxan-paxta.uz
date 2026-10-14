@@ -12,8 +12,12 @@
 <div class="d-wrap">
   <div class="d-top"><a class="icon-btn" href="{{ url_for('punkt.groups_home') }}">{{ icon('chev-left') }}</a><h1 class="d-h1">{{ g.number }}</h1></div>
 {% if g.status == 'OCHIQ' %}
-  <p class="small muted">Haydovchi bergan blanklarni birma-bir skanerlang — ro‘yxat o‘zi to‘ladi.</p>
+  <p class="small muted">Traktorchi bergan dala nakladnoylarini birma-bir rasmga oling — tizim o‘qiydi, siz tekshirasiz.</p>
   {% if can('station.receive') %}
+  <input type="file" id="pb-file" accept="image/*" capture="environment" hidden>
+  <button type="button" class="btn btn-block d-big" id="pb-shot" style="background:#1d4ed8;border-color:#1d4ed8;color:#fff;white-space:normal;line-height:1.2;flex-direction:column;display:flex;align-items:center">📷 DALA NAKLADNOYINI RASMGA OLISH<small style="display:block;font-size:13px;font-weight:600;margin-top:3px">tizim o‘zi o‘qiydi</small></button>
+  <div id="pb-box" hidden></div>
+  <details class="mt-s" {{ 'open' if pick_blank }}><summary class="small link">QR skaner (eski blankalar)</summary>
   <div class="p-cam"><video id="cam" playsinline muted></video><div class="p-frame"></div></div>
   <div class="small mt-s" id="cam-msg">Kamera ochilmoqda…</div>
   <form method="post" action="{{ url_for('punkt.group_add', gid=g.id) }}" class="row mt-s" style="gap:6px" id="uy-add">{{ csrf() }}
@@ -22,6 +26,7 @@
   <form method="post" action="{{ url_for('punkt.group_add', gid=g.id) }}" class="uy-pick">{{ csrf() }}<input type="hidden" name="code" value="{{ pick_blank }}">
     {% for c in cands if not c.blank %}<button class="pk-card" name="waybill_id" value="{{ c.id }}"><div class="pk-body"><b>{{ c.trailer }} · {{ c.trip_no }}</b><span class="small">{{ c.field_code }} · {{ c.net_kg|num }} kg</span></div></button>
     {% else %}<div class="small muted">Blanksiz telashka yo‘lda yo‘q.</div>{% endfor %}</form>{% endif %}
+  </details>
   {% endif %}
   <div class="uy-list">{% for it in items %}{{ item(it, True) }}{% else %}<div class="small muted">Hali telashka yo‘q.</div>{% endfor %}</div>
   <div class="uy-tot"><span>{{ items|length }} ta telashka · jami</span><b>{{ sent_kg|num }} kg</b></div>
@@ -73,13 +78,120 @@
 .uy-tot{display:flex;justify-content:space-between;background:#e0ecff;border-radius:12px;padding:12px 14px;font-weight:800;font-size:16px;margin-bottom:10px}
 .uy-write{background:#fff;border:2px solid #0a2c5a;border-radius:14px;padding:12px 14px;margin:8px 0}.uy-w{display:flex;justify-content:space-between;padding:6px 0;font-size:16px}.uy-w.big b{font-size:26px}
 .uy-pick{display:flex;flex-direction:column;gap:6px;margin:8px 0}.uy-pick .pk-card{text-align:left;width:100%}
+.pb{background:#fff;border:2px solid #1d4ed8;border-radius:16px;padding:12px;margin:10px 0}
+.pb h3{margin:0 0 6px;font-size:18px}.pb .ph{width:100%;max-height:220px;object-fit:contain;border-radius:10px;background:#f3f6fa}
+.pb label{display:block;font-size:13px;font-weight:800;margin:8px 0 3px}.pb select,.pb input{width:100%;font-size:16px;padding:8px;border:1.5px solid #c9d6e8;border-radius:10px}
+.pb .rw{border-top:1px solid #e3e9f1;padding-top:8px;margin-top:8px}.pb .rw.bad{background:#fff4e0;border-radius:10px;padding:8px}
+.pb .rw .g3{display:grid;grid-template-columns:1fr 110px;gap:6px}.pb .rw .g3 .b{grid-column:1 / -1}.pb .fl{font-size:12.5px;color:#8a4a00;font-weight:800;margin-top:3px}
+.pb .sum{display:flex;justify-content:space-between;background:#e0ecff;border-radius:10px;padding:10px;font-weight:900;font-size:17px;margin-top:10px}
+.pb .sum.bad{background:#fde9ee;color:#a0153a}.pb .seg{display:flex;gap:6px}.pb .seg label{flex:1;margin:0}.pb .seg input{width:auto}
+.pb .err{background:#fde9ee;color:#a0153a;border-radius:10px;padding:8px;font-weight:700;font-size:14px;margin-top:8px}
 .uy-net{background:#dcfce7;color:#15803d;border-radius:12px;padding:10px 12px;font-weight:800;font-size:18px;margin:8px 0}
 </style>
 {% endblock %}
-{% block scripts %}<script src="{{ url_for('static', filename='js/qrscan.js') }}?v={{ version }}"></script><script>
+{% block scripts %}<script src="{{ url_for('static', filename='js/qrscan.js') }}?v={{ version }}"></script>
+{% if pb_choices %}<script src="{{ url_for('static', filename='vendor/jsqr/jsQR.min.js') }}"></script>
+<script id="pb-choices" type="application/json">{{ pb_choices|tojson }}</script>
+<script>
+// a field waybill (PB): photo → its QR read here, the paper read by the server → checked here → trips in this UY
+(() => {
+  const CH = JSON.parse(document.getElementById('pb-choices').textContent), CSRF = {{ csrf_token()|tojson }};
+  const READ = {{ url_for('punkt.group_pb_read', gid=g.id)|tojson }}, SAVE = {{ url_for('punkt.group_pb_save', gid=g.id)|tojson }};
+  const $ = id => document.getElementById(id), box = $('pb-box');
+  const esc = t => String(t == null ? '' : t).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const opt = (list, sel, text) => '<option value="">— tanlang —</option>' + list.map(x => `<option value="${x.id}" ${String(x.id) === String(sel) ? 'selected' : ''}>${esc(text(x))}</option>`).join('');
+  let cur = null, imgUrl = null;
+  $('pb-shot').addEventListener('click', () => { $('pb-file').value = ''; $('pb-file').click(); });
+  $('pb-file').addEventListener('change', () => {
+    const f = $('pb-file').files[0]; if (!f) return;
+    const img = new Image();
+    img.onload = () => send(img);
+    imgUrl = URL.createObjectURL(f); img.src = imgUrl;
+  });
+  function qrOf(img) {          // the blank's QR, read on the phone (the server reads the handwriting)
+    if (!window.jsQR) return '';
+    for (const side of [1400, 900, 2000]) {
+      const k = Math.min(1, side / Math.max(img.naturalWidth, img.naturalHeight)), cv = document.createElement('canvas');
+      cv.width = Math.round(img.naturalWidth * k); cv.height = Math.round(img.naturalHeight * k);
+      const g = cv.getContext('2d'); g.drawImage(img, 0, 0, cv.width, cv.height);
+      const r = window.jsQR(g.getImageData(0, 0, cv.width, cv.height).data, cv.width, cv.height);
+      if (r && /\/blanka\//.test(r.data)) return r.data;
+    }
+    return '';
+  }
+  function shrink(img) {
+    return new Promise(res => {
+      const k = Math.min(1, 2000 / Math.max(img.naturalWidth, img.naturalHeight)), cv = document.createElement('canvas');
+      cv.width = Math.round(img.naturalWidth * k); cv.height = Math.round(img.naturalHeight * k);
+      cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height); cv.toBlob(b => res(b), 'image/jpeg', 0.85);
+    });
+  }
+  async function send(img) {
+    box.hidden = false; box.innerHTML = '<div class="pb"><b>⏳ O‘qilmoqda…</b> <span class="small muted">5–15 soniya</span></div>';
+    const fd = new FormData(); fd.append('_csrf', CSRF); fd.append('code', qrOf(img)); fd.append('photo', await shrink(img), 'pb.jpg');
+    let j = {};
+    try { const r = await fetch(READ, { method: 'POST', body: fd, credentials: 'same-origin', headers: { 'X-Requested-With': 'fetch' } }); j = await r.json(); }
+    catch (_) { j = { ok: false, error: 'Internet sekin — qayta urinib ko‘ring.' }; }
+    if (!j.ok) { box.innerHTML = `<div class="pb"><div class="err">${esc(j.error || 'Xato')}</div><button type="button" class="btn btn-light btn-block mt-s" id="pb-again">📷 Qayta rasmga olish</button></div>`;
+      $('pb-again').onclick = () => $('pb-shot').click(); return; }
+    if (j.already) { location.reload(); return; }
+    cur = j; form(j.read);
+  }
+  function form(r) {
+    const rows = [0, 1, 2].map(i => r.rows[i] || { brigadier_id: '', field_id: '', kg: '', flag: '' });
+    box.innerHTML = `<div class="pb"><h3>${esc(cur.blank)} — tekshiring</h3>
+      <img class="ph" src="${imgUrl}" alt="">
+      ${cur.ai_error ? `<div class="err">${esc(cur.ai_error)} Qo‘lda to‘ldiring.</div>` : (!cur.ai_on ? '<div class="small muted">AI ulanmagan — qo‘lda to‘ldiring.</div>' : '')}
+      <label>Telashka</label><select id="pb-tr">${opt(CH.trailers, r.trailer_id, x => x.code)}</select>
+      <label>Terim</label><div class="seg"><label><input type="radio" name="pb-m" value="hand" ${r.method !== 'combine' ? 'checked' : ''}> ✋ Qo‘l terimi</label>
+        <label><input type="radio" name="pb-m" value="combine" ${r.method === 'combine' ? 'checked' : ''}> 🚜 Kombayn</label></div>
+      <div id="pb-cb" ${r.method === 'combine' ? '' : 'hidden'}><label>Kombayn</label><select id="pb-c">${opt(CH.combines, r.combine_id, x => x.code)}</select></div>
+      ${rows.map((x, i) => `<div class="rw ${x.flag ? 'bad' : ''}" data-i="${i}"><b>${i + 1}-qator</b>
+        <div class="g3"><select class="b">${opt(CH.brigadiers, x.brigadier_id, b => b.name)}</select>
+        <select class="f">${opt(CH.fields, x.field_id, f => f.code + (f.brig ? ' · ' + f.brig : ''))}</select>
+        <input class="k" inputmode="decimal" placeholder="kg" value="${x.kg == null ? '' : x.kg}"></div>
+        ${x.flag ? `<div class="fl">⚠ ${esc(x.flag)}</div>` : ''}</div>`).join('')}
+      <div class="sum" id="pb-sum"></div>
+      <div class="err" id="pb-err" hidden></div>
+      <div class="row2" style="display:flex;gap:8px;margin-top:10px"><button type="button" class="btn btn-light" id="pb-x" style="flex:1">Bekor</button>
+        <button type="button" class="btn btn-green d-big" id="pb-ok" style="flex:2">✔ Qo‘shish</button></div></div>`;
+    box.querySelectorAll('input[name=pb-m]').forEach(m => m.onchange = () => { $('pb-cb').hidden = m.value !== 'combine' || !m.checked; });
+    box.querySelectorAll('.rw').forEach(rw => {
+      rw.querySelector('.f').onchange = e => { const f = CH.fields.find(x => String(x.id) === e.target.value); if (f && f.brigadier_id) rw.querySelector('.b').value = f.brigadier_id; };
+      rw.querySelectorAll('select,input').forEach(el => el.addEventListener('input', () => { rw.classList.remove('bad'); const fl = rw.querySelector('.fl'); if (fl) fl.remove(); sum(); }));
+    });
+    $('pb-x').onclick = () => { box.hidden = true; box.innerHTML = ''; };
+    $('pb-ok').onclick = save;
+    sum();
+  }
+  function rowsOf() { return [...box.querySelectorAll('.rw')].map(rw => ({ brigadier_id: rw.querySelector('.b').value, field_id: rw.querySelector('.f').value,
+    kg: rw.querySelector('.k').value.replace(',', '.') })).filter(x => x.brigadier_id || x.field_id || x.kg); }
+  function sum() {
+    const s = Math.round(rowsOf().reduce((a, x) => a + (parseFloat(x.kg) || 0), 0) * 10) / 10, t = cur.read.total_kg;
+    const bad = t != null && Math.abs(t - s) > 0.5;
+    $('pb-sum').className = 'sum' + (bad ? ' bad' : '');
+    $('pb-sum').innerHTML = `<span>Jami${t != null ? ' (nakladnoyda ' + t + ')' : ''}</span><span>${s} kg${bad ? ' ⚠' : ''}</span>`;
+  }
+  async function save() {
+    const m = box.querySelector('input[name=pb-m]:checked').value;
+    const data = { code: cur.token, photo_id: cur.photo_id, trailer_id: $('pb-tr').value, method: m,
+                   combine_id: m === 'combine' ? $('pb-c').value : null, rows: rowsOf(), total_kg: cur.read.total_kg };
+    const fd = new FormData(); fd.append('_csrf', CSRF); fd.append('data', JSON.stringify(data));
+    $('pb-ok').disabled = true; $('pb-ok').textContent = '⏳';
+    let j = {};
+    try { const r = await fetch(SAVE, { method: 'POST', body: fd, credentials: 'same-origin', headers: { 'X-Requested-With': 'fetch' } }); j = await r.json(); }
+    catch (_) { j = { ok: false, error: 'Javob kelmadi — qayta bosing (ikki marta yozilmaydi).' }; }
+    if (!j.ok) { $('pb-err').hidden = false; $('pb-err').textContent = j.error || 'Xato'; $('pb-ok').disabled = false; $('pb-ok').textContent = '✔ Qo‘shish'; return; }
+    location.href = j.redirect || location.href;
+  }
+})();
+</script>{% endif %}
+<script>
 (() => {
   const cam = document.getElementById('cam');
-  if (cam) {
+  const det = cam && cam.closest('details');
+  const startCam = () => {     // the old QR scanner: only when opened (the photo button is the usual way now)
+    if (cam.dataset.on) return; cam.dataset.on = '1';
     const msg = document.getElementById('cam-msg'), form = document.getElementById('uy-add');
     let busy = false;
     spxQrScan(cam, msg, t => {
@@ -96,7 +208,8 @@
       }).catch(() => { msg.textContent = 'Internet yo‘q — qayta urinib ko‘ring.'; busy = false; });
       return false;
     }, {{ url_for('static', filename='vendor/jsqr/jsQR.min.js')|tojson }});
-  }
+  };
+  if (cam) { if (!det || det.open) startCam(); else det.addEventListener('toggle', () => { if (det.open) startCam(); }); }
   const f = document.getElementById('uy-rcv');
   if (f) {
     const g = document.getElementById('uy-g'), t = document.getElementById('uy-t'), out = document.getElementById('uy-net'), rs = document.getElementById('uy-reason');

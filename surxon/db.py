@@ -1200,6 +1200,9 @@ def migrate(db):
     # v30: the field the phone was in when the trip was opened (GPS) — told apart from the field chosen in the list
     _add_column(db, 'trailer_loads', 'gps_field_id', 'INTEGER')
     _add_column(db, 'trailer_loads', 'gps_checked', 'INTEGER')   # the rahbar looked: the chosen field is right
+    # v30: a trip made at the punkt from a field waybill (PB v3): which paper and which of its rows
+    _add_column(db, 'trailer_loads', 'pb_blank_id', 'INTEGER')
+    _add_column(db, 'trailer_loads', 'pb_row', 'INTEGER')
     # Future column changes go here as: if version < N: ALTER TABLE ...
     db.execute('UPDATE schema_version SET version=? WHERE version < ?', (SCHEMA_VERSION, SCHEMA_VERSION))
 

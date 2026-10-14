@@ -300,7 +300,13 @@ def group(token):
     return render_template('punkt_group.html', need_load_no=get_setting('punkt_require_load_no') != '0', g=d['group'], items=d['items'], sent_kg=d['sent_kg'],
                            cands=G.candidates(my_station()) if d['group']['status'] == 'OCHIQ' else [],
                            reasons=STATION_DIFF_REASONS, other_reason=OTHER_REASON, warn=get_float('punkt_warn_pct', 1),
-                           alert=get_float('punkt_alert_pct', 3), pick_blank=request.args.get('blanka', ''))
+                           alert=get_float('punkt_alert_pct', 3), pick_blank=request.args.get('blanka', ''),
+                           pb_choices=_pb_choices() if d['group']['status'] == 'OCHIQ' else None)
+
+
+def _pb_choices():
+    from .. import intake
+    return intake.choices()
 
 
 @bp.post('/uy/<int:gid>/qosh')
@@ -326,6 +332,33 @@ def group_add(gid):
     d = G.detail(gid)
     return done(f'✓ {trip} qo‘shildi · {len(d["items"])} ta telashka · jami {d["sent_kg"]:,.0f} kg'.replace(',', ' '),
                 url_for('punkt.group', token=g0['token']), n=len(d['items']), kg=d['sent_kg'])
+
+
+@bp.post('/uy/<int:gid>/pb-oqish')
+@perm_required('station.receive')
+def group_pb_read(gid):
+    """A field waybill (PB) photographed in the UY list: kept and read — the phone shows it for checking."""
+    from .. import intake
+    r = intake.read(post_actor(), gid, read_upload(request.files.get('photo')), request.form.get('code', ''))
+    return jsonify(ok=True, **r)
+
+
+@bp.post('/uy/<int:gid>/pb-saqlash')
+@perm_required('station.receive')
+def group_pb_save(gid):
+    """The checked paper becomes trips in this UY."""
+    import json as _json
+    from .. import groups as G, intake
+    try:
+        d = _json.loads(request.form.get('data') or '{}')
+    except ValueError:
+        raise UserError('Ma’lumot buzildi — qaytadan yuboring.')
+    r = intake.register(post_actor(), gid, code=d.get('code'), photo_id=d.get('photo_id'), trailer_id=d.get('trailer_id'),
+                        method=d.get('method'), combine_id=d.get('combine_id'), rows=d.get('rows') or [],
+                        total_kg=d.get('total_kg'))
+    det = G.detail(gid)
+    return done(f'✓ {r["blank"]}: {len(r["trips"])} ta reys · {r["kg"]:,.0f} kg qo‘shildi · jami {len(det["items"])} ta telashka, '
+                f'{det["sent_kg"]:,.0f} kg'.replace(',', ' '), url_for('punkt.group', token=G.get(gid)['token']))
 
 
 @bp.post('/uy/<int:gid>/olib')

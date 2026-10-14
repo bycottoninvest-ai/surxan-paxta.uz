@@ -197,6 +197,7 @@ def register_template_helpers(app):
             'gmaps_key': _gmaps_key() if user else '',
             'nazorat_open': _nazorat_open() if user and can('acct.view') else 0,
             'pq17_todo': _pq17_todo() if user and can('nayman.write') else None,
+            'paper_field': user is not None and __import__('surxon.settings', fromlist=['get_bool']).get_bool('dala_qogoz'),
             'offline_queue': user is not None and __import__('surxon.settings', fromlist=['get_bool']).get_bool('offline_queue'),
         }
 

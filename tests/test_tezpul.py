@@ -247,6 +247,9 @@ def test_trailer_qr_opens_the_trip_or_its_opening_page(app, world):
     assert 'Talonni skanerlang' not in html and 'Kechki hisob' in html
     assert f'href="/dala/reys/{lid}"' in tally.get('/dala').get_data(as_text=True)
     assert 'Ismni qidiring' in tally.get(f'/dala/reys/{lid}?eski=1').get_data(as_text=True)
+    home = tally.get('/dala').get_data(as_text=True)                    # paper mode (default): only the evening count
+    assert 'Telashka QR' not in home and 'telefonda ochilmaydi' in home and 'Kechki hisob' in home
+    world['admin'].post('/admin/sozlamalar', {'set_dala_qogoz': '0'})
     assert 'Telashka QR' in tally.get('/dala').get_data(as_text=True)
 
 

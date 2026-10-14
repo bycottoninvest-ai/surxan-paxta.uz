@@ -33,8 +33,8 @@ def test_blanks_print_attach_required_once_and_office_check(app, world):
     assert pdf.status_code == 200 and len(re.findall(rb'/Type\s*/Page[^s]', pdf.data)) == 300       # 2 blanks on each A4
     text = pdf_text(pdf.data)
     assert 'PB-0001' in text and 'PB-0600' in text and 'DALA NAKLADNOYI' in text and 'KOMBAYN' in text
-    assert 'QO‘L TERIMI' in text and 'PAXTA, kg' in text and 'QABUL QILUVCHI' not in text      # the receiver part is on the UY
-    assert 'NAZORAT QISMI' in text and text.count('PB-0001') >= 2          # cheque style: the stub that stays with us, same number
+    assert 'TERIMI' in text and 'JAMI KG' in text and 'Brigadir' in text and 'QABUL QILUVCHI' not in text   # v3: rows per place
+    assert 'NAZORAT QISMI' in text and text.count('PB-0001') >= 2          # cheque style: the stub (with the driver), same number
     assert admin.post('/admin/blankalar', {'count': '5000'}).get_json()['ok'] is False
     # the simple print form: from a number, how many — only those, two per page
     part = admin.get('/admin/blankalar/chop.pdf?dan=1&soni=10')

@@ -157,6 +157,11 @@ def kg_part(data, cut):
 
 def _ask(jpeg_bytes):
     """One request to Claude with the kg part of the sheet. Returns the parsed JSON (SCHEMA)."""
+    return _request(jpeg_bytes, PROMPT, SCHEMA)
+
+
+def _request(jpeg_bytes, prompt, schema):
+    """One request to Claude: the photo and the instructions; the answer is JSON of `schema`."""
     import anthropic
     client = anthropic.Anthropic(api_key=api_key(), timeout=90, max_retries=2)
     try:
@@ -165,11 +170,11 @@ def _ask(jpeg_bytes):
             max_tokens=16000,
             betas=['server-side-fallback-2026-07-01'],
             fallbacks='default',
-            output_config={'format': {'type': 'json_schema', 'schema': SCHEMA}},
+            output_config={'format': {'type': 'json_schema', 'schema': schema}},
             messages=[{'role': 'user', 'content': [
                 {'type': 'image', 'source': {'type': 'base64', 'media_type': 'image/jpeg',
                                              'data': base64.standard_b64encode(jpeg_bytes).decode()}},
-                {'type': 'text', 'text': PROMPT}]}],
+                {'type': 'text', 'text': prompt}]}],
         )
     except anthropic.AuthenticationError:
         raise UserError('AI kaliti noto‘g‘ri — Admin → Integratsiyalar (server .env dagi ANTHROPIC_API_KEY).')
@@ -226,3 +231,57 @@ def check(raw):
 
 def read_sheet(jpeg_bytes):
     return check(_ask(jpeg_bytes))
+
+
+# ------------------------------------------------------------------ DALA NAKLADNOYI (PB v3) — read at the punkt / sent to the bot
+
+PB_PROMPT = """This photo shows a filled paper form "DALA NAKLADNOYI" (a cotton trailer's field waybill), filled in by hand.
+Read it:
+- "blank_no": the printed red number like "PB-0123" (top right or on the left stub).
+- "trailer": the handwritten trailer number after "Telashka: TL-" (only the number part, e.g. "02").
+- "method": "hand" if the box "QO‘L TERIMI" is ticked, "combine" if "KOMBAYN" is ticked, null if neither.
+- "combine_no": what is written after "KOMBAYN №" (or null).
+- "rows": the table rows 1, 2, 3. For each row that has anything written: "brigadier" = the printed name next to the
+  ticked box (one of: {names}), or the handwritten name next to the empty box if that one is ticked; "field" = the field
+  code written in the "Dala" column (like "D-04" or "4"); "kg" = the number in the "Kg" column. Ignore the "Imzo"
+  (signature) column. Set "unclear": true if any of the row's handwriting is not clearly readable or two boxes are ticked.
+- "total_kg": the number written in "JAMI KG".
+- "date": the date written after "Sana" (as written) or null.
+Copy exactly what is written — do not correct numbers or fill in missing cells (leave them null). If the photo is not
+this form, return empty rows and explain in "note"."""
+
+PB_SCHEMA = {
+    'type': 'object',
+    'properties': {
+        'blank_no': {'anyOf': [{'type': 'string'}, {'type': 'null'}]},
+        'trailer': {'anyOf': [{'type': 'string'}, {'type': 'null'}]},
+        'method': {'anyOf': [{'type': 'string', 'enum': ['hand', 'combine']}, {'type': 'null'}]},
+        'combine_no': {'anyOf': [{'type': 'string'}, {'type': 'null'}]},
+        'rows': {'type': 'array', 'items': {
+            'type': 'object',
+            'properties': {'row': {'type': 'integer'}, 'brigadier': {'anyOf': [{'type': 'string'}, {'type': 'null'}]},
+                           'field': {'anyOf': [{'type': 'string'}, {'type': 'null'}]}, 'kg': _NUM,
+                           'unclear': {'type': 'boolean'}},
+            'required': ['row', 'brigadier', 'field', 'kg', 'unclear'], 'additionalProperties': False}},
+        'total_kg': _NUM,
+        'date': {'anyOf': [{'type': 'string'}, {'type': 'null'}]},
+        'note': {'type': 'string'},
+    },
+    'required': ['blank_no', 'trailer', 'method', 'combine_no', 'rows', 'total_kg', 'date', 'note'],
+    'additionalProperties': False,
+}
+
+
+def photo_jpeg(data):
+    """The photo upright and at most MAX_SIDE px, as JPEG (for reading and for the archive)."""
+    full, _ = kg_part(data, 0)
+    return full
+
+
+def _ask_pb(jpeg_bytes, names):
+    return _request(jpeg_bytes, PB_PROMPT.replace('{names}', ', '.join(f'"{n}"' for n in names) or '—'), PB_SCHEMA)
+
+
+def read_blank(jpeg_bytes, names):
+    """The field waybill read from its photo: {blank_no, trailer, method, combine_no, rows, total_kg, date, note}."""
+    return _ask_pb(jpeg_bytes, names)

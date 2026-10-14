@@ -149,6 +149,8 @@ def test_tally_home_has_live_field_map_and_new_trip_preselects(app, world):
     with app.app_context():
         get_db().execute('UPDATE fields SET polygon_json=? WHERE id=?',
                          (_j.dumps([[41.30, 69.24], [41.30, 69.25], [41.31, 69.25], [41.31, 69.24]]), world['f']['D-04']))
+    assert 'd-live-map' not in tally.get('/dala').get_data(as_text=True)      # paper mode (default): no field screens
+    world['admin'].post('/admin/sozlamalar', {'set_dala_qogoz': '0'})
     home = tally.get('/dala').get_data(as_text=True)
     assert 'd-live-map' in home and 'fieldgeo.js' in home and '"D-04"' in home
     page = tally.get(f'/dala/yangi?field={world["f"]["D-04"]}').get_data(as_text=True)

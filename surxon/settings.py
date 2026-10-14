@@ -32,6 +32,8 @@ DEFAULTS = {
     'diff_threshold_pct': ('2', 'Ichki hisob va tarozi farqi shu % dan oshsa sabab majburiy'),
     'nayman_diff_reason_required': ('1', 'Nayman qabulida farq bo‘lsa sabab majburiy (1/0)'),
     'toldi_min_photos': ('1', 'TOLDI uchun kamida nechta rasm majburiy'),
+    'dala_qogoz': ('1', 'Dalada telefon ishlatilmaydi (1): telashka va kg qog‘oz dala nakladnoyida, punktda Yunus rasmga oladi; '
+                        'terim hisobchisida faqat “Kechki hisob” qoladi. 0 — eski tartib (hisobchi telashka ochadi/yopadi)'),
     'driver_rate_person': ('10000', 'Shofyorga olib kelgan har bir odam uchun, so‘m (starshi talonida kg i yozilgan odamlar soni bo‘yicha)'),
     'max_hand_kg': ('250', 'Bitta qo‘l terimi yozuvi uchun maksimal kg (xatoni ushlash uchun)'),
     'max_group_kg': ('20000', 'Guruh boshlig‘i (o‘z odamlari terganini bir yozuvda kiritadigan ishchi) uchun bitta yozuvda maksimal kg'),
