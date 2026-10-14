@@ -38,7 +38,16 @@ def home():
         cot=D.cotton(year, a, b), now=D.trips_now(), cash=D.cash(a, b), wages=D.wages(year, a, b), fuel=D.fuel(a, b),
         checks=checks, red=sum(1 for c in checks if c['level'] == 'red'), feed=D.feed(8), staff=_staff_count(),
         fleet=_fleet_count(), live=_live(8), pk=__import__('surxon.queries', fromlist=['finance_summary']).finance_summary(year),
-        loans=__import__('surxon.loans', fromlist=['summary']).summary()))
+        loans=__import__('surxon.loans', fromlist=['summary']).summary(), sv=_sverka_today()))
+
+
+def _sverka_today():
+    from .. import sverka as S
+    from ..utils import today_str
+    try:
+        return S.check(today_str())
+    except Exception:          # the banner never breaks the director's home
+        return None
 
 
 def _live(limit):
@@ -300,3 +309,21 @@ def fuel():
 def checks():
     year, p, a, b, _ = _period()
     return render_template('rahbar_checks.html', **_ctx(items=D.checks(year, a, b)))
+
+
+@bp.get('/rahbar/sverka')
+@perm_required(VIEW)
+def sverka():
+    """KUNLIK SVERKA: dala → punkt → pul for one day, made by itself (read-only)."""
+    from datetime import date, timedelta
+    from .. import sverka as S
+    from ..utils import UserError, parse_date, today_str
+    try:
+        day = parse_date(request.args.get('sana') or today_str())
+    except UserError:
+        day = today_str()
+    d = date.fromisoformat(day)
+    today = today_str()
+    nxt = (d + timedelta(days=1)).isoformat()
+    return render_template('rahbar_sverka.html', c=S.check(day), day=day, today=today,
+                           prev=(d - timedelta(days=1)).isoformat(), next=nxt if nxt <= today else None)

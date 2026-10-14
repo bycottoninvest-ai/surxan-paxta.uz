@@ -1,0 +1,109 @@
+{% extends 'base.html' %}
+{% set page_title = 'Kunlik sverka' %}
+{% set t = c.totals %}
+{% set HEAD = {'red': ('🔴', c.counts.red ~ ' ta brigadada farq', 'Pastda qizil kartani oching — qayerda ekan, tizim yozib qo‘ygan'),
+               'yellow': ('🟡', 'Tekshirish kerak', 'Katta xato yo‘q, lekin sariq kartalarga qarang'),
+               'wait': ('⏳', 'Punkt tortishi kutilmoqda', 'Hozircha farq yo‘q — punkt tortgach o‘zi yangilanadi'),
+               'green': ('✅', 'Hammasi mos', 'Dala, punkt va pul bir-biriga to‘g‘ri keldi'),
+               'empty': ('🌙', 'Bu kun terim yo‘q', 'Boshqa kunni tanlang')} %}
+{% set LV = {'red': 'Farq', 'yellow': 'Tekshiring', 'wait': 'Kutilmoqda', 'green': 'Mos'} %}
+{% block content %}
+<div class="sv">
+  <div class="sv-top">
+    <a class="sv-nav" href="?sana={{ prev }}" aria-label="Oldingi kun">‹</a>
+    <div class="sv-title"><b>⚖️ KUNLIK SVERKA</b><span>{{ day[8:10] }}.{{ day[5:7] }}.{{ day[:4] }}{% if day == today %} · bugun{% endif %}</span></div>
+    {% if next %}<a class="sv-nav" href="?sana={{ next }}" aria-label="Keyingi kun">›</a>{% else %}<span class="sv-nav off">›</span>{% endif %}
+  </div>
+
+  {% set h = HEAD[c.level] %}
+  <div class="sv-hero sv-{{ c.level }}">
+    <div class="sv-hero-ico">{{ h[0] }}</div>
+    <div><b>{{ h[1] }}</b><span>{{ h[2] }}</span></div>
+  </div>
+
+  {% if c.rows %}
+  <div class="sv-flow">
+    <div class="sv-step"><div class="sv-ico">🌾</div><small>DALA</small><b>{{ t.dala|num }}</b><em>kg · {{ t.trips }} telashka</em><i>nakladnoy</i></div>
+    <div class="sv-arrow">›</div>
+    <div class="sv-step"><div class="sv-ico">🏭</div><small>PUNKT</small><b>{{ t.punkt|num }}</b><em>kg netto</em>{% if t.waiting %}<i class="sv-wait">⏳ +{{ t.waiting_kg|num }} kg kutilmoqda</i>{% else %}<i>tortildi</i>{% endif %}</div>
+    <div class="sv-arrow">›</div>
+    <div class="sv-step"><div class="sv-ico">💵</div><small>PUL</small><b>{{ t.talon|num }}</b><em>kg talon</em><i>{{ t.amount|num }} so‘m</i></div>
+  </div>
+  <div class="sv-money">
+    <span>Talon summasi <b>{{ t.amount|num }} so‘m</b></span>
+    <span>Berildi <b class="g">{{ t.paid|num }} so‘m</b></span>
+    {% if t.amount - t.paid > 0 %}<span>Kassada kutilmoqda <b>{{ (t.amount - t.paid)|num }} so‘m</b></span>{% endif %}
+  </div>
+
+  <h3 class="sv-h">Brigadalar</h3>
+  {% for r in c.rows %}
+  <div class="sv-card sv-c-{{ r.level }}">
+    <div class="sv-card-h">
+      <div><b>{{ r.name }}</b><small>{{ 'Kombayn' if r.method == 'combine' else 'Qo‘l terimi' }} · {{ r.trips }} telashka{% if r.talon_n %} · {{ r.talon_n }} talon{% endif %}{% if r.people %} · {{ r.people }} odam{% endif %}</small></div>
+      <span class="sv-pill sv-p-{{ r.level }}">{{ {'red': '🔴', 'yellow': '🟡', 'wait': '⏳', 'green': '✅'}[r.level] }} {{ LV[r.level] }}</span>
+    </div>
+    <div class="sv-bars">
+      <div class="sv-bar"><span>🌾 Dala</span><div><i class="b-dala" style="width:{{ r.bars.dala }}%"></i></div><b>{{ r.dala|num }}</b></div>
+      <div class="sv-bar"><span>🏭 Punkt</span><div><i class="b-punkt" style="width:{{ r.bars.punkt }}%"></i></div><b>{% if r.punkt %}{{ r.punkt|num }}{% else %}—{% endif %}</b></div>
+      {% if r.method == 'hand' %}<div class="sv-bar"><span>💵 Pul</span><div><i class="b-talon" style="width:{{ r.bars.talon }}%"></i></div><b>{% if r.talon_kg %}{{ r.talon_kg|num }}{% else %}—{% endif %}</b></div>{% endif %}
+    </div>
+    <div class="sv-why">{{ r.why }}{% if r.waiting %} <small>· {{ r.waiting }} telashka ({{ r.waiting_kg|num }} kg) punktda hali tortilmagan</small>{% endif %}</div>
+    {% if r.season %}{% set s = r.season %}
+    <div class="sv-season"><span>Mavsum:</span> dala {{ s.dala|num }} · punkt {{ s.punkt|num }}{% if r.method == 'hand' %} · pul {{ s.talon|num }}{% endif %} kg
+      {% if s.pct is not none %}<b class="{{ 'r' if (r.method == 'hand' and s.diff > 100 and s.pct > c.alert_pct) or (r.method == 'combine' and s.pct|abs > c.alert_pct) else '' }}">farq {{ '%+.0f'|format(s.diff) }} kg ({{ '%+.1f'|format(s.pct) }}%)</b>{% endif %}</div>
+    {% endif %}
+  </div>
+  {% endfor %}
+
+  <div class="sv-legend">
+    <span>✅ mos</span><span>⏳ punkt kutilmoqda</span><span>🟡 tekshiring</span><span>🔴 farq {{ '%g'|format(c.alert_pct) }}% dan ko‘p</span>
+  </div>
+  <div class="sv-note">Tizim o‘zi hisoblaydi: hech kim hech narsa yozmaydi. <b>Dala</b> — dala nakladnoyidagi kg, <b>Punkt</b> — punkt tortgan netto (umumiy yukdan ulushi), <b>Pul</b> — kechki hisobda talonlarga yozilgan kg (shu telashkalar uchun). Kechqurun direktorga Telegramda ham boradi.</div>
+  {% endif %}
+</div>
+<style>
+.sv{max-width:560px;margin:0 auto;padding:4px 2px 90px}
+.sv-top{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:2px 0 12px}
+.sv-title{text-align:center}.sv-title b{display:block;font-size:20px;font-weight:900;color:#0b2a55;letter-spacing:.5px}
+.sv-title span{font-size:14px;color:#5b6b82;font-weight:700}
+.sv-nav{width:44px;height:44px;border-radius:14px;background:#fff;display:grid;place-items:center;font-size:28px;font-weight:800;color:#0b2a55;text-decoration:none;box-shadow:0 2px 8px rgba(11,42,85,.1)}
+.sv-nav.off{opacity:.3}
+.sv-hero{display:flex;gap:14px;align-items:center;border-radius:22px;padding:18px 18px;color:#fff;box-shadow:0 10px 26px rgba(11,42,85,.18)}
+.sv-hero b{display:block;font-size:22px;font-weight:900;line-height:1.15}.sv-hero span{display:block;font-size:13.5px;opacity:.92;margin-top:4px}
+.sv-hero-ico{font-size:44px;line-height:1;background:rgba(255,255,255,.18);border-radius:18px;width:68px;height:68px;display:grid;place-items:center;flex:none}
+.sv-green{background:linear-gradient(135deg,#15803d,#22c55e)}.sv-red{background:linear-gradient(135deg,#b91c1c,#ef4444)}
+.sv-yellow{background:linear-gradient(135deg,#b45309,#f59e0b)}.sv-wait{background:linear-gradient(135deg,#0b2a55,#2563eb)}
+.sv-empty{background:linear-gradient(135deg,#334155,#64748b)}
+.sv-flow{display:grid;grid-template-columns:1fr 18px 1fr 18px 1fr;align-items:stretch;gap:4px;margin:14px 0 8px}
+.sv-step{background:#fff;border-radius:18px;padding:12px 6px 10px;text-align:center;box-shadow:0 3px 12px rgba(11,42,85,.08);display:flex;flex-direction:column;align-items:center}
+.sv-ico{font-size:30px;line-height:1;margin-bottom:4px}
+.sv-step small{font-size:11px;font-weight:900;color:#5b6b82;letter-spacing:1px}
+.sv-step b{font-size:19px;font-weight:900;color:#0b2a55;margin-top:2px;font-variant-numeric:tabular-nums}
+.sv-step em{font-style:normal;font-size:11.5px;color:#6b7c93}
+.sv-step i{font-style:normal;font-size:11px;color:#94a3b8;margin-top:3px}.sv-step i.sv-wait{color:#2563eb;font-weight:700}
+.sv-arrow{display:grid;place-items:center;font-size:26px;font-weight:900;color:#94a3b8}
+.sv-money{display:flex;flex-wrap:wrap;gap:6px 14px;justify-content:center;font-size:13px;color:#5b6b82;margin:4px 0 6px}
+.sv-money b{color:#0b2a55}.sv-money b.g{color:#15803d}
+.sv-h{font-size:15px;font-weight:900;color:#0b2a55;margin:16px 4px 8px;text-transform:uppercase;letter-spacing:.6px}
+.sv-card{background:#fff;border-radius:18px;padding:13px 14px;margin-bottom:10px;box-shadow:0 3px 12px rgba(11,42,85,.07);border-left:6px solid #22c55e}
+.sv-c-red{border-left-color:#ef4444;background:#fff7f7}.sv-c-yellow{border-left-color:#f59e0b}.sv-c-wait{border-left-color:#2563eb}
+.sv-card-h{display:flex;justify-content:space-between;align-items:flex-start;gap:8px}
+.sv-card-h b{display:block;font-size:17px;font-weight:900;color:#0b2a55}.sv-card-h small{display:block;font-size:12px;color:#6b7c93;margin-top:2px}
+.sv-pill{flex:none;font-size:12.5px;font-weight:800;border-radius:999px;padding:5px 10px;white-space:nowrap}
+.sv-p-green{background:#dcfce7;color:#166534}.sv-p-red{background:#fee2e2;color:#991b1b}.sv-p-yellow{background:#fef3c7;color:#92400e}.sv-p-wait{background:#dbeafe;color:#1e40af}
+.sv-bars{margin:10px 0 6px}
+.sv-bar{display:grid;grid-template-columns:74px 1fr 66px;align-items:center;gap:8px;margin:5px 0}
+.sv-bar span{font-size:13px;font-weight:700;color:#334155}
+.sv-bar div{height:14px;background:#eef2f7;border-radius:8px;overflow:hidden}
+.sv-bar i{display:block;height:100%;border-radius:8px}
+.b-dala{background:linear-gradient(90deg,#65a30d,#a3e635)}.b-punkt{background:linear-gradient(90deg,#0b2a55,#3b82f6)}.b-talon{background:linear-gradient(90deg,#15803d,#4ade80)}
+.sv-c-red .b-talon{background:linear-gradient(90deg,#b91c1c,#f87171)}
+.sv-bar b{text-align:right;font-size:14px;font-weight:900;color:#0b2a55;font-variant-numeric:tabular-nums}
+.sv-why{font-size:14px;font-weight:800;color:#0b2a55}.sv-c-red .sv-why{color:#b91c1c}
+.sv-why small{font-weight:600;color:#6b7c93}
+.sv-season{margin-top:7px;padding-top:7px;border-top:1px dashed #e2e8f0;font-size:12.5px;color:#5b6b82}
+.sv-season span{font-weight:800;color:#334155}.sv-season b{font-weight:800;color:#334155}.sv-season b.r{color:#b91c1c}
+.sv-legend{display:flex;flex-wrap:wrap;gap:6px 12px;justify-content:center;font-size:12px;color:#5b6b82;margin:12px 0 6px}
+.sv-note{font-size:12px;color:#6b7c93;text-align:center;line-height:1.45;padding:0 8px}
+</style>
+{% endblock %}

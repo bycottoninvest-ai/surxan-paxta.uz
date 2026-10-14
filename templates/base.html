@@ -62,6 +62,7 @@
       {% if current_user['role'] in ('admin', 'manager') %}{{ nav('acct.yordamchi', 'Yordamchi (kunlik hisobot)', 'chart') }}{% endif %}
       {% if current_user['role'] in ('admin', 'manager') %}{{ nav('rahbar.home', 'Direktor paneli (telefon)', 'chart', None, ['rahbar.home', 'rahbar.cotton', 'rahbar.moving', 'rahbar.trip', 'rahbar.cash', 'rahbar.wages', 'rahbar.worker', 'rahbar.checks', 'rahbar.fuel']) }}
       {{ nav('rahbar.car', 'Mashina ekrani', 'map', None, ['rahbar.car']) }}{% endif %}
+      {{ nav('rahbar.sverka', 'Kunlik sverka (dala → punkt → pul)', 'calc', 'reports.finance') }}
       {% endcall %}
       {% call group('Dala va paxta', 'cotton') %}
       {{ nav('ops.harvest', 'Terim (Qo‘l terimi)', 'sprout', 'harvest.write') }}

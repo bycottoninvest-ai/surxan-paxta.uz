@@ -6,6 +6,13 @@
 <div class="d-wrap rb">
   {% with rb_title='Direktor paneli' %}{% include 'partials/rb_head.html' %}{% endwith %}
   <form class="hm-search" method="get" action="{{ url_for('main.search') }}">{{ icon('search','sm') }}<input name="q" placeholder="Texnika, reys, nakladnoy, dala, ishchi…" autocomplete="off"></form>
+  {% if sv %}{% set svh = {'red': ('🔴', sv.counts.red ~ ' ta brigadada farq'), 'yellow': ('🟡', 'Tekshirish kerak'), 'wait': ('⏳', 'Punkt tortishi kutilmoqda'), 'green': ('✅', 'Hammasi mos'), 'empty': ('🌙', 'Bugun terim yo‘q')}[sv.level] %}
+  <a class="rb-sv rb-sv-{{ sv.level }}" href="{{ url_for('rahbar.sverka') }}"><span class="rb-sv-i">⚖️</span>
+    <span><b>KUNLIK SVERKA · {{ svh[0] }} {{ svh[1] }}</b><small>dala {{ sv.totals.dala|num }} → punkt {{ sv.totals.punkt|num }} → pul {{ sv.totals.talon|num }} kg</small></span>{{ icon('chev-right') }}</a>
+  <style>.rb-sv{display:flex;align-items:center;gap:12px;border-radius:18px;padding:13px 14px;margin:0 0 12px;color:#fff;text-decoration:none;box-shadow:0 6px 18px rgba(11,42,85,.15)}
+  .rb-sv b{display:block;font-size:15px;font-weight:900}.rb-sv small{display:block;font-size:12.5px;opacity:.92}.rb-sv>span:nth-child(2){flex:1}
+  .rb-sv-i{font-size:28px}.rb-sv-green{background:linear-gradient(135deg,#15803d,#22c55e)}.rb-sv-red{background:linear-gradient(135deg,#b91c1c,#ef4444)}
+  .rb-sv-yellow{background:linear-gradient(135deg,#b45309,#f59e0b)}.rb-sv-wait{background:linear-gradient(135deg,#0b2a55,#2563eb)}.rb-sv-empty{background:linear-gradient(135deg,#334155,#64748b)}</style>{% endif %}
   {% if live is not none %}<div class="lv-head"><b>📸 Jonli kuzatuv</b>
     <span>{% if can('kuzatuv.request') %}<a class="btn btn-primary" href="{{ url_for('kuzatuv.ask') }}">+ So‘rash</a>{% endif %}
       <a class="btn btn-ghost" href="{{ url_for('rahbar.live') }}">Barchasi</a></span></div>

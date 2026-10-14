@@ -112,6 +112,14 @@ def director_text(day=None):
              + (f' (farq {rec["acc"] - rec["shipped"]:+,.0f} kg)'.replace(',', ' ') if rec['n'] else ''),
              f'Hozir yo‘lda: {road} ta · dalada ochiq telashka: {open_trips} ta',
              f'Mavsum: terildi {_n(season["field_kg"])} kg · punkt qabul {_n(season["punkt_kg"])} kg']
+    try:                                    # the ready reckoning: dala → punkt → pul per brigade, made by itself
+        from .sverka import text as sverka_text
+        sv = sverka_text(day)
+        if sv:
+            from flask import current_app
+            lines += ['', *sv, f'Rasmli ko‘rinish: {current_app.config["SURXON"].DOMAIN}/rahbar/sverka?sana={day}']
+    except Exception as exc:
+        print(f'sverka text failed: {exc}', flush=True)
 
     pq = q('''SELECT COUNT(*) n, COALESCE(SUM(netto),0) netto, COALESCE(SUM(kond_kg),0) kond,
                      COALESCE(SUM(deduction_kg - COALESCE(bonus_kg,0)),0) ded, COALESCE(SUM(amount),0) amount,
