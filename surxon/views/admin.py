@@ -344,8 +344,11 @@ def blanks():
         rows = [r for r in rows if r['waybill_id'] or r['spoiled_reason']]
     first_free = next((int(r['number'][3:]) for r in ov['rows'] if not r['waybill_id'] and not r['spoiled_reason']), 1)
     uy_free = q("SELECT MIN(CAST(substr(number, 4) AS INTEGER)) m FROM load_groups WHERE status='BOSH'", one=True)['m'] or 8
+    pb_done, uy_done = _printed('pb'), _printed('uy')
+    # the print form continues after the last number printed — never the same number on two papers
+    first_free, uy_free = max(first_free, pb_done['upto'] + 1), max(uy_free, uy_done['upto'] + 1)
     return render_template('admin_blanks.html', ov=ov, rows=rows[:1000], show=show, new_batch=request.args.get('yangi', type=int),
-                           first_free=first_free, uy_free=uy_free,
+                           first_free=first_free, uy_free=uy_free, pb_done=pb_done, uy_done=uy_done,
                            receiver=_blank_receiver(), receiver_set=bool(get_setting('blank_receiver')),
                            uy=__import__('surxon.groups', fromlist=['overview']).overview(), new_uy=request.args.get('uy', type=int))
 
@@ -373,6 +376,29 @@ def blanks_pdf(batch):
         'Cache-Control': 'private, no-store'})
 
 
+def _printed(kind):
+    """The last number printed of PB / UY papers, when and by whom ({'upto': 0} before the first print)."""
+    raw = (get_setting(f'{kind}_printed') or '').split('|')
+    try:
+        return {'upto': int(raw[0]), 'at': raw[1] if len(raw) > 1 else '', 'who': raw[2] if len(raw) > 2 else ''}
+    except ValueError:
+        return {'upto': 0, 'at': '', 'who': ''}
+
+
+def _mark_printed(kind, a, b, actor):
+    """Remember the highest number printed (the next print starts after it) and keep the print in the audit."""
+    from ..db import tx
+    from ..security import audit
+    from ..utils import now_str
+    upto = max(_printed(kind)['upto'], b)
+    with tx() as db:
+        db.execute("INSERT INTO settings(key, value, updated_at) VALUES (?, ?, ?) ON CONFLICT(key) DO UPDATE SET "
+                   "value=excluded.value, updated_at=excluded.updated_at",
+                   (f'{kind}_printed', f'{upto}|{now_str()[:16]}|{actor.name}', now_str()))
+        audit(db, actor, 'PRINT', 'punkt_blanks' if kind == 'pb' else 'load_groups', None,
+              new={'from': f'{kind.upper()}-{a:04d}', 'to': f'{kind.upper()}-{b:04d}'})
+
+
 def _range_args():
     """“from number N, K pieces” of the simple print form → (first, last); K is at most 1000."""
     first = parse_int(request.args.get('dan'), 'Raqam') or 1
@@ -385,10 +411,19 @@ def _range_args():
 def blanks_print():
     """Only the blanks asked for (e.g. from PB-0001, 10 of them) — no page numbers to choose in the printer."""
     from ..pdfdoc import build_blanks_pdf
+    from .. import blanks as BL
+    from ..security import current_actor
     a, b = _range_args()
+    actor = current_actor()
+    top = q('SELECT MAX(CAST(substr(number, 4) AS INTEGER)) m FROM punkt_blanks', one=True)['m'] or 0
+    if b > top:                      # not made yet: made now, numbered on from the last one
+        if a > top + 1:
+            raise UserError(f'Oxirgi raqam PB-{top:04d} — PB-{top + 1:04d} dan boshlang.')
+        BL.create_batch(actor, b - top)
     rows = q("SELECT * FROM punkt_blanks WHERE CAST(substr(number, 4) AS INTEGER) BETWEEN ? AND ? ORDER BY number", (a, b))
     if not rows:
         abort(404)
+    _mark_printed('pb', a, b, actor)
     pdf = build_blanks_pdf(rows, company=get_setting('company_name'), domain=current_app.config['SURXON'].DOMAIN)
     return Response(pdf, mimetype='application/pdf', headers={
         'Content-Disposition': f'inline; filename="dala_blanklari_{rows[0]["number"]}_{rows[-1]["number"]}.pdf"',
@@ -399,11 +434,20 @@ def blanks_print():
 @perm_required('masterdata.write')
 def group_blanks_print():
     from ..pdfdoc import build_group_blanks_pdf
+    from .. import groups as G
+    from ..security import current_actor
     a, b = _range_args()
+    actor = current_actor()
+    top = q("SELECT MAX(CAST(substr(number, 4) AS INTEGER)) m FROM load_groups WHERE number LIKE 'UY-%'", one=True)['m'] or 0
+    if b > top:                      # not made yet: made now, numbered on from the last one
+        if a > top + 1:
+            raise UserError(f'Oxirgi raqam UY-{top:04d} — UY-{top + 1:04d} dan boshlang.')
+        G.create_batch(actor, b - top, top + 1)
     rows = q("SELECT * FROM load_groups WHERE number LIKE 'UY-%' AND CAST(substr(number, 4) AS INTEGER) BETWEEN ? AND ? "
              "ORDER BY number", (a, b))
     if not rows:
         abort(404)
+    _mark_printed('uy', a, b, actor)
     pdf = build_group_blanks_pdf(rows, company=get_setting('company_name'), domain=current_app.config['SURXON'].DOMAIN,
                                  receiver=_blank_receiver(), copies=1)
     return Response(pdf, mimetype='application/pdf', headers={

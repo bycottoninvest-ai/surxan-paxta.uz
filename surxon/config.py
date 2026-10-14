@@ -38,6 +38,8 @@ class Config:
         self.GOOGLE_MAPS_KEY = env.get('GOOGLE_MAPS_KEY', '').strip()
         # Claude (Anthropic) API key: reads the kg on photos of the starshi's talon sheets. Secret — .env only.
         self.ANTHROPIC_API_KEY = env.get('ANTHROPIC_API_KEY', '').strip()
+        # Google Gemini API key: the assistant's Uzbek voice (text → speech). Secret — .env or the private file only.
+        self.GEMINI_API_KEY = env.get('GEMINI_API_KEY', '').strip()
         self.TZ = _timezone(env.get('APP_TZ', 'Asia/Tashkent'))
         self.MAX_UPLOAD_MB = int(env.get('MAX_UPLOAD_MB', '25'))
         # External archives — each one stays "not connected" until its settings are present.
@@ -57,6 +59,7 @@ class Config:
             self.TELEGRAM_REPORT_CHAT_ID = self.TELEGRAM_REPORT_BOT_TOKEN = ''
             self.GOOGLE_SHEETS_ID = self.GOOGLE_SERVICE_ACCOUNT_FILE = self.OFFSITE_RCLONE_REMOTE = ''
             self.ANTHROPIC_API_KEY = ''
+            self.GEMINI_API_KEY = ''
 
     OFFSITE_FILE = 'rclone.conf'
     OFFSITE_LOCAL_REMOTE = 'storagebox:surxon-zaxira'

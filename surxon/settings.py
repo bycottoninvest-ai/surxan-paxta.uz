@@ -35,6 +35,8 @@ DEFAULTS = {
     'dala_qogoz': ('1', 'Dalada telefon ishlatilmaydi (1): telashka va kg qog‘oz dala nakladnoyida, punktda Yunus rasmga oladi; '
                         'terim hisobchisida faqat “Kechki hisob” qoladi. 0 — eski tartib (hisobchi telashka ochadi/yopadi)'),
     'driver_rate_person': ('10000', 'Shofyorga olib kelgan har bir odam uchun, so‘m (starshi talonida kg i yozilgan odamlar soni bo‘yicha)'),
+    'gemini_tts_model': ('gemini-3.8-flash-tts', 'Yordamchining o‘zbekcha ovozi: Gemini TTS modeli (Google nomini o‘zgartirsa — shu yerda)'),
+    'gemini_tts_voice': ('Kore', 'Yordamchining ovozi (Gemini): Kore, Puck, Zephyr, Leda, Charon … — Integratsiyalarda “Ovozni sinash”'),
     'ai_yordamchi_on': ('1', 'AI yordamchi (direktor, punkt operatori, buxgalter uchun; Claude kaliti Integratsiyalarda) — 1 yoqilgan, 0 o‘chiq'),
     'ai_yordamchi_model': ('', 'AI yordamchi modeli: bo‘sh — talon o‘qish modeli bilan bir xil; claude-haiku-5-5 — arzonroq'),
     'ai_yordamchi_limit': ('1500', 'AI yordamchi: bir oyda jami savollar chegarasi (0 — chegarasiz)'),

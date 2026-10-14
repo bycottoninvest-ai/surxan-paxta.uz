@@ -7,16 +7,18 @@
   <section class="card s8"><div class="card-h"><h3>🖨 Chop etish</h3></div><div class="card-b">
     <style>.pr-wrap{display:flex;flex-wrap:wrap;gap:16px}.pr{flex:1 1 300px;display:block;padding:14px;border:1px solid var(--line,#e5e7eb);border-radius:12px}
       .pr-row{display:flex;gap:10px;margin:10px 0}.pr-row label{display:block;font-size:13px;color:#5b6b80;margin-bottom:4px}.pr-row>div{flex:1}
-      .pr-row input{width:100%;font-size:22px;padding:8px 10px;border:1px solid var(--line,#d6dde7);border-radius:10px}.pr .btn{width:100%}</style>
+      .pr-row input{width:100%;font-size:22px;padding:8px 10px;border:1px solid var(--line,#d6dde7);border-radius:10px}.pr .btn{width:100%}.pr-last{margin-top:6px;font-size:13px;color:#166534;background:#ecfdf3;border-radius:8px;padding:6px 8px}</style>
     <div class="pr-wrap">
-      <form method="get" action="{{ url_for('admin.blanks_print') }}" target="_blank" class="pr" data-prefix="PB" data-per="2">
+      <form method="get" action="{{ url_for('admin.blanks_print') }}" target="_blank" class="pr" data-prefix="PB" data-per="2" data-done="{{ pb_done.upto }}">
         <b>Dala nakladnoyi (PB)</b> <span class="tiny muted">— A4 da 2 ta, traktorchilarga · chap nazorat qismi traktorchida qoladi</span>
+        {% if pb_done.upto %}<div class="pr-last">✅ Oxirgi chop etilgan: <b>PB-{{ '%04d'|format(pb_done.upto) }}</b> · {{ pb_done.at }} · {{ pb_done.who }}</div>{% endif %}
         <div class="pr-row"><div><label>Qaysi raqamdan</label><input name="dan" value="{{ first_free }}" inputmode="numeric"></div>
           <div><label>Nechta</label><input name="soni" value="10" inputmode="numeric"></div></div>
         <button class="btn btn-primary">{{ icon('printer','sm') }} PDF ochish</button>
         <div class="tiny muted pr-hint" style="margin-top:6px">PDF ochilgach Ctrl + P.</div></form>
-      <form method="get" action="{{ url_for('admin.group_blanks_print') }}" target="_blank" class="pr" data-prefix="UY" data-per="1">
+      <form method="get" action="{{ url_for('admin.group_blanks_print') }}" target="_blank" class="pr" data-prefix="UY" data-per="1" data-done="{{ uy_done.upto }}">
         <b>Umumiy nakladnoy (UY)</b> <span class="tiny muted">— A4 da 1 ta, Yunusga</span>
+        {% if uy_done.upto %}<div class="pr-last">✅ Oxirgi chop etilgan: <b>UY-{{ '%04d'|format(uy_done.upto) }}</b> · {{ uy_done.at }} · {{ uy_done.who }}</div>{% endif %}
         <div class="pr-row"><div><label>Qaysi raqamdan</label><input name="dan" value="{{ uy_free }}" inputmode="numeric"></div>
           <div><label>Nechta</label><input name="soni" value="10" inputmode="numeric"></div></div>
         <button class="btn btn-primary">{{ icon('printer','sm') }} PDF ochish</button>
@@ -78,6 +80,16 @@ document.querySelectorAll('form.pr[data-prefix]').forEach(function (f) {
     hint.textContent = pad(a) + ' … ' + pad(a + n - 1) + ' — ' + n + ' ta, ' + Math.ceil(n / per) + ' varaq. PDF ochilgach Ctrl + P.';
   }
   f.dan.addEventListener('input', show); f.soni.addEventListener('input', show); show();
+  f.addEventListener('submit', function (e) {    // the same number on two papers is the one thing to avoid
+    var a = parseInt(f.dan.value, 10), n = parseInt(f.soni.value, 10), done = +f.dataset.done;
+    if (a <= done && !confirm(pad(a) + ' allaqachon chop etilgan (oxirgisi ' + pad(done) + '). Qayta chop etilsa, bir xil raqamli ikki qog‘oz bo‘ladi. Baribir chop etilsinmi?')) {
+      e.preventDefault(); return;
+    }
+    setTimeout(function () {                       // the next print goes on after this one
+      var last = Math.max(done, a + n - 1);
+      f.dataset.done = last; f.dan.value = last + 1; show();
+    }, 300);
+  });
 });
 </script>
 {% endblock %}

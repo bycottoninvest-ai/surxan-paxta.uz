@@ -135,8 +135,37 @@ html,body{margin:0;height:100%;background:var(--bg);font-family:system-ui,-apple
       if (i < full.length) setTimeout(tick, 16); else if (links && links.length) { addLinks(b, links); down(); }
     })();
   }
-  function speak(t) {
-    if (!voiceOn || !('speechSynthesis' in window)) return;
+  const UZ_VOICE = {{ 'true' if uz_voice else 'false' }};
+  const player = new Audio();      // one element, unlocked by the first tap (phones block sound that starts later)
+  let unlocked = false;
+  document.addEventListener('pointerdown', () => {
+    if (unlocked) return;
+    unlocked = true;
+    player.src = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=';
+    player.play().catch(() => {});
+  }, { once: false });
+  function stopVoice() {
+    try { player.pause(); } catch (e) {}
+    if ('speechSynthesis' in window) speechSynthesis.cancel();
+  }
+  async function speak(t) {
+    if (!voiceOn) return;
+    stopVoice();
+    if (UZ_VOICE) {                 // the real Uzbek voice (Gemini) — the phone's voice only if it does not come
+      try {
+        const fd = new FormData(); fd.append('text', t); fd.append('_csrf', $('csrf').value);
+        const r = await fetch('{{ url_for("assistant.voice") }}', { method: 'POST', body: fd, headers: { 'X-Requested-With': 'fetch' } });
+        if (r.ok && (r.headers.get('Content-Type') || '').startsWith('audio')) {
+          player.src = URL.createObjectURL(await r.blob());
+          await player.play();
+          return;
+        }
+      } catch (e) {}
+    }
+    phoneSpeak(t);
+  }
+  function phoneSpeak(t) {
+    if (!('speechSynthesis' in window)) return;
     try {
       speechSynthesis.cancel();
       const u = new SpeechSynthesisUtterance(t.replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}›•]/gu, '').replace(/\s+/g, ' '));
@@ -180,7 +209,7 @@ html,body{margin:0;height:100%;background:var(--bg);font-family:system-ui,-apple
   $('voice').addEventListener('click', () => {
     voiceOn = !voiceOn; paintVoice();
     try { localStorage.setItem('ai_voice', voiceOn ? '1' : '0'); } catch (e) {}
-    if (!voiceOn && 'speechSynthesis' in window) speechSynthesis.cancel();
+    if (!voiceOn) stopVoice();
   });
   $('reset').addEventListener('click', async () => {
     if (!confirm('Yangi suhbat boshlansinmi? (eskisi tarixda qoladi)')) return;
@@ -196,7 +225,7 @@ html,body{margin:0;height:100%;background:var(--bg);font-family:system-ui,-apple
   mic.addEventListener('click', () => {
     if (!SR) { hear.textContent = 'Bu telefon ovozni tanimaydi — yozib yuboring.'; setTimeout(() => { hear.textContent = ''; }, 4000); return; }
     if (rec) { rec.stop(); return; }
-    if ('speechSynthesis' in window) speechSynthesis.cancel();
+    stopVoice();
     rec = new SR(); rec.lang = 'uz-UZ'; rec.interimResults = true; rec.continuous = false; heard = '';
     rec.onstart = () => { mic.classList.add('on'); hear.textContent = 'Eshityapman…'; };
     rec.onresult = (e) => {

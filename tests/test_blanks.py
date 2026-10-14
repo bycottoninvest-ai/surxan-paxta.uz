@@ -174,3 +174,29 @@ def test_clerk_attaches_a_blank_to_a_trailer_closed_before(app, world):
     assert ok['ok'], ok
     late = tally.post(f'/dala/reys/{l1}/blanka', {'blank_code': 'PB-0003'}).get_json()
     assert late['ok'] is False and 'punktda allaqachon qabul qilingan' in late['error'] and 'TL-' in late['error']
+
+
+def test_print_continues_after_the_last_printed_number(app, world):
+    """The next print starts after the last number printed (not the first unused one); numbers not made yet are made."""
+    admin = world['admin']
+    from surxon.db import scalar as sc
+    page = admin.get('/admin/blankalar').get_data(as_text=True)
+    assert 'name="dan" value="1"' in page and 'Oxirgi chop etilgan' not in page
+    r = admin.get('/admin/blankalar/chop.pdf?dan=1&soni=4')                 # none made yet: made now
+    assert r.status_code == 200 and r.data[:4] == b'%PDF'
+    with app.app_context():
+        assert sc('SELECT COUNT(*) FROM punkt_blanks') == 4
+    page = admin.get('/admin/blankalar').get_data(as_text=True)
+    assert 'name="dan" value="5"' in page and 'PB-0004' in page and 'Oxirgi chop etilgan' in page
+    assert admin.get('/admin/blankalar/chop.pdf?dan=9&soni=2').status_code != 200             # a gap in the numbers: refused
+    assert admin.get('/admin/blankalar/chop.pdf?dan=5&soni=6').status_code == 200
+    with app.app_context():
+        assert sc('SELECT COUNT(*) FROM punkt_blanks') == 10
+        assert sc("SELECT COUNT(*) FROM audit_logs WHERE action='PRINT'") == 2
+    assert 'name="dan" value="11"' in admin.get('/admin/blankalar').get_data(as_text=True)
+    # UY papers the same way
+    with app.app_context():
+        top = sc("SELECT MAX(CAST(substr(number, 4) AS INTEGER)) FROM load_groups WHERE number LIKE 'UY-%'") or 0
+    assert admin.get(f'/admin/uy-blankalar/chop.pdf?dan={top + 1}&soni=3').status_code == 200
+    page = admin.get('/admin/blankalar').get_data(as_text=True)
+    assert f'value="{top + 4}"' in page and f'UY-{top + 3:04d}' in page

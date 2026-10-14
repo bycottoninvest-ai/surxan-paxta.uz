@@ -72,6 +72,9 @@ def index():
         if action == 'ai_key_save':          # before the transaction: the check asks Anthropic over the internet
             from .. import talon_ai
             ai_checked = talon_ai.save_key(request.form.get('ai_key'))
+        if action == 'gemini_key_save':      # the same for the Gemini (Uzbek voice) key: asks Google first
+            from .. import gemini
+            gm_checked = gemini.save_key(request.form.get('gemini_key'))
         with tx() as db:
             if action in ('erp_on', 'erp_off', 'tv_on', 'tv_off'):
                 key = 'erp_enabled' if action.startswith('erp') else 'tv_enabled'
@@ -118,6 +121,17 @@ def index():
                     msg = 'Kalit o‘chirildi — kg qo‘lda yoziladi.'
                 audit(db, actor, 'UPDATE', 'integration', 'anthropic_key',
                       new={'anthropic_key': talon_ai.key_tail() if action == 'ai_key_save' else 'o‘chirildi'})
+            elif action in ('gemini_key_save', 'gemini_key_clear'):
+                # the Gemini key for the assistant's Uzbek voice: a private file like the Claude key, never on a page
+                from .. import gemini
+                if action == 'gemini_key_save':
+                    msg = ('Gemini kaliti saqlandi va Google uni tasdiqladi. “Ovozni sinash” ni bosing.' if gm_checked
+                           else 'Kalit saqlandi, lekin hozir Google’dan javob kelmadi — “Ovozni sinash” bilan tekshiring.')
+                else:
+                    gemini.clear_key()
+                    msg = 'Gemini kaliti o‘chirildi — yordamchi telefon ovozida gapiradi.'
+                audit(db, actor, 'UPDATE', 'integration', 'gemini_key',
+                      new={'gemini_key': gemini.key_tail() if action == 'gemini_key_save' else 'o‘chirildi'})
             elif action in ('gmaps_save', 'gmaps_clear'):
                 # Google Map Tiles key: a browser key (sent to every map page anyway), restricted in Google Cloud to this
                 # site and to the Map Tiles API — so it may be kept in settings. Shown masked, never in full.
@@ -361,6 +375,9 @@ def render(new_key=None, message=None):
                            gmaps_env=bool(current_app.config['SURXON'].GOOGLE_MAPS_KEY),
                            ai_on=talon_ai.enabled(), ai_models=talon_ai.MODELS, ai_model=talon_ai.model(),
                            ai_src=talon_ai.source(), ai_tail=talon_ai.key_tail(),
+                           gm_on=__import__('surxon.gemini', fromlist=['enabled']).enabled(),
+                           gm_src=__import__('surxon.gemini', fromlist=['source']).source(),
+                           gm_tail=__import__('surxon.gemini', fromlist=['key_tail']).key_tail(),
                            sheets=_sheets_state(), offsite=_offsite_state(),
                            chosen={'archive': get_setting('tg_archive_chat_id'), 'report': get_setting('tg_report_chat_id')},
                            bot_user=current_app.config['SURXON'].TELEGRAM_BOT_USERNAME)
@@ -945,3 +962,16 @@ def tv_photo(photo_id):
     resp = make_response(send_from_directory(current_app.config['SURXON'].UPLOAD_DIR, p['thumb_path'] or p['path'], max_age=3600))
     resp.headers['Cache-Control'] = 'private, max-age=3600'
     return resp
+
+
+@bp.get('/admin/integratsiyalar/ovoz-sinov')
+@perm_required('settings.manage')
+def gemini_test():
+    """“Ovozni sinash”: one Uzbek sentence through Gemini — the voice, or the exact error from Google."""
+    from flask import Response, jsonify
+    from .. import gemini
+    try:
+        return Response(gemini.tts('Assalomu alaykum! Men SURXON yordamchisiman. Bugun 12 450 kilogramm paxta terildi.'),
+                        mimetype='audio/wav', headers={'Cache-Control': 'no-store'})
+    except UserError as err:
+        return jsonify(ok=False, error=str(err)), 422

@@ -44,6 +44,33 @@
     </div>
   </section>
 
+  <section class="card s12" id="gemini">
+    <div class="card-h"><h3>🗣 Yordamchining o‘zbekcha ovozi (Google Gemini)</h3>
+      <span class="badge {{ 'b-green' if gm_on else 'b-gray' }}" style="margin-left:auto">{{ ('Ulangan (server .env)' if gm_src == 'env' else 'Ulangan ' ~ gm_tail) if gm_on else 'Ulanmagan — telefon ovozi' }}</span></div>
+    <div class="card-b">
+      <p class="small">Telefonlarda o‘zbekcha ovoz yo‘q — yordamchi javobni rus/turk talaffuzida o‘qiydi (“pakhta”). Gemini ulansa, javoblar
+        <b>o‘zbekcha ravon ovozda</b> o‘qiladi. Faqat yordamchining javobi yuboriladi (ishchi ismlari yo‘q); bir xil gap ikkinchi marta pullanmaydi.
+        Bu <b>pullik xizmat</b> (Google) — narxi aistudio.google.com da. Kalitsiz ham ishlaydi — telefon ovozida.</p>
+      {% if gm_src == 'env' %}<p class="small">Kalit server <code>.env</code> faylida (<b>{{ gm_tail }}</b>).</p>
+      {% else %}
+      <p class="small"><b>1.</b> aistudio.google.com → <b>Get API key</b> → <b>Create API key</b> → kalitni nusxalang → pastga qo‘yib <b>Saqlash</b>.
+        Kalit maxfiy: bazaga, zaxiraga va sahifalarga tushmaydi — faqat oxirgi 4 belgisi ko‘rinadi. Kalitni chatga yoki Telegramga yozmang.</p>
+      <form method="post" class="row">{{ csrf() }}<input type="hidden" name="action" value="gemini_key_save">
+        <input class="input" type="password" name="gemini_key" placeholder="{{ 'Yangi kalit bilan almashtirish (AIza…)' if gm_tail else 'AIza… kalitni shu yerga qo‘ying' }}" autocomplete="off" spellcheck="false" style="flex:1;min-width:260px">
+        <button class="btn btn-primary">Saqlash</button></form>
+      {% if gm_tail %}<form method="post" class="mt-s" data-confirm="Gemini kaliti o‘chirilsinmi? Yordamchi telefon ovozida gapiradi.">{{ csrf() }}<input type="hidden" name="action" value="gemini_key_clear"><button class="btn btn-ghost btn-sm">Kalitni o‘chirish</button></form>{% endif %}
+      {% endif %}
+      {% if gm_on %}<p class="small mt-s"><b>2.</b> <button type="button" class="btn btn-light btn-sm" id="gm-test">🔊 Ovozni sinash</button> <span id="gm-msg" class="small"></span></p>
+      <p class="tiny muted">Model va ovoz: Sozlamalar → <code>gemini_tts_model</code>, <code>gemini_tts_voice</code>.</p>
+      <script>document.getElementById('gm-test').addEventListener('click', async () => {
+        const m = document.getElementById('gm-msg'); m.textContent = 'Kuting…';
+        const r = await fetch('{{ url_for('integrations.gemini_test') }}');
+        if ((r.headers.get('Content-Type') || '').startsWith('audio')) { new Audio(URL.createObjectURL(await r.blob())).play(); m.textContent = '✅ Ishlayapti'; }
+        else { const j = await r.json().catch(() => ({})); m.textContent = '❌ ' + (j.error || ('xato ' + r.status)); }
+      });</script>{% endif %}
+    </div>
+  </section>
+
   <section class="card s12" id="ai">
     <div class="card-h"><h3>🤖 Starshi talonini rasmdan o‘qish (Claude AI)</h3>
       <span class="badge {{ 'b-green' if ai_on else 'b-gray' }}" style="margin-left:auto">{{ ('Ulangan (server .env)' if ai_src == 'env' else 'Ulangan ' ~ ai_tail) if ai_on else 'Ulanmagan — kg qo‘lda yoziladi' }}</span></div>
