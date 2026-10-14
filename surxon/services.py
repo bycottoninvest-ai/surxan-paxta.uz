@@ -1766,6 +1766,77 @@ def admin_void_trip(actor, load_id, reason):
     return plan
 
 
+def admin_void_onroad(actor, waybill_ids, reason):
+    """Admin only: trips entered wrong at the punkt and left “on the road” (never received) are cancelled in one step —
+    the office writes them again from the notebook as new nakladnoys. The evening talons (the workers' pay — often
+    already paid) were written to the brigade's last trailer of the day, maybe one of these: they are not cancelled,
+    they move to another live trip of the same brigade (the same day first), so nobody's money changes. A trip whose
+    brigade has no other trip yet is left as it is and named — enter the new nakladnoy first, then cancel it.
+    Returns (cancelled waybill numbers, [(waybill number, why not)])."""
+    if actor is None or actor.role != 'admin':
+        raise UserError('Yo‘ldagi reyslarni bekor qilishni faqat Admin qila oladi.')
+    reason = _require_reason(reason, 'Bekor qilish')
+    ids = sorted({int(i) for i in waybill_ids if str(i).isdigit()})
+    if not ids:
+        raise UserError('Reyslarni belgilang.')
+    marks = ','.join('?' * len(ids))
+    trips = q(f"""SELECT wb.id wid, wb.number, tl.id lid, tl.trip_no, tl.brigadier_id, substr(tl.opened_at,1,10) day
+                  FROM waybills wb JOIN trailer_loads tl ON tl.id=wb.load_id
+                  WHERE wb.id IN ({marks}) AND wb.status='YARATILDI' AND tl.status<>'BEKOR'
+                  AND NOT EXISTS (SELECT 1 FROM nayman_receipts nr WHERE nr.waybill_id=wb.id) ORDER BY wb.id""", ids)
+    found = {t['number'] for t in trips}
+    skipped = [(r['number'], 'yo‘lda emas (qabul qilingan yoki bekor qilingan)')
+               for r in q(f'SELECT number FROM waybills WHERE id IN ({marks})', ids) if r['number'] not in found]
+    leaving = [t['lid'] for t in trips]
+    cancelled = []
+    for t in trips:
+        try:
+            with tx() as db:
+                talons = db.execute("""SELECT t.id, t.number, t.harvest_id FROM tezpul_talons t
+                                       WHERE t.load_id=? AND t.status IN ('TAYYOR','TOLANDI') AND EXISTS
+                                       (SELECT 1 FROM harvests h WHERE h.id=t.harvest_id AND h.voided_at IS NULL)""",
+                                    (t['lid'],)).fetchall()
+                if talons:
+                    to = db.execute(f"""SELECT * FROM trailer_loads WHERE brigadier_id IS ? AND status<>'BEKOR'
+                                        AND COALESCE(method,'hand')='hand' AND id NOT IN ({','.join('?' * len(leaving))})
+                                        ORDER BY substr(opened_at,1,10)=? DESC,
+                                                 ABS(julianday(substr(opened_at,1,10)) - julianday(?)), id DESC LIMIT 1""",
+                                    [t['brigadier_id'], *leaving, t['day'], t['day']]).fetchone()
+                    if not to:
+                        raise UserError(f'{len(talons)} ta talon (ishchilar puli) shu reysga yozilgan, brigadaning boshqa '
+                                        'reysi yo‘q — avval daftardan yangi nakladnoyni kiriting, keyin bekor qiling '
+                                        '(talonlar o‘sha reysga o‘tadi)')
+                    for tal in talons:
+                        db.execute('UPDATE tezpul_talons SET load_id=? WHERE id=?', (to['id'], tal['id']))
+                        db.execute('UPDATE harvests SET load_id=?, field_id=?, trailer_id=?, tractor_id=? WHERE id=?',
+                                   (to['id'], to['field_id'], to['trailer_id'], to['tractor_id'], tal['harvest_id']))
+                    audit(db, actor, 'MOVE', 'tezpul_talon', talons[0]['id'],
+                          old={'load_id': t['lid'], 'trip_no': t['trip_no']},
+                          new={'load_id': to['id'], 'trip_no': to['trip_no'], 'talons': [x['number'] for x in talons]},
+                          reason=f'reys bekor qilinmoqda: {reason}')
+                plan = admin_trip_void_plan(db, t['lid'])
+                if plan['blocks']:
+                    raise UserError(' '.join(plan['blocks']))
+                groups = db.execute("""SELECT g.id, g.status FROM load_group_items i JOIN load_groups g ON g.id=i.group_id
+                                       WHERE i.waybill_id=? AND g.status IN ('OCHIQ','YUBORILDI')""", (t['wid'],)).fetchall()
+                for g in groups:        # out of the umumiy yuk it was waiting in (an emptied one is cancelled)
+                    db.execute('DELETE FROM load_group_items WHERE group_id=? AND waybill_id=?', (g['id'], t['wid']))
+                    left = db.execute("""SELECT COUNT(*) n, COALESCE(SUM(wb.net_kg),0) kg FROM load_group_items i
+                                         JOIN waybills wb ON wb.id=i.waybill_id WHERE i.group_id=?""", (g['id'],)).fetchone()
+                    if not left['n']:
+                        db.execute("UPDATE load_groups SET status='BEKOR', spoiled_reason=? WHERE id=?",
+                                   (clean_text(f'telashkalari bekor qilindi: {reason}', 300), g['id']))
+                    elif g['status'] == 'YUBORILDI':
+                        db.execute('UPDATE load_groups SET sent_kg=? WHERE id=?', (round(left['kg'], 1), g['id']))
+                    audit(db, actor, 'REMOVE', 'load_group', g['id'], old={'waybill_id': t['wid']}, new={'left': left['n']},
+                          reason=reason)
+            admin_void_trip(actor, t['lid'], reason)
+            cancelled.append(t['number'])
+        except UserError as err:
+            skipped.append((t['number'], str(err)))
+    return cancelled, skipped
+
+
 def clerk_continue_trip(actor, load_id):
     """The clerk closed the trailer too early (a lunch break, rain) and it has not left for the punkt yet: they open the
     SAME trip again and keep weighing — one trailer, one waybill (its number is kept), never two halves."""

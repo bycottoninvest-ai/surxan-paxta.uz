@@ -77,6 +77,9 @@ Kassir kg yoza olmaydi va o‘zgartira olmaydi.
 - **“Kassada pul yetmayapti”** — buxgalter kassaga kirim qiladi (Mening kassam → Kirim). Pul yetmasa chiqim bo‘lmaydi.
 - **“Sverkada qizil”** — Kunlik sverka → qizil karta: qaysi brigada, nechchi kg farq. Starshi talonining varaq rasmlari va
   dala nakladnoyi rasmi bilan solishtiriladi (TEZ-PUL panel, UY sahifasi).
+- **“Nechta nakladnoy yozish kerak?”** — Buxgalteriya → Agroklaster sverkasi → hosil-qabuli.uz jadvali: Excel yuklanadi,
+  tepada “N ta nakladnoy yozish kerak” (kun bo‘yicha, yuk xati raqamlari bilan). Pastda “Yo‘lda qolgan reyslar”: xato
+  yozilganlarini Admin belgilab bekor qiladi — talonlar (ishchilar puli) bekor bo‘lmaydi, brigadaning boshqa reysiga o‘tadi.
 - **“Yangi PB blanka kerak”** — Boshqaruv → Punkt blanklari → yaratish → PDF chop etish.
 - **“Yangi xodim”** — Boshqaruv → Xodimlar va loginlar (rol tanlanadi; punkt operatoriga punkt biriktiriladi).
 

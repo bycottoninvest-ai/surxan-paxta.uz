@@ -196,3 +196,53 @@ def test_correct_takes_trips_left_on_the_road_in_open_uys(app, world):
         new = q("SELECT * FROM load_groups WHERE number='YX-463926'", one=True)
         assert new['status'] == 'QABUL' and new['accepted_kg'] == 4260
         assert {x['status'] for x in q('SELECT status FROM load_groups WHERE id IN (?,?)', (g1['id'], g2['id']))} == {'BEKOR'}
+
+
+def test_admin_cancels_trips_left_on_the_road_talons_move(app, world):
+    """Trips entered wrong at the punkt sat “on the road”; the office writes them again from the notebook. Admin cancels
+    them in one step from the hosil-qabuli page: the evening talon (already paid) is not cancelled — it moves to the
+    brigade's other trip; a trip whose brigade has no other trip is kept and named."""
+    from conftest import jpeg, uuid4
+    from surxon.db import get_db, q, scalar
+    from test_dala import open_trip
+    from test_tezpul import cash_in, pay, qr, setup as tz_setup
+    admin, bux, kassa = world['admin'], world['bux'], world['kassa']
+    tally, lid, ts = tz_setup(app, world, 2)
+    cash_in(bux, '9000000')
+    admin.post('/admin/sozlamalar', {'set_auto_waybill_hand': '1'})
+    assert tally.post(f'/dala/reys/{lid}/yopish', {'kg': '1300'}, files={'photos': jpeg((10, 20, 30))}).get_json()['ok']
+    lid2 = open_trip(tally, world, rate='2000', trailer='TL-02')
+    assert tally.post(f'/dala/reys/{lid2}/yopish', {'kg': '1250'}, files={'photos': jpeg((40, 50, 60))}).get_json()['ok']
+    with app.app_context():
+        bid = scalar('SELECT brigadier_id FROM trailer_loads WHERE id=?', (lid,))
+        w1, w2 = [r['id'] for r in q('SELECT id FROM waybills ORDER BY id')]
+    assert tally.post('/tezpul/kechki/saqlash', {'brigada': bid, 'code': qr(ts[0]), 'kg': '2400', 'client_uuid': uuid4(),
+                                                 'odam': '30', 'sheets': '[]'}).get_json()['ok']
+    assert pay(kassa, qr(ts[0])).get_json()['ok']
+    with app.app_context():
+        t = q('SELECT * FROM tezpul_talons WHERE number=?', (ts[0]['number'],), one=True)
+        assert t['load_id'] == lid2 and t['status'] == 'TOLANDI'           # the evening count → the brigade's last trailer
+        get_db().execute("""INSERT INTO hq_loads(load_no, dt, brutto, tara, netto, kond, method, imported_at)
+                            VALUES ('700001', '2026-10-13 18:00', 12000, 9500, 2500, 2400, 'hand', '2026-10-14 00:00:00')""")
+        get_db().commit()
+    page = bux.get('/buxgalteriya/hosil-qabuli').get_data(as_text=True)
+    assert '1 ta nakladnoy yozish kerak' in page and 'Yo‘lda qolgan reyslar (2 ta' in page and '1 ta berilgan' in page
+    assert 'Belgilanganlarni bekor qilish' not in page                     # the accountant sees, Admin cancels
+    r = bux.post('/buxgalteriya/hosil-qabuli', {'action': 'void_onroad', 'waybill_ids': [w2], 'reason': 'xato'}).get_json()
+    assert not r['ok']
+    assert 'Belgilanganlarni bekor qilish' in admin.get('/buxgalteriya/hosil-qabuli').get_data(as_text=True)
+    r = admin.post('/buxgalteriya/hosil-qabuli', {'action': 'void_onroad', 'waybill_ids': [w2],
+                                                  'reason': 'Xato kiritilgan — daftardan qayta yoziladi'}).get_json()
+    assert r['ok'] and 'Bekor qilindi: 1 ta' in r['message'], r
+    with app.app_context():
+        t = q('SELECT * FROM tezpul_talons WHERE number=?', (ts[0]['number'],), one=True)
+        h = q('SELECT * FROM harvests WHERE id=?', (t['harvest_id'],), one=True)
+        assert t['load_id'] == lid and t['status'] == 'TOLANDI' and h['load_id'] == lid and h['voided_at'] is None
+        assert q('SELECT status FROM trailer_loads WHERE id=?', (lid2,), one=True)['status'] == 'BEKOR'
+        assert q('SELECT status FROM waybills WHERE id=?', (w2,), one=True)['status'] == 'BEKOR'
+        assert scalar("SELECT COUNT(*) FROM audit_logs WHERE action='MOVE' AND entity_type='tezpul_talon'") == 1
+    # the last trip of the brigade carries the paid talon now: kept until the new nakladnoy is entered
+    r = admin.post('/buxgalteriya/hosil-qabuli', {'action': 'void_onroad', 'waybill_ids': [w1], 'reason': 'xato'}).get_json()
+    assert r['ok'] and 'Hech bir reys bekor qilinmadi' in r['message'] and 'avval daftardan yangi nakladnoyni' in r['message']
+    with app.app_context():
+        assert q('SELECT status FROM trailer_loads WHERE id=?', (lid,), one=True)['status'] != 'BEKOR'

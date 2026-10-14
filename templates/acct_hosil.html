@@ -20,6 +20,18 @@
   <div class="card"><div class="card-b"><small class="muted">Raqami yozilmagan</small><div class="b" style="font-size:20px;color:#1d4ed8">{{ t.raqamsiz }}</div></div></div>
   <div class="card"><div class="card-b"><small class="muted">Bizda yo‘q</small><div class="b" style="font-size:20px;color:#b91c1c">{{ t.yoq }}</div></div></div>
 </div>
+{% if t.n %}
+<section class="card" style="margin:0 0 12px;border:2px solid {{ '#fca5a5' if t.yoq else '#86efac' }}"><div class="card-b">
+  {% if t.yoq %}
+  <div style="font-size:22px;font-weight:800;color:#b91c1c">✍ {{ t.yoq }} ta nakladnoy yozish kerak</div>
+  <div class="muted">Klaster tortgan, lekin bizda reysi yo‘q yuklar · jami <b>{{ t.yoq_kg|num }} kg</b>. Daftardan har biriga dala nakladnoyi yoziladi → punktda UY ga qo‘shiladi → UY yopilganda shu yuk xati № yoziladi.</div>
+  <table class="table small" style="margin-top:8px;max-width:640px"><thead><tr><th>Sana</th><th class="num">Nakladnoy</th><th class="num">Klaster netto</th><th>Yuk xatlari</th></tr></thead><tbody>
+  {% for d in t.yoq_days %}<tr><td class="nowrap b">{{ d.day|d if d.day else '—' }}</td><td class="num b">{{ d.n }} ta</td><td class="num">{{ d.kg|num }} kg</td><td class="tiny">{{ d.nos|join(', ') }}</td></tr>{% endfor %}
+  </tbody></table>
+  {% else %}<div style="font-size:20px;font-weight:800;color:#15803d">✓ Klaster tortgan har bir yuk bizda bor — yangi nakladnoy kerak emas</div>{% endif %}
+  {% if t.onroad %}<div style="margin-top:8px">🚜 Punktda qabul qilinmagan (“yo‘lda” qolgan) reyslar: <b>{{ t.onroad }} ta</b> · {{ t.onroad_kg|num }} kg — <a class="link" href="#yolda">pastda ›</a></div>{% endif %}
+</div></section>
+{% endif %}
 {% if t.farq or t.yoq or t.orphans %}
 <form method="post" style="margin:0 0 12px">{{ csrf() }}<input type="hidden" name="action" value="notify">
   <button class="btn btn-primary btn-sm">📨 Xodimlarga Telegram’da yuborish</button>
@@ -58,6 +70,28 @@
     </td></tr>
   {% else %}<tr><td colspan="9" class="muted">Hali jadval yuklanmagan.</td></tr>{% endfor %}</tbody>
 </table></div></section>
+
+{% if cmp.onroad %}
+<section class="card" id="yolda" style="margin-top:12px"><div class="card-h"><h3>🚜 Yo‘lda qolgan reyslar ({{ cmp.onroad|length }} ta · {{ t.onroad_kg|num }} kg)</h3></div><div class="card-b">
+  <div class="tiny muted" style="margin-bottom:6px">Nakladnoyi yozilgan, lekin punktda qabul qilinmagan. Agar yuk klaster jadvalida bo‘lsa — yuqoridagi qizil qatordan <b>“Klaster kg i bilan tuzatish”</b>. Xato yozilgan bo‘lsa (daftardan qayta yoziladi) — belgilab bekor qiling.
+    <b>Talonlar (ishchilar puli) bekor bo‘lmaydi</b> — shu brigadaning boshqa reysiga o‘tadi; brigadada boshqa reys bo‘lmasa, reys qoldiriladi: avval yangi nakladnoyni kiriting.</div>
+  <form method="post" onsubmit="return confirm('Belgilangan reyslar bekor qilinadi (tarixda qoladi). Davom etasizmi?')">{{ csrf() }}<input type="hidden" name="action" value="void_onroad">
+  <div style="overflow-x:auto"><table class="table small"><thead><tr>
+    {% if current_user.role == 'admin' %}<th><input type="checkbox" onclick="for(const c of this.closest('form').querySelectorAll('input[name=waybill_ids]'))c.checked=this.checked" title="Hammasi"></th>{% endif %}
+    <th>Sana</th><th>Nakladnoy</th><th>Telashka</th><th>Brigada</th><th class="num">Dala kg</th><th>UY</th><th>Talon (pul)</th><th>Kiritgan</th><th></th></tr></thead><tbody>
+  {% for c in cmp.onroad %}<tr>
+    {% if current_user.role == 'admin' %}<td><input type="checkbox" name="waybill_ids" value="{{ c.wid }}"></td>{% endif %}
+    <td class="nowrap">{{ c.day|d }}</td><td class="b">{{ c.number }}</td><td>{{ c.trailer or '—' }}</td><td>{{ c.brig or '—' }}</td>
+    <td class="num">{{ c.kg|num }}</td><td>{{ c.grp or '—' }}</td>
+    <td>{% if c.paid or c.ready %}<span style="color:#b45309">{{ c.paid }} ta berilgan{% if c.ready %} · {{ c.ready }} ta kutmoqda{% endif %}</span>{% else %}<span class="muted">yo‘q</span>{% endif %}</td>
+    <td class="tiny">{{ c.who or '—' }}</td><td><a class="link small" href="{{ url_for('ops.waybill_detail', waybill_id=c.wid) }}">ochish</a></td></tr>{% endfor %}
+  </tbody></table></div>
+  {% if current_user.role == 'admin' %}
+  <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:8px">
+    <input class="input" name="reason" required minlength="3" style="flex:1;min-width:220px" value="Xato kiritilgan — daftardan yangi nakladnoy bilan qayta yoziladi">
+    <button class="btn btn-red">Belgilanganlarni bekor qilish</button></div>
+  {% else %}<div class="tiny muted" style="margin-top:6px">Bekor qilishni Admin qiladi.</div>{% endif %}
+  </form></div></section>{% endif %}
 
 {% if cmp.orphans %}
 <section class="card" style="margin-top:12px"><div class="card-h"><h3>⚠ Bizda bor, lekin jadvalda mos yuk xati topilmadi ({{ cmp.orphans|length }} ta)</h3></div><div class="card-b">

@@ -269,6 +269,13 @@ def hosil_qabuli():
             trips, kg = H.correct(actor, request.form.get('load_no', ''), request.form.getlist('waybill_ids'))
             return done(f'Tuzatildi: {", ".join(trips)} → yuk xati {request.form.get("load_no")} · klaster netto {kg:g} kg.',
                         url_for('acct.hosil_qabuli'))
+        if request.form.get('action') == 'void_onroad':
+            from ..services import admin_void_onroad
+            gone, kept = admin_void_onroad(actor, request.form.getlist('waybill_ids'), request.form.get('reason', ''))
+            msg = f'Bekor qilindi: {len(gone)} ta reys.' if gone else 'Hech bir reys bekor qilinmadi.'
+            if kept:
+                msg += ' Qoldi: ' + '; '.join(f'{n} — {why}' for n, why in kept[:5]) + (f' (yana {len(kept) - 5} ta)' if len(kept) > 5 else '')
+            return done(msg, url_for('acct.hosil_qabuli') + '#yolda')
         if request.form.get('action') == 'notify':
             people, n = H.send_notices(actor)
             return done(f'Telegram’ga yuborildi: {n} ta muammo direktorga, {people} ta xodimga o‘z savollari.' if n

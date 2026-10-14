@@ -214,13 +214,27 @@ def compare():
     tot['n'] = len(rows)
     tot['last'] = q('SELECT MAX(imported_at) m FROM hq_loads', one=True)['m']
     onroad = [dict(r) for r in q('''SELECT wb.id wid, wb.number, tl.trip_no, e.code trailer, wb.net_kg kg,
-                                          substr(wb.created_at,1,10) day, g.number grp
+                                          substr(wb.created_at,1,10) day, g.number grp, b.name brig, us.full_name who,
+                                          (SELECT COUNT(*) FROM tezpul_talons t WHERE t.load_id=tl.id AND t.status='TOLANDI') paid,
+                                          (SELECT COUNT(*) FROM tezpul_talons t WHERE t.load_id=tl.id AND t.status='TAYYOR') ready
                                    FROM waybills wb JOIN trailer_loads tl ON tl.id=wb.load_id
-                                   LEFT JOIN equipment e ON e.id=tl.trailer_id
+                                   LEFT JOIN equipment e ON e.id=tl.trailer_id LEFT JOIN brigadiers b ON b.id=tl.brigadier_id
+                                   LEFT JOIN users us ON us.id=wb.created_by
                                    LEFT JOIN load_group_items i ON i.waybill_id=wb.id LEFT JOIN load_groups g ON g.id=i.group_id
                                    WHERE wb.status='YARATILDI' AND NOT EXISTS (SELECT 1 FROM nayman_receipts nr WHERE nr.waybill_id=wb.id)
                                    ORDER BY wb.created_at, wb.id''')]
     tot['onroad'] = len(onroad)
+    tot['onroad_kg'] = round(sum(r['kg'] or 0 for r in onroad), 1)
+    # the yuk xatlari the cluster weighed that we have no trip for: each needs a nakladnoy written from the notebook
+    tot['yoq_kg'] = round(sum(r['netto'] or 0 for r in rows if r['state'] == 'yoq'), 1)
+    days = {}
+    for r in rows:
+        if r['state'] == 'yoq':
+            d = days.setdefault((r['dt'] or '')[:10], {'day': (r['dt'] or '')[:10], 'n': 0, 'kg': 0.0, 'nos': []})
+            d['n'] += 1
+            d['kg'] += r['netto'] or 0
+            d['nos'].append(r['load_no'])
+    tot['yoq_days'] = sorted(days.values(), key=lambda d: d['day'])
     return {'rows': rows, 'tot': tot, 'orphans': orphans, 'onroad': onroad}
 
 
