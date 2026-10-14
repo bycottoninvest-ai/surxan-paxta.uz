@@ -76,10 +76,11 @@ def create_app(**overrides):
         resp.headers.setdefault('X-Content-Type-Options', 'nosniff')
         resp.headers.setdefault('X-Frame-Options', 'SAMEORIGIN')
         resp.headers.setdefault('Referrer-Policy', 'same-origin')
-        resp.headers.setdefault('Permissions-Policy', 'geolocation=(self), camera=(self)')
+        resp.headers.setdefault('Permissions-Policy', 'geolocation=(self), camera=(self), microphone=(self)')
         resp.headers.setdefault(
             'Content-Security-Policy',
             "default-src 'self'; img-src 'self' data: blob: https://*.arcgisonline.com https://*.tile.openstreetmap.org https://tile.googleapis.com; "
+            "media-src 'self' blob: data:; "   # the assistant's voice (Gemini audio arrives as a blob)
             "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; "
             "script-src 'self' 'unsafe-inline'; connect-src 'self' https://api.open-meteo.com https://tile.googleapis.com; frame-ancestors 'self'")
         if request.endpoint and not request.endpoint.startswith('static') and (g.get('user') or resp.mimetype == 'text/html'):

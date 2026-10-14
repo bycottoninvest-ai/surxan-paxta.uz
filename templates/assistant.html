@@ -77,6 +77,7 @@ html,body{margin:0;height:100%;background:var(--bg);font-family:system-ui,-apple
     <a class="ai-back" href="{{ url_for('main.dashboard') }}" aria-label="Orqaga">‹</a>
     <div class="ai-ava"><img src="{{ url_for('static', filename='img/cotton.png') }}" alt=""></div>
     <div class="ai-who"><b>Yordamchi</b><span id="state">onlayn · gapiring yoki yozing</span></div>
+    <button class="ai-tool off" id="hands" title="Suhbat rejimi: tugmasiz, “Paxta, …” deb gapiring">🎧</button>
     <button class="ai-tool" id="voice" title="Ovozli javob">🔊</button>
     <button class="ai-tool" id="reset" title="Yangi suhbat">⟳</button>
   </div>
@@ -101,7 +102,7 @@ html,body{margin:0;height:100%;background:var(--bg);font-family:system-ui,-apple
       <div class="inp"><textarea id="text" rows="1" placeholder="Savolingizni yozing…"></textarea><button class="send" id="send" disabled aria-label="Yuborish">➤</button></div>
       <button class="mic" id="mic" aria-label="Gapirish">🎤</button>
     </div>
-    <div class="hint">🎤 ni bosing va gapiring · yordamchi tayyorlaydi, o‘zgarishni siz “✔ Bajarish” bilan tasdiqlaysiz</div>
+    <div class="hint">🎤 — bir marta gapirish · 🎧 — tugmasiz suhbat: “Paxta, …” deb gapiring · o‘zgarishni siz “✔ Bajarish” bilan tasdiqlaysiz</div>
   </div>
 </div>
 <input type="hidden" id="csrf" value="{{ csrf_token() }}">
@@ -216,24 +217,24 @@ html,body{margin:0;height:100%;background:var(--bg);font-family:system-ui,-apple
         const r = await fetch('{{ url_for("assistant.voice") }}', { method: 'POST', body: fd, headers: { 'X-Requested-With': 'fetch' } });
         if (r.ok && (r.headers.get('Content-Type') || '').startsWith('audio')) {
           player.src = URL.createObjectURL(await r.blob());
-          await player.play();
+          await new Promise((done) => { player.onended = done; player.onerror = done; player.play().catch(done); });
           return;
         }
       } catch (e) {}
     }
-    phoneSpeak(t);
+    await phoneSpeak(t);
   }
   function phoneSpeak(t) {
-    if (!('speechSynthesis' in window)) return;
-    try {
+    return new Promise((done) => { if (!('speechSynthesis' in window)) return done(); try {
       speechSynthesis.cancel();
       const u = new SpeechSynthesisUtterance(t.replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}›•]/gu, '').replace(/\s+/g, ' '));
       const vs = speechSynthesis.getVoices();
       const v = vs.find((x) => /^uz/i.test(x.lang)) || vs.find((x) => /^tr/i.test(x.lang));
       if (v) { u.voice = v; u.lang = v.lang; } else { u.lang = 'uz-UZ'; }
       u.rate = 1.0;
+      u.onend = done; u.onerror = done;
       speechSynthesis.speak(u);
-    } catch (e) {}
+    } catch (e) { done(); } });
   }
   async function ask(q) {
     q = (q || '').trim();
@@ -251,7 +252,8 @@ html,body{margin:0;height:100%;background:var(--bg);font-family:system-ui,-apple
       const r = await fetch('{{ url_for("assistant.ask") }}', { method: 'POST', body: fd, headers: { 'X-Requested-With': 'fetch' } });
       const j = await r.json().catch(() => ({ ok: false, error: 'Javob kelmadi — internetni tekshiring.' }));
       t.remove();
-      if (j.ok) { typeOut(bubble('a', ''), j.text, j.links); addCards(j.cards); speak(j.text); }
+      if (j.ok) { typeOut(bubble('a', ''), j.text, j.links); addCards(j.cards); speaking = true; pauseHands();
+                  speak(j.text).finally(() => { speaking = false; followUntil = Date.now() + 8000; resumeHands(); }); }
       else { const e = bubble('a', j.error || 'Xatolik'); e.parentNode.classList.add('err'); }
     } catch (e) {
       t.remove();
@@ -259,6 +261,7 @@ html,body{margin:0;height:100%;background:var(--bg);font-family:system-ui,-apple
     }
     $('state').textContent = 'onlayn · gapiring yoki yozing';
     busy = false; send.disabled = !text.value.trim();
+    if (!speaking) resumeHands();
   }
   function grow() { text.style.height = 'auto'; text.style.height = Math.min(120, text.scrollHeight) + 'px'; }
   text.addEventListener('input', () => { grow(); send.disabled = busy || !text.value.trim(); });
@@ -286,7 +289,7 @@ html,body{margin:0;height:100%;background:var(--bg);font-family:system-ui,-apple
   mic.addEventListener('click', () => {
     if (!SR) { hear.textContent = 'Bu telefon ovozni tanimaydi — yozib yuboring.'; setTimeout(() => { hear.textContent = ''; }, 4000); return; }
     if (rec) { rec.stop(); return; }
-    stopVoice();
+    stopVoice(); pauseHands();
     rec = new SR(); rec.lang = 'uz-UZ'; rec.interimResults = true; rec.continuous = false; heard = '';
     rec.onstart = () => { mic.classList.add('on'); hear.textContent = 'Eshityapman…'; };
     rec.onresult = (e) => {
@@ -301,6 +304,51 @@ html,body{margin:0;height:100%;background:var(--bg);font-family:system-ui,-apple
     rec.start();
   });
   if ('speechSynthesis' in window) speechSynthesis.getVoices();
+
+  // 🎧 hands-free: the microphone stays on while this page is open; a phrase that starts with “Paxta” (or “Yordamchi”)
+  // is a question; right after an answer, 8 seconds for a follow-up without the word. Paused while the answer is spoken.
+  let hands = false, handsRec = null, speaking = false, followUntil = 0;
+  const WAKE = /^\s*(paxta|yordamchi|пахта|ёрдамчи)[\s,.!?:-]*/i;
+  function handsState(t) { $('state').textContent = t; }
+  function pauseHands() { if (handsRec) { try { handsRec.abort(); } catch (e) {} handsRec = null; } }
+  function resumeHands() { if (hands && !speaking && !busy) setTimeout(startHands, 250); }
+  function startHands() {
+    if (!hands || handsRec || speaking || busy || !SR) return;
+    const r = new SR(); handsRec = r;
+    r.lang = 'uz-UZ'; r.continuous = true; r.interimResults = true;
+    r.onstart = () => handsState(Date.now() < followUntil ? '🎧 eshityapman — davom eting' : '🎧 eshityapman — “Paxta, …” deb gapiring');
+    r.onresult = (e) => {
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        const t = e.results[i][0].transcript || '';
+        if (!e.results[i].isFinal) { hear.textContent = t; continue; }
+        hear.textContent = '';
+        const m = t.match(WAKE);
+        if (!m && Date.now() > followUntil) continue;          // not for me
+        const q = (m ? t.slice(m[0].length) : t).trim();
+        if (!q) { followUntil = Date.now() + 8000; handsState('🎧 ha, eshityapman…'); continue; }   // “Paxta!” alone: listening
+        pauseHands(); ask(q);
+        return;
+      }
+    };
+    r.onerror = (e) => {
+      if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
+        hands = false; paintHands(); hear.textContent = 'Mikrofonga ruxsat bering (brauzer sozlamasi).';
+      }
+    };
+    r.onend = () => { if (handsRec === r) handsRec = null; resumeHands(); };     // phones stop after silence: start again
+    try { r.start(); } catch (e) { handsRec = null; }
+  }
+  function paintHands() {
+    $('hands').classList.toggle('off', !hands);
+    if (!hands) { pauseHands(); handsState('onlayn · gapiring yoki yozing'); }
+  }
+  $('hands').addEventListener('click', () => {
+    if (!SR) { hear.textContent = 'Bu telefon ovozni tanimaydi — Chrome’da oching yoki yozing.'; return; }
+    hands = !hands; paintHands();
+    try { localStorage.setItem('ai_hands', hands ? '1' : '0'); } catch (e) {}
+    if (hands) { followUntil = Date.now() + 8000; startHands(); }
+  });
+  try { if (localStorage.getItem('ai_hands') === '1' && SR) { hands = true; paintHands(); startHands(); } } catch (e) {}
 })();
 </script>
 </body>
