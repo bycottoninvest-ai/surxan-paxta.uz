@@ -181,13 +181,13 @@ def test_print_continues_after_the_last_printed_number(app, world):
     admin = world['admin']
     from surxon.db import scalar as sc
     page = admin.get('/admin/blankalar').get_data(as_text=True)
-    assert 'name="dan" value="1"' in page and 'Oxirgi chop etilgan' not in page
+    assert 'name="dan" value="1"' in page and '✅ Oxirgi chop etilgan' not in page
     r = admin.get('/admin/blankalar/chop.pdf?dan=1&soni=4')                 # none made yet: made now
     assert r.status_code == 200 and r.data[:4] == b'%PDF'
     with app.app_context():
         assert sc('SELECT COUNT(*) FROM punkt_blanks') == 4
     page = admin.get('/admin/blankalar').get_data(as_text=True)
-    assert 'name="dan" value="5"' in page and 'PB-0004' in page and 'Oxirgi chop etilgan' in page
+    assert 'name="dan" value="5"' in page and 'PB-0004' in page and '✅ Oxirgi chop etilgan' in page
     assert admin.get('/admin/blankalar/chop.pdf?dan=9&soni=2').status_code != 200             # a gap in the numbers: refused
     assert admin.get('/admin/blankalar/chop.pdf?dan=5&soni=6').status_code == 200
     with app.app_context():
@@ -200,3 +200,25 @@ def test_print_continues_after_the_last_printed_number(app, world):
     assert admin.get(f'/admin/uy-blankalar/chop.pdf?dan={top + 1}&soni=3').status_code == 200
     page = admin.get('/admin/blankalar').get_data(as_text=True)
     assert f'value="{top + 4}"' in page and f'UY-{top + 3:04d}' in page
+
+
+def test_last_printed_number_written_once_by_hand(app, world):
+    """Papers were printed before the system counted: the admin writes the last number once (e.g. 240) — the print
+    form starts at 241, and after printing 50 the next one starts at 291 by itself."""
+    admin = world['admin']
+    from surxon.db import scalar as sc
+    page = admin.get('/admin/blankalar').get_data(as_text=True)
+    assert 'bir marta yozing' in page and 'form="set-pb"' in page
+    assert not admin.post('/admin/blankalar', {'action': 'printed', 'kind': 'pb', 'upto': ''}).get_json()['ok']
+    r = admin.post('/admin/blankalar', {'action': 'printed', 'kind': 'pb', 'upto': '240'}).get_json()
+    assert r['ok'] and 'PB-0241' in r['message'], r
+    page = admin.get('/admin/blankalar').get_data(as_text=True)
+    assert 'name="dan" value="241"' in page and 'keyingisi <b>PB-0241</b>' in page
+    assert admin.get('/admin/blankalar/chop.pdf?dan=1&soni=240').status_code == 200          # the blanks exist up to 240
+    assert admin.get('/admin/blankalar/chop.pdf?dan=241&soni=50').status_code == 200
+    assert 'name="dan" value="291"' in admin.get('/admin/blankalar').get_data(as_text=True)
+    assert admin.post('/admin/blankalar', {'action': 'printed', 'kind': 'uy', 'upto': '80'}).get_json()['ok']
+    assert 'name="dan" value="81"' in admin.get('/admin/blankalar').get_data(as_text=True)
+    with app.app_context():
+        assert sc("SELECT COUNT(*) FROM audit_logs WHERE entity_type='settings' AND new_json LIKE '%pb_printed%'") == 1
+    assert world['kassa'].post('/admin/blankalar', {'action': 'printed', 'kind': 'pb', 'upto': '5'}).status_code in (302, 403)

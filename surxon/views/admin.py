@@ -329,6 +329,14 @@ def blanks():
         if request.form.get('action') == 'spoil':
             BL.spoil(actor, parse_int(request.form.get('id'), 'Blank'), request.form.get('reason'))
             return done('Blank buzilgan deb belgilandi.', url_for('admin.blanks'))
+        if request.form.get('action') == 'printed':      # papers printed before the system counted: the last number, once
+            kind = 'uy' if request.form.get('kind') == 'uy' else 'pb'
+            upto = parse_int(request.form.get('upto'), 'Raqam')
+            if not upto or upto < 1 or upto > 99999:
+                raise UserError('Oxirgi chop etilgan raqamni yozing (masalan 240).')
+            _set_printed(kind, upto, post_actor())
+            return done(f'Yozildi: oxirgi chop etilgan {kind.upper()}-{upto:04d}. Keyingi chop {kind.upper()}-{upto + 1:04d} dan boshlanadi.',
+                        url_for('admin.blanks'))
         if request.form.get('action') == 'receiver':
             save_settings(actor, {'blank_receiver': (request.form.get('receiver') or '').strip()[:120]})
             return done('Qabul qiluvchi saqlandi — PDF’ni qayta oching.', url_for('admin.blanks'))
@@ -346,7 +354,13 @@ def blanks():
     uy_free = q("SELECT MIN(CAST(substr(number, 4) AS INTEGER)) m FROM load_groups WHERE status='BOSH'", one=True)['m'] or 8
     pb_done, uy_done = _printed('pb'), _printed('uy')
     # the print form continues after the last number printed — never the same number on two papers
-    first_free, uy_free = max(first_free, pb_done['upto'] + 1), max(uy_free, uy_done['upto'] + 1)
+    # once the last printed number is known, the next print starts after it (never below a number already in use)
+    pb_used = q('''SELECT MAX(CAST(substr(number, 4) AS INTEGER)) m FROM punkt_blanks
+                   WHERE waybill_id IS NOT NULL OR spoiled_reason IS NOT NULL''', one=True)['m'] or 0
+    uy_used = q("SELECT MAX(CAST(substr(number, 4) AS INTEGER)) m FROM load_groups WHERE number LIKE 'UY-%' AND status<>'BOSH'",
+                one=True)['m'] or 0
+    first_free = max(pb_done['upto'], pb_used) + 1 if pb_done['upto'] else first_free
+    uy_free = max(uy_done['upto'], uy_used) + 1 if uy_done['upto'] else uy_free
     return render_template('admin_blanks.html', ov=ov, rows=rows[:1000], show=show, new_batch=request.args.get('yangi', type=int),
                            first_free=first_free, uy_free=uy_free, pb_done=pb_done, uy_done=uy_done,
                            receiver=_blank_receiver(), receiver_set=bool(get_setting('blank_receiver')),
@@ -397,6 +411,19 @@ def _mark_printed(kind, a, b, actor):
                    (f'{kind}_printed', f'{upto}|{now_str()[:16]}|{actor.name}', now_str()))
         audit(db, actor, 'PRINT', 'punkt_blanks' if kind == 'pb' else 'load_groups', None,
               new={'from': f'{kind.upper()}-{a:04d}', 'to': f'{kind.upper()}-{b:04d}'})
+
+
+def _set_printed(kind, upto, actor):
+    """The admin says which number the papers already printed by hand reach — the next print starts after it."""
+    from ..db import tx
+    from ..security import audit
+    from ..utils import now_str
+    old = _printed(kind)['upto']
+    with tx() as db:
+        db.execute("INSERT INTO settings(key, value, updated_at) VALUES (?, ?, ?) ON CONFLICT(key) DO UPDATE SET "
+                   "value=excluded.value, updated_at=excluded.updated_at",
+                   (f'{kind}_printed', f'{upto}|{now_str()[:16]}|{actor.name} (qo‘lda yozildi)', now_str()))
+        audit(db, actor, 'UPDATE', 'settings', None, old={f'{kind}_printed': old}, new={f'{kind}_printed': upto})
 
 
 def _range_args():
