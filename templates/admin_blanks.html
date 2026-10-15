@@ -16,7 +16,8 @@
         {% else %}<div class="pr-last" style="background:#fff7ed;color:#9a3412">Qo‘lingizdagi oxirgi chop etilgan PB raqamini bir marta yozing — keyin tizim o‘zi davom ettiradi.</div>{% endif %}
         <div class="pr-set pr-row" {{ 'hidden' if pb_done.upto }} style="align-items:end"><div><label>Oxirgi chop etilgan raqam</label><input form="set-pb" name="upto" inputmode="numeric"></div>
           <div><button form="set-pb" class="btn btn-light">Saqlash</button></div></div>
-        <div class="pr-row"><div><label>Qaysi raqamdan</label><input name="dan" value="{{ first_free }}" inputmode="numeric"></div>
+        <div class="pr-row"><div>{% if pb_done.upto %}<label>Keyingisi</label><div class="pr-next" style="font-size:22px;font-weight:800;padding:8px 0">{{ '%04d'|format(first_free) }} dan</div>
+            <input type="hidden" name="dan" value="{{ first_free }}">{% else %}<label>Qaysi raqamdan</label><input name="dan" value="{{ first_free }}" inputmode="numeric">{% endif %}</div>
           <div><label>Nechta</label><input name="soni" value="10" inputmode="numeric"></div></div>
         <button class="btn btn-primary">{{ icon('printer','sm') }} PDF ochish</button>
         <div class="tiny muted pr-hint" style="margin-top:6px">PDF ochilgach Ctrl + P.</div></form>
@@ -27,7 +28,8 @@
         {% else %}<div class="pr-last" style="background:#fff7ed;color:#9a3412">Qo‘lingizdagi oxirgi chop etilgan UY raqamini bir marta yozing — keyin tizim o‘zi davom ettiradi.</div>{% endif %}
         <div class="pr-set pr-row" {{ 'hidden' if uy_done.upto }} style="align-items:end"><div><label>Oxirgi chop etilgan raqam</label><input form="set-uy" name="upto" inputmode="numeric"></div>
           <div><button form="set-uy" class="btn btn-light">Saqlash</button></div></div>
-        <div class="pr-row"><div><label>Qaysi raqamdan</label><input name="dan" value="{{ uy_free }}" inputmode="numeric"></div>
+        <div class="pr-row"><div>{% if uy_done.upto %}<label>Keyingisi</label><div class="pr-next" style="font-size:22px;font-weight:800;padding:8px 0">{{ '%04d'|format(uy_free) }} dan</div>
+            <input type="hidden" name="dan" value="{{ uy_free }}">{% else %}<label>Qaysi raqamdan</label><input name="dan" value="{{ uy_free }}" inputmode="numeric">{% endif %}</div>
           <div><label>Nechta</label><input name="soni" value="10" inputmode="numeric"></div></div>
         <button class="btn btn-primary">{{ icon('printer','sm') }} PDF ochish</button>
         <div class="tiny muted pr-hint" style="margin-top:6px"></div></form>
@@ -98,6 +100,7 @@ document.querySelectorAll('form.pr[data-prefix]').forEach(function (f) {
     setTimeout(function () {                       // the next print goes on after this one
       var last = Math.max(done, a + n - 1);
       f.dataset.done = last; f.dan.value = last + 1; show();
+      var nx = f.querySelector('.pr-next'); if (nx) nx.textContent = String(last + 1).padStart(4, '0') + ' dan';
     }, 300);
   });
 });

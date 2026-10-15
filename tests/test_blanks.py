@@ -213,7 +213,7 @@ def test_last_printed_number_written_once_by_hand(app, world):
     r = admin.post('/admin/blankalar', {'action': 'printed', 'kind': 'pb', 'upto': '240'}).get_json()
     assert r['ok'] and 'PB-0241' in r['message'], r
     page = admin.get('/admin/blankalar').get_data(as_text=True)
-    assert 'name="dan" value="241"' in page and 'keyingisi <b>PB-0241</b>' in page
+    assert 'name="dan" value="241"' in page and 'keyingisi <b>PB-0241</b>' in page and '0241 dan' in page
     assert admin.get('/admin/blankalar/chop.pdf?dan=1&soni=240').status_code == 200          # the blanks exist up to 240
     assert admin.get('/admin/blankalar/chop.pdf?dan=241&soni=50').status_code == 200
     assert 'name="dan" value="291"' in admin.get('/admin/blankalar').get_data(as_text=True)
