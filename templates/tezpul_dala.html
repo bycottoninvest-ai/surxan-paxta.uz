@@ -100,7 +100,7 @@ button{font:inherit;border:0;cursor:pointer}
   <div class="net" id="net">📡 Internet yo‘q — saqlanganlar telefonda turadi, aloqa kelganda o‘zi yuboriladi.</div>
   {% if ld %}<div class="ctx"><span>{{ ld.trailer_code }} · {{ ld.field_name }} · {{ ld.brigadier_name }}</span><span>{% if ld.rate %}{{ ld.rate|num }} so‘m/kg{% endif %}</span></div>
   {% else %}<div class="ctx" style="align-items:center"><span>Brigada:</span>
-    <select id="brig" style="flex:1;font-size:16px;font-weight:800;padding:6px;border:2px solid var(--navy);border-radius:10px">{% for b in brigades %}<option value="{{ b.id }}">{{ b.name }} · {{ b.trips }} telashka</option>{% else %}<option value="">Bugun qo‘l terimi telashkasi yo‘q</option>{% endfor %}</select></div>{% endif %}
+    <select id="brig" style="flex:1;font-size:16px;font-weight:800;padding:6px;border:2px solid var(--navy);border-radius:10px">{% for b in brigades %}<option value="{{ b.id }}">{{ b.name }}{% if b.trips %} · {{ b.trips }} telashka{% endif %}</option>{% else %}<option value="">Brigada yo‘q — Admin: Brigadirlar</option>{% endfor %}</select></div>{% endif %}
   <div class="toast" id="toast"></div>
 
   <!-- 1: scan -->

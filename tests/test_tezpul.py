@@ -505,7 +505,7 @@ def test_trailers_close_with_their_kg_and_the_evening_count_pays(app, world):
     assert 'o‘zi kg yozib, o‘zi pul bergan' in page
     # no hand trailer for a brigade today: refused
     r = tally.post('/tezpul/kechki/saqlash', {'brigada': 99999, 'code': qr(ts[2]), 'kg': '100', 'client_uuid': uuid4()})
-    assert r.status_code == 422 and 'brigadani tanlang' in r.get_json()['error']
+    assert r.status_code == 422 and 'Brigadani tanlang' in r.get_json()['error']
 
 
 def test_driver_paid_per_person_with_kg_on_the_talon(app, world):

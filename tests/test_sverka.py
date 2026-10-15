@@ -68,3 +68,42 @@ def test_cancelled_trip_and_talon_are_not_counted(app, world):
         get_db().execute("UPDATE trailer_loads SET status='BEKOR' WHERE id=?", (lid,))
         c = S.check(today_str())
         assert c['rows'] == [] and c['level'] == 'empty'
+
+
+def test_evening_count_without_a_trailer_today(app, world):
+    """The punkt has not entered today's papers yet: the evening count still saves the starshi's talon (on a pay-only
+    holder trip of the brigade) — every brigade is in the list; the sverka shows it yellow, not as a trip."""
+    from surxon import sverka as S
+    from surxon.utils import today_str
+    tally, lid, ts = setup(app, world, 3)
+    cash_in(world['bux'], '9000000')
+    with app.app_context():
+        bid = scalar('SELECT brigadier_id FROM trailer_loads WHERE id=?', (lid,))
+        db = get_db()
+        db.execute("UPDATE trailer_loads SET opened_at='2026-10-01 08:00:00', load_date='2026-10-01' WHERE id=?", (lid,))
+        db.commit()
+    page = tally.get('/tezpul/kechki').get_data(as_text=True)
+    assert 'telashkasi yo‘q' not in page and f'<option value="{bid}">' in page
+    r = tally.post('/tezpul/kechki/saqlash', {'brigada': bid, 'code': qr(ts[0]), 'kg': '3143', 'client_uuid': uuid4(),
+                                              'odam': '30', 'sheets': '[]'}).get_json()
+    assert r['ok'], r
+    r = tally.post('/tezpul/kechki/saqlash', {'brigada': bid, 'code': qr(ts[1]), 'kg': '500', 'client_uuid': uuid4(),
+                                              'odam': '5', 'sheets': '[]'}).get_json()
+    assert r['ok'], r
+    with app.app_context():
+        holders = q('SELECT * FROM trailer_loads WHERE pay_only=1')
+        assert len(holders) == 1 and holders[0]['brigadier_id'] == bid and holders[0]['status'] == 'TORTILDI'
+        assert {t['load_id'] for t in q('SELECT load_id FROM tezpul_talons WHERE kg IS NOT NULL')} == {holders[0]['id']}
+        c = S.check(today_str())
+        assert len(c['rows']) == 1 and c['rows'][0]['trips'] == 0 and c['rows'][0]['talon_kg'] == 3643
+        assert c['rows'][0]['level'] == 'yellow' and 'telashka (nakladnoy) hali kiritilmagan' in c['rows'][0]['why']
+    assert world['kassa'].post('/tezpul/tolash', {'code': qr(ts[0]), 'client_uuid': uuid4()}).get_json()['ok']
+    # a trailer entered later the same day takes the next talons; the holder keeps the ones it has
+    from test_dala import open_trip
+    lid2 = open_trip(tally, world, rate='2000', trailer='TL-02')
+    assert tally.post(f'/dala/reys/{lid2}/yopish', {'kg': '1250'}, files={'photos': jpeg((40, 50, 60))}).get_json()['ok']
+    r = tally.post('/tezpul/kechki/saqlash', {'brigada': bid, 'code': qr(ts[2]), 'kg': '200', 'client_uuid': uuid4(),
+                                              'odam': '3', 'sheets': '[]'}).get_json()
+    with app.app_context():
+        assert q('SELECT load_id FROM tezpul_talons WHERE number=?', (ts[2]['number'],), one=True)['load_id'] == lid2
+        assert S.check(today_str())['rows'][0]['trips'] == 1

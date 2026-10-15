@@ -32,7 +32,7 @@ def _trips(db, where, args):
         LEFT JOIN brigadiers b ON b.id=tl.brigadier_id
         LEFT JOIN waybills wb ON wb.load_id=tl.id AND wb.status<>'BEKOR'
         LEFT JOIN nayman_receipts nr ON nr.waybill_id=wb.id
-        WHERE tl.status<>'BEKOR' AND {where}
+        WHERE tl.status<>'BEKOR' AND COALESCE(tl.pay_only, 0)=0 AND {where}
         GROUP BY tl.brigadier_id, COALESCE(tl.method, 'hand')''', args).fetchall()
 
 
@@ -108,6 +108,15 @@ def check(day, year=None):
         top = max(row['dala'], row['punkt'], row['talon_kg']) or 1
         row['bars'] = {k: round(v / top * 100) for k, v in (('dala', row['dala']), ('punkt', row['punkt']), ('talon', row['talon_kg']))}
         rows.append(row)
+    seen = {r['bid'] for r in rows if r['method'] == 'hand'}
+    for bid, t in tal.items():         # talons counted in the evening, but no trailer of the brigade entered that day
+        if bid in seen:
+            continue
+        name = (db.execute('SELECT name FROM brigadiers WHERE id=?', (bid,)).fetchone() or {'name': 'Brigadasiz'})['name']
+        rows.append({'bid': bid, 'name': name, 'method': 'hand', 'trips': 0, 'dala': 0, 'dala_recv': 0, 'punkt': 0, 'waiting': 0,
+                     'waiting_kg': 0, 'talon_kg': t['kg'], 'talon_n': t['n'], 'amount': t['amount'], 'paid': t['paid'],
+                     'people': t['people'], 'level': 'yellow', 'why': 'Talon yozilgan, lekin telashka (nakladnoy) hali kiritilmagan',
+                     'bars': {'dala': 0, 'punkt': 0, 'talon': 100}})
     order = {'red': 0, 'yellow': 1, 'wait': 2, 'green': 3}
     rows.sort(key=lambda x: (order[x['level']], x['method'] != 'hand', -x['dala']))
     hand = [r for r in rows if r['method'] == 'hand']

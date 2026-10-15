@@ -19,7 +19,7 @@ from flask import current_app
 
 from .db import get_db, q, tx
 from .security import audit
-from .settings import get_float
+from .settings import get_float, get_setting
 from .utils import UserError, fmt_money, fmt_num, name_key, now_str, today_str
 
 MAX_BATCH = 2000
@@ -258,10 +258,44 @@ def enter(actor, load_id, code, kg, *, manual_code='', client_uuid=None, group=F
 
 
 def evening_brigades(day=None):
-    """The brigades with a hand trailer today — the evening count writes the starshi's kg to the brigade's last one."""
-    return q('''SELECT b.id, b.name, MAX(tl.id) last_load, COUNT(*) trips FROM trailer_loads tl JOIN brigadiers b ON b.id=tl.brigadier_id
-                WHERE COALESCE(tl.method,'hand')='hand' AND tl.status<>'BEKOR' AND substr(tl.opened_at,1,10)=?
-                GROUP BY b.id ORDER BY MAX(tl.id) DESC''', (day or today_str(),))
+    """Every active brigade for the evening count — those with a hand trailer today first. The starshi's kg goes to the
+    brigade's last trailer of the day; a brigade with none entered today (the punkt writes the papers later) still
+    gets its talons saved — on a pay-only holder trip of the day (see _pay_holder)."""
+    return q('''SELECT b.id, b.name,
+                       (SELECT MAX(tl.id) FROM trailer_loads tl WHERE tl.brigadier_id=b.id AND COALESCE(tl.method,'hand')='hand'
+                        AND tl.status<>'BEKOR' AND substr(tl.opened_at,1,10)=?) last_load,
+                       (SELECT COUNT(*) FROM trailer_loads tl WHERE tl.brigadier_id=b.id AND COALESCE(tl.method,'hand')='hand'
+                        AND tl.status<>'BEKOR' AND COALESCE(tl.pay_only,0)=0 AND substr(tl.opened_at,1,10)=?) trips
+                FROM brigadiers b WHERE b.active=1 ORDER BY trips=0, b.name COLLATE NOCASE''', (day or today_str(),) * 2)
+
+
+def _pay_holder(actor, brigadier_id):
+    """No hand trailer of this brigade today: a closed, pay-only trip of the day carries the evening talons (no kg of its
+    own — the sverka does not count it as a trip). Its field / trailer are the brigade's last ones."""
+    from .db import trip_number
+    with tx() as db:
+        prev = db.execute("""SELECT * FROM trailer_loads WHERE brigadier_id=? AND status<>'BEKOR' AND COALESCE(method,'hand')='hand'
+                             ORDER BY id DESC LIMIT 1""", (brigadier_id,)).fetchone()
+        field = prev['field_id'] if prev else (db.execute(
+            'SELECT id FROM fields WHERE brigadier_id=? ORDER BY active DESC, id LIMIT 1', (brigadier_id,)).fetchone() or [None])[0]
+        trailer = prev['trailer_id'] if prev else (db.execute(
+            "SELECT id FROM equipment WHERE kind='telashka' ORDER BY active DESC, id LIMIT 1").fetchone() or [None])[0]
+        if not field or not trailer:
+            raise UserError('Bu brigadaga dala biriktirilmagan — Admin: Dalalar.')
+        rate = (prev['rate'] if prev else None) or get_setting('worker_rate_hand') or None
+        from .services import current_season
+        year = current_season(db)
+        ts = now_str()
+        lid = db.execute("""INSERT INTO trailer_loads(season_year, load_date, trailer_id, tractor_id, field_id, brigadier_id, status,
+                                note, opened_by, opened_at, full_by, full_at, weighed_at, trip_no, station_id, method, rate,
+                                manual_kg, pay_only)
+                            VALUES (?,?,?,?,?,?,'TORTILDI',?,?,?,?,?,?,?,?,'hand',?,0,1)""",
+                         (year, today_str(), trailer, prev['tractor_id'] if prev else None, field, brigadier_id,
+                          'Kechki hisob: bugun telashka kiritilmagan — faqat talonlar (pul)', actor.user_id, ts,
+                          actor.user_id, ts, ts, trip_number(db, year), prev['station_id'] if prev else None,
+                          int(rate) if rate else None)).lastrowid
+        audit(db, actor, 'CREATE', 'trailer_load', lid, new={'pay_only': 1, 'brigadier_id': brigadier_id})
+    return lid
 
 
 def evening_lookup(actor, code, manual_code=''):
@@ -282,9 +316,12 @@ def enter_evening(actor, brigadier_id, code, kg, *, manual_code='', client_uuid=
     _need(actor, 'harvest.write', 'tezpul.count')
     b = next((r for r in evening_brigades() if r['id'] == brigadier_id), None)
     if not b:
-        raise UserError('Bugun bu brigadada qo‘l terimi telashkasi yo‘q — brigadani tanlang.')
-    return _logged(actor, code, lambda: _enter(actor, b['last_load'], code, kg, manual_code, client_uuid, True, sheets,
-                                              people, late=True, driver=driver))
+        raise UserError('Brigadani tanlang.')
+
+    def go():
+        lid = b['last_load'] or _pay_holder(actor, brigadier_id)
+        return _enter(actor, lid, code, kg, manual_code, client_uuid, True, sheets, people, late=True, driver=driver)
+    return _logged(actor, code, go)
 
 
 def _enter(actor, load_id, code, kg, manual_code, client_uuid, group=False, sheets=None, people=None, late=False, driver=None):
