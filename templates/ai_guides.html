@@ -1,0 +1,40 @@
+{% extends 'base.html' %}
+{% from 'macros.html' import csrf with context %}
+{% set page_title = 'Yordamchi-ustoz' %}
+{% block content %}
+<style>.ustoz-f>*{grid-column:1/-1}</style>
+<div class="page-h"><h1>🎓 Yordamchi-ustoz</h1><span class="sub">Xodimga topshiriq bering — u tizimga kirganda yordamchi o‘zi salomlashadi, hol-ahvol so‘raydi va ishni qadamma-qadam ovozda o‘rgatadi</span></div>
+
+<section class="card"><div class="card-b">
+  <form method="post" class="form ustoz-f" style="display:grid;gap:10px;max-width:720px">{{ csrf() }}
+    <div class="f"><label>Kimga</label><select class="input" name="user_id" required><option value="">— xodimni tanlang —</option>
+      {% for u in users %}<option value="{{ u.id }}">{{ u.full_name or u.username }} · {{ roles.get(u.role, u.role) }}</option>{% endfor %}</select></div>
+    <div class="f"><label>Tayyor topshiriq</label><div style="display:flex;gap:8px;flex-wrap:wrap">
+      {% for k, v in ready.items() %}<button type="button" class="btn btn-light btn-sm" data-ready="{{ k }}">{{ v[0] }}</button>{% endfor %}
+      <button type="button" class="btn btn-light btn-sm" data-ready="">✍ O‘zim yozaman</button></div></div>
+    <div class="f"><label>Topshiriq nomi</label><input class="input" name="title" required minlength="3" maxlength="120"></div>
+    <div class="f"><label>Qadamlar (har qator — bitta qadam; yordamchi shularni bittadan o‘rgatadi)</label>
+      <textarea class="input" name="body" rows="10" required minlength="10"></textarea></div>
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><button class="btn btn-primary">🎓 Topshiriq berish</button>
+      <span class="tiny muted">Xodimning eski ochiq topshirig‘i (bo‘lsa) yopiladi, suhbat yangidan boshlanadi.</span></div>
+  </form>
+</div></section>
+
+<section class="card" style="margin-top:12px"><div class="card-h"><h3>Topshiriqlar</h3></div><div class="card-b" style="overflow-x:auto">
+<table class="table small"><thead><tr><th>Xodim</th><th>Topshiriq</th><th>Berilgan</th><th>Holat</th><th></th></tr></thead><tbody>
+{% for r in rows %}<tr><td class="b">{{ r.full_name or r.username }}</td><td>{{ r.title }}</td><td class="nowrap">{{ r.created_at|d }} <span class="tiny muted">{{ r.by_name or '' }}</span></td>
+  <td>{% if r.done_at %}<span class="pq-ok">✔ tugagan {{ r.done_at|d }}</span>{% else %}<b style="color:#1d4ed8">o‘rganmoqda</b>{% endif %}</td>
+  <td>{% if not r.done_at %}<form method="post">{{ csrf() }}<input type="hidden" name="action" value="done"><input type="hidden" name="id" value="{{ r.id }}"><button class="btn btn-light btn-sm">Yopish</button></form>{% endif %}</td></tr>
+{% else %}<tr><td colspan="5" class="muted">Hali topshiriq berilmagan.</td></tr>{% endfor %}</tbody></table>
+</div></section>
+<script type="application/json" id="ready">{{ ready|tojson }}</script>
+<script>(function () {
+  var ready = JSON.parse(document.getElementById('ready').textContent), f = document.querySelector('form.form');
+  document.querySelectorAll('[data-ready]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var r = ready[b.dataset.ready];
+      f.title.value = r ? r[0] : ''; f.body.value = r ? r[1] : ''; (r ? f.body : f.title).focus();
+    });
+  });
+})();</script>
+{% endblock %}

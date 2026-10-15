@@ -202,6 +202,7 @@ def register_template_helpers(app):
             'offline_queue': user is not None and __import__('surxon.settings', fromlist=['get_bool']).get_bool('offline_queue'),
             'ai_on': _ai_on(user),
             'ai_todo': _ai_todo(user),
+            'ai_guide': _ai_guide(user),
         }
 
     def _pq17_todo():
@@ -234,6 +235,15 @@ def register_template_helpers(app):
             return allowed(user)
         except Exception:          # the button never breaks a page
             return False
+
+    def _ai_guide(user):
+        try:
+            if not user or request.endpoint in ('assistant.page', 'static'):
+                return None
+            from .ustoz import active
+            return active(user['id'])
+        except Exception:
+            return None
 
     def _ai_todo(user):
         try:

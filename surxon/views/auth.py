@@ -54,6 +54,11 @@ def do_login():
         with tx() as db:
             db.execute('UPDATE users SET last_login_at=? WHERE id=?', (now_str(), user['id']))
             audit(db, Actor.from_user(user, ip=request.remote_addr), 'LOGIN', 'user', user['id'])
+        if not request.args.get('next'):      # a person with a task from the admin: straight to the assistant-teacher
+            from ..assistant import allowed
+            from ..ustoz import active
+            if active(user['id']) and allowed(user):
+                return redirect(url_for('assistant.page', boshla=1))
         return redirect(_safe_next(request.args.get('next')))
     record_failed_login(key)
     flash('Login yoki parol noto‘g‘ri.', 'error')

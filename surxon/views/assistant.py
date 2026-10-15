@@ -1,5 +1,5 @@
 """YORDAMCHI (AI): the chat page and its two calls. Read-only for the data; see surxon.assistant."""
-from flask import Blueprint, Response, abort, g, jsonify, render_template, request
+from flask import Blueprint, Response, abort, g, jsonify, render_template, request, url_for
 
 from .. import assistant as A
 from ..security import login_required
@@ -19,8 +19,40 @@ def page():
     _gate()
     name = (g.user['full_name'] or g.user['username'] or '').split(' ')[0]
     from .. import gemini
+    from ..ustoz import active
     return render_template('assistant.html', messages=A.history(g.user['id'], limit=40), name=name,
-                           chips=A.suggestions(g.user), uz_voice=gemini.enabled(), start=request.args.get('boshla') == '1')
+                           chips=A.suggestions(g.user), uz_voice=gemini.enabled(), start=request.args.get('boshla') == '1',
+                           guide=active(g.user['id']), is_admin=g.user['role'] == 'admin')
+
+
+@bp.route('/ai/ustoz', methods=['GET', 'POST'])
+@login_required
+def guides():
+    """Admin: give a staff member a task — the assistant greets them each time and teaches it step by step."""
+    from .. import ustoz as U
+    from ..db import q
+    from ..utils import parse_int
+    from . import done, post_actor
+    if g.user['role'] != 'admin':
+        abort(404)
+    if request.method == 'POST':
+        actor = post_actor()
+        if request.form.get('action') == 'done':
+            U.finish(actor, parse_int(request.form.get('id'), 'Topshiriq'))
+            return done('Topshiriq yopildi.', url_for('assistant.guides'))
+        U.assign(actor, parse_int(request.form.get('user_id'), 'Xodim'), request.form.get('title'), request.form.get('body'))
+        return done('Topshiriq berildi — xodim tizimga kirganda yordamchi o‘zi salomlashib, o‘rgatadi.', url_for('assistant.guides'))
+    users = q("SELECT id, full_name, username, role FROM users WHERE active=1 AND role NOT IN ('driver') ORDER BY full_name")
+    return render_template('ai_guides.html', users=users, ready=U.READY, rows=U.listing(), roles=A.ROLE_NAMES)
+
+
+@bp.post('/ai/ustoz/<int:gid>/tugadi')
+@login_required
+def guide_done(gid):
+    from .. import ustoz as U
+    from . import done, post_actor
+    U.finish(post_actor(), gid)
+    return done('Zo‘r! Topshiriq tugadi 👍', url_for('assistant.page'))
 
 
 @bp.post('/ai/savol')

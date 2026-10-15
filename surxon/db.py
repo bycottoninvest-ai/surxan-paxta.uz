@@ -10,7 +10,7 @@ from contextlib import contextmanager
 
 from flask import current_app, g
 
-SCHEMA_VERSION = 34
+SCHEMA_VERSION = 35
 
 SCHEMA = r'''
 CREATE TABLE IF NOT EXISTS brigadiers (
@@ -750,6 +750,16 @@ CREATE TABLE IF NOT EXISTS yordamchi_actions (  -- v33: a change the assistant p
   result TEXT,
   created_at TEXT NOT NULL,
   done_at TEXT
+);
+CREATE TABLE IF NOT EXISTS yordamchi_guides (  -- v35: a task the admin gave someone; the assistant teaches it step by step
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL REFERENCES users(id),
+  title TEXT NOT NULL,
+  body TEXT NOT NULL,
+  created_by INTEGER REFERENCES users(id),
+  created_at TEXT NOT NULL,
+  done_at TEXT,
+  done_by INTEGER REFERENCES users(id)
 );
 CREATE TABLE IF NOT EXISTS yordamchi_messages (  -- v31: the AI assistant's conversations (kept here, never at Claude)
   id INTEGER PRIMARY KEY AUTOINCREMENT,

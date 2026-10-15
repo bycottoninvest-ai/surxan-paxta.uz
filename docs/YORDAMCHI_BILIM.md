@@ -90,3 +90,9 @@ Kassir kg yoza olmaydi va o‘zgartira olmaydi.
 - **Ish guruhida:** bot guruhda admin; “Yordamchi, …” deb yoki @bot nomi bilan yozilsa, yoki botning xabariga javob
   (ovozli ham) bo‘lsa — javob beradi. Guruhda faqat kg, telashkalar va tizimdan foydalanish haqida; pul va ismlar — faqat shaxsiy chatda.
 - O‘zgarish (xarajatni tasdiqlash, kassani yopish, qarzni yopish) faqat saytda, “✔ Bajarish” bilan.
+
+## Yordamchi-ustoz (admin topshirig‘i)
+- Admin: **Boshqaruv → Yordamchi-ustoz** → xodimni tanlaydi → tayyor topshiriq (eski nakladnoylarni kiritish, punktdagi
+  kundalik ish, buxgalterning kundalik ishi) yoki o‘z so‘zlari → **Topshiriq berish**.
+- Xodim tizimga kirganda yordamchi ochiladi: “🔊 Boshladik” (bitta bosish — telefon ovoz chiqarishi uchun) → yordamchi
+  salomlashadi, hol-ahvol so‘raydi va ishni bittadan qadam qilib, ovozda o‘rgatadi. Tugagach — “✔ Tugatdim”.

@@ -108,6 +108,7 @@
       {% call group('Boshqaruv', 'settings') %}
       {{ nav('admin.staff', 'Xodimlar va loginlar', 'users', 'users.manage') }}
       {{ nav('admin.users', 'Foydalanuvchilar', 'user', 'users.manage') }}
+      {% if current_user['role'] == 'admin' %}{{ nav('assistant.guides', 'Yordamchi-ustoz', 'user') }}{% endif %}
       {{ nav('admin.brigadiers', 'Brigadirlar', 'users', 'masterdata.write') }}
       {{ nav('admin.stations', 'Punktlar', 'building', 'masterdata.write') }}
       {{ nav('admin.blanks', 'Punkt blanklari', 'doc', 'masterdata.write') }}
@@ -208,7 +209,7 @@
   {% endif %}
 </nav>
 {% if ai_on %}<a class="ai-fab no-print" href="{{ url_for('assistant.page', boshla=1) if ai_todo else url_for('assistant.page') }}" aria-label="Yordamchi"><img src="{{ url_for('static', filename='img/cotton.png') }}" alt=""><span>🎤</span>{% if ai_todo %}<i class="ai-cnt">{{ ai_todo }}</i>{% endif %}</a>
-{% if ai_todo %}<a class="ai-bubble no-print" id="ai-bubble" href="{{ url_for('assistant.page', boshla=1) }}" hidden><b>{{ (current_user['full_name'] or current_user['username']).split(' ')[0] }}, bugun {{ ai_todo }} ta ish bor 👋</b><span>Keling, birga qilamiz — bosing</span><em data-x aria-label="Yopish">×</em></a>
+{% if ai_todo %}<a class="ai-bubble no-print" id="ai-bubble" href="{{ url_for('assistant.page', boshla=1) }}" hidden><b>{% if ai_guide %}Salom, {{ (current_user['full_name'] or current_user['username']).split(' ')[0] }}! 👋{% else %}{{ (current_user['full_name'] or current_user['username']).split(' ')[0] }}, bugun {{ ai_todo }} ta ish bor 👋{% endif %}</b><span>{% if ai_guide %}{{ ai_guide.title }} — birga qilamiz, bosing{% else %}Keling, birga qilamiz — bosing{% endif %}</span><em data-x aria-label="Yopish">×</em></a>
 <script>(function () {
   var b = document.getElementById('ai-bubble'), key = 'ai_bubble_' + new Date().toISOString().slice(0, 10);
   try { if (localStorage.getItem(key)) return; } catch (e) {}

@@ -63,7 +63,12 @@ def allowed(user, channel='site'):
     (each with their own permissions — a clerk's tools are a clerk's)."""
     if not user or not enabled():
         return False
-    return user['role'] in ROLES if channel == 'site' else user['role'] != 'driver'
+    if channel != 'site':
+        return user['role'] != 'driver'
+    if user['role'] in ROLES:
+        return True
+    from .ustoz import active               # anyone the admin gave a task to is taught on the site too
+    return bool(user['id'] and active(user['id']))
 
 
 def model():
@@ -200,6 +205,10 @@ def t_telashkalar(user, holat='yolda'):
 def t_vazifalar(user):
     """What this person should do today — from the system's own state."""
     role, todo = user['role'], []
+    from .ustoz import active
+    gd = active(user['id']) if user['id'] else None
+    if gd:
+        todo.append(f'Admin topshirig‘i: {gd["title"]} — qadamma-qadam birga qilamiz')
     if role in ('admin', 'manager'):
         from . import sverka as S
         c = S.check(today_str())
@@ -594,8 +603,9 @@ def _system(user):
         station = scalar('SELECT name FROM stations WHERE id=?', (user['station_id'],)) or ''
     who = (f'Hozir gaplashayotgan odam: {name} — {ROLE_NAMES.get(user["role"], user["role"])}'
            + (f' ({station} punkti)' if station else '') + f'. Bugun: {today_str()}, soat {now_str()[11:16]}.')
+    from .ustoz import prompt
     return [{'type': 'text', 'text': PERSONA + _book(), 'cache_control': {'type': 'ephemeral'}},
-            {'type': 'text', 'text': who}]
+            {'type': 'text', 'text': who + prompt(user)}]
 
 
 def history(user_id, limit=MEMORY):
@@ -732,8 +742,11 @@ def suggestions(user):
 
 def todo_count(user):
     """The small red number on the assistant's round button: today's open tasks (accountant and punkt only — cheap)."""
-    if user['role'] not in ('accountant', 'station') or not allowed(user):
+    from .ustoz import active
+    if not allowed(user):
         return 0
+    if user['role'] not in ('accountant', 'station'):
+        return 1 if active(user['id']) else 0
     try:
         t = t_vazifalar(user)['vazifalar']
         return 0 if t == ['Hozircha shoshilinch ish yo‘q 👍'] else len(t)
