@@ -14,7 +14,7 @@
         {% if pb_done.upto %}<div class="pr-last">✅ Oxirgi chop etilgan: <b>PB-{{ '%04d'|format(pb_done.upto) }}</b> → keyingisi <b>PB-{{ '%04d'|format(pb_done.upto + 1) }}</b> · {{ pb_done.at }} · {{ pb_done.who }}
           <a href="#" class="link small" onclick="this.closest('.pr').querySelector('.pr-set').hidden=false;return false">o‘zgartirish</a></div>
         {% else %}<div class="pr-last" style="background:#fff7ed;color:#9a3412">Qo‘lingizdagi oxirgi chop etilgan PB raqamini bir marta yozing — keyin tizim o‘zi davom ettiradi.</div>{% endif %}
-        <div class="pr-set pr-row" {{ 'hidden' if pb_done.upto }} style="align-items:end"><div><label>Oxirgi chop etilgan raqam</label><input form="set-pb" name="upto" inputmode="numeric" placeholder="240"></div>
+        <div class="pr-set pr-row" {{ 'hidden' if pb_done.upto }} style="align-items:end"><div><label>Oxirgi chop etilgan raqam</label><input form="set-pb" name="upto" inputmode="numeric"></div>
           <div><button form="set-pb" class="btn btn-light">Saqlash</button></div></div>
         <div class="pr-row"><div><label>Qaysi raqamdan</label><input name="dan" value="{{ first_free }}" inputmode="numeric"></div>
           <div><label>Nechta</label><input name="soni" value="10" inputmode="numeric"></div></div>
@@ -25,7 +25,7 @@
         {% if uy_done.upto %}<div class="pr-last">✅ Oxirgi chop etilgan: <b>UY-{{ '%04d'|format(uy_done.upto) }}</b> → keyingisi <b>UY-{{ '%04d'|format(uy_done.upto + 1) }}</b> · {{ uy_done.at }} · {{ uy_done.who }}
           <a href="#" class="link small" onclick="this.closest('.pr').querySelector('.pr-set').hidden=false;return false">o‘zgartirish</a></div>
         {% else %}<div class="pr-last" style="background:#fff7ed;color:#9a3412">Qo‘lingizdagi oxirgi chop etilgan UY raqamini bir marta yozing — keyin tizim o‘zi davom ettiradi.</div>{% endif %}
-        <div class="pr-set pr-row" {{ 'hidden' if uy_done.upto }} style="align-items:end"><div><label>Oxirgi chop etilgan raqam</label><input form="set-uy" name="upto" inputmode="numeric" placeholder="240"></div>
+        <div class="pr-set pr-row" {{ 'hidden' if uy_done.upto }} style="align-items:end"><div><label>Oxirgi chop etilgan raqam</label><input form="set-uy" name="upto" inputmode="numeric"></div>
           <div><button form="set-uy" class="btn btn-light">Saqlash</button></div></div>
         <div class="pr-row"><div><label>Qaysi raqamdan</label><input name="dan" value="{{ uy_free }}" inputmode="numeric"></div>
           <div><label>Nechta</label><input name="soni" value="10" inputmode="numeric"></div></div>
