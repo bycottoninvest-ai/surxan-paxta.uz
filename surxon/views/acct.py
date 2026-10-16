@@ -269,6 +269,16 @@ def hosil_qabuli():
             trips, kg = H.correct(actor, request.form.get('load_no', ''), request.form.getlist('waybill_ids'))
             return done(f'Tuzatildi: {", ".join(trips)} → yuk xati {request.form.get("load_no")} · klaster netto {kg:g} kg.',
                         url_for('acct.hosil_qabuli'))
+        if request.form.get('action') == 'enter':
+            require('nayman.write')
+            f = request.files.get('photo')
+            rows = [{'brigadier_id': b, 'field_id': fld, 'kg': kg} for b, fld, kg in
+                    zip(request.form.getlist('brigadier_id'), request.form.getlist('field_id'), request.form.getlist('kg'))]
+            trips, kg = H.quick_enter(actor, request.form.get('load_no', ''), trailer_id=request.form.get('trailer_id'),
+                                      rows=rows, photo=f.read() if f and f.filename else None,
+                                      combine_id=request.form.get('combine_id') or None)
+            return done(f'Kiritildi: yuk xati {request.form.get("load_no")} · {", ".join(trips)} · klaster netto {kg:g} kg.',
+                        url_for('acct.hosil_qabuli'))
         if request.form.get('action') == 'void_onroad':
             from ..services import admin_void_onroad
             gone, kept = admin_void_onroad(actor, request.form.getlist('waybill_ids'), request.form.get('reason', ''))
@@ -285,7 +295,13 @@ def hosil_qabuli():
             raise UserError('hosil-qabuli.uz dan yuklab olingan Excel faylni tanlang.')
         new, upd = H.import_file(actor, f.read(), f.filename)
         return done(f'Jadval qabul qilindi: {new} ta yangi, {upd} ta yangilandi.', url_for('acct.hosil_qabuli'))
-    return render_template('acct_hosil.html', cmp=H.compare())
+    cmp, pick = H.compare(), None
+    if cmp['tot']['yoq'] and can('nayman.write'):     # the lists the “➕ Tizimga kiritish” form needs
+        pick = {'trailers': q("SELECT id, code FROM equipment WHERE kind='telashka' AND active=1 ORDER BY code"),
+                'combines': q("SELECT id, code, operator_name FROM equipment WHERE kind='kombayn' AND active=1 ORDER BY code"),
+                'brigades': q('SELECT id, name FROM brigadiers WHERE active=1 ORDER BY name'),
+                'fields': q('SELECT id, code, name, brigadier_id FROM fields WHERE active=1 ORDER BY code')}
+    return render_template('acct_hosil.html', cmp=cmp, pick=pick)
 
 
 @bp.get('/buxgalteriya/pq17/<int:doc_id>.pdf')

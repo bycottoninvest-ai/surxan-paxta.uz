@@ -246,3 +246,43 @@ def test_admin_cancels_trips_left_on_the_road_talons_move(app, world):
     assert r['ok'] and 'Hech bir reys bekor qilinmadi' in r['message'] and 'avval daftardan yangi nakladnoyni' in r['message']
     with app.app_context():
         assert q('SELECT status FROM trailer_loads WHERE id=?', (lid,), one=True)['status'] != 'BEKOR'
+
+
+def test_office_enters_a_lost_yuk_xati_from_the_notebook(app, world):
+    """The papers were lost in the rush: the cluster weighed it, we have nothing. From the red row the office picks the
+    trailer and the brigades with their notebook kg, adds a photo of the page — the trips are made (dated that day),
+    received with the cluster netto shared by field kg, and the yuk xati is written."""
+    from conftest import jpeg
+    from surxon.db import get_db, q, scalar
+    admin, bux = world['admin'], world['bux']
+    admin.post('/admin/sozlamalar', {'set_auto_waybill_hand': '1', 'set_worker_rate_hand': '1500'})
+    with app.app_context():
+        get_db().execute("""INSERT INTO hq_loads(load_no, dt, brutto, tara, netto, kond, method, imported_at) VALUES
+                            ('649146', '2026-10-13 15:32', 18600, 11780, 6820, 6500, 'hand', '2026-10-16 00:00:00'),
+                            ('656000', '2026-10-16 19:33', 14990, NULL, NULL, NULL, 'hand', '2026-10-16 00:00:00')""")
+        get_db().commit()
+        tl = scalar("SELECT id FROM equipment WHERE code='TL-01'")
+        f1, b1 = q('SELECT id, brigadier_id FROM fields WHERE brigadier_id IS NOT NULL ORDER BY id LIMIT 1', one=True)
+        f2, b2 = q('SELECT id, brigadier_id FROM fields WHERE brigadier_id IS NOT NULL AND brigadier_id<>? ORDER BY id LIMIT 1', (b1,), one=True)
+    page = bux.get('/buxgalteriya/hosil-qabuli').get_data(as_text=True)
+    assert '➕ Tizimga kiritish (daftardan)' in page
+    form = {'action': 'enter', 'load_no': '649146', 'trailer_id': tl, 'brigadier_id': [b1, b2, ''], 'field_id': [f1, '', ''],
+            'kg': ['4000', '2900', '']}
+    r = bux.post('/buxgalteriya/hosil-qabuli', form).get_json()
+    assert not r['ok'] and 'rasm' in r['error']                                       # the notebook photo is the proof
+    r = bux.post('/buxgalteriya/hosil-qabuli', form, files={'photo': jpeg()}).get_json()
+    assert r['ok'] and '6820 kg' in r['message'], r
+    with app.app_context():
+        trips = q('''SELECT tl.*, nr.accepted_kg, nr.load_no, nr.received_date FROM trailer_loads tl JOIN waybills wb ON wb.load_id=tl.id
+                     JOIN nayman_receipts nr ON nr.waybill_id=wb.id ORDER BY tl.id''')
+        assert len(trips) == 2 and {t['brigadier_id'] for t in trips} == {b1, b2}
+        assert round(sum(t['accepted_kg'] for t in trips), 1) == 6820 and {t['load_no'] for t in trips} == {'649146'}
+        assert {t['load_date'] for t in trips} == {'2026-10-13'} and {t['received_date'] for t in trips} == {'2026-10-13'}
+        assert [t['manual_kg'] for t in trips] == [4000, 2900]
+        assert scalar("SELECT COUNT(*) FROM audit_logs WHERE action='HQ_ENTER'") == 2
+    page = bux.get('/buxgalteriya/hosil-qabuli').get_data(as_text=True)
+    r = bux.post('/buxgalteriya/hosil-qabuli', form, files={'photo': jpeg()}).get_json()
+    assert not r['ok'] and 'allaqachon bor' in r['error']                             # never twice
+    r = bux.post('/buxgalteriya/hosil-qabuli', dict(form, load_no='656000'), files={'photo': jpeg()}).get_json()
+    assert not r['ok'] and 'tarozida' in r['error']
+    assert world['kassa'].post('/buxgalteriya/hosil-qabuli', form, files={'photo': jpeg()}).status_code in (302, 403)

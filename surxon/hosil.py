@@ -419,3 +419,81 @@ def send_notices(actor):
         _send(db, 'sverka', f'sverka:{ts}', '📋 hosil-qabuli.uz bilan sverka — muammolar:\n\n' + '\n'.join(boss), DIRECTOR_ROLES)
         audit(db, actor, 'NOTIFY', 'hq_loads', 0, new={'people': reached, 'problems': len(boss)})
     return reached, len(boss)
+
+
+def quick_enter(actor, load_no, *, trailer_id, rows, photo, combine_id=None):
+    """A yuk xati the cluster weighed that we never entered (the papers were lost in the rush): the office writes it from
+    the notebook in one step — the trailer, the brigade(s) with their field kg, a photo of the notebook page. The trips
+    are made as the punkt would have made them (one per brigade, dated the yuk xati's day), then received with the
+    cluster's netto shared by field kg (correct()). Only the office (nayman.write); everything is in the audit."""
+    if not actor or not actor.can('nayman.write'):
+        raise UserError('Bu amal uchun huquqingiz yo‘q.')
+    from .intake import _as_intake
+    from .services import add_harvest, mark_full, open_load
+    from .settings import get_float, get_setting
+    h = q('SELECT * FROM hq_loads WHERE load_no=?', (load_no,), one=True)
+    if not h:
+        raise UserError('Bu yuk xati jadvalda yo‘q — avval Excelni yuklang.')
+    if not h['netto']:
+        raise UserError(f'Yuk xati {load_no} hali tarozida (tara yo‘q) — tara chiqqach Excelni qayta yuklang.')
+    if q('''SELECT 1 FROM nayman_receipts nr JOIN waybills wb ON wb.id=nr.waybill_id
+            WHERE nr.load_no=? AND wb.status<>'BEKOR' ''', (load_no,), one=True):
+        raise UserError(f'Yuk xati {load_no} tizimda allaqachon bor.')
+    method = 'combine' if h['method'] == 'combine' else 'hand'
+    if not trailer_id:
+        raise UserError('Telashkani tanlang.')
+    if method == 'combine' and not combine_id:
+        raise UserError('Kombaynni tanlang.')
+    if not photo:
+        raise UserError('Daftar varag‘ining rasmini oling (dalil sifatida saqlanadi).')
+    max_kg = get_float('max_trailer_kg', 15000)
+    clean = []
+    for r in rows or []:
+        try:
+            kg = round(float(str(r.get('kg') or '').replace(',', '.').replace(' ', '')), 1)
+        except ValueError:
+            kg = 0
+        if not r.get('brigadier_id') and not kg:
+            continue
+        if not r.get('brigadier_id'):
+            raise UserError(f'{len(clean) + 1}-qator: brigadani tanlang.')
+        if not 0 < kg <= max_kg:
+            raise UserError(f'{len(clean) + 1}-qator: dala kg ni yozing (daftardagi).')
+        bid = int(r['brigadier_id'])
+        fid = int(r['field_id']) if str(r.get('field_id') or '').isdigit() else None
+        if not fid:
+            f = q('SELECT id FROM fields WHERE brigadier_id=? ORDER BY active DESC, id LIMIT 1', (bid,), one=True)
+            if not f:
+                raise UserError('Bu brigadaga dala biriktirilmagan — dalani tanlang.')
+            fid = f['id']
+        clean.append({'brigadier_id': bid, 'field_id': fid, 'kg': kg})
+    if not clean:
+        raise UserError('Kamida bitta qator: brigada va dala kg.')
+    rate = (get_setting('worker_rate_hand') if method == 'hand'
+            else get_setting('combine_rate_standard') or get_setting('combine_rate_kg')) or None
+    if not rate:
+        raise UserError('Terim narxi sozlanmagan — Admin: Sozlamalar.')
+    fa = _as_intake(actor)
+    day = (h['dt'] or now_str())[:10]
+    waybills = []
+    for k, r in enumerate(clean, 1):
+        key = f'hq:{load_no}:{k}'
+        prev = q('''SELECT wb.id FROM trailer_loads tl JOIN waybills wb ON wb.load_id=tl.id
+                    WHERE tl.client_uuid=? AND wb.status<>'BEKOR' ''', (key,), one=True)
+        if prev:                       # sent twice (bad network): the trip is already made
+            waybills.append(prev['id'])
+            continue
+        lid = open_load(fa, trailer_id=int(trailer_id), field_id=r['field_id'], brigadier_id=r['brigadier_id'],
+                        method=method, rate=rate, client_uuid=key)
+        if method == 'combine':
+            add_harvest(fa, load_id=lid, method='combine', kg=r['kg'], combine_id=int(combine_id), client_uuid=key + ':h')
+        res = mark_full(fa, lid, photos=[photo], manual_kg=r['kg'] if method == 'hand' else None,
+                        note=f'hosil-qabuli.uz yuk xati {load_no} — daftardan kiritildi')
+        if not res.get('waybill_id'):
+            raise UserError('Nakladnoy avtomatik chiqmadi — Sozlamalar: auto_waybill_hand = 1.')
+        with tx() as db:               # the trip belongs to the yuk xati's day, not to today
+            db.execute('UPDATE trailer_loads SET load_date=?, opened_at=? WHERE id=?', (day, (h['dt'] or now_str())[:16] + ':00', lid))
+            db.execute('UPDATE harvests SET work_date=? WHERE load_id=?', (day, lid))
+            audit(db, actor, 'HQ_ENTER', 'trailer_load', lid, new={'load_no': load_no, 'kg': r['kg'], 'day': day})
+        waybills.append(res['waybill_id'])
+    return correct(actor, load_no, waybills)

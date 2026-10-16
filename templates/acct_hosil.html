@@ -2,6 +2,9 @@
 {% from 'macros.html' import icon, csrf with context %}
 {% set page_title = 'hosil-qabuli.uz jadvali' %}
 {% block content %}
+<style>.hq-enter{margin-top:6px}.hq-enter summary{list-style:none;display:inline-block}.hq-enter summary::-webkit-details-marker{display:none}
+.hq-f{display:grid;gap:6px;margin-top:6px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:8px;max-width:520px}
+.hq-f label{display:grid;gap:2px;font-size:12px;color:#475569}.hq-row{display:grid;grid-template-columns:1.2fr 1.2fr .8fr;gap:6px}</style>
 <div class="page-h"><h1>{{ icon('doc','lg') }} hosil-qabuli.uz jadvali</h1><span class="sub">Klaster tortgan har bir yuk — bizning punkt yozuvi bilan · <a class="link" href="{{ url_for('acct.pq17') }}">‹ Agroklaster sverkasi</a></span></div>
 
 <section class="card pq-up"><div class="card-b">
@@ -59,6 +62,19 @@
           <button class="btn btn-light btn-sm">Raqamni yozish</button></form>
       {% elif r.state == 'tarozida' %}<span class="muted">hali tarozida (tara tortilmagan)</span>
       {% else %}<span style="color:#b91c1c">✗ bizda bu yuk topilmadi — punkt daftarini tekshiring</span>
+        {% if pick %}<details class="hq-enter"><summary class="btn btn-primary btn-sm">➕ Tizimga kiritish (daftardan)</summary>
+        <form method="post" enctype="multipart/form-data" class="hq-f">{{ csrf() }}<input type="hidden" name="action" value="enter"><input type="hidden" name="load_no" value="{{ r.load_no }}">
+          <div class="tiny muted">Yuk xati <b>{{ r.load_no }}</b> · {{ r.dt|d }} · netto <b>{{ r.netto|num }} kg</b> — shular o‘zi yoziladi. Daftardan: telashka, brigada, dala kg.</div>
+          <label>Telashka <select class="input" name="trailer_id" required><option value="">—</option>{% for t in pick.trailers %}<option value="{{ t.id }}">{{ t.code }}</option>{% endfor %}</select></label>
+          {% if r.method == 'combine' %}<label>Kombayn <select class="input" name="combine_id" required><option value="">—</option>{% for c in pick.combines %}<option value="{{ c.id }}">{{ c.code }}{% if c.operator_name %} · {{ c.operator_name }}{% endif %}</option>{% endfor %}</select></label>{% endif %}
+          {% for i in range(3) %}<div class="hq-row">
+            <select class="input" name="brigadier_id" {{ 'required' if i == 0 }}><option value="">{{ 'Brigada' if i == 0 else '+ yana brigada' }}</option>{% for b in pick.brigades %}<option value="{{ b.id }}">{{ b.name }}</option>{% endfor %}</select>
+            <select class="input" name="field_id"><option value="">dala (o‘zi)</option>{% for f in pick.fields %}<option value="{{ f.id }}" data-b="{{ f.brigadier_id }}">{{ f.code }} · {{ f.name }}</option>{% endfor %}</select>
+            <input class="input" name="kg" inputmode="decimal" placeholder="dala kg" {{ 'required' if i == 0 }}></div>{% endfor %}
+          <label>📷 Daftar varag‘ining rasmi <input class="input" type="file" name="photo" accept="image/*" capture="environment" required></label>
+          <button class="btn btn-primary btn-sm">✔ Saqlash</button>
+          <div class="tiny muted">Reys(lar) {{ r.dt[:10]|d if r.dt else '' }} sanasi bilan yaratiladi, punktda qabul qilingan bo‘ladi, kg — klaster netto (bir nechta brigada bo‘lsa — dala kg iga qarab bo‘linadi). Hammasi tarixda qoladi.</div>
+        </form></details>{% endif %}
         {% if (cmp.orphans or cmp.onroad) and can('nayman.write') %}<details><summary class="link small">Bu yuk bizdagi qaysi reys(lar)? — klaster kg i bilan tuzatish</summary>
         <form method="post" style="margin-top:4px">{{ csrf() }}<input type="hidden" name="action" value="correct"><input type="hidden" name="load_no" value="{{ r.load_no }}">
           {% for c in cmp.orphans %}<label style="display:block"><input type="checkbox" name="waybill_ids" value="{{ c.wid }}"> {{ c.label }} · {{ c.day|d }} · {{ c.kg|num }} kg <span class="tiny muted">({{ c.who or '—' }})</span></label>{% endfor %}
@@ -100,4 +116,11 @@
   {% for c in cmp.orphans %}<tr><td class="b">{{ c.label }}</td><td>{{ c.day|d }}</td><td>{{ 'Qo‘l' if c.method == 'hand' else 'Kombayn' }}</td><td class="num">{{ c.kg|num }}</td>
     <td>{{ c.who or '—' }} <span class="tiny muted">{{ c.at|d }}</span></td><td><a class="link small" href="{{ url_for('ops.waybill_detail', waybill_id=c.wid) }}">ochish</a></td></tr>{% endfor %}
   </tbody></table></div></section>{% endif %}
+<script>document.querySelectorAll('.hq-row').forEach(function (row) {    // a brigade's own fields only
+  var b = row.querySelector('[name=brigadier_id]'), f = row.querySelector('[name=field_id]');
+  b.addEventListener('change', function () {
+    f.value = '';
+    f.querySelectorAll('option[data-b]').forEach(function (o) { o.hidden = b.value && o.dataset.b !== b.value; });
+  });
+});</script>
 {% endblock %}
