@@ -247,8 +247,11 @@ Read it:
   (signature) column. Set "unclear": true if any of the row's handwriting is not clearly readable or two boxes are ticked.
 - "total_kg": the number written in "JAMI KG".
 - "date": the date written after "Sana" (as written) or null.
+Handwriting may be in Uzbek (Latin or Cyrillic) or in Russian: e.g. "Бойрам ота"/"Байрам" = Bayram ota, "ТЛ-02" = TL-02,
+"Д-4"/"поле 4" = field 4, "кг", "итого"/"жами" = total. Map a name written in Cyrillic to the matching name from the list
+above (give the list's Latin spelling); if it matches none, copy it as written and set "unclear": true.
 Copy exactly what is written — do not correct numbers or fill in missing cells (leave them null). If the photo is not
-this form, return empty rows and explain in "note"."""
+this form, return empty rows and explain in "note" (in Uzbek)."""
 
 PB_SCHEMA = {
     'type': 'object',
