@@ -269,6 +269,11 @@ def hosil_qabuli():
             trips, kg = H.correct(actor, request.form.get('load_no', ''), request.form.getlist('waybill_ids'))
             return done(f'Tuzatildi: {", ".join(trips)} → yuk xati {request.form.get("load_no")} · klaster netto {kg:g} kg.',
                         url_for('acct.hosil_qabuli'))
+        if request.form.get('action') == 'relink':
+            trips, kg = H.relink(actor, request.form.get('load_no', ''), request.form.get('new_load_no', ''),
+                                 request.form.get('reason', ''))
+            return done(f'Ko‘chirildi: {", ".join(trips)} → yuk xati {request.form.get("new_load_no")} · klaster netto {kg:g} kg. '
+                        f'{request.form.get("load_no")} endi “bizda yo‘q”.', url_for('acct.hosil_qabuli'))
         if request.form.get('action') == 'enter':
             require('nayman.write')
             f = request.files.get('photo')

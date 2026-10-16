@@ -41,6 +41,7 @@
   <span class="tiny muted">har xato o‘sha qabulni kiritgan xodimga savol bo‘lib boradi, to‘liq ro‘yxat — direktorga</span></form>
 {% endif %}
 
+{% set yoq_rows = cmp.rows|selectattr('state', 'equalto', 'yoq')|list %}
 <section class="card"><div class="card-b" style="overflow-x:auto">
 <table class="table small">
   <thead><tr><th>Sana</th><th>Yuk xati</th><th>Terim</th><th class="num">Brutto</th><th class="num">Tara</th><th class="num">Netto</th><th class="num">Konditsion</th><th>PQ-17</th><th>Bizning punkt yozuvi</th></tr></thead>
@@ -83,6 +84,12 @@
           <div class="tiny muted">Belgilangan reys(lar)ning punkt kg i {{ r.netto|num }} kg ga tenglashtiriladi (bir nechta bo‘lsa — dala kg iga qarab bo‘linadi), yuk xati yoziladi, PQ-17 o‘zi bog‘lanadi. Eski kg tarixda qoladi.</div>
           <button class="btn btn-light btn-sm">Klaster kg i bilan tuzatish</button></form></details>{% endif %}
       {% endif %}
+      {% if r.state in ('mos', 'farq') and yoq_rows and current_user.role == 'admin' %}<details><summary class="link small">↺ Boshqa yuk xatiga ko‘chirish</summary>
+        <form method="post" style="margin-top:4px;display:flex;gap:6px;flex-wrap:wrap" onsubmit="return confirm('Reys boshqa yuk xatiga ko‘chiriladi, {{ r.load_no }} “bizda yo‘q” bo‘lib qoladi. Davom etasizmi?')">{{ csrf() }}
+          <input type="hidden" name="action" value="relink"><input type="hidden" name="load_no" value="{{ r.load_no }}">
+          <select class="input" name="new_load_no" required><option value="">to‘g‘ri yuk xati…</option>{% for y in yoq_rows %}<option value="{{ y.load_no }}">{{ y.load_no }} · {{ y.dt|d }} · {{ y.netto|num }} kg</option>{% endfor %}</select>
+          <input class="input" name="reason" required minlength="3" placeholder="sabab (masalan: UY qog‘ozida boshqa netto)" style="flex:1;min-width:200px">
+          <button class="btn btn-light btn-sm">Ko‘chirish</button></form></details>{% endif %}
     </td></tr>
   {% else %}<tr><td colspan="9" class="muted">Hali jadval yuklanmagan.</td></tr>{% endfor %}</tbody>
 </table></div></section>

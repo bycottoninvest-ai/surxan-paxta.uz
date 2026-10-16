@@ -421,6 +421,46 @@ def send_notices(actor):
     return reached, len(boss)
 
 
+def relink(actor, old_no, new_no, reason):
+    """Admin only: a trip tied to the wrong yuk xati (the paper UY shows another one) moves to the right number — the
+    old number's PQ-17 lets go of it (the old yuk xati is “bizda yo‘q” again), then the cluster netto of the new number
+    is put on it as in correct(). Nothing is deleted: the old number, kg and the reason stay in the audit."""
+    if not actor or actor.role != 'admin':
+        raise UserError('Yuk xatini ko‘chirishni faqat Admin qiladi.')
+    reason = clean_text(reason, 200)
+    if len(reason or '') < 3:
+        raise UserError('Sababini yozing.')
+    old_no, new_no = (old_no or '').strip(), (new_no or '').strip()
+    if not old_no or not new_no or old_no == new_no:
+        raise UserError('Qaysi yuk xatiga ko‘chirishni tanlang.')
+    h = q('SELECT * FROM hq_loads WHERE load_no=?', (new_no,), one=True)
+    if not h or not h['netto']:
+        raise UserError('Yangi yuk xati jadvalda yo‘q yoki hali tortib bo‘linmagan.')
+    if q("""SELECT 1 FROM nayman_receipts nr JOIN waybills wb ON wb.id=nr.waybill_id
+            WHERE nr.load_no=? AND wb.status<>'BEKOR'""", (new_no,), one=True):
+        raise UserError(f'Yuk xati {new_no} allaqachon boshqa reysga yozilgan.')
+    with tx() as db:
+        ids = [r['waybill_id'] for r in db.execute("""SELECT nr.waybill_id FROM nayman_receipts nr JOIN waybills wb
+                                                      ON wb.id=nr.waybill_id WHERE nr.load_no=? AND wb.status<>'BEKOR'""", (old_no,))]
+        if not ids:
+            raise UserError(f'Yuk xati {old_no} hech bir reysga yozilmagan.')
+        marks = ','.join('?' * len(ids))
+        gids = [r['group_id'] for r in db.execute(f'SELECT DISTINCT group_id FROM load_group_items WHERE waybill_id IN ({marks})', ids)]
+        for d in db.execute(f"""SELECT * FROM pq17_docs WHERE waybill_id IN ({marks})
+                                OR group_id IN ({','.join('?' * len(gids)) or 'NULL'})""", ids + gids).fetchall():
+            if (d['load_no'] or '') != old_no:
+                raise UserError(f'Reysga boshqa PQ-17 ({d["code"]}) biriktirilgan — tegilmadi.')
+            db.execute('UPDATE pq17_docs SET waybill_id=NULL, group_id=NULL, match_how=NULL WHERE id=?', (d['id'],))
+            audit(db, actor, 'UPDATE', 'pq17_doc', d['id'], old={'waybill_id': d['waybill_id'], 'group_id': d['group_id']},
+                  new={'waybill_id': None, 'group_id': None}, reason=f'yuk xati {old_no} → {new_no}: {reason}')
+        db.execute(f'UPDATE nayman_receipts SET load_no=NULL WHERE waybill_id IN ({marks})', ids)
+        for g in gids:
+            db.execute('UPDATE load_groups SET load_no=NULL WHERE id=? AND load_no=?', (g, old_no))
+        for wid in ids:
+            audit(db, actor, 'RELINK', 'nayman_receipt', wid, old={'load_no': old_no}, new={'load_no': new_no}, reason=reason)
+    return correct(actor, new_no, ids)
+
+
 def quick_enter(actor, load_no, *, trailer_id, rows, photo, combine_id=None):
     """A yuk xati the cluster weighed that we never entered (the papers were lost in the rush): the office writes it from
     the notebook in one step — the trailer, the brigade(s) with their field kg, a photo of the notebook page. The trips

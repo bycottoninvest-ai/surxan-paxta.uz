@@ -286,3 +286,37 @@ def test_office_enters_a_lost_yuk_xati_from_the_notebook(app, world):
     r = bux.post('/buxgalteriya/hosil-qabuli', dict(form, load_no='656000'), files={'photo': jpeg()}).get_json()
     assert not r['ok'] and 'tarozida' in r['error']
     assert world['kassa'].post('/buxgalteriya/hosil-qabuli', form, files={'photo': jpeg()}).status_code in (302, 403)
+
+
+def test_admin_moves_a_trip_to_the_right_yuk_xati(app, world):
+    """The trip was tied to the wrong number (the paper UY shows another netto): Admin moves it — the old number's PQ-17
+    lets go, the trip gets the right number and its cluster netto, the old number is “bizda yo‘q” again."""
+    tally, yunus, ali, st = setup(app, world)
+    bux, admin = world['bux'], world['admin']
+    w1 = received_trip(app, world, tally, yunus, kg='480')
+    with app.app_context():
+        day = q("SELECT MAX(received_date) d FROM nayman_receipts", one=True)['d']
+    dd = f'{day[8:10]}.{day[5:7]}.{day[:4]} 12:00:00'
+    bux.c.post('/buxgalteriya/hosil-qabuli', data={'file': (io.BytesIO(hq_xlsx([('528431', dd, 352, 'Qo‘lda'),
+                                                                                 ('537537', dd, 660, 'Qo‘lda')])), 'hq.xlsx'),
+                                                   '_csrf': bux.csrf()}, content_type='multipart/form-data')
+    assert bux.post('/buxgalteriya/hosil-qabuli', {'action': 'correct', 'load_no': '528431', 'waybill_ids': [w1]}).get_json()['ok']
+    bux.c.post('/buxgalteriya/pq17', data={'files': [(io.BytesIO(pq17_pdf('XH2000000009', '528431', netto=352)), 'a.pdf')],
+                                           '_csrf': bux.csrf()}, content_type='multipart/form-data', headers={'X-Requested-With': 'fetch'})
+    with app.app_context():
+        assert q("SELECT waybill_id FROM pq17_docs WHERE code='XH2000000009'", one=True)['waybill_id'] == w1
+    assert '↺ Boshqa yuk xatiga ko‘chirish' not in bux.get('/buxgalteriya/hosil-qabuli').get_data(as_text=True)
+    assert '↺ Boshqa yuk xatiga ko‘chirish' in admin.get('/buxgalteriya/hosil-qabuli').get_data(as_text=True)
+    form = {'action': 'relink', 'load_no': '528431', 'new_load_no': '537537', 'reason': 'UY-0065 qog‘ozida netto 6600'}
+    assert not bux.post('/buxgalteriya/hosil-qabuli', form).get_json()['ok']          # Admin only
+    assert not admin.post('/buxgalteriya/hosil-qabuli', dict(form, reason='')).get_json()['ok']
+    r = admin.post('/buxgalteriya/hosil-qabuli', form).get_json()
+    assert r['ok'] and '537537' in r['message'], r
+    with app.app_context():
+        nr = q('SELECT * FROM nayman_receipts WHERE waybill_id=?', (w1,), one=True)
+        assert (nr['load_no'], nr['accepted_kg']) == ('537537', 660)
+        assert q("SELECT waybill_id FROM pq17_docs WHERE code='XH2000000009'", one=True)['waybill_id'] is None
+        assert q("SELECT COUNT(*) n FROM audit_logs WHERE action='RELINK'", one=True)['n'] == 1
+        from surxon.hosil import compare
+        st_ = {x['load_no']: x['state'] for x in compare()['rows']}
+    assert st_ == {'528431': 'yoq', '537537': 'mos'}
