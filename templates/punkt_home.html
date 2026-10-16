@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% from 'macros.html' import icon, empty with context %}
+{% from 'macros.html' import icon, empty, csrf with context %}
 {% set page_title = 'Punkt' %}
 {% macro card(t, first=False) -%}
 <a class="pk-card {{ 'pk-first' if first }}" href="{{ url_for('punkt.trip', waybill_id=t.id) }}">
@@ -25,7 +25,14 @@
     {% set open_uy = uys|selectattr('status', 'equalto', 'OCHIQ')|list %}
     {% for u in open_uy %}
     <div class="py-uy"><div><b>{{ u.number }}</b><span>{{ u.n }} ta telashka · {{ u.kg|num }} kg</span></div><em>ochiq</em></div>
+    {% if u.n == 0 and not loop.first %}
+    <form method="post" action="{{ url_for('punkt.group_cancel', gid=u.id) }}" data-confirm="{{ u.number }} bo‘sh — bekor qilinsinmi? (varaq ishlatilmaydi)">{{ csrf() }}
+      <button class="py-del">✕ Bo‘sh UY — bekor qilish</button></form>
+    {% else %}
     <a class="py-big" href="{{ url_for('punkt.group', token=u.token) }}">📷 DALA NAKLADNOYINI QO‘SHISH<small>telashka keldi — nakladnoyini rasmga oling</small></a>
+    {% if u.n == 0 and open_uy|length > 1 %}<form method="post" action="{{ url_for('punkt.group_cancel', gid=u.id) }}" data-confirm="{{ u.number }} bo‘sh — bekor qilinsinmi? (varaq ishlatilmaydi)">{{ csrf() }}
+      <button class="py-del">✕ Bo‘sh UY — bekor qilish</button></form>{% endif %}
+    {% endif %}
     {% endfor %}
     {% for u in uys if u.status == 'YUBORILDI' %}
     <a class="py-wait" href="{{ url_for('punkt.group', token=u.token) }}"><span><b>{{ u.number }}</b> · {{ u.n }} ta telashka · {{ u.kg|num }} kg<small>yopilgan — punkt tortishi kutilmoqda</small></span><b>⚖️ Brutto / tara ›</b></a>
@@ -41,6 +48,7 @@
   .py-big small{font-size:12.5px;font-weight:600;opacity:.95;margin-top:3px}.py-new{background:#f59e0b}
   .py-wait{display:flex;justify-content:space-between;align-items:center;gap:8px;background:#fff;color:#0b2a55;text-decoration:none;border-radius:14px;padding:10px 12px;margin:6px 0;font-size:14px}
   .py-wait small{display:block;font-size:12px;color:#b45309;font-weight:700}.py-wait>b{white-space:nowrap;color:#1d4ed8}
+  .py-del{display:block;width:100%;background:rgba(255,255,255,.1);color:#fecaca;border:1px dashed rgba(254,202,202,.6);border-radius:12px;padding:9px;font-weight:800;font-size:14px;margin:0 0 10px;cursor:pointer}
   .py-steps{margin:10px 0 0;padding-left:20px;font-size:13px;line-height:1.5;opacity:.95}</style>
   {% endif %}
   <div>{% if not paper %}<h1 class="d-h1">1. Kelgan telashkani tanlang</h1>{% endif %}

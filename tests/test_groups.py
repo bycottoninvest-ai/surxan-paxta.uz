@@ -273,3 +273,30 @@ def test_main_screen_bugungi_paxta(app, world):
         thumb = q('SELECT p.thumb_path FROM brigadiers b JOIN photos p ON p.id=b.photo_id WHERE b.id=?', (bid,), one=True)['thumb_path']
     assert thumb in admin.get('/').get_data(as_text=True) and thumb in admin.get('/admin/brigadirlar').get_data(as_text=True)
     assert world['juma'].c.post(f'/admin/rasm/brigadir/{bid}', data={'_csrf': world['juma'].csrf()}).status_code in (302, 403)
+
+
+def test_empty_open_uy_is_set_aside(app, world):
+    """Old UY papers opened but left empty clutter the punkt screen: an empty one is cancelled with one tap
+    (BEKOR, reason in the audit); one with a trailer on it is not."""
+    tally, yunus, ali, st = setup(app, world)
+    admin = world['admin']
+    admin.post('/admin/sozlamalar', {'set_dala_qogoz': '1'})
+    admin.post('/admin/blankalar', {'count': '5'})
+    admin.post('/admin/uy-blankalar', {'count': '3'})
+    with app.app_context():
+        toks = [(r['id'], r['token']) for r in q('SELECT id, token FROM load_groups ORDER BY id')]
+    for _, t in toks:
+        yunus.get(f'/punkt/uy/{t}')
+    w1 = closed_trip(app, tally, world, 'TL-01', ['150', '150'], blank='PB-0001')
+    full = toks[2][0]
+    assert yunus.post(f'/punkt/uy/{full}/qosh', {'waybill_id': w1}).get_json()['ok']
+    assert yunus.post(f'/punkt/uy/{full}/bekor').get_json()['ok'] is False               # has a trailer
+    assert ali.post(f'/punkt/uy/{toks[0][0]}/bekor').get_json()['ok'] is False             # another punkt
+    r = yunus.post(f'/punkt/uy/{toks[0][0]}/bekor').get_json()
+    assert r['ok'] and 'bekor' in r['message']
+    with app.app_context():
+        st_ = {r['id']: r['status'] for r in q('SELECT id, status FROM load_groups')}
+        assert st_[toks[0][0]] == 'BEKOR' and st_[toks[1][0]] == 'OCHIQ' and st_[full] == 'OCHIQ'
+        assert q("SELECT COUNT(*) n FROM audit_logs WHERE action='VOID' AND entity_type='load_group'", one=True)['n'] == 1
+    home = yunus.get('/punkt').get_data(as_text=True)
+    assert 'UY-0008' not in home and '✕ Bo‘sh UY — bekor qilish' in home     # the other empty one can go too

@@ -209,6 +209,26 @@ def reopen(actor, gid):
         audit(db, actor, 'REOPEN', 'load_group', gid)
 
 
+def cancel_empty(actor, gid, reason='Bo‘sh qoldi — telashka qo‘shilmagan'):
+    """An UY opened but left empty (its trailers went elsewhere or none came): the paper is set aside (BEKOR) so it no
+    longer waits on the punkt's screen. Only when no live trailer is on it; the reason stays in the audit."""
+    _need(actor, 'station.receive')
+    g = get(gid)
+    if not g:
+        raise UserError('UY topilmadi.')
+    _check_station(actor, g)
+    if g['status'] not in ('OCHIQ', 'YUBORILDI'):
+        raise UserError(f'{g["number"]} ochiq emas.')
+    reason = clean_text(reason, 200) or 'Bo‘sh qoldi'
+    with tx() as db:
+        if db.execute("""SELECT 1 FROM load_group_items i JOIN waybills wb ON wb.id=i.waybill_id
+                         WHERE i.group_id=? AND wb.status<>'BEKOR'""", (gid,)).fetchone():
+            raise UserError(f'{g["number"]} da telashka bor — bo‘sh emas.')
+        db.execute("UPDATE load_groups SET status='BEKOR', spoiled_reason=? WHERE id=? AND status IN ('OCHIQ','YUBORILDI')",
+                   (reason, gid))
+        audit(db, actor, 'VOID', 'load_group', gid, old={'status': g['status']}, new={'status': 'BEKOR'}, reason=reason)
+
+
 def split(total, weights):
     """The punkt netto shared by the field kg: 0.1 kg steps, the last trailer takes the rounding rest (sum is exact)."""
     s = sum(weights)

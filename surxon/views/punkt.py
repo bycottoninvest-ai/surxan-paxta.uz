@@ -381,6 +381,14 @@ def group_close(gid):
     return done('Ro‘yxat yopildi — endi UY varaqqa telashkalar soni va jami kg ni yozing.', url_for('punkt.group', token=g0['token']))
 
 
+@bp.post('/uy/<int:gid>/bekor')
+@perm_required('station.receive')
+def group_cancel(gid):
+    from .. import groups as G
+    G.cancel_empty(post_actor(), gid)
+    return done(f'{G.get(gid)["number"]} bekor qilindi (bo‘sh edi).', url_for('punkt.home'))
+
+
 @bp.post('/uy/<int:gid>/ochish')
 @perm_required('station.receive')
 def group_reopen(gid):
