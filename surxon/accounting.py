@@ -113,7 +113,7 @@ def default_cashbox(db):
 
 def _cashbox(db, actor, cashbox_id):
     """Cashier (or a clerk standing in for one): always their own box. Others: the chosen one or the default."""
-    if actor.acts_as('cashier'):
+    if actor.acts_as('cashier') or getattr(actor, 'pays_cash', False):     # a paying field clerk: his own box too
         own = db.execute('SELECT cashbox_id FROM users WHERE id=?', (actor.user_id,)).fetchone()
         if own and own['cashbox_id']:
             return own['cashbox_id']
@@ -885,6 +885,8 @@ def cash_totals(db=None, cashbox_id=None, date_from=None, date_to=None):
     where, params = ['voided_at IS NULL'], []
     if cashbox_id:
         where.append('cashbox_id=?'); params.append(cashbox_id)
+    else:                                   # all boxes: money moved between our own boxes is neither in nor out
+        where.append("""category NOT IN ('xfer_out','xfer_in')""")
     if date_from:
         where.append('entry_date>=?'); params.append(date_from)
     if date_to:

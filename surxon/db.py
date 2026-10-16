@@ -10,7 +10,7 @@ from contextlib import contextmanager
 
 from flask import current_app, g
 
-SCHEMA_VERSION = 35
+SCHEMA_VERSION = 36
 
 SCHEMA = r'''
 CREATE TABLE IF NOT EXISTS brigadiers (
@@ -751,6 +751,22 @@ CREATE TABLE IF NOT EXISTS yordamchi_actions (  -- v33: a change the assistant p
   created_at TEXT NOT NULL,
   done_at TEXT
 );
+CREATE TABLE IF NOT EXISTS tally_floats (     -- v36: the field clerk pays the talons himself: cash from the cashier, back in the evening
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  tally_id INTEGER NOT NULL REFERENCES users(id),
+  kind TEXT NOT NULL CHECK (kind IN ('BERISH','TOPSHIRISH')),   -- morning / top-up · evening hand-back
+  status TEXT NOT NULL CHECK (status IN ('KUTILMOQDA','QABUL','BEKOR')),
+  day TEXT NOT NULL,
+  amount INTEGER NOT NULL CHECK (amount > 0),   -- given · counted by the cashier
+  expected INTEGER,                             -- hand-back: what the clerk should have had in hand
+  from_box INTEGER REFERENCES cashboxes(id), to_box INTEGER REFERENCES cashboxes(id),
+  out_entry_id INTEGER REFERENCES cash_entries(id), in_entry_id INTEGER REFERENCES cash_entries(id),
+  note TEXT, client_uuid TEXT UNIQUE,
+  created_by INTEGER REFERENCES users(id), created_at TEXT NOT NULL,
+  confirmed_by INTEGER REFERENCES users(id), confirmed_at TEXT,
+  void_reason TEXT, voided_by INTEGER REFERENCES users(id), voided_at TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_tally_floats ON tally_floats(tally_id, day);
 CREATE TABLE IF NOT EXISTS yordamchi_guides (  -- v35: a task the admin gave someone; the assistant teaches it step by step
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   user_id INTEGER NOT NULL REFERENCES users(id),
@@ -1256,6 +1272,8 @@ def migrate(db):
     _add_column(db, 'harvests', 'fix_reason', 'TEXT')
     # v34: the evening count's holder trip — a brigade had no trailer entered that day, the talons (pay) still go somewhere
     _add_column(db, 'trailer_loads', 'pay_only', 'INTEGER')
+    # v36: this field clerk pays the talons himself from his own cash box (tally_floats)
+    _add_column(db, 'users', 'pays_cash', 'INTEGER')
     # Future column changes go here as: if version < N: ALTER TABLE ...
     db.execute('UPDATE schema_version SET version=? WHERE version < ?', (SCHEMA_VERSION, SCHEMA_VERSION))
 
@@ -1291,6 +1309,8 @@ def doc_number(db, prefix, year):
 
 
 def cash_prefix(direction, category):
+    if (category or '').startswith('xfer_'):     # money moved between our own boxes (cashier ↔ field clerk)
+        return 'TRF'
     if direction == 'IN':
         return 'INC'
     if category in ('worker_pay', 'advance', 'combine_pay', 'tezpul_pay', 'driver_pay'):
@@ -1298,6 +1318,7 @@ def cash_prefix(direction, category):
     if category in ('adjust_in', 'adjust_out'):
         return 'ADJ'
     return 'EXP'
+
 
 
 def _backfill_v5(db):

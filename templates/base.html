@@ -82,6 +82,7 @@
       {{ nav('hamyon.today', 'Bugungi amallar', 'list') }}{% endif %}
       {{ nav('tezpul.panel', 'TEZ-PUL (talon to‘lovlari)', 'cash', 'tezpul.panel', ['tezpul.panel', 'tezpul.talons']) }}
       {{ nav('tezpul.drivers', 'Shofyorlar (odam tashish)', 'truck', 'tezpul.panel') }}
+      {{ nav('hkassa.cashier', 'Hisobchilar kassasi', 'wallet', 'hkassa.give') }}
       {% if current_user['role'] == 'accountant' %}{{ nav('tezpul.kassa', 'TEZ-PUL kassa (skaner)', 'camera') }}{% endif %}
       {{ nav('acct.cashier', 'Kassir', 'cash', 'payouts.pay', ['acct.cashier']) }}
       {{ nav('acct.payouts', 'Ishchilarga to‘lovlar', 'card', 'payouts.view', ['acct.payouts']) }}

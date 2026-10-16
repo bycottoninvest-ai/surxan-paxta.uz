@@ -85,8 +85,8 @@ def build(year, dan, gacha, brig=None, money=False):
                  'in_field': scalar("SELECT COUNT(*) FROM trailer_loads WHERE status='OCHIQ'" + (' AND brigadier_id=?' if brig else ''), bp)}
     fuel = scalar('''SELECT COALESCE(SUM(liters),0) FROM fuel_ops WHERE kind='BERISH' AND voided_at IS NULL
                      AND substr(created_at,1,10) BETWEEN ? AND ?''', per)
-    cash = scalar('''SELECT COALESCE(SUM(amount),0) FROM cash_entries WHERE direction='OUT' AND voided_at IS NULL
-                     AND entry_date BETWEEN ? AND ?''', per) if money else None
+    cash = scalar(f'''SELECT COALESCE(SUM(amount),0) FROM cash_entries WHERE direction='OUT' AND voided_at IS NULL
+                     AND entry_date BETWEEN ? AND ? AND category NOT IN ('xfer_out','xfer_in')''', per) if money else None
 
     brigades = []
     for b in q('''SELECT b.id, b.name, b.full_name, b.photo_id,

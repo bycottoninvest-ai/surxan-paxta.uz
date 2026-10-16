@@ -91,6 +91,9 @@ def home():
                ((current_season(get_db()),) * 2) + ((brig,) if brig else ()))
     from ..tezpul import in_use
     from ..settings import get_bool
+    from ..hkassa import mine as my_cash
+    from ..security import current_actor
+    kassam = my_cash(current_actor())          # a field clerk who pays talons: his day's cash
     if get_bool('dala_qogoz'):
         # paper in the field: the clerk's day is the evening count — one big start, today's talons, old trips to close
         evening = q('''SELECT t.number, t.kg, t.amount, t.status, t.people, b.name brigade FROM tezpul_talons t
@@ -98,9 +101,10 @@ def home():
                        WHERE t.entered_by=? AND substr(t.entered_at,1,10)=? AND t.status IN ('TAYYOR','TOLANDI')
                        ORDER BY t.entered_at DESC''', (uid, today_str()))
         from ..tezpul import number_text
-        return render_template('dala_home_paper.html', evening=evening, num=number_text)
+        return render_template('dala_home_paper.html', evening=evening, num=number_text, kassam=kassam, kassam_day=today_str())
+    from ..tezpul import number_text
     return render_template('dala_home.html', open_trips=open_trips, done_trips=done_trips, today=today, fields=fields,
-                           tezpul=in_use(),
+                           tezpul=in_use(), num=number_text, kassam=kassam, kassam_day=today_str(),
                            map_center=get_setting('map_center'))
 
 

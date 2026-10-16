@@ -50,7 +50,7 @@ def finance_summary(date_from, date_to, cashbox_id=None):
                      (date_from, date_to)))
     exp = q('''SELECT category, SUM(amount) amount, COUNT(*) n FROM expenses WHERE voided_at IS NULL
                AND expense_date BETWEEN ? AND ? GROUP BY category ORDER BY amount DESC''', (date_from, date_to))
-    box_where, box_p = ('AND cashbox_id=?', [cashbox_id]) if cashbox_id else ('', [])
+    box_where, box_p = ('AND cashbox_id=?', [cashbox_id]) if cashbox_id else (f"AND category NOT IN ('xfer_out','xfer_in')", [])
     cash = q(f'''SELECT COALESCE(SUM(CASE WHEN direction='IN' THEN amount END),0) i,
                         COALESCE(SUM(CASE WHEN direction='OUT' THEN amount END),0) o,
                         COALESCE(SUM(CASE WHEN category='worker_pay' THEN amount END),0) wages,

@@ -88,12 +88,13 @@ button{font:inherit;border:0;cursor:pointer}
 .drv .r em{font-style:normal;font-weight:900;font-size:16px;color:#137a37;white-space:nowrap}
 .drv .r button{background:var(--green);color:#fff;border-radius:10px;padding:9px 10px;font-weight:850;font-size:13.5px;white-space:nowrap}
 .zoom{position:fixed;inset:0;background:#000;z-index:20;overflow:auto}.zoom img{display:block;width:230%;max-width:none}
+.ctx .hand{background:#e5f6eb;color:#137a37;border-radius:10px;padding:2px 8px;font-weight:800}.ctx .hand b{font-size:15px}
 .zoom button{position:fixed;top:12px;right:12px;background:#fff;color:#0b2a55;border-radius:12px;padding:10px 14px;font-weight:850;font-size:16px;z-index:21}
 </style></head>
 <body><div class="app">
-  <div class="top"><div class="brand">SURXON <b>TEZ-PUL</b></div>{% if standin == 'tally' %}<a href="{{ url_for('dala.home') }}">🔁 Terim ›</a>{% endif %}<a href="{{ url_for('tezpul.kechki') }}">🌙 Kechki hisob</a><a href="{{ url_for('hamyon.home') }}">Kassa ›</a></div>
+  <div class="top"><div class="brand">SURXON <b>TEZ-PUL</b></div>{% if standin == 'tally' %}<a href="{{ url_for('dala.home') }}">🔁 Terim ›</a>{% endif %}<a href="{{ url_for('tezpul.kechki') }}">🌙 Kechki hisob</a>{% if hand is not none %}<a href="{{ url_for('dala.home') }}">Mening kassam ›</a>{% else %}<a href="{{ url_for('hamyon.home') }}">Kassa ›</a>{% endif %}</div>
   <div class="net" id="net">📡 Internet yo‘q — pul berish yopiq. Aloqa kelishini kuting.</div>
-  <div class="ctx"><span>{{ box_name }}</span><span>Talon → summa → PUL BERILDI</span></div>
+  <div class="ctx"><span>{{ box_name }}</span>{% if hand is not none %}<span class="hand">Qo‘limda: <b id="c-hand">{{ hand|num }}</b> so‘m</span>{% else %}<span>Talon → summa → PUL BERILDI</span>{% endif %}</div>
   <div class="toast" id="toast"></div>
 
   <!-- 1: scan -->
@@ -269,6 +270,7 @@ button{font:inherit;border:0;cursor:pointer}
     if (j.ok) {
       const r = j.result;
       $('c-n').textContent = j.today.n; $('c-kg').textContent = kgfmt(j.today.kg); $('c-sum').textContent = fmt(j.today.amount);
+      if (j.hand != null && $('c-hand')) $('c-hand').textContent = fmt(j.hand);
       toast(r.count > 1 ? `✓ Berildi: ${r.count} talon — ${fmt(r.amount)} so‘m` : `✓ Berildi: № ${r.number} — ${kgfmt(r.kg)} kg · ${fmt(r.amount)} so‘m`);
       if (navigator.vibrate) navigator.vibrate([60, 40, 60]);
       reset(); return;

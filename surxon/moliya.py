@@ -212,7 +212,7 @@ def period(p, a=None, b=None):
 def _cash(a, b):
     return q('''SELECT COALESCE(SUM(CASE WHEN direction='IN' THEN amount END),0) i,
                        COALESCE(SUM(CASE WHEN direction='OUT' THEN amount END),0) o
-                FROM cash_entries WHERE voided_at IS NULL AND entry_date BETWEEN ? AND ?''', (a, b), one=True)
+                FROM cash_entries WHERE voided_at IS NULL AND entry_date BETWEEN ? AND ? AND category NOT IN ('xfer_out','xfer_in')''', (a, b), one=True)
 
 
 def _exp(a, b, *names):

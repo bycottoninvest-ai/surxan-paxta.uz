@@ -1058,10 +1058,12 @@ CASH_CATEGORIES = {
     'refund_combine_pay': ('IN', 'Kombayn to‘lovi qaytarildi'),
     'tezpul_pay': ('OUT', 'Qo‘l terim (talon)'),
     'driver_pay': ('OUT', 'Shofyor (odam tashish)'),
+    'xfer_out': ('OUT', 'Kassadan kassaga (hisobchi)'),
+    'xfer_in': ('IN', 'Kassadan kassaga (hisobchi)'),
 }
 # categories only created by their own flows (payment orders, day close, debts), never typed on the kassa form
 SYSTEM_CASH_CATEGORIES = {'combine_pay', 'adjust_in', 'adjust_out', 'debt_in', 'debt_out', 'refund_worker_pay',
-                          'refund_advance', 'refund_combine_pay', 'tezpul_pay', 'driver_pay'}
+                          'refund_advance', 'refund_combine_pay', 'tezpul_pay', 'driver_pay', 'xfer_out', 'xfer_in'}
 
 
 def add_expense(actor, *, amount, expense_date, category, field_id=None, brigadier_id=None, equipment_id=None, payer='',

@@ -18,9 +18,9 @@ bp = Blueprint('tezpul', __name__)
 
 
 @bp.get('/tezpul')
-@perm_required('payouts.pay', 'tezpul.panel')
+@perm_required('tezpul.pay', 'tezpul.panel')
 def home():
-    return redirect(url_for('tezpul.kassa' if can('payouts.pay') and not can('tezpul.manage') else 'tezpul.panel'))
+    return redirect(url_for('tezpul.kassa' if can('tezpul.pay') and not can('tezpul.manage') else 'tezpul.panel'))
 
 
 def _refused(err):
@@ -142,14 +142,16 @@ def dala_photo():
 # ------------------------------------------------------------------ cashier
 
 @bp.get('/tezpul/kassa')
-@perm_required('payouts.pay')
+@perm_required('tezpul.pay')
 def kassa():
     from .. import accounting as A
     from ..db import get_db
-    box = A._cashbox(get_db(), current_actor(), None)
+    actor = current_actor()
+    box = A._cashbox(get_db(), actor, None)
     name = q('SELECT name FROM cashboxes WHERE id=?', (box,), one=True)
-    return render_template('tezpul_kassa.html', box_name=name['name'] if name else 'Kassa', today=T.today_counter(current_actor()),
-                           due=T.drivers_due())
+    clerk = actor.pays_cash and not actor.acts_as('cashier')       # a field clerk paying from his own box
+    return render_template('tezpul_kassa.html', box_name=name['name'] if name else 'Kassa', today=T.today_counter(actor),
+                           due=[] if clerk else T.drivers_due(), hand=A.box_balance(get_db(), box) if clerk else None)
 
 
 @bp.post('/tezpul/shofyor/tolash')
@@ -179,7 +181,7 @@ def drivers():
 
 
 @bp.post('/tezpul/talon')
-@perm_required('payouts.pay')
+@perm_required('tezpul.pay')
 def lookup():
     try:
         t = T.lookup(post_actor(), request.form.get('code'), request.form.get('manual_code', ''))
@@ -189,14 +191,20 @@ def lookup():
 
 
 @bp.post('/tezpul/tolash')
-@perm_required('payouts.pay')
+@perm_required('tezpul.pay')
 def pay():
     try:
         r = T.pay(post_actor(), request.form.getlist('code'), manual_codes=request.form.getlist('manual_code'),
                   client_uuid=form_uuid())
     except T.Refused as err:
         return _refused(err)
-    return jsonify(ok=True, result=r, today=T.today_counter(current_actor()))
+    actor = current_actor()
+    hand = None
+    if actor.pays_cash and not actor.acts_as('cashier'):
+        from .. import accounting as A
+        from ..db import get_db
+        hand = A.box_balance(get_db(), A._cashbox(get_db(), actor, None))
+    return jsonify(ok=True, result=r, today=T.today_counter(actor), hand=hand)
 
 
 # ------------------------------------------------------------------ rahbar

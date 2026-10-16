@@ -148,7 +148,7 @@ def director_text(day=None):
                      + (f' (shundan {_n(prov)} taxminiy — PQ-17 kutilmoqda)' if prov else ''))
 
     cash = q('''SELECT COALESCE(SUM(CASE WHEN direction='IN' THEN amount END),0) i, COALESCE(SUM(CASE WHEN direction='OUT' THEN amount END),0) o
-                FROM cash_entries WHERE voided_at IS NULL AND entry_date=?''', (day,), one=True)
+                FROM cash_entries WHERE voided_at IS NULL AND entry_date=? AND category NOT IN ('xfer_out','xfer_in')''', (day,), one=True)
     exp = scalar('SELECT COALESCE(SUM(amount),0) FROM expenses WHERE voided_at IS NULL AND expense_date=?', (day,))
     lines += ['', '💰 PUL (bugun)', f'Kassa kirim {_n(cash["i"])} · chiqim {_n(cash["o"])} · xarajat {_n(exp)} so‘m',
               f'Kassa qoldig‘i: {_n(total_balance(db))} so‘m']

@@ -168,7 +168,7 @@ def mobile_home(year, day, brig, kpi):
                                          "AND voided_at IS NULL", (year,)))
         ctx['cash_today'] = q('''SELECT COALESCE(SUM(CASE WHEN direction='IN' THEN amount END),0) inflow,
                                         COALESCE(SUM(CASE WHEN direction='OUT' THEN amount END),0) outflow
-                                 FROM cash_entries WHERE entry_date=? AND voided_at IS NULL''', (day,), one=True)
+                                 FROM cash_entries WHERE entry_date=? AND voided_at IS NULL AND category NOT IN ('xfer_out','xfer_in')''', (day,), one=True)
     return render_template('mobile_home.html', kuz=_kuz(day), **ctx)
 
 

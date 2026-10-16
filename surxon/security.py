@@ -59,6 +59,8 @@ PERMISSIONS = {
     'payouts.view': {'manager', 'accountant', 'cashier'},
     'payouts.prepare': {'accountant'},
     'payouts.pay': {'accountant', 'cashier'},
+    'tezpul.pay': {'accountant', 'cashier'},       # PUL BERILDI on a talon (+ a field clerk the admin let pay: pays_cash)
+    'hkassa.give': {'accountant', 'cashier'},      # hand a field clerk his day's cash, take back what is left
     'tezpul.panel': {'manager', 'accountant'},      # SURXON TEZ-PUL: the day's talon figures (read)
     'tezpul.count': {'manager', 'accountant', 'tally', 'cashier'},   # the evening count of a starshi's talon (photos)
     'tezpul.manage': {'manager'},                  # print talons, hand packs to brigades, approve big kg, cancel a talon
@@ -108,10 +110,23 @@ def acts_as(user, role):
     return bool(user) and (user['role'] == role or standin(user) == role)
 
 
+# a field clerk who pays the talons himself (Admin → Hisobchilar kassasi): only the talon payment, from his own box
+PAYS_CASH_PERMS = {'tezpul.pay'}
+
+
+def pays_cash(user):
+    if not user:
+        return False
+    keys = user.keys() if hasattr(user, 'keys') else user
+    return user['role'] == 'tally' and 'pays_cash' in keys and bool(user['pays_cash'])
+
+
 def has_perm(user, perm):
     if not user:
         return False
     if user['role'] == 'admin':
+        return True
+    if perm in PAYS_CASH_PERMS and pays_cash(user):
         return True
     roles = PERMISSIONS.get(perm, set())
     return user['role'] in roles or standin(user) in roles
@@ -140,6 +155,7 @@ class Actor:
     station_id: int | None = None       # punkt operator: the only receiving point they may act on
     standin_role: str | None = None     # o‘rinbosar: the second role held today (see standin())
     standin_until: str | None = None
+    pays_cash: bool = False             # a field clerk paying talons from his own box
 
     @classmethod
     def from_user(cls, user, source='web', ip=None):
@@ -149,10 +165,12 @@ class Actor:
                    source, ip, user['full_name'],
                    user['station_id'] if user['role'] == 'station' and 'station_id' in keys else None,
                    user['standin_role'] if 'standin_role' in keys else None,
-                   user['standin_until'] if 'standin_until' in keys else None)
+                   user['standin_until'] if 'standin_until' in keys else None,
+                   pays_cash(user))
 
     def _as_user(self):
-        return {'role': self.role, 'standin_role': self.standin_role, 'standin_until': self.standin_until}
+        return {'role': self.role, 'standin_role': self.standin_role, 'standin_until': self.standin_until,
+                'pays_cash': self.pays_cash}
 
     def can(self, perm):
         return has_perm(self._as_user(), perm)
@@ -256,7 +274,7 @@ def _stored(acc):
 def _allowed(user, ep):
     if user['role'] not in ('station', 'cashier', 'tally', 'fuel'):
         return True
-    return _gate_open(user['role'], ep) or _gate_open(standin(user), ep)
+    return _gate_open(user['role'], ep) or _gate_open(standin(user), ep) or (pays_cash(user) and ep in PAYS_CASH_ENDPOINTS)
 
 
 def _referrer_endpoint():
@@ -303,6 +321,9 @@ CASHIER_ENDPOINTS = STATION_ENDPOINTS | {'acct.cashier', 'acct.payout_pay', 'acc
 # SURXON TEZ-PUL: the cashier's two-step screen
 TEZPUL_EVENING = {'tezpul.kechki', 'tezpul.kechki_lookup', 'tezpul.kechki_save', 'tezpul.dala_photo'}
 TEZPUL_CASHIER = {'tezpul.home', 'tezpul.kassa', 'tezpul.lookup', 'tezpul.pay', 'tezpul.pay_driver'} | TEZPUL_EVENING
+# Hisobchilar kassasi: the cashier gives / takes back; a paying field clerk opens the talon screen and his own card
+HKASSA_CASHIER = {'hkassa.cashier', 'hkassa.give', 'hkassa.receive', 'hkassa.cancel'}
+PAYS_CASH_ENDPOINTS = {'tezpul.kassa', 'tezpul.lookup', 'tezpul.pay', 'hkassa.mine', 'hkassa.accept'}
 TEZPUL_FIELD = {'tezpul.dala', 'tezpul.dala_lookup', 'tezpul.dala_save'} | TEZPUL_EVENING
 
 
@@ -322,7 +343,7 @@ def _gate_open(role, ep):
     if role == 'station':
         return ep in STATION_ENDPOINTS or ep in STATION_EXTRA or ep.startswith('punkt.')
     if role == 'cashier':
-        return ep in CASHIER_ENDPOINTS or ep.startswith('hamyon.') or ep in TEZPUL_CASHIER
+        return ep in CASHIER_ENDPOINTS or ep.startswith('hamyon.') or ep in TEZPUL_CASHIER or ep in HKASSA_CASHIER
     if role == 'fuel':
         return ep in FUEL_ENDPOINTS or ep.startswith('yoqilgi.op_') or ep == 'yoqilgi.home'
     return False
@@ -335,7 +356,7 @@ def station_gate():
     ep = request.endpoint or ''
     if not user or user['role'] not in ('station', 'cashier', 'tally', 'fuel'):
         return None
-    if _gate_open(user['role'], ep) or _gate_open(standin(user), ep):
+    if _gate_open(user['role'], ep) or _gate_open(standin(user), ep) or (pays_cash(user) and ep in PAYS_CASH_ENDPOINTS):
         return None
     if wants_json():
         return jsonify(ok=False, error='Bu amal uchun huquqingiz yo‘q.'), 403

@@ -83,6 +83,15 @@ Kassir kg yoza olmaydi va o‘zgartira olmaydi.
 - **“Yangi PB blanka kerak”** — Boshqaruv → Punkt blanklari → yaratish → PDF chop etish.
 - **“Yangi xodim”** — Boshqaruv → Xodimlar va loginlar (rol tanlanadi; punkt operatoriga punkt biriktiriladi).
 
+## Hisobchilar kassasi (hisobchi talon pulini o‘zi beradi)
+- Admin **Buxgalteriya → Hisobchilar kassasi** sahifasida (kassirda — “Mening kassam” dagi tugma) qaysi terim hisobchisi pulni o‘zi berishini yoqadi. Unga alohida kassa ochiladi (“Hisobchi: Ism”).
+- **Ertalab** kassir shu sahifada hisobchiga summani yozib **“Berdim”** ni bosadi (10/20/30 mln tugmalari bor). Pul kassir kassasidan chiqadi.
+- Hisobchi telefonida (Dala sahifasi, “💵 MENING KASSAM”) sariq **“✔ OLDIM”** tugmasini bosadi — pul uning kassasiga tushadi. Bosmaguncha kassir **“↩ Qaytarib olish”** mumkin.
+- Kun davomida hisobchi **“📷 TALON — PUL BERISH”** orqali talonni skanerlab, o‘z qo‘lidagi puldan to‘laydi. Qo‘lidagi pul yetmasa tizim to‘lamaydi.
+- **Kechqurun** kassir qolgan pulni sanab, **“Kechki qabul”** ga sanagan summani yozadi va **“Qabul qildim”** ni bosadi. Tizim “qo‘lida bo‘lishi kerak” bilan solishtiradi — farq bo‘lsa **Farq** deb yoziladi va hisobchining kassasida qoladi (rahbar ko‘radi).
+- 21:00 dan keyin pulni topshirmagan hisobchilar ro‘yxati rahbar va kassirga Telegram’da boradi.
+- Kassir ↔ hisobchi o‘rtasidagi pul **kirim ham, chiqim ham emas** — umumiy hisobotlarda ko‘rinmaydi, faqat kassalar qoldig‘ida.
+
 ## Yordamchi qayerda ishlaydi
 - **Saytda:** har sahifadagi yumaloq paxta tugmasi (direktor, punkt operatori, buxgalter). 🎤 — gapirish.
 - **Telegram botda (shaxsiy):** Telegrami tizimga ulangan har bir xodim botga yozadi yoki ovozli xabar yuboradi —

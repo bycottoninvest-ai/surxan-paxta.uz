@@ -159,8 +159,12 @@ def cash(a, b):
         boxes.append({'id': bx['id'], 'name': bx['name'], 'active': bx['active'], 'opening': opening, 'inflow': r['i'],
                       'outflow': r['o'], 'closing': opening + r['i'] - r['o'], 'now': A.box_balance(db, bx['id'])})
     tot = {k: sum(x[k] for x in boxes) for k in ('opening', 'inflow', 'outflow', 'closing', 'now')}
-    out = q('''SELECT category, SUM(amount) amount FROM cash_entries WHERE direction='OUT' AND voided_at IS NULL
-               AND entry_date BETWEEN ? AND ? GROUP BY category ORDER BY amount DESC''', (a, b))
+    moved = q(f'''SELECT COALESCE(SUM(CASE WHEN direction='IN' THEN amount END),0) i,
+                         COALESCE(SUM(CASE WHEN direction='OUT' THEN amount END),0) o FROM cash_entries
+                  WHERE voided_at IS NULL AND entry_date BETWEEN ? AND ? AND NOT (category NOT IN ('xfer_out','xfer_in'))''', (a, b), one=True)
+    tot['inflow'] -= moved['i']; tot['outflow'] -= moved['o']     # cashier ↔ field clerk is not income nor spending
+    out = q(f'''SELECT category, SUM(amount) amount FROM cash_entries WHERE direction='OUT' AND voided_at IS NULL
+               AND entry_date BETWEEN ? AND ? AND category NOT IN ('xfer_out','xfer_in') GROUP BY category ORDER BY amount DESC''', (a, b))
     from .services import CASH_CATEGORIES
     groups = [{'label': CASH_CATEGORIES.get(r['category'], ('', r['category']))[1], 'amount': r['amount']} for r in out]
     exp = q('''SELECT category, SUM(amount) amount FROM expenses WHERE voided_at IS NULL AND expense_date BETWEEN ? AND ?

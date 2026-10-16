@@ -504,7 +504,7 @@ def finance_summary(year):
     cash = q('''SELECT COALESCE(SUM(CASE WHEN direction='IN' THEN amount END),0) inflow,
                        COALESCE(SUM(CASE WHEN direction='OUT' THEN amount END),0) outflow,
                        COALESCE(SUM(CASE WHEN category='opening' THEN amount END),0) opening
-                FROM cash_entries WHERE season_year=? AND voided_at IS NULL''', (year,), one=True)
+                FROM cash_entries WHERE season_year=? AND voided_at IS NULL AND category NOT IN ('xfer_out','xfer_in')''', (year,), one=True)
     return {
         'shipped_kg': shipped['kg'], 'waybills': shipped['n'], 'accepted_kg': acc['kg'],
         'receivable': acc['amount'], 'unpriced': acc['unpriced'] or 0, 'received': received,

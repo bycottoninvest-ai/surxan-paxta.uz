@@ -5,6 +5,7 @@
 <div class="d-wrap">
   <h1 class="d-h1">Salom, {{ current_user['full_name'].split()[0] }}</h1>
   <div class="small muted">Bugun siz yozdingiz: <b>{{ today.kg|num }} kg</b> · {{ today.people }} kishi</div>
+  {% include '_hkassa_card.html' %}
 
   {% for t in open_trips %}
   <a class="d-continue" href="{{ url_for('dala.trip', load_id=t.id) }}">

@@ -16,8 +16,21 @@
   <div class="kpi"><div class="sq bg-purple">🧾</div><div><div class="label">Mavsum: to‘langan</div><div class="value">{{ p.season.amount|num }} <small>so‘m</small></div><div class="tiny muted">{{ p.season.n }} talon · {{ p.season.kg|num(0) }} kg · bo‘sh talon {{ p.blank }}</div></div></div>
 </div>
 {% if p.legacy %}<div class="notice">⚠️ {{ p.legacy }} ta talon eski tartibda (kassir kg yozgan) qolgan — Talonlar sahifasida bekor qiling.</div>{% endif %}
-{% for s in p.self_paid %}<div class="notice" style="background:#fde9ee;border-color:#f3a3b5;color:#a0153a">🔴 <b>{{ s.name }}</b> o‘zi kg yozib, o‘zi pul bergan:
-  {{ s.n }} talon · {{ s.kg|num(1) }} kg · {{ s.amount|num }} so‘m — talonlar: {% for x in (s.numbers or '').split(',')[:30] %}{{ num(x|int) }}{% if not loop.last %}, {% endif %}{% endfor %}{% if s.n > 30 %} …{% endif %}. Daftar va punkt bilan solishtiring.</div>{% endfor %}
+{% for s in p.self_paid %}{% if s.allowed %}<div class="notice">🧑‍🌾 <b>{{ s.name }}</b> (pulni o‘zi beradigan hisobchi) o‘zi yozgan talonlarni to‘lagan:
+  {{ s.n }} talon · {{ s.kg|num(1) }} kg · {{ s.amount|num }} so‘m. Kechqurun daftar, starshi varaqlari va punkt bilan solishtiring.</div>
+{% else %}<div class="notice" style="background:#fde9ee;border-color:#f3a3b5;color:#a0153a">🔴 <b>{{ s.name }}</b> o‘zi kg yozib, o‘zi pul bergan:
+  {{ s.n }} talon · {{ s.kg|num(1) }} kg · {{ s.amount|num }} so‘m — talonlar: {% for x in (s.numbers or '').split(',')[:30] %}{{ num(x|int) }}{% if not loop.last %}, {% endif %}{% endfor %}{% if s.n > 30 %} …{% endif %}. Daftar va punkt bilan solishtiring.</div>{% endif %}{% endfor %}
+{% if p.clerk_cash.rows %}{% set cc = p.clerk_cash %}
+<section class="card" style="margin-bottom:14px"><div class="card-h"><h3>🧑‍🌾 Hisobchilar kassasi — pulni o‘zi beradiganlar</h3>
+  {% if can('hkassa.give') %}<a class="btn btn-light btn-sm" href="{{ url_for('hkassa.cashier', kun=p.day) }}">Ochish ›</a>{% endif %}</div><div class="card-b">
+  <div class="table-wrap"><table class="t"><thead><tr><th>Hisobchi</th><th class="num">Oldi</th><th class="num">Talonga berdi</th><th class="num">Talon</th><th class="num">Topshirdi</th><th class="num">Qo‘lida</th><th class="num">Farq</th><th>Holat</th></tr></thead><tbody>
+  {% for r in cc.rows %}<tr><td class="b">{{ r.name }}</td><td class="num">{{ r.given|num }}{% if r.pending_sum %} <span class="badge b-orange" title="hali OLDIM demagan">+{{ r.pending_sum|num }}</span>{% endif %}</td>
+    <td class="num">{{ r.paid|num }}</td><td class="num">{{ r.paid_n }}</td><td class="num">{{ r.returned|num }}</td>
+    <td class="num">{% if r.hand %}<b>{{ r.hand|num }}</b>{% else %}0{% endif %}</td>
+    <td class="num">{% if r.farq %}<span class="badge b-red">{{ r.farq|num }}</span>{% else %}—{% endif %}</td>
+    <td>{{ {'boshlanmagan': 'pul olmagan', 'kutmoqda': 'OLDIM kutilmoqda', 'qolida': 'ishlayapti', 'topshirdi': '✓ topshirdi', 'farq': '⚠ farq'}[r.state] }}</td></tr>{% endfor %}
+  <tr class="b"><td>Jami</td><td class="num">{{ cc.tot.given|num }}</td><td class="num">{{ cc.tot.paid|num }}</td><td class="num">{{ cc.tot.paid_n }}</td><td class="num">{{ cc.tot.returned|num }}</td><td class="num">{{ cc.tot.hand|num }}</td><td class="num">{{ cc.tot.farq|num }}</td><td></td></tr>
+  </tbody></table></div></div></section>{% endif %}
 <div class="grid">
   <section class="card s6"><div class="card-h"><h3>👥 Brigadalar natijasi</h3></div><div class="card-b">
     <div class="table-wrap"><table class="t"><thead><tr><th>Brigada</th><th class="num">Talon</th><th class="num">Talon kg</th><th class="num">Telashkalar (dala)</th><th class="num">Hisoblangan</th><th class="num">Berildi</th><th class="num">Punkt qabul (qo‘l)</th><th class="num">Farq</th></tr></thead><tbody>

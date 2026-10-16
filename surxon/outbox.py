@@ -364,6 +364,11 @@ def run_once(limit=50):
     except Exception as exc:  # kuzatuv schedule/delivery problems never block the archive deliveries
         print(f'kuzatuv tick failed: {exc}', flush=True)
     try:
+        from .hkassa import tick as hkassa_tick
+        hkassa_tick()
+    except Exception as exc:  # the clerks' cash reminder never blocks deliveries
+        print(f'hkassa reminder failed: {exc}', flush=True)
+    try:
         from .nazorat import tick as nazorat_tick
         nazorat_tick()
     except Exception as exc:  # the self-check never blocks deliveries

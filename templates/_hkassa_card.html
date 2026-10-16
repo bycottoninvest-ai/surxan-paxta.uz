@@ -1,0 +1,44 @@
+{% from 'macros.html' import csrf with context %}
+{# The paying field clerk's own cash: money waiting for “OLDIM”, what is in hand, paid, handed back. #}
+{% if kassam %}
+<div class="hk">
+  <div class="hk-h"><span>💵 MENING KASSAM</span><em>{{ kassam_day[8:10] }}.{{ kassam_day[5:7] }}</em></div>
+  {% for p in kassam.pending %}
+  <form method="post" action="{{ url_for('hkassa.accept', fid=p.id) }}" class="hk-take" data-confirm="{{ p.amount|num }} so‘m qo‘lingizga tegdimi? Sanab oldingizmi?">{{ csrf() }}
+    <button><span class="hk-take-t">✔ OLDIM</span><b>{{ p.amount|num }} <i>so‘m</i></b><small>kassir berdi · {{ p.created_at[11:16] }} — sanab oling, keyin bosing</small></button>
+  </form>
+  {% endfor %}
+  <div class="hk-hand"><span>Qo‘limda</span><b>{{ kassam.hand|num }}</b><i>so‘m</i></div>
+  <div class="hk-3">
+    <div><b>{{ kassam.given|num }}</b><span>oldim</span></div>
+    <div><b>{{ kassam.paid|num }}</b><span>berdim · {{ kassam.paid_n }} talon</span></div>
+    <div><b>{{ kassam.returned|num }}</b><span>topshirdim</span></div>
+  </div>
+  {% if kassam.hand > 0 %}<a class="hk-pay" href="{{ url_for('tezpul.kassa') }}">📷 TALON — PUL BERISH <span>›</span></a>
+  {% elif not kassam.pending %}<div class="hk-empty">{{ 'Bugungi pul topshirildi ✓' if kassam.state == 'topshirdi' else 'Qo‘lingizda pul yo‘q — kassirdan oling' }}</div>{% endif %}
+  {% if kassam.farq %}<div class="hk-farq">⚠ Farq {{ kassam.farq|num }} so‘m — rahbar bilan gaplashing</div>{% endif %}
+  {% if kassam.last %}<div class="hk-last"><div class="hk-last-h">Oxirgi to‘lovlar</div>{% for t in kassam.last %}<div><span>№ {{ num(t.number) }} · {{ (t.paid_at or '')[11:16] }}</span><b>{{ (t.amount or 0)|num }}</b></div>{% endfor %}</div>{% endif %}
+  <div class="hk-note">🌙 Kechqurun qolgan pulni kassirga topshiring — kassir sanab “Qabul qildim” bosadi.</div>
+</div>
+<style>
+.hk{background:linear-gradient(155deg,#0b2a55 0%,#123d78 60%,#1b5aa8 100%);color:#fff;border-radius:24px;padding:16px 16px 14px;margin:6px 0 16px;box-shadow:0 12px 28px rgba(11,42,85,.30)}
+.hk-h{display:flex;justify-content:space-between;align-items:center;font-size:13px;font-weight:900;letter-spacing:1.2px;opacity:.92}
+.hk-h em{font-style:normal;background:rgba(255,255,255,.14);border-radius:999px;padding:3px 10px;letter-spacing:0}
+.hk-take{margin:12px 0 4px}.hk-take button{width:100%;border:0;border-radius:18px;padding:14px 12px;background:linear-gradient(135deg,#ffcf3f,#f5a300);color:#3b2600;
+  display:flex;flex-direction:column;align-items:center;gap:2px;box-shadow:0 8px 20px rgba(245,163,0,.45);animation:hkp 1.6s ease-in-out infinite;cursor:pointer}
+.hk-take-t{font-size:15px;font-weight:950;letter-spacing:1px}.hk-take b{font-size:30px;font-weight:950;line-height:1.1}.hk-take b i{font-size:15px;font-style:normal}
+.hk-take small{font-size:12.5px;font-weight:700;opacity:.85}
+@keyframes hkp{0%,100%{transform:scale(1)}50%{transform:scale(1.02)}}
+.hk-hand{text-align:center;margin:14px 0 10px}.hk-hand span{display:block;font-size:13px;opacity:.8;font-weight:700}
+.hk-hand b{font-size:40px;font-weight:950;letter-spacing:.5px;line-height:1.05;font-variant-numeric:tabular-nums}.hk-hand i{font-style:normal;font-size:16px;opacity:.85;margin-left:4px}
+.hk-3{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}.hk-3 div{background:rgba(255,255,255,.11);border-radius:14px;padding:9px 4px;text-align:center}
+.hk-3 b{display:block;font-size:15.5px;font-weight:900;font-variant-numeric:tabular-nums}.hk-3 span{font-size:11.5px;opacity:.82}
+.hk-pay{display:flex;justify-content:center;gap:8px;align-items:center;margin-top:12px;background:#1e9e4a;color:#fff;text-decoration:none;border-radius:18px;padding:17px 10px;
+  font-size:19px;font-weight:950;letter-spacing:.3px;white-space:nowrap;box-shadow:0 8px 18px rgba(30,158,74,.45)}.hk-pay span{font-size:24px;line-height:0}
+.hk-empty{margin-top:12px;text-align:center;background:rgba(255,255,255,.1);border-radius:14px;padding:12px;font-weight:800}
+.hk-farq{margin-top:10px;background:#fde9ee;color:#a0153a;border-radius:12px;padding:10px;font-weight:850;text-align:center}
+.hk-last{margin-top:12px;background:rgba(255,255,255,.08);border-radius:14px;padding:8px 12px}.hk-last-h{font-size:12px;opacity:.75;font-weight:800;margin-bottom:2px}
+.hk-last div:not(.hk-last-h){display:flex;justify-content:space-between;font-size:13.5px;padding:3px 0;border-top:1px solid rgba(255,255,255,.08)}
+.hk-note{margin-top:10px;font-size:12.5px;opacity:.85;text-align:center}
+</style>
+{% endif %}

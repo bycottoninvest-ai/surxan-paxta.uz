@@ -11,6 +11,7 @@
   {% if pending %}<a class="hm-alert" href="{{ url_for('hamyon.fixes') }}">{{ icon('edit','sm') }} Tuzatish so‘rovi: <b>{{ pending }} ta</b> — ko‘rib tasdiqlang</a>{% endif %}
   {% if standin == 'tally' %}<a class="hm-btn" href="{{ url_for('dala.home') }}" style="background:#1e9e4a;border-color:#1e9e4a">🔁<span>TERIM — siz bugun hisobchi o‘rnidasiz<small>Telashka QR → talon → kg</small></span>{{ icon('chev-right') }}</a>{% endif %}
   {% if can('payouts.pay') %}<a class="hm-btn" href="{{ url_for('tezpul.kassa') }}" style="background:#1e9e4a;border-color:#1e9e4a">{{ icon('camera') }}<span>TEZ-PUL — talon bo‘yicha pul<small>QR → summa → PUL BERILDI</small></span>{{ icon('chev-right') }}</a>{% endif %}
+  {% if can('hkassa.give') %}<a class="hm-btn" href="{{ url_for('hkassa.cashier') }}" style="background:#0b2a55;border-color:#0b2a55">🧑‍🌾<span>Hisobchilar kassasi<small>ertalab pul berish · kechqurun qabul</small></span>{{ icon('chev-right') }}</a>{% endif %}
   {% if can('payouts.pay') %}<a class="hm-btn" href="{{ url_for('hamyon.pay') }}">{{ icon('user') }}<span>Ishchiga pul berish{% if ready %}<small>{{ ready }} ta tayyor to‘lov</small>{% endif %}</span>{{ icon('chev-right') }}</a>{% endif %}
   {% if can('expenses.write') %}<a class="hm-btn" href="{{ url_for('hamyon.expense') }}">{{ icon('receipt') }}<span>Xarajat yozish</span>{{ icon('chev-right') }}</a>{% endif %}
   {% if can('cash.write') %}<a class="hm-btn" href="{{ url_for('hamyon.income') }}">{{ icon('plus') }}<span>Kassaga kirim</span>{{ icon('chev-right') }}</a>{% endif %}

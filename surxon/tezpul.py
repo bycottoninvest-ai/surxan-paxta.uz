@@ -455,7 +455,7 @@ def _ready(db, t):
 
 def lookup(actor, code, manual_code=''):
     """What the cashier sees after the scan."""
-    _need(actor, 'payouts.pay')
+    _need(actor, 'tezpul.pay')
 
     def go():
         db = get_db()
@@ -488,7 +488,7 @@ def _detail(db, t):
 def pay(actor, codes, *, manual_codes=None, client_uuid=None):
     """“PUL BERILDI” for one talon or many at once (a starshi brings his team's 50–60 talons): every talon gets the
     whole amount owed on it, all in one transaction — all are paid or none. Same tap sent twice = paid once."""
-    _need(actor, 'payouts.pay')
+    _need(actor, 'tezpul.pay')
     codes = [codes] if isinstance(codes, str) else list(codes or [])
     manual_codes = list(manual_codes or []) + [''] * len(codes)
     if not codes:
@@ -759,7 +759,7 @@ def panel(day=None):
                             WHERE substr(t.entered_at,1,10)=? AND {LIVE} GROUP BY d.id ORDER BY amount DESC''', (day,))]
     # one person both wrote the kg and paid the money (an o‘rinbosar day) — shown in red for the rahbar to check
     self_paid = db.execute('''SELECT u.full_name name, COUNT(*) n, SUM(t.kg) kg, SUM(t.amount) amount,
-                                     GROUP_CONCAT(t.number, ',') numbers
+                                     GROUP_CONCAT(t.number, ',') numbers, MAX(COALESCE(u.pays_cash, 0)) allowed
                               FROM tezpul_talons t LEFT JOIN users u ON u.id=t.paid_by
                               WHERE t.status='TOLANDI' AND t.pay_date=? AND t.paid_by=t.entered_by
                               GROUP BY t.paid_by ORDER BY n DESC''', (day,)).fetchall()
@@ -773,9 +773,14 @@ def panel(day=None):
     return {'day': day, 'entered': dict(entered), 'paid': dict(paid), 'unpaid': dict(unpaid), 'season': dict(season),
             'photos': list(photos.values()),
             'counts': counts, 'brigades': brigades, 'cashiers': cashiers, 'clerks': clerks, 'errors': errors,
-            'self_paid': self_paid, 'drivers': drivers_day,
+            'self_paid': self_paid, 'drivers': drivers_day, 'clerk_cash': _clerk_cash(day),
             'recent': recent, 'issued': sum(counts.values()), 'blank': counts.get('BOSH', 0),
             'legacy': counts.get('KUTILMOQDA', 0)}
+
+
+def _clerk_cash(day):
+    from .hkassa import overview
+    return overview(day)
 
 
 def today_counter(actor):

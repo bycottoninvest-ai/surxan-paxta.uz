@@ -8,6 +8,7 @@
   <div class="ph-hi">Salom, {{ current_user['full_name'].split()[0] }} 👋</div>
 
   {% if standin == 'cashier' %}<a class="ph-kassa" href="{{ url_for('tezpul.kassa') }}">🔁 KASSA <small>bugun kassir o‘rnidasiz</small></a>{% endif %}
+  {% include '_hkassa_card.html' %}
 
   <div class="ph-hero">
     <div class="ph-moon">🌙</div>
