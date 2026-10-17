@@ -364,6 +364,11 @@ def run_once(limit=50):
     except Exception as exc:  # kuzatuv schedule/delivery problems never block the archive deliveries
         print(f'kuzatuv tick failed: {exc}', flush=True)
     try:
+        from .fieldphoto import tick as fieldphoto_tick
+        fieldphoto_tick()
+    except Exception as exc:  # reading the field waybill photos never blocks deliveries
+        print(f'field photo reading failed: {exc}', flush=True)
+    try:
         from .hkassa import tick as hkassa_tick
         hkassa_tick()
     except Exception as exc:  # the clerks' cash reminder never blocks deliveries

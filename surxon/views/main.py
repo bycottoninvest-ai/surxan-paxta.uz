@@ -351,6 +351,8 @@ def can_see_photo(photo):
     if g.user['role'] == 'fuel':      # the fuel keeper sees only the photos they took
         return False
     if g.user['role'] == 'station':
+        if photo['entity_type'] in ('field_photo', 'punkt_blank'):     # the field waybills sent to the punkt
+            return True
         return bool(photo['load_id'] and photo['category'] in ('trailer', 'cotton', 'nayman') and q(
             'SELECT 1 FROM trailer_loads WHERE id=? AND station_id=?', (photo['load_id'], g.user['station_id']), one=True))
     if g.user['role'] == 'tally':

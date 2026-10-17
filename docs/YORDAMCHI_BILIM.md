@@ -83,6 +83,13 @@ Kassir kg yoza olmaydi va o‘zgartira olmaydi.
 - **“Yangi PB blanka kerak”** — Boshqaruv → Punkt blanklari → yaratish → PDF chop etish.
 - **“Yangi xodim”** — Boshqaruv → Xodimlar va loginlar (rol tanlanadi; punkt operatoriga punkt biriktiriladi).
 
+## Nakladnoy rasmi guruhga (dala → punkt, “🚜 Yo‘lda”)
+- Telashka to‘lgach dalachi dala nakladnoyi (PB) **rasmini ish guruhiga** (Surxon paxta guruhi) yuboradi. Bot rasmni saqlaydi, o‘qiydi (PB raqami, telashka, brigada, kg) va rasm ostiga javob yozadi: “✅ PB-0343 · TL-02 · … — punktga yuborildi”.
+- Yunusning **Punkt** sahifasida “🚜 YO‘LDA — guruhdan kelgan nakladnoylar” chiqadi: rasm, kim yuborgani, vaqti, o‘qilgan ma’lumot.
+- Telashka kelganda Yunus **“✅ KELDI — UY-00xx ga qo‘shish”** ni bosadi: nakladnoy ochiq UY ichida o‘qilgan holda ochiladi, tekshirib **“✔ Qo‘shish”** — qayta rasmga olish shart emas.
+- Nakladnoy bo‘lmagan rasm (boshqa surat) jim chetga qo‘yiladi. Xato/takror rasmni Yunus “✕ kerak emas” bilan olib tashlaydi.
+- Guruhga e’lon: **Kuzatuv → “📢 Guruhga xabar yuborish”** — matn tayyor, “Hozir yuborish” bosiladi.
+
 ## Hisobchilar kassasi (hisobchi talon pulini o‘zi beradi)
 - Admin **Buxgalteriya → Hisobchilar kassasi** sahifasida (kassirda — “Mening kassam” dagi tugma) qaysi terim hisobchisi pulni o‘zi berishini yoqadi. Unga alohida kassa ochiladi (“Hisobchi: Ism”).
 - **Ertalab** kassir shu sahifada hisobchiga summani yozib **“Berdim”** ni bosadi (10/20/30 mln tugmalari bor). Pul kassir kassasidan chiqadi.

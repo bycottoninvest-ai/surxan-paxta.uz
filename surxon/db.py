@@ -10,7 +10,7 @@ from contextlib import contextmanager
 
 from flask import current_app, g
 
-SCHEMA_VERSION = 36
+SCHEMA_VERSION = 37
 
 SCHEMA = r'''
 CREATE TABLE IF NOT EXISTS brigadiers (
@@ -751,6 +751,18 @@ CREATE TABLE IF NOT EXISTS yordamchi_actions (  -- v33: a change the assistant p
   created_at TEXT NOT NULL,
   done_at TEXT
 );
+CREATE TABLE IF NOT EXISTS field_photos (     -- v37: the field waybill's photo sent to the work group — on its way to the punkt
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  chat_id TEXT NOT NULL, tg_message_id INTEGER, tg_file_unique_id TEXT UNIQUE,
+  sender TEXT, sender_tg_id TEXT,
+  photo_id INTEGER REFERENCES photos(id),
+  status TEXT NOT NULL DEFAULT 'YANGI' CHECK (status IN ('YANGI','YOLDA','KELDI','BEKOR','BOSHQA')),
+  read_json TEXT, blank_no TEXT, blank_id INTEGER, trailer_text TEXT, total_kg REAL, summary TEXT, note TEXT,
+  created_at TEXT NOT NULL, read_at TEXT,
+  arrived_at TEXT, arrived_by INTEGER REFERENCES users(id), group_id INTEGER,
+  voided_by INTEGER REFERENCES users(id), void_reason TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_field_photos ON field_photos(status, created_at);
 CREATE TABLE IF NOT EXISTS tally_floats (     -- v36: the field clerk pays the talons himself: cash from the cashier, back in the evening
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   tally_id INTEGER NOT NULL REFERENCES users(id),

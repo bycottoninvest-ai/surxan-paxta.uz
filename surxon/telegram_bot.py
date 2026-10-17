@@ -274,15 +274,18 @@ def _on_group_message(m):
     from . import tg_assistant
     if m.get('from') and not m['from'].get('is_bot') and tg_assistant.wants(m, None, group=True):
         return tg_assistant.handle(m, group=True)       # “@bot …”, “Yordamchi, …” or a reply to the bot
-    if not info or not info['is_work'] or not member or member['status'] != 'FAOL' or not kuzatuv.media_of(m):
+    if not info or not info['is_work'] or not member or not kuzatuv.media_of(m):
         return
     reply_to = (m.get('reply_to_message') or {}).get('message_id')
-    req = kuzatuv.open_request_for(get_db(), member, chat['id'], reply_to)
+    req = kuzatuv.open_request_for(get_db(), member, chat['id'], reply_to) if member['status'] == 'FAOL' else None
     if not req:
-        # a photo/video nobody asked for: kept too (setting kuzatuv_group_all) so the screens show what really happens —
-        # silently, the bot does not answer every picture in a busy group
+        # a photo nobody asked for: the field waybill of a full trailer, on its way to the punkt (read in the background,
+        # the bot answers under it); anything else (setting kuzatuv_group_all) is kept silently for the screens
+        from . import fieldphoto
         from .settings import get_bool
-        if get_bool('kuzatuv_group_all'):
+        if fieldphoto.on():
+            fieldphoto.take(m, m['from'])
+        if member['status'] == 'FAOL' and get_bool('kuzatuv_group_all'):
             kuzatuv.save_incoming(member, m, None)
         return
     kuzatuv.save_incoming(member, m, req)

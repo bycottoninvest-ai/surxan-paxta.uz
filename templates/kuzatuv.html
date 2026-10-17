@@ -5,6 +5,13 @@
 <div class="page-h"><h1>{{ icon('video','lg') }} Kuzatuv</h1><span class="sub">Tizim odamlardan ish joyidan rasm/video so‘raydi — javoblar shu yerda</span></div>
 {% set k_active = 'home' %}{% include 'partials/k_tabs.html' %}
 {% if not bot_ok %}<div class="notice mb">{{ icon('alert','sm') }} Telegram bot hali ulanmagan — so‘rovlar saqlanadi, bot ulangach o‘zi yuboriladi.</div>{% endif %}
+{% if groups and can('kuzatuv.request') %}
+<details class="card mb ann"><summary class="card-h"><h3>📢 Guruhga xabar yuborish</h3><span class="tiny muted">bot {{ groups|length }} ta ish guruhiga yozadi</span></summary>
+  <div class="card-b"><form method="post" data-confirm="Xabar guruhga yuborilsinmi?">{{ csrf() }}<input type="hidden" name="action" value="announce">
+    <textarea class="input" name="text" rows="10" style="width:100%;font-size:15px;height:auto;min-height:250px">{{ announce_text }}</textarea>
+    <button class="btn btn-primary" style="margin-top:8px">📢 Hozir yuborish</button>
+    <span class="tiny muted">Matnni o‘zgartirsangiz bo‘ladi. Nakladnoy rasmlari guruhga tashlansa — Punkt ekranida “🚜 Yo‘lda” bo‘lib chiqadi.</span></form></div></details>
+{% endif %}
 {% if not groups %}<div class="notice blue mb">{{ icon('telegram','sm') }} Ishchi guruh belgilanmagan. Botni guruhga qo‘shing va “Odamlar” bo‘limida guruhni tasdiqlang (ixtiyoriy).</div>{% endif %}
 
 <div class="a-tiles k-tiles">

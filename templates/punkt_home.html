@@ -38,6 +38,23 @@
     <a class="py-wait" href="{{ url_for('punkt.group', token=u.token) }}"><span><b>{{ u.number }}</b> · {{ u.n }} ta telashka · {{ u.kg|num }} kg<small>yopilgan — punkt tortishi kutilmoqda</small></span><b>⚖️ Brutto / tara ›</b></a>
     {% endfor %}
     {% if not open_uy %}<a class="py-big py-new" href="{{ url_for('punkt.groups_home') }}">🧾 YANGI UY VARAG‘INI SKANERLASH<small>bo‘sh UY qog‘ozidagi QR ni oching</small></a>{% endif %}
+    {% if yolda %}
+    <div class="yl-h">🚜 YO‘LDA — guruhdan kelgan nakladnoylar <b>{{ yolda|length }}</b></div>
+    {% for y in yolda %}
+    <div class="yl">
+      {% if y.thumb_path %}<a class="yl-img" href="{{ url_for('main.media', path=y.path) }}" target="_blank"><img src="{{ url_for('main.media', path=y.thumb_path) }}" alt=""></a>{% endif %}
+      <div class="yl-b">
+        <b>{{ y.blank_no or ('o‘qilmoqda…' if y.status == 'YANGI' else 'PB raqami o‘qilmadi') }}</b>
+        <span>{{ (y.summary or '').replace((y.blank_no or '~') ~ ' · ', '') or (y.blank_no and '' or 'rasmni oching') }}</span>
+        <small>{{ y.sender }} · {{ y.created_at[11:16] }}{% if y.created_at[:10] != today %} ({{ y.created_at[8:10] }}.{{ y.created_at[5:7] }}){% endif %}{% if y.note %} · {{ y.note }}{% endif %}</small>
+      </div>
+    </div>
+    {% if open_uy %}<a class="yl-go" href="{{ url_for('punkt.group', token=open_uy[0].token, yolda=y.id) }}">✅ KELDI — {{ open_uy[0].number }} ga qo‘shish</a>
+    {% else %}<div class="yl-wait">Telashka kelganda — avval UY varag‘ini skanerlang</div>{% endif %}
+    <form method="post" action="{{ url_for('punkt.yolda_void', fid=y.id) }}" data-confirm="Bu rasm ro‘yxatdan olib tashlansinmi?">{{ csrf() }}
+      <input type="hidden" name="reason" value="nakladnoy emas / takror"><button class="yl-x">✕ kerak emas</button></form>
+    {% endfor %}
+    {% endif %}
     <ol class="py-steps"><li>UY varag‘ini skanerlang (yangi yuk boshlanadi)</li><li>Har telashka kelganda — <b>nakladnoyini rasmga oling</b>, tekshirib “Qo‘shish”</li><li>Hammasi kelgach — <b>yopish</b>, keyin brutto / tara</li></ol>
   </div>
   <style>.py-hero{background:linear-gradient(135deg,#0b2a55,#1d4ed8);color:#fff;border-radius:22px;padding:16px;margin:4px 0 14px;box-shadow:0 10px 26px rgba(11,42,85,.25)}
@@ -49,6 +66,15 @@
   .py-wait{display:flex;justify-content:space-between;align-items:center;gap:8px;background:#fff;color:#0b2a55;text-decoration:none;border-radius:14px;padding:10px 12px;margin:6px 0;font-size:14px}
   .py-wait small{display:block;font-size:12px;color:#b45309;font-weight:700}.py-wait>b{white-space:nowrap;color:#1d4ed8}
   .py-del{display:block;width:100%;background:rgba(255,255,255,.1);color:#fecaca;border:1px dashed rgba(254,202,202,.6);border-radius:12px;padding:9px;font-weight:800;font-size:14px;margin:0 0 10px;cursor:pointer}
+  .yl-h{margin:14px 0 6px;font-size:13px;font-weight:900;letter-spacing:.8px;display:flex;justify-content:space-between;align-items:center}
+  .yl-h b{background:#f59e0b;color:#fff;border-radius:999px;padding:2px 10px;font-size:14px}
+  .yl{display:flex;gap:10px;align-items:center;background:#fff;color:#0b2a55;border-radius:16px 16px 0 0;padding:8px;margin-top:8px}
+  .yl-img img{width:72px;height:72px;object-fit:cover;border-radius:12px;display:block}
+  .yl-b{flex:1;min-width:0}.yl-b b{display:block;font-size:18px}.yl-b span{display:block;font-size:13.5px;line-height:1.3}
+  .yl-b small{display:block;font-size:12px;color:#6b7c93;margin-top:2px}
+  .yl-go{display:block;text-align:center;background:#22c55e;color:#fff;text-decoration:none;font-weight:900;font-size:17px;padding:12px;border-radius:0 0 16px 16px}
+  .yl-wait{background:rgba(255,255,255,.85);color:#8a5a00;text-align:center;font-weight:800;font-size:13px;padding:10px;border-radius:0 0 16px 16px}
+  .yl-x{background:none;border:0;color:#fecaca;font-size:12.5px;font-weight:700;margin:4px 0 0 4px;cursor:pointer}
   .py-steps{margin:10px 0 0;padding-left:20px;font-size:13px;line-height:1.5;opacity:.95}</style>
   {% endif %}
   <div>{% if not paper %}<h1 class="d-h1">1. Kelgan telashkani tanlang</h1>{% endif %}

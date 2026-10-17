@@ -52,8 +52,9 @@ def home():
     etas = {d['wb_id']: d for d in on_the_way(sid) if d['eta']}
     from ..groups import active, who
     from ..settings import get_bool
+    from .. import fieldphoto as FP
     return render_template('punkt_home.html', station=station, stations=_stations(), sid=sid, etas=etas,
-                           paper=get_bool('dala_qogoz'), uys=active(sid),
+                           paper=get_bool('dala_qogoz'), uys=active(sid), yolda=FP.waiting() if FP.on() else [], today=today,
                            who=who([t['id'] for t in trips]),
                            counts=queries.station_counts(sid, today),
                            on_way=[t for t in trips if not t['arrived_at']], arrived=[t for t in trips if t['arrived_at']],
@@ -304,7 +305,19 @@ def group(token):
                            cands=G.candidates(my_station()) if d['group']['status'] == 'OCHIQ' else [],
                            reasons=STATION_DIFF_REASONS, other_reason=OTHER_REASON, warn=get_float('punkt_warn_pct', 1),
                            alert=get_float('punkt_alert_pct', 3), pick_blank=request.args.get('blanka', ''),
-                           pb_choices=_pb_choices() if d['group']['status'] == 'OCHIQ' else None)
+                           pb_choices=_pb_choices() if d['group']['status'] == 'OCHIQ' else None,
+                           yolda=_yolda_arg() if d['group']['status'] == 'OCHIQ' else None)
+
+
+def _yolda_arg():
+    """“KELDI” from the punkt's list: the field's photo opens in this UY already read."""
+    from .. import fieldphoto as FP
+    fid = request.args.get('yolda', '')
+    fp = FP.get(int(fid)) if fid.isdigit() else None
+    if not fp or fp['status'] not in FP.LIVE or not fp['path']:
+        return None
+    return {'id': fp['id'], 'url': url_for('main.media', path=fp['path']), 'summary': fp['summary'] or '',
+            'sender': fp['sender'], 'at': fp['created_at']}
 
 
 def _pb_choices():
@@ -342,7 +355,19 @@ def group_add(gid):
 def group_pb_read(gid):
     """A field waybill (PB) photographed in the UY list: kept and read — the phone shows it for checking."""
     from .. import intake
-    r = intake.read(post_actor(), gid, read_upload(request.files.get('photo')), request.form.get('code', ''))
+    actor = post_actor()
+    fid = parse_int(request.form.get('yolda'), 'Rasm', required=False)
+    if fid:                                  # the photo the field sent to the group: no second photo, no second reading
+        from .. import fieldphoto as FP
+        fp = FP.get(fid)
+        if not fp or fp['status'] not in FP.LIVE:
+            raise UserError('Bu rasm ro‘yxatda yo‘q (allaqachon qo‘shilgan yoki olib tashlangan).')
+        r = intake.read(actor, gid, FP.photo_bytes(fp), request.form.get('code', '') or (fp['blank_no'] or ''),
+                        raw=FP.raw_of(fp))
+        if r.get('already'):
+            FP.arrived(actor, fid, gid)
+        return jsonify(ok=True, yolda=fid, **r)
+    r = intake.read(actor, gid, read_upload(request.files.get('photo')), request.form.get('code', ''))
     return jsonify(ok=True, **r)
 
 
@@ -356,12 +381,24 @@ def group_pb_save(gid):
         d = _json.loads(request.form.get('data') or '{}')
     except ValueError:
         raise UserError('Ma’lumot buzildi — qaytadan yuboring.')
-    r = intake.register(post_actor(), gid, code=d.get('code'), photo_id=d.get('photo_id'), trailer_id=d.get('trailer_id'),
+    actor = post_actor()
+    r = intake.register(actor, gid, code=d.get('code'), photo_id=d.get('photo_id'), trailer_id=d.get('trailer_id'),
                         method=d.get('method'), combine_id=d.get('combine_id'), rows=d.get('rows') or [],
                         total_kg=d.get('total_kg'))
+    if str(d.get('yolda') or '').isdigit():
+        from .. import fieldphoto as FP
+        FP.arrived(actor, int(d['yolda']), gid)
     det = G.detail(gid)
     return done(f'✓ {r["blank"]}: {len(r["trips"])} ta reys · {r["kg"]:,.0f} kg qo‘shildi · jami {len(det["items"])} ta telashka, '
                 f'{det["sent_kg"]:,.0f} kg'.replace(',', ' '), url_for('punkt.group', token=G.get(gid)['token']))
+
+
+@bp.post('/yolda/<int:fid>/bekor')
+@perm_required('station.receive')
+def yolda_void(fid):
+    from .. import fieldphoto as FP
+    FP.void(post_actor(), fid, request.form.get('reason', ''))
+    return done('Ro‘yxatdan olib tashlandi.', url_for('punkt.home'))
 
 
 @bp.post('/uy/<int:gid>/olib')

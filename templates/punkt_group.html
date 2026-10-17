@@ -137,6 +137,20 @@
     if (j.already) { location.reload(); return; }
     cur = j; form(j.read);
   }
+  const YOLDA = {{ (yolda or none)|tojson }};
+  if (YOLDA) (async () => {     // “KELDI” from the punkt's list: the photo the field sent to the group, already read
+    box.hidden = false; imgUrl = YOLDA.url;
+    box.innerHTML = '<div class="pb"><b>⏳ Guruhdan kelgan nakladnoy ochilmoqda…</b></div>';
+    const fd = new FormData(); fd.append('_csrf', CSRF); fd.append('yolda', YOLDA.id);
+    let j = {};
+    try { const r = await fetch(READ, { method: 'POST', body: fd, credentials: 'same-origin', headers: { 'X-Requested-With': 'fetch' } }); j = await r.json(); }
+    catch (_) { j = { ok: false, error: 'Internet sekin — sahifani yangilang.' }; }
+    if (!j.ok) { box.innerHTML = `<div class="pb"><div class="err">${esc(j.error || 'Xato')}</div><button type="button" class="btn btn-light btn-block mt-s" id="pb-again">📷 O‘zim rasmga olaman</button></div>`;
+      $('pb-again').onclick = () => $('pb-shot').click(); return; }
+    if (j.already) { location.href = location.pathname; return; }
+    cur = j; form(j.read);
+    box.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  })();
   function form(r) {
     const rows = [0, 1, 2].map(i => r.rows[i] || { brigadier_id: '', field_id: '', kg: '', flag: '' });
     box.innerHTML = `<div class="pb"><h3>${esc(cur.blank)} — tekshiring</h3>
@@ -175,7 +189,8 @@
   async function save() {
     const m = box.querySelector('input[name=pb-m]:checked').value;
     const data = { code: cur.token, photo_id: cur.photo_id, trailer_id: $('pb-tr').value, method: m,
-                   combine_id: m === 'combine' ? $('pb-c').value : null, rows: rowsOf(), total_kg: cur.read.total_kg };
+                   combine_id: m === 'combine' ? $('pb-c').value : null, rows: rowsOf(), total_kg: cur.read.total_kg,
+                   yolda: cur.yolda || null };
     const fd = new FormData(); fd.append('_csrf', CSRF); fd.append('data', JSON.stringify(data));
     $('pb-ok').disabled = true; $('pb-ok').textContent = '⏳';
     let j = {};

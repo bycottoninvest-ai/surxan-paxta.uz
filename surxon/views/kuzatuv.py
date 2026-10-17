@@ -25,6 +25,11 @@ def home():
             require('kuzatuv.request')
             K.remind(post_actor(), parse_int(request.form.get('request_id'), 'So‘rov'))
             return done('Eslatma yuborildi.', url_for('kuzatuv.home'))
+        if action == 'announce':
+            require('kuzatuv.request')
+            from .. import fieldphoto as FP
+            n = FP.announce(post_actor(), request.form.get('text', ''))
+            return done(f'Xabar {n} ta guruhga yuborildi.', url_for('kuzatuv.home'))
         if action == 'cancel':
             require('kuzatuv.request')
             K.cancel(post_actor(), parse_int(request.form.get('request_id'), 'So‘rov'))
@@ -50,7 +55,13 @@ def home():
     return render_template('kuzatuv.html', day=day, stats=K.day_stats(day), items=rows[:48], has_more=len(rows) > 48,
                            page=page, member_id=member_id, open_reqs=K.open_requests(), requests=K.recent_requests(day),
                            members=K.members('FAOL'), templates=K.TEMPLATES, kinds=K.KINDS, statuses=K.STATUSES,
-                           bot_ok=bool(cfg.TELEGRAM_BOT_TOKEN), groups=q('SELECT * FROM tg_chats WHERE is_work=1'))
+                           bot_ok=bool(cfg.TELEGRAM_BOT_TOKEN), groups=q('SELECT * FROM tg_chats WHERE is_work=1'),
+                           announce_text=_announce_text())
+
+
+def _announce_text():
+    from ..fieldphoto import ANNOUNCE_TEXT
+    return ANNOUNCE_TEXT
 
 
 @bp.route('/kuzatuv/sorash', methods=['GET', 'POST'])

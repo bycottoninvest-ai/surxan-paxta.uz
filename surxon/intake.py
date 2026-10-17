@@ -132,7 +132,7 @@ def _group(actor, gid):
     return g
 
 
-def read(actor, gid, data, code=''):
+def read(actor, gid, data, code='', raw=None):
     """The photo of one field waybill: kept as evidence and read. The blank comes from its QR (decoded on the phone)
     or from the number the reader saw. A blank whose trips exist already (registered before) just joins the list."""
     _need(actor)
@@ -142,9 +142,9 @@ def read(actor, gid, data, code=''):
     if not data:
         raise UserError('Nakladnoyni rasmga oling.')
     jpeg = talon_ai.photo_jpeg(data)
-    raw, ai_error = None, None
+    ai_error = None
     ch = choices()
-    if talon_ai.enabled():
+    if raw is None and talon_ai.enabled():        # (a paper sent from the field group comes already read)
         try:
             raw = talon_ai.read_blank(jpeg, [b['name'] for b in ch['brigadiers']])
         except UserError as err:
