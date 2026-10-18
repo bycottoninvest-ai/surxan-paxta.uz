@@ -113,7 +113,7 @@ def read_one(fid):
     return status
 
 
-def tick(limit=4):
+def tick(limit=10):
     """From the outbox worker: read the photos still unread (oldest first)."""
     n = 0
     for r in q("SELECT id FROM field_photos WHERE status='YANGI' ORDER BY id LIMIT ?", (limit,)):

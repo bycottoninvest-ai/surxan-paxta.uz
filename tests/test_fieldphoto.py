@@ -106,3 +106,38 @@ def test_other_photos_reader_off_cancel_and_announce(app, world, monkeypatch):
     assert 'Nakladnoy rasmini' in last_text(CHAT)
     assert world['rahbar'].post('/kuzatuv', {'action': 'announce', 'text': 'salom salom'}).get_json()['ok']
     assert yunus.post('/kuzatuv', {'action': 'announce', 'text': 'salom salom'}).status_code in (302, 403)
+
+
+def test_photo_sent_to_the_bot_privately_or_in_an_unconfirmed_group(app, world, monkeypatch):
+    from surxon import talon_ai
+    yunus, ali, gid, seen = prepare(app, world, monkeypatch, RAW)
+    admin, tg = world['admin'], TG(app)
+    admin.post('/admin/sozlamalar', {'set_dala_qogoz': '1'})
+    monkeypatch.setattr(talon_ai, 'read_blank', lambda data, names: RAW)
+    # a field man who never linked anything sends it to the bot privately
+    tg.dm(6001, first='Bahrom', **photo('dm1'))
+    _tick(app)
+    assert 'PB-0001' in last_text(6001) and 'punktga yuborildi' in last_text(6001)
+    # a group the bot is in but nobody confirmed for kuzatuv: the waybill is still taken
+    tg.post({'my_chat_member': {'chat': {'id': -100999, 'type': 'supergroup', 'title': 'Surxon paxta'}, 'from': {'id': 1},
+                                'new_chat_member': {'status': 'administrator', 'user': {'id': 42, 'is_bot': True}}}})
+    raw2 = dict(RAW, blank_no='PB-0002')
+    monkeypatch.setattr(talon_ai, 'read_blank', lambda data, names: raw2)
+    tg.group(-100999, 6002, first='Ali', **photo('g9'))
+    _tick(app)
+    with app.app_context():
+        assert {r['blank_no'] for r in q("SELECT blank_no FROM field_photos WHERE status='YOLDA'")} == {'PB-0001', 'PB-0002'}
+    home = yunus.get('/punkt').get_data(as_text=True)
+    assert 'PB-0001' in home and 'PB-0002' in home
+    # a linked system user (no form open) sending a photo: taken as a waybill too
+    from conftest import make_user
+    make_user(app, admin, 'dalachi1', 'tally')
+    with app.app_context():
+        from surxon.db import get_db
+        get_db().execute("UPDATE users SET telegram_id='6003' WHERE username='dalachi1'")
+        get_db().commit()
+    monkeypatch.setattr(talon_ai, 'read_blank', lambda data, names: dict(RAW, blank_no='PB-0003'))
+    tg.dm(6003, first='Dalachi', **photo('u1'))
+    assert 'Nakladnoy qabul qilindi' in last_text(6003)
+    _tick(app)
+    assert 'PB-0003' in last_text(6003)

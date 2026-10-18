@@ -199,7 +199,10 @@ def test_stranger_is_registered_but_nothing_stored(app, world):
     tg.dm(555, first='Notanish', **photo('s1'))
     with app.app_context():
         assert q("SELECT status FROM tg_members WHERE telegram_id='555'", one=True)['status'] == 'YANGI'
-        assert scalar('SELECT COUNT(*) FROM media_items') == 0 and scalar('SELECT COUNT(*) FROM photos') == 0
+        assert scalar('SELECT COUNT(*) FROM media_items') == 0          # nothing in kuzatuv …
+        # … only kept as a field waybill on its way (Yunus checks it on the punkt's list)
+        assert scalar("SELECT COUNT(*) FROM photos WHERE entity_type<>'field_photo'") == 0
+    assert 'Nakladnoy qabul qilindi' in last_text(555)
     # requests cannot target a member who is not approved
     with app.app_context():
         mid = q("SELECT id FROM tg_members WHERE telegram_id='555'", one=True)['id']

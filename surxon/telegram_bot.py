@@ -274,7 +274,12 @@ def _on_group_message(m):
     from . import tg_assistant
     if m.get('from') and not m['from'].get('is_bot') and tg_assistant.wants(m, None, group=True):
         return tg_assistant.handle(m, group=True)       # “@bot …”, “Yordamchi, …” or a reply to the bot
-    if not info or not info['is_work'] or not member or not kuzatuv.media_of(m):
+    if not info or not member or not kuzatuv.media_of(m):
+        return
+    if not info['is_work']:                 # a group not confirmed for kuzatuv: only the field waybills are taken
+        from . import fieldphoto
+        if fieldphoto.on():
+            fieldphoto.take(m, m['from'])
         return
     reply_to = (m.get('reply_to_message') or {}).get('message_id')
     req = kuzatuv.open_request_for(get_db(), member, chat['id'], reply_to) if member['status'] == 'FAOL' else None
@@ -299,6 +304,13 @@ def _kuzatuv_private(chat, sender, message):
         member = kuzatuv.seen(db, sender, private=True)
     if not member:
         return
+    if member['status'] != 'NOFAOL' and message.get('photo') and member['status'] == 'YANGI':
+        # not linked yet, but a field waybill photo is still taken (read and shown to the punkt — Yunus checks it)
+        from . import fieldphoto
+        if fieldphoto.on():
+            fieldphoto.take(message, sender)
+            return send(chat, '📥 Nakladnoy qabul qilindi — o‘qilmoqda, 1 daqiqada javob keladi. Punkt (Yunus) ekranida '
+                              '“🚜 Yo‘lda” bo‘lib chiqadi.')
     if member['status'] == 'YANGI':
         return send(chat, '🔒 Bu Telegram akkaunt tizimga ulanmagan.\n'
                           f'Siz kuzatuv ro‘yxatiga yozildingiz ({member["full_name"]}). Rahbar tasdiqlagach, '
@@ -319,6 +331,10 @@ def _kuzatuv_media(chat, member, message):
     from . import kuzatuv
     reply_to = (message.get('reply_to_message') or {}).get('message_id')
     req = kuzatuv.open_request_for(get_db(), member, chat, reply_to)
+    if not req and message.get('photo'):
+        from . import fieldphoto              # nobody asked for it: maybe a field waybill — read and shown to the punkt too
+        if fieldphoto.on():
+            fieldphoto.take(message, message.get('from') or {'id': chat})
     item = kuzatuv.save_incoming(member, message, req)
     if item is None:
         return send(chat, 'Bu fayl allaqachon qabul qilingan.')
@@ -621,6 +637,13 @@ def _on_message(chat, user, message, update_id):
             attach_load_photos(actor, st['load_id'], [data], category=cat, source='telegram',
                                tg_ids=[best.get('file_unique_id')])
             return send(chat, '📷 Tarozi rasmi saqlandi. Endi kg ni yozing.', [cancel_row()])
+        if step != 'archive_photos':
+            # a photo sent to the bot with no form open: the field waybill of a full trailer (read, shown to the punkt)
+            from . import fieldphoto
+            if fieldphoto.on():
+                fieldphoto.take(message, message.get('from') or {'id': tid, 'first_name': user['full_name']})
+                return send(chat, '📥 Nakladnoy qabul qilindi — o‘qilmoqda, 1 daqiqada javob keladi. Punkt (Yunus) ekranida '
+                                  '“🚜 Yo‘lda” bo‘lib chiqadi.', menu_buttons(user))
         category = st.get('category', 'other') if step == 'archive_photos' else 'other'
         upload_archive_photo(actor, data, category=category, caption=message.get('caption', ''), source='telegram',
                              tg_file_unique_id=best.get('file_unique_id'))
