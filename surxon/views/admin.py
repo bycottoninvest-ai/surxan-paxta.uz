@@ -376,14 +376,24 @@ def _blank_receiver():
     return (r['cluster_name'] + (f' (STIR {r["cluster_inn"]})' if r['cluster_inn'] else '')) if r else ''
 
 
+def _blank_builder():
+    """The paper for the way the field works now: the phone way (dala_qogoz = 0) prints the old blank (trailer, kg,
+    hand / combine — the trip is in the phone); the paper way prints v3 (rows per place, read at the punkt).
+    ?tur=eski / ?tur=yangi picks one by hand."""
+    from ..pdfdoc import build_blanks_pdf, build_blanks_pdf_v2
+    from ..settings import get_bool
+    tur = request.args.get('tur')
+    old = tur == 'eski' or (tur != 'yangi' and not get_bool('dala_qogoz'))
+    return build_blanks_pdf_v2 if old else build_blanks_pdf
+
+
 @bp.get('/blankalar/<int:batch>.pdf')
 @perm_required('masterdata.write')
 def blanks_pdf(batch):
-    from ..pdfdoc import build_blanks_pdf
     rows = q('SELECT * FROM punkt_blanks WHERE batch=? ORDER BY id', (batch,))
     if not rows:
         abort(404)
-    pdf = build_blanks_pdf(rows, company=get_setting('company_name'), domain=current_app.config['SURXON'].DOMAIN,
+    pdf = _blank_builder()(rows, company=get_setting('company_name'), domain=current_app.config['SURXON'].DOMAIN,
                            receiver=_blank_receiver(), copies=1 if request.args.get('nusxa') == '1' else 2)
     return Response(pdf, mimetype='application/pdf', headers={
         'Content-Disposition': f'inline; filename="punkt_blanklari_{rows[0]["number"]}_{rows[-1]["number"]}.pdf"',
@@ -437,7 +447,6 @@ def _range_args():
 @perm_required('masterdata.write')
 def blanks_print():
     """Only the blanks asked for (e.g. from PB-0001, 10 of them) — no page numbers to choose in the printer."""
-    from ..pdfdoc import build_blanks_pdf
     from .. import blanks as BL
     from ..security import current_actor
     a, b = _range_args()
@@ -451,7 +460,7 @@ def blanks_print():
     if not rows:
         abort(404)
     _mark_printed('pb', a, b, actor)
-    pdf = build_blanks_pdf(rows, company=get_setting('company_name'), domain=current_app.config['SURXON'].DOMAIN)
+    pdf = _blank_builder()(rows, company=get_setting('company_name'), domain=current_app.config['SURXON'].DOMAIN)
     return Response(pdf, mimetype='application/pdf', headers={
         'Content-Disposition': f'inline; filename="dala_blanklari_{rows[0]["number"]}_{rows[-1]["number"]}.pdf"',
         'Cache-Control': 'private, no-store'})

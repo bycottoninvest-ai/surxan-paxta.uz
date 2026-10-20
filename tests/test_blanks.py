@@ -222,3 +222,16 @@ def test_last_printed_number_written_once_by_hand(app, world):
     with app.app_context():
         assert sc("SELECT COUNT(*) FROM audit_logs WHERE entity_type='settings' AND new_json LIKE '%pb_printed%'") == 1
     assert world['kassa'].post('/admin/blankalar', {'action': 'printed', 'kind': 'pb', 'upto': '5'}).status_code in (302, 403)
+
+
+def test_phone_way_prints_the_old_blank(app, world):
+    """dala_qogoz = 0 (the clerk closes the trip in his phone): the print gives the old blank (trailer, field, kg,
+    hand / combine — the QR ties it to the trip); the paper way gives v3; ?tur= picks one by hand."""
+    import pymupdf
+    admin = world['admin']
+    text = lambda r: pymupdf.open(stream=r.data, filetype='pdf')[0].get_text()
+    assert 'galochka' in text(admin.get('/admin/blankalar/chop.pdf?dan=1&soni=2'))             # default: paper way, v3
+    admin.post('/admin/sozlamalar', {'set_dala_qogoz': '0'})
+    old = text(admin.get('/admin/blankalar/chop.pdf?dan=1&soni=2'))
+    assert 'galochka' not in old and 'DALA NAKLADNOYI' in old and 'PB-0001' in old
+    assert 'galochka' in text(admin.get('/admin/blankalar/chop.pdf?dan=1&soni=2&tur=yangi'))
