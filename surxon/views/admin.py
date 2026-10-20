@@ -380,11 +380,11 @@ def _blank_builder():
     """The paper for the way the field works now: the phone way (dala_qogoz = 0) prints the old blank (trailer, kg,
     hand / combine — the trip is in the phone); the paper way prints v3 (rows per place, read at the punkt).
     ?tur=eski / ?tur=yangi picks one by hand."""
-    from ..pdfdoc import build_blanks_pdf, build_blanks_pdf_v2
+    from ..pdfdoc import build_blanks_pdf, build_blanks_pdf_old
     from ..settings import get_bool
     tur = request.args.get('tur')
     old = tur == 'eski' or (tur != 'yangi' and not get_bool('dala_qogoz'))
-    return build_blanks_pdf_v2 if old else build_blanks_pdf
+    return build_blanks_pdf_old if old else build_blanks_pdf
 
 
 @bp.get('/blankalar/<int:batch>.pdf')

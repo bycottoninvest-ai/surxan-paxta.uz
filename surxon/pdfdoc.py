@@ -563,139 +563,75 @@ def build_cash_pdf(e, corrections, *, company, printed_by, printed_at):
     return buf.getvalue()
 
 
-def build_blanks_pdf_v2(blanks, *, company, domain, receiver='', copies=2):
-    """(v2 — the phone way, dala_qogoz = 0) DALA NAKLADNOYI, TWO per A4 page, cheque style like the TEZ-PUL talon: the narrow NAZORAT part stays with us (binder
-    holes), the big part is torn off along the dashed line and goes with the trailer to the punkt; both parts carry the
-    same number and QR, the stamp goes across the line. The clerk writes the trailer, kg, hand / combine (and the
-    combine's number) on both parts; the QR ties the paper to the trip. Only the look changed — numbers, QR links and
-    the flow are the same as before (`receiver` / `copies` are kept for the callers and not used)."""
+def build_blanks_pdf_old(blanks, *, company, domain, receiver='', copies=2):
+    """(the phone way, dala_qogoz = 0) Field blanks (dala yorlig‘i), TWO per A4 page — cut along the dashed line. The clerk writes only the trailer,
+    field, kg and ticks hand / combine; its QR ties it to the trip (and the combine / brigade) in the system. It goes
+    with the trailer; only the UY (umumiy nakladnoy) goes into the cluster, so it has no receiver part and one copy is
+    enough (`receiver` / `copies` are kept for the callers and not used)."""
     _fonts()
     buf = io.BytesIO()
     c = canvas.Canvas(buf, pagesize=A4)
     W, H = A4
-    c.setTitle('Dala nakladnoylari')
+    c.setTitle('Dala blanklari')
     c.setAuthor(company)
     logo = Path(current_app.static_folder) / 'img' / 'logo-dark.png'
-    navy, red, pink, grey = colors.HexColor('#0b2a55'), colors.HexColor('#e0284f'), colors.HexColor('#fde4ea'), colors.HexColor('#6b7c93')
+    x0, x1 = 16 * mm, W - 16 * mm
     half = H / 2
 
-    def spaced(x, y, text, size, font='DejaVu', color=navy, gap=1.6, align='l'):
-        c.setFont(font, size); c.setFillColor(color)
-        w = sum(c.stringWidth(ch, font, size) + gap for ch in text) - gap
-        if align == 'c': x -= w / 2
-        elif align == 'r': x -= w
-        for ch in text:
-            c.drawString(x, y, ch); x += c.stringWidth(ch, font, size) + gap
-
-    def field(x, y, label, w, size=10):
-        c.setFillColor(navy); c.setFont('DejaVu-Bold', size)
+    def line_field(y, label, width=None, x=None, big=False):
+        x = x or x0
+        font, size = ('DejaVu-Bold', 14) if big else ('DejaVu', 12)
+        c.setFont(font, size)
         c.drawString(x, y, label)
-        lw = c.stringWidth(label, 'DejaVu-Bold', size)
-        c.setStrokeColor(navy); c.setLineWidth(0.8)
-        c.line(x + lw + 2 * mm, y - 1.2 * mm, x + w, y - 1.2 * mm)
+        lw = c.stringWidth(label, font, size)
+        c.setLineWidth(0.8)
+        c.line(x + lw + 3 * mm, y - 1.2 * mm, (x + width) if width else x1, y - 1.2 * mm)
 
-    def tick(x, y, label, size=11, box=5.5):
-        c.setStrokeColor(navy); c.setLineWidth(1.3)
-        c.roundRect(x, y - 1.3 * mm, box * mm, box * mm, 1 * mm)
-        c.setFillColor(navy); c.setFont('DejaVu-Bold', size)
-        c.drawString(x + (box + 2.5) * mm, y, label)
+    def tick(x, y, label):
+        c.setLineWidth(1.4)
+        c.rect(x, y - 1.2 * mm, 7 * mm, 7 * mm)
+        c.setFont('DejaVu-Bold', 14)
+        c.drawString(x + 10 * mm, y, label)
 
     def one(b, top):
         url = f'https://{domain}/punkt/blanka/{b["token"]}'
-        x0, x1, y0, y1 = 8 * mm, W - 8 * mm, top - half + 7 * mm, top - 7 * mm
-        xs, sx = x0 + 60 * mm, x0 + 11 * mm
-        no = b['number']
-        c.setStrokeColor(navy); c.setLineWidth(1.6)
-        c.roundRect(x0, y0, x1 - x0, y1 - y0, 5 * mm)
-        # ---- NAZORAT QISMI (stays with us, kept in a folder)
-        cx = (sx + xs) / 2
-        c.setFillColor(navy)
-        c.roundRect(sx, y1 - 15 * mm, xs - sx - 3 * mm, 11 * mm, 2 * mm, stroke=0, fill=1)
-        c.setFillColor(colors.white); c.setFont('DejaVu-Bold', 10)
-        c.drawCentredString(cx, y1 - 9 * mm, 'NAZORAT QISMI')
-        spaced(cx, y1 - 13 * mm, 'BIZDA QOLADI', 5.5, color=colors.white, gap=1.4, align='c')
-        c.setFillColor(navy); c.setFont('DejaVu-Bold', 9)
-        c.drawCentredString(cx, y1 - 21 * mm, 'Nakladnoy №')
-        c.setFillColor(red); c.setFont('DejaVu-Bold', 18)
-        c.drawCentredString(cx, y1 - 28.5 * mm, no)
-        _qr(c, url, cx - 15 * mm, y1 - 61 * mm, 30 * mm)
-        field(sx, y1 - 68 * mm, 'Telashka:', xs - sx - 4 * mm, 9)
-        c.setFillColor(navy); c.setFont('DejaVu-Bold', 10)
-        c.drawString(sx, y1 - 77 * mm, 'Kg:')
-        c.setLineWidth(1.2); c.setStrokeColor(navy)
-        c.roundRect(sx + 8 * mm, y1 - 81 * mm, xs - sx - 11 * mm, 10 * mm, 1.5 * mm)
-        tick(sx, y1 - 87 * mm, 'Qo‘l', 9, 4.5)
-        tick(sx + 21 * mm, y1 - 87 * mm, 'Kombayn', 9, 4.5)
-        field(sx, y1 - 94 * mm, 'Kombayn №:', xs - sx - 4 * mm, 8)
-        field(sx, y1 - 101 * mm, 'Sana:', xs - sx - 4 * mm, 8)
-        cy = (y0 + y1) / 2
-        c.setStrokeColor(grey); c.setLineWidth(0.6); c.setDash(1.5, 1.5)
-        for hy in (cy - 40 * mm, cy + 40 * mm):
-            c.circle(x0 + 5.5 * mm, hy, 2.6 * mm)
-        c.setDash()
-        c.saveState(); c.translate(x0 + 6.5 * mm, cy - 12 * mm); c.rotate(90)
-        spaced(0, 0, 'TESHIK (PAPKA)', 4.8, color=grey, gap=1); c.restoreState()
-        # ---- tear line + stamp across it
-        c.setStrokeColor(navy); c.setDash(3, 2.5); c.setLineWidth(0.8)
-        c.line(xs, y0 + 2 * mm, xs, y1 - 2 * mm); c.setDash()
-        c.saveState(); c.translate(xs - 1.5 * mm, y1 - 48 * mm); c.rotate(90)
-        spaced(0, 0, '✂ QIRQISH JOYI', 5.5, color=grey, gap=1.2); c.restoreState()
-        sy = y0 + 15 * mm
-        c.setStrokeColor(colors.HexColor('#9fb3cc')); c.setDash(2, 2); c.setLineWidth(0.8)
-        c.circle(xs, sy, 13 * mm); c.setDash()
-        c.setFillColor(colors.HexColor('#9fb3cc')); c.setFont('DejaVu-Bold', 7)
-        c.drawCentredString(xs, sy + 1 * mm, 'MUHR')
-        c.setFont('DejaVu', 5.5); c.drawCentredString(xs, sy - 3 * mm, 'chiziq ustiga')
-        # ---- DALA NAKLADNOYI (goes with the trailer to the punkt)
-        m0, m1 = xs + 4 * mm, x1 - 3 * mm
-        mid = (m0 + m1) / 2
-        yh = y1 - 21 * mm
+        y = top - 12 * mm
         if logo.exists():
-            c.drawImage(str(logo), m0 + 2 * mm, yh - 1 * mm, width=56 * mm, height=17 * mm, mask='auto', preserveAspectRatio=True, anchor='w')
-        nx = m1 - 35 * mm
-        c.setFillColor(pink); c.roundRect(nx, yh - 1 * mm, 34 * mm, 17 * mm, 3 * mm, stroke=0, fill=1)
-        c.setFillColor(navy); c.setFont('DejaVu-Bold', 9)
-        c.drawCentredString(nx + 17 * mm, yh + 10.5 * mm, 'Nakladnoy №')
-        c.setFillColor(red); c.setFont('DejaVu-Bold', 18)
-        c.drawCentredString(nx + 17 * mm, yh + 2.5 * mm, no)
-        yb = yh - 18 * mm
-        c.setFillColor(navy)
-        c.roundRect(m0 + 2 * mm, yb, m1 - m0 - 4 * mm, 14 * mm, 3 * mm, stroke=0, fill=1)
-        c.setFillColor(colors.white); c.setFont('DejaVu-Bold', 19)
-        c.drawCentredString(mid, yb + 5.5 * mm, 'DALA NAKLADNOYI')
-        spaced(mid, yb + 1.8 * mm, 'TELASHKA BILAN PUNKTGA BORADI', 5.5, color=colors.white, gap=2, align='c')
-        # QR left, fields right
-        qy = yb - 44 * mm
-        _qr(c, url, m0 + 1 * mm, qy + 4 * mm, 36 * mm)
-        spaced(m0 + 19 * mm, qy + 1 * mm, 'SKANER QILING', 6, 'DejaVu-Bold', align='c')
-        kx = m0 + 41 * mm
-        field(kx, yb - 9 * mm, 'Telashka:', m1 - kx - 2 * mm, 11)
-        field(kx, yb - 19 * mm, 'Dala:', m1 - kx - 2 * mm, 11)
-        tick(kx, yb - 30 * mm, 'QO‘L TERIMI', 11)
-        tick(kx + 42 * mm, yb - 30 * mm, 'KOMBAYN', 11)
-        field(kx, yb - 40 * mm, 'Kombayn №:', m1 - kx - 2 * mm, 11)
-        # big kg box
-        ky = qy - 22 * mm
-        c.setStrokeColor(navy); c.setLineWidth(1.8)
-        c.roundRect(m0 + 2 * mm, ky, m1 - m0 - 4 * mm, 17 * mm, 2.5 * mm)
-        c.setFillColor(navy); c.setFont('DejaVu-Bold', 16)
-        c.drawString(m0 + 6 * mm, ky + 6 * mm, 'PAXTA, kg:')
-        c.setFont('DejaVu-Bold', 20); c.drawRightString(m1 - 6 * mm, ky + 5.5 * mm, 'KG')
-        fy = ky - 11 * mm
-        field(m0 + 16 * mm, fy, 'Sana:', 40 * mm, 10)
-        field(m0 + 62 * mm, fy, 'Hisobchi imzosi:', m1 - m0 - 64 * mm, 10)
-        c.setFillColor(grey); c.setFont('DejaVu', 6.5)
-        c.drawString(m0 + 16 * mm, y0 + 4 * mm, f'{company} · QR ni hisobchi telashkani yopishda, punktda Yunus skanerlaydi.')
+            c.drawImage(str(logo), x0, y - 15 * mm, width=48 * mm, height=15 * mm, mask='auto', preserveAspectRatio=True, anchor='sw')
+        c.setFont('DejaVu-Bold', 16)
+        c.drawRightString(x1 - 40 * mm, y - 9 * mm, 'DALA NAKLADNOYI')
+        _qr(c, url, x1 - 34 * mm, y - 30 * mm, 34 * mm)
+        c.setFont('DejaVu', 8)                  # small: only if the QR gets dirty and has to be typed in
+        c.drawCentredString(x1 - 17 * mm, y - 33 * mm, b['number'])
+        y -= 44 * mm
+        line_field(y, 'Telashka:', width=70 * mm)
+        line_field(y, 'Dala:', x=x0 + 80 * mm)
+        y -= 18 * mm
+        c.setLineWidth(1.8)
+        c.rect(x0, y - 5 * mm, x1 - x0, 15 * mm)
+        c.setFont('DejaVu-Bold', 17)
+        c.drawString(x0 + 4 * mm, y + 0.5 * mm, 'PAXTA, kg:')
+        y -= 19 * mm
+        tick(x0, y, 'QO‘L TERIMI')
+        tick(x0 + 70 * mm, y, 'KOMBAYN')
+        y -= 16 * mm
+        line_field(y, 'Sana:', width=60 * mm)
+        line_field(y, 'Hisobchi imzosi:', x=x0 + 70 * mm)
+        c.setFont('DejaVu', 8)
+        c.drawString(x0, top - half + 8 * mm, f'{company} · QR ni hisobchi yopishda, punktda Yunus skanerlaydi.')
 
     for i, b in enumerate(blanks):
         if i % 2 == 0:
             one(b, H)
-            c.setStrokeColor(navy); c.setDash(4, 3); c.setLineWidth(0.6)
-            c.line(6 * mm, half, W - 6 * mm, half); c.setDash()
-            c.setFillColor(navy); c.setFont('DejaVu', 9)
-            c.drawString(3 * mm, half - 1.2 * mm, '✂'); c.drawRightString(W - 3 * mm, half - 1.2 * mm, '✂')
+            c.setDash(4, 3)
+            c.setLineWidth(0.6)
+            c.line(8 * mm, half, W - 8 * mm, half)
+            c.setDash()
+            c.setFont('DejaVu', 7)
+            c.drawCentredString(W / 2, half + 1.5 * mm, '✂  shu yerdan qirqing')
         else:
-            one(b, half); c.showPage()
+            one(b, half)
+            c.showPage()
     if len(blanks) % 2:
         c.showPage()
     c.save()
